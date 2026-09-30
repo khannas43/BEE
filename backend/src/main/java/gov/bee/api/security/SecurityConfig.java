@@ -24,9 +24,11 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 
 /**
- * Deny by default. Only the health probe is public and only GET /api/me is open to
- * an authenticated caller; every other request is denied until a reviewed
- * first-slice rule allows it (ADR-001 D-RT4). No screen-matrix capacity is imported.
+ * Deny by default. Only the health probe is public. GET /api/me and the model-application
+ * list and read are open to an authenticated caller, and their controllers apply the
+ * Spring-database scope. Every other request, including every workflow transition and
+ * history read, is denied until a reviewed first-slice rule is implemented by its owning
+ * work package (ADR-001 D-RT4). No screen-matrix capacity is imported.
  */
 @Configuration
 @EnableWebSecurity
@@ -43,6 +45,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(a -> a
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/me").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/model-applications", "/api/model-applications/*").authenticated()
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o -> o
                 .jwt(Customizer.withDefaults())

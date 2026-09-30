@@ -1,6 +1,6 @@
 # WP01.2 First vertical slice: registration to approved model with computed rating
 
-Status: WP01.2 and WP01.3 passed documentation review on 30 September 2026. WP01 is accepted as documentation and design evidence (1 of 11 work packages, 9.1%). Nothing in this first slice is implemented in the running app yet.
+Status: WP01.2 and WP01.3 passed documentation review on 30 September 2026. WP01 is accepted as documentation and design evidence (1 of 11 work packages, 9.1%). WP02.2, for review and not accepted: Spring enforces the list and read scope in §7 from its own account, role, membership and assignment records, and defines reusable checks for the seven steps in §3. Every transition and the history read stay denied by default. Rules, evidence and deferred actions: [WP02.2_POLICY.md](../wp02/WP02.2_POLICY.md). No slice transition is implemented yet.
 
 This is the first increment of real behaviour after WP01. It is chosen because it exercises the three controls every later work package depends on: organisation-scoped partner access, manual Finance fee confirmation with no payer self-confirmation, and a two-stage BEE approval taken on a computed, versioned star rating. Requirement references (R1 to R15) and gap references (G01 to G25) are in [INVENTORY.md](INVENTORY.md). The role and route capacity for every slice step is in [SCREEN_ACTION_MATRIX.md](SCREEN_ACTION_MATRIX.md) (rows whose note starts with **slice**), and `scripts/screen-matrix.cjs` checks it.
 
@@ -108,6 +108,8 @@ Only what the slice needs. Names are indicative; WP04 and WP05 own the final sch
 
 IDs are issued by the server. The client does not predict them (G07).
 
+WP02.2 persists only the part of `model_application` that the scope checks need: id, reference, organisation id, brand name as text, category, model number, state and version (`V3__model_application.sql`). Brand, fee, rating and history columns and tables stay with WP04, WP05 and WP07.
+
 ## 7. API outline
 
 | Method and path | Who | Effect |
@@ -126,6 +128,8 @@ IDs are issued by the server. The client does not predict them (G07).
 
 Every write checks, on the server: the user's role owns the current state, the application is inside the user's scope, and the expected version matches (optimistic concurrency).
 
+Implemented in WP02.2: the two `GET` list and read routes, filtered on the server by rules P1–P6 in [WP02.2_POLICY.md](../wp02/WP02.2_POLICY.md). A read outside scope returns the same 404 as an unknown ID. Every other route in this table returns 403 `denied_by_default` until its owning activity implements it.
+
 ## 8. Denial cases
 
 Each of these must fail with a server error and must leave no transition entry:
@@ -140,6 +144,8 @@ Each of these must fail with a server error and must leave no transition entry:
 8. The same user acts at two stages of one application.
 9. Any role acts on an application that is not in that role's stage.
 10. Helpdesk, Admin or Auditor performs any slice transition. (Annex A.1 would grant Admin, Finance and Helpdesk approve on director and secretary approval; the slice overrides it, G10.)
+
+WP02.2 enforces case 1 for list and read and denies case 10's roles any read. Cases 1, 2, 3, 4, 5, 7, 8, 9 and 10 have unit-tested step checks (P7 in [WP02.2_POLICY.md](../wp02/WP02.2_POLICY.md)). None of them can yet be exercised through the API, because every transition is still denied. Case 6 is deferred to WP05.2.
 
 ## 9. Proposed local acceptance checks
 

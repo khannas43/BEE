@@ -43,7 +43,7 @@ class MeControllerSecurityTest {
 
     @Test
     void unknownRouteIsDeniedEvenWithAValidToken() throws Exception {
-        mvc.perform(get("/api/model-applications").with(jwt().jwt(j -> j.subject(SUBJECT.toString()))))
+        mvc.perform(get("/api/anything").with(jwt().jwt(j -> j.subject(SUBJECT.toString()))))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error").value("denied_by_default"));
     }

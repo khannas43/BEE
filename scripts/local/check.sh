@@ -53,7 +53,10 @@ w="$(jq -r '"\(.organisations) \(.userAccounts) \(.memberships) \(.roleAssignmen
 check "db.seed-counts" "$(ok test "$g_org $g_usr $g_mem $g_role $g_act" = "$w")" "org/user/membership/role/active = $g_org/$g_usr/$g_mem/$g_role/$g_act (expected ${w// //})"
 rule_counts="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.fee_rule WHERE id='RAC-DEMO' AND category='RAC' AND version='0-unverified' AND amount_inr=1000 AND status='unverified'), (SELECT count(*) FROM app.rating_formula WHERE id='RAC-STAR-DEMO' AND category='RAC' AND version='0-unverified' AND status='unverified' AND definition='{}'::jsonb), (SELECT count(*) FROM app.seed_run WHERE seed_version='rt1-local-v2')" 2>/dev/null || true)"
 check "db.provisional-rules" "$(ok test "$rule_counts" = '1 1 1')" "synthetic fee/formula/seed marker = $rule_counts (expected 1 1 1; neither rule approved)"
-check "db.no-workflow-data" "$(ok test "${g_asg:-x}" = 0)" "assignment rows=${g_asg:-?} (model workflow not implemented)"
+scope_want="$(jq -r '"\(.modelApplications) \(.assignments) \(.activeAssignments)"' <<<"$want")"
+scope_got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.model_application), (SELECT count(*) FROM app.assignment), (SELECT count(*) FROM app.assignment WHERE active)" 2>/dev/null || true)"
+wf_tables="$(psql_app -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('transition','fee_confirmation','rating_result','approval_decision')" 2>/dev/null || echo x)"
+check "db.scope-fixtures-only" "$(ok test "$scope_got" = "$scope_want" -a "$wf_tables" = 0)" "applications/assignments/active = ${scope_got// //} (expected ${scope_want// //}); workflow tables=$wf_tables (transitions not implemented)"
 grants="$(psql_app -c "SELECT count(*) FROM app.role_assignment WHERE role NOT IN ('admin','programme','reviewer','director','secretary','finance','helpdesk','auditor','manufacturer','agency','iame','sda','laboratory')" 2>/dev/null || echo x)"
 check "db.no-matrix-grants" "$(ok test "$grants" = 0)" "role rows outside the 13 personas=$grants; no capacity grants table exists"
 iso="$(docker exec -e PGPASSWORD="$BEE_APP_DB_PASSWORD" bee-local-postgres psql -h 127.0.0.1 -U bee_app -d keycloak -c 'SELECT 1' 2>&1 || true)"
@@ -113,6 +116,13 @@ grep -E '^(PASS|FAIL) ' <<<"$auth_out"
 read -r a_pass a_fail <<<"$(sed -nE 's/^auth checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$auth_out")"
 if [[ -z "${a_pass:-}" ]]; then check "auth.run" 0 "auth-check did not complete: $(tail -1 <<<"$auth_out")"
 else pass=$((pass + a_pass)); fail=$((fail + a_fail)); fi
+
+# ---- WP02.2 model-application scope, direct to Spring (scripts/local/access-check.cjs)
+ac_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/access-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$ac_out"
+read -r c_pass c_fail <<<"$(sed -nE 's/^access checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$ac_out")"
+if [[ -z "${c_pass:-}" ]]; then check "access.run" 0 "access-check did not complete: $(tail -1 <<<"$ac_out")"
+else pass=$((pass + c_pass)); fail=$((fail + c_fail)); fi
 
 # ---- signed-in screens identify the preview, not a fake identity (scripts/local/browser-check.cjs)
 br_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/browser-check.cjs" 2>&1)"

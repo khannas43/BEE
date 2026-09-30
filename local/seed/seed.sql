@@ -47,7 +47,7 @@ INSERT INTO role_assignment (user_id, role, scope, active) VALUES
   ('00000000-0000-4000-a000-000000000002', 'agency', 'own-org', true),
   ('00000000-0000-4000-a000-000000000003', 'finance', 'all', true),
   ('00000000-0000-4000-a000-000000000004', 'iame', 'assigned', true),
-  ('00000000-0000-4000-a000-000000000005', 'reviewer', 'all', true),
+  ('00000000-0000-4000-a000-000000000005', 'reviewer', 'assigned', true),
   ('00000000-0000-4000-a000-000000000006', 'programme', 'all', true),
   ('00000000-0000-4000-a000-000000000007', 'director', 'all', true),
   ('00000000-0000-4000-a000-000000000008', 'secretary', 'all', true),
@@ -56,12 +56,23 @@ INSERT INTO role_assignment (user_id, role, scope, active) VALUES
   ('00000000-0000-4000-a000-000000000011', 'auditor', 'all', true),
   ('00000000-0000-4000-a000-000000000012', 'sda', 'assigned', true),
   ('00000000-0000-4000-a000-000000000013', 'laboratory', 'assigned', true),
-  ('00000000-0000-4000-a000-000000000015', 'reviewer', 'all', false),
+  ('00000000-0000-4000-a000-000000000015', 'reviewer', 'assigned', false),
   ('00000000-0000-4000-a000-000000000016', 'auditor', 'all', true)
 ON CONFLICT (user_id, role) DO UPDATE SET scope = EXCLUDED.scope, active = EXCLUDED.active;
 -- Synthetic local-only fee; this is not a BEE-approved amount.
 INSERT INTO fee_rule (id, category, version, amount_inr, status, note) VALUES ('RAC-DEMO', 'RAC', '0-unverified', 1000.00, 'unverified', 'Synthetic local amount only; BEE fee decision pending') ON CONFLICT (id) DO UPDATE SET amount_inr = EXCLUDED.amount_inr, status = EXCLUDED.status, note = EXCLUDED.note;
 -- Metadata only: no approved star-rating expression or computation is claimed.
 INSERT INTO rating_formula (id, category, version, status, definition, note) VALUES ('RAC-STAR-DEMO', 'RAC', '0-unverified', 'unverified', '{}'::jsonb, 'Placeholder only; no official rating may be computed') ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, definition = EXCLUDED.definition, note = EXCLUDED.note;
-INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2') ON CONFLICT (seed_version) DO NOTHING;
+-- WP02.2 scope fixtures: seeded states only; version reset to 0 on every seed.
+INSERT INTO model_application (id, reference, organisation_id, brand_name, category, model_number, state, version) VALUES
+  ('00000000-0000-4000-c000-000000000001', 'LOCAL-MA-0001', '00000000-0000-4000-b000-000000000001', 'Nova Cool', 'RAC', 'NC-RAC-12D', 'draft', 0),
+  ('00000000-0000-4000-c000-000000000002', 'LOCAL-MA-0002', '00000000-0000-4000-b000-000000000001', 'Nova Cool', 'RAC', 'NC-RAC-18F', 'fee_due', 0),
+  ('00000000-0000-4000-c000-000000000003', 'LOCAL-MA-0003', '00000000-0000-4000-b000-000000000002', 'Aurora Air (synthetic principal)', 'RAC', 'AU-RAC-15X', 'iame_scrutiny', 0),
+  ('00000000-0000-4000-c000-000000000004', 'LOCAL-MA-0004', '00000000-0000-4000-b000-000000000001', 'Nova Cool', 'RAC', 'NC-RAC-24H', 'bee_scrutiny', 0)
+ON CONFLICT (id) DO UPDATE SET reference = EXCLUDED.reference, organisation_id = EXCLUDED.organisation_id, brand_name = EXCLUDED.brand_name, model_number = EXCLUDED.model_number, state = EXCLUDED.state, version = 0;
+INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES
+  ('00000000-0000-4000-a000-000000000004', 'model_application', '00000000-0000-4000-c000-000000000003', 'iame_scrutiny', true),
+  ('00000000-0000-4000-a000-000000000005', 'model_application', '00000000-0000-4000-c000-000000000004', 'bee_scrutiny', false)
+ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = EXCLUDED.active;
+INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1') ON CONFLICT (seed_version) DO NOTHING;
 COMMIT;

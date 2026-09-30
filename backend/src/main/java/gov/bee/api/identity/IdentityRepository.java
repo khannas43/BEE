@@ -2,6 +2,7 @@ package gov.bee.api.identity;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -43,6 +44,13 @@ public class IdentityRepository {
             "SELECT o.code, o.kind, o.legal_name FROM organisation_membership m JOIN organisation o ON o.id = m.organisation_id "
                 + "WHERE m.user_id = ? AND m.active AND o.status = 'active' AND now() >= m.valid_from AND now() < m.valid_to ORDER BY o.code",
             (rs, i) -> new Membership(rs.getString("code"), rs.getString("kind"), rs.getString("legal_name")), userId);
+    }
+
+    public Set<UUID> activeMembershipOrganisationIds(UUID userId) {
+        return Set.copyOf(jdbc.query(
+            "SELECT m.organisation_id FROM organisation_membership m JOIN organisation o ON o.id = m.organisation_id "
+                + "WHERE m.user_id = ? AND m.active AND o.status = 'active' AND now() >= m.valid_from AND now() < m.valid_to",
+            (rs, i) -> rs.getObject(1, UUID.class), userId));
     }
 
     public int activeAssignments(UUID userId) {

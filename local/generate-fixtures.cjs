@@ -15,6 +15,7 @@ const ROLES = ["admin", "programme", "reviewer", "director", "secretary", "finan
 
 const org = (n) => `00000000-0000-4000-b000-${String(n).padStart(12, "0")}`;
 const usr = (n) => `00000000-0000-4000-a000-${String(n).padStart(12, "0")}`;
+const app = (n) => `00000000-0000-4000-c000-${String(n).padStart(12, "0")}`;
 
 const ORGS = [
   { id: org(1), code: "NOVA", kind: "manufacturer", name: "Nova Cool Appliances Pvt Ltd (synthetic)" },
@@ -34,7 +35,7 @@ const USERS = [
   { n: 2, username: "pixel.applicant", first: "Pixel", last: "Applicant", kc: "agency", org: "PIXEL", db: { role: "agency", scope: "own-org", active: true } },
   { n: 3, username: "bee.finance", first: "BEE", last: "Finance", kc: "finance", org: "BEE", db: { role: "finance", scope: "all", active: true } },
   { n: 4, username: "iame.officer", first: "IAME", last: "Officer", kc: "iame", org: "IAME", db: { role: "iame", scope: "assigned", active: true } },
-  { n: 5, username: "bee.reviewer", first: "BEE", last: "Reviewer", kc: "reviewer", org: "BEE", db: { role: "reviewer", scope: "all", active: true } },
+  { n: 5, username: "bee.reviewer", first: "BEE", last: "Reviewer", kc: "reviewer", org: "BEE", db: { role: "reviewer", scope: "assigned", active: true } },
   { n: 6, username: "bee.programme", first: "BEE", last: "Programme", kc: "programme", org: "BEE", db: { role: "programme", scope: "all", active: true } },
   { n: 7, username: "bee.director", first: "BEE", last: "Director", kc: "director", org: "BEE", db: { role: "director", scope: "all", active: true } },
   { n: 8, username: "bee.secretary", first: "BEE", last: "Secretary", kc: "secretary", org: "BEE", db: { role: "secretary", scope: "all", active: true } },
@@ -44,8 +45,24 @@ const USERS = [
   { n: 12, username: "sda.officer", first: "SDA", last: "Officer", kc: "sda", org: "SDA", db: { role: "sda", scope: "assigned", active: true } },
   { n: 13, username: "lab.officer", first: "Lab", last: "Officer", kc: "laboratory", org: "LAB", db: { role: "laboratory", scope: "assigned", active: true } },
   { n: 14, username: "no.account", first: "No", last: "Account", kc: "manufacturer", org: null, db: null },
-  { n: 15, username: "inactive.role", first: "Inactive", last: "Role", kc: "reviewer", org: "BEE", db: { role: "reviewer", scope: "all", active: false } },
+  { n: 15, username: "inactive.role", first: "Inactive", last: "Role", kc: "reviewer", org: "BEE", db: { role: "reviewer", scope: "assigned", active: false } },
   { n: 16, username: "role.mismatch", first: "Role", last: "Mismatch", kc: "finance", org: "BEE", db: { role: "auditor", scope: "all", active: true } },
+];
+
+/**
+ * WP02.2 scope fixtures: seeded states, not transitions (no workflow is implemented).
+ * Nova owns three, PixelCert one. Only IAME holds an active assignment; the
+ * Reviewer's assignment on LOCAL-MA-0004 is inactive, so the Reviewer sees nothing.
+ */
+const APPLICATIONS = [
+  { n: 1, reference: "LOCAL-MA-0001", org: "NOVA", brand: "Nova Cool", model: "NC-RAC-12D", state: "draft" },
+  { n: 2, reference: "LOCAL-MA-0002", org: "NOVA", brand: "Nova Cool", model: "NC-RAC-18F", state: "fee_due" },
+  { n: 3, reference: "LOCAL-MA-0003", org: "PIXEL", brand: "Aurora Air (synthetic principal)", model: "AU-RAC-15X", state: "iame_scrutiny" },
+  { n: 4, reference: "LOCAL-MA-0004", org: "NOVA", brand: "Nova Cool", model: "NC-RAC-24H", state: "bee_scrutiny" },
+];
+const ASSIGNMENTS = [
+  { user: 4, app: 3, stage: "iame_scrutiny", active: true },
+  { user: 5, app: 4, stage: "bee_scrutiny", active: false },
 ];
 
 const audience = { name: "bee-api-audience", protocol: "openid-connect", protocolMapper: "oidc-audience-mapper", consentRequired: false, config: { "included.custom.audience": "bee-api", "access.token.claim": "true", "id.token.claim": "false" } };
@@ -125,29 +142,38 @@ S.push("-- Synthetic local-only fee; this is not a BEE-approved amount.");
 S.push("INSERT INTO fee_rule (id, category, version, amount_inr, status, note) VALUES ('RAC-DEMO', 'RAC', '0-unverified', 1000.00, 'unverified', 'Synthetic local amount only; BEE fee decision pending') ON CONFLICT (id) DO UPDATE SET amount_inr = EXCLUDED.amount_inr, status = EXCLUDED.status, note = EXCLUDED.note;");
 S.push("-- Metadata only: no approved star-rating expression or computation is claimed.");
 S.push("INSERT INTO rating_formula (id, category, version, status, definition, note) VALUES ('RAC-STAR-DEMO', 'RAC', '0-unverified', 'unverified', '{}'::jsonb, 'Placeholder only; no official rating may be computed') ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, definition = EXCLUDED.definition, note = EXCLUDED.note;");
-S.push("INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2') ON CONFLICT (seed_version) DO NOTHING;");
+S.push("-- WP02.2 scope fixtures: seeded states only; version reset to 0 on every seed.");
+S.push("INSERT INTO model_application (id, reference, organisation_id, brand_name, category, model_number, state, version) VALUES");
+S.push(APPLICATIONS.map((a) => `  (${q(app(a.n))}, ${q(a.reference)}, ${q(ORGS.find((o) => o.code === a.org).id)}, ${q(a.brand)}, 'RAC', ${q(a.model)}, ${q(a.state)}, 0)`).join(",\n"));
+S.push("ON CONFLICT (id) DO UPDATE SET reference = EXCLUDED.reference, organisation_id = EXCLUDED.organisation_id, brand_name = EXCLUDED.brand_name, model_number = EXCLUDED.model_number, state = EXCLUDED.state, version = 0;");
+S.push("INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES");
+S.push(ASSIGNMENTS.map((a) => `  (${q(usr(a.user))}, 'model_application', ${q(app(a.app))}, ${q(a.stage)}, ${a.active})`).join(",\n"));
+S.push("ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = EXCLUDED.active;");
+S.push("INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1') ON CONFLICT (seed_version) DO NOTHING;");
 S.push("COMMIT;");
 S.push("");
 
-const OUT = [
-  [path.join(__dirname, `keycloak/import/${REALM}-realm.json`), JSON.stringify(realm, null, 2) + "\n"],
-  [path.join(__dirname, "seed/seed.sql"), S.join("\n")],
-];
-if (process.argv.includes("--counts")) {
-  console.log(JSON.stringify({ organisations: ORGS.length, keycloakUsers: USERS.length, userAccounts: dbUsers.length, memberships: dbUsers.length, roleAssignments: dbUsers.length, activeRoleAssignments: dbUsers.filter((u) => u.db.active).length, feeRules: 1, ratingFormulas: 1 }));
-  process.exit(0);
-}
-const CHECK = process.argv.includes("--check");
-let stale = 0;
-OUT.forEach(([file, text]) => {
-  if (CHECK) {
-    if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== text) { console.log(`stale: ${path.relative(process.cwd(), file)}`); stale++; }
-  } else {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, text);
+if (require.main === module) {
+  const OUT = [
+    [path.join(__dirname, `keycloak/import/${REALM}-realm.json`), JSON.stringify(realm, null, 2) + "\n"],
+    [path.join(__dirname, "seed/seed.sql"), S.join("\n")],
+  ];
+  if (process.argv.includes("--counts")) {
+    console.log(JSON.stringify({ organisations: ORGS.length, keycloakUsers: USERS.length, userAccounts: dbUsers.length, memberships: dbUsers.length, roleAssignments: dbUsers.length, activeRoleAssignments: dbUsers.filter((u) => u.db.active).length, feeRules: 1, ratingFormulas: 1, modelApplications: APPLICATIONS.length, assignments: ASSIGNMENTS.length, activeAssignments: ASSIGNMENTS.filter((a) => a.active).length }));
+    process.exit(0);
   }
-});
-if (CHECK && stale) process.exit(1);
-if (!CHECK) console.log(`wrote ${OUT.length} fixture files (${ORGS.length} organisations, ${USERS.length} Keycloak users, ${dbUsers.length} Spring accounts)`);
+  const CHECK = process.argv.includes("--check");
+  let stale = 0;
+  OUT.forEach(([file, text]) => {
+    if (CHECK) {
+      if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== text) { console.log(`stale: ${path.relative(process.cwd(), file)}`); stale++; }
+    } else {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, text);
+    }
+  });
+  if (CHECK && stale) process.exit(1);
+  if (!CHECK) console.log(`wrote ${OUT.length} fixture files (${ORGS.length} organisations, ${USERS.length} Keycloak users, ${dbUsers.length} Spring accounts)`);
+}
 
-module.exports = { ORGS, USERS, usr, org, REALM, DEV_PASSWORD };
+module.exports = { ORGS, USERS, APPLICATIONS, ASSIGNMENTS, usr, org, app, REALM, DEV_PASSWORD };

@@ -70,7 +70,7 @@ public final class SlicePolicy {
     /** The server's own recheck of a row the repository returned; must agree with the SQL filter. */
     public static boolean canRead(ReadScope scope, ApplicationFacts app) {
         return scope.organisations().contains(app.organisationId())
-            || (scope.assigned() && !app.assignedStagesForCaller().isEmpty())
+            || (scope.assigned() && app.assignedStagesForCaller().contains(app.state()))
             || scope.stages().contains(app.state());
     }
 
@@ -80,7 +80,7 @@ public final class SlicePolicy {
         if (scope.organisations().contains(app.organisationId())) {
             basis.add(OWN_ORG);
         }
-        if (scope.assigned() && !app.assignedStagesForCaller().isEmpty()) {
+        if (scope.assigned() && app.assignedStagesForCaller().contains(app.state())) {
             basis.add(ASSIGNED);
         }
         if (scope.stages().contains(app.state())) {

@@ -48,6 +48,7 @@ class SlicePolicyTest {
         var iame = SlicePolicy.readScope(caller("iame", "assigned", UUID.randomUUID()));
         assertThat(SlicePolicy.canRead(iame, app(PIXEL, "iame_scrutiny", "iame_scrutiny"))).isTrue();
         assertThat(SlicePolicy.canRead(iame, app(PIXEL, "iame_scrutiny"))).isFalse();
+        assertThat(SlicePolicy.canRead(iame, app(PIXEL, "bee_scrutiny", "iame_scrutiny"))).as("old-stage assignment cannot grant read after handoff").isFalse();
         var reviewer = SlicePolicy.readScope(caller("reviewer", "assigned"));
         assertThat(SlicePolicy.canRead(reviewer, app(NOVA, "bee_scrutiny"))).as("stage alone does not grant a reviewer").isFalse();
     }

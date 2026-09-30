@@ -154,6 +154,18 @@ class ModelApplicationControllerSecurityTest {
         verify(applications).list(argThat(s -> s.assigned() && s.organisations().isEmpty() && s.stages().isEmpty()), eq(USER));
     }
 
+    @Test
+    void oldStageAssignmentCannotReadAfterHandoffEvenIfRepositoryReturnsTheRow() throws Exception {
+        account("iame", "assigned");
+        var oldAssignment = row(PIXEL_APP, PIXEL, "PIXEL", "bee_scrutiny", "iame_scrutiny");
+        when(applications.list(any(), eq(USER))).thenReturn(List.of(oldAssignment));
+        when(applications.find(eq(PIXEL_APP), any(), eq(USER))).thenReturn(Optional.of(oldAssignment));
+        mvc.perform(get("/api/model-applications").with(token("iame")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.count").value(0));
+        mvc.perform(get("/api/model-applications/" + PIXEL_APP).with(token("iame")))
+            .andExpect(status().isNotFound()).andExpect(content().json(NOT_FOUND, true));
+    }
+
     /** Every FIRST_SLICE.md §7 write and the history read stay denied, even for the step's own actor. */
     @ParameterizedTest
     @CsvSource({

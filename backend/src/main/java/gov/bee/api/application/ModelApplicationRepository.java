@@ -27,7 +27,7 @@ public class ModelApplicationRepository {
     private static final String SELECT = """
         SELECT a.id, a.reference, a.organisation_id, o.code, a.brand_name, a.category, a.model_number, a.state, a.version,
                COALESCE((SELECT string_agg(s.stage, ',') FROM assignment s
-                          WHERE s.subject_type = 'model_application' AND s.subject_id = a.id AND s.user_id = ? AND s.active), '') AS stages
+                          WHERE s.subject_type = 'model_application' AND s.subject_id = a.id AND s.user_id = ? AND s.active AND s.stage = a.state), '') AS stages
         FROM model_application a JOIN organisation o ON o.id = a.organisation_id
         """;
 
@@ -59,7 +59,7 @@ public class ModelApplicationRepository {
             args.addAll(scope.organisations());
         }
         if (scope.assigned()) {
-            any.add("EXISTS (SELECT 1 FROM assignment s WHERE s.subject_type = 'model_application' AND s.subject_id = a.id AND s.user_id = ? AND s.active)");
+            any.add("EXISTS (SELECT 1 FROM assignment s WHERE s.subject_type = 'model_application' AND s.subject_id = a.id AND s.user_id = ? AND s.active AND s.stage = a.state)");
             args.add(callerId);
         }
         if (!scope.stages().isEmpty()) {

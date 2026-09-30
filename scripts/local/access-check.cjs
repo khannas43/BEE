@@ -90,6 +90,15 @@ const leaks = (body, refsList) => [...idsOf(refsList), ...refsList].filter((x) =
   /* ---------- assignment records are the authority for IAME and Reviewer ---------- */
   r = await call("iame.officer", "/api/model-applications");
   check("scope.iame-assigned-only", r.status === 200 && same(refs(r), ["LOCAL-MA-0003"]) && r.json.items[0].readBasis.join() === "assigned", `HTTP ${r.status} ${refs(r).join(", ")} (one active assignment)`);
+  try {
+    sql(`UPDATE app.model_application SET state = 'bee_scrutiny' WHERE id = '${byRef["LOCAL-MA-0003"].id}'`);
+    const staleList = await call("iame.officer", "/api/model-applications");
+    const staleRead = await call("iame.officer", `/api/model-applications/${byRef["LOCAL-MA-0003"].id}`);
+    check("scope.iame-old-stage-assignment", staleList.status === 200 && staleList.json?.count === 0 && staleRead.status === 404 && staleRead.body === NOT_FOUND,
+      `active iame_scrutiny assignment after handoff to bee_scrutiny: list ${staleList.json?.count}, read HTTP ${staleRead.status}`);
+  } finally {
+    sql(`UPDATE app.model_application SET state = 'iame_scrutiny' WHERE id = '${byRef["LOCAL-MA-0003"].id}'`);
+  }
   r = await call("iame.officer", `/api/model-applications/${byRef["LOCAL-MA-0002"].id}`);
   check("scope.iame-unassigned-read", r.status === 404 && r.body === NOT_FOUND, `LOCAL-MA-0002 (not assigned): HTTP ${r.status}`);
   r = await call("bee.reviewer", "/api/model-applications");

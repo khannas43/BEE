@@ -7,8 +7,7 @@ import { Stars } from "@/components/ui/Stars";
 import { Module, Screen } from "@/lib/screens";
 import { Card, ScreenChrome, Status, OK, WARN, BAD } from "@/components/app/ScreenScaffold";
 import { ADVISORY_TEXT, AI_MODELS, AIModelState, modelLabel } from "@/lib/mock/certificate";
-import { useRole } from "@/components/app/RoleContext";
-import { roleByKey } from "@/lib/roles";
+import { previewRoleOf, useRole } from "@/components/app/RoleContext";
 
 /** The mandatory advisory-only disclaimer shown on every AI screen. */
 export function AIDisclaimer() {
@@ -277,7 +276,7 @@ function evidenceFor(entity: RiskEntity, factor: RiskFactor): EvidenceTable {
 
 export function ComplianceRiskScoring({ module, screen }: { module: Module; screen: Screen }) {
   const { role } = useRole();
-  const officer = roleByKey(role);
+  const officer = previewRoleOf(role);
   const [selId, setSelId] = useState(RISK_ENTITIES[0].id);
   const [disposition, setDisposition] = useState("monitor");
   const [note, setNote] = useState("");
@@ -520,7 +519,7 @@ interface AnomalyOutcome { status: string; officer: string; timestamp: string; r
 
 export function ProductionAnomalyDetection({ module, screen }: { module: Module; screen: Screen }) {
   const { role } = useRole();
-  const officer = roleByKey(role);
+  const officer = previewRoleOf(role);
   const [selId, setSelId] = useState(ANOMALIES[0].id);
   const [reason, setReason] = useState("");
   const [assignee, setAssignee] = useState("IAME North — A. Kapoor");
@@ -652,7 +651,7 @@ type Dispo = "accept" | "correct" | "clarify";
 
 export function DocumentIntelligence({ module, screen }: { module: Module; screen: Screen }) {
   const { role } = useRole();
-  const officer = roleByKey(role);
+  const officer = previewRoleOf(role);
   const [page, setPage] = useState(1);
   const [sel, setSel] = useState<string | null>(null);
   const [dispo, setDispo] = useState<Record<string, Dispo>>({});
@@ -793,7 +792,7 @@ const THRESHOLD = 70;
 
 export function HelpdeskAssistant({ module, screen }: { module: Module; screen: Screen }) {
   const { role } = useRole();
-  const agent = roleByKey(role);
+  const agent = previewRoleOf(role);
   const [reply, setReply] = useState(
     "You can verify a BEE star label by scanning the QR code on the appliance, or by entering the registration number at bee-portal /verify. A genuine label returns the brand, model and star rating."
   );
@@ -1049,7 +1048,7 @@ const GOV_STATUS_TONE: Record<AIModelState["state"], string> = { Approved: OK, S
 
 export function AIModelGovernance({ module, screen }: { module: Module; screen: Screen }) {
   const { role } = useRole();
-  const maker = roleByKey(role);
+  const maker = previewRoleOf(role);
   const canAct = GOV_ACTORS.has(role);
   const [selName, setSelName] = useState(GOV_MODELS[0].name);
   const [action, setAction] = useState("");

@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Card } from "@/components/app/ScreenScaffold";
-import { useRole } from "@/components/app/RoleContext";
-import { roleByKey } from "@/lib/roles";
+import { previewRoleOf, useRole } from "@/components/app/RoleContext";
 import { PRIMARY_CERT, FABRIC_META, correlationForVersion } from "@/lib/mock/certificate";
 import { useCert } from "./CertificateStore";
 import {
@@ -22,7 +21,7 @@ const V1 = SEED.versions[0];
 
 export function CertificateWorkspace({ view }: { view?: "ledger" | "history" | "actions" } = {}) {
   const { role } = useRole();
-  const officer = roleByKey(role);
+  const officer = previewRoleOf(role);
   const { state, current, dispatch } = useCert();
   const [localTab, setTab] = useState<"ledger" | "history" | "actions">("ledger");
   const tab = view ?? localTab;   // controlled when the parent supplies a view
@@ -241,7 +240,7 @@ export function CertificateWorkspace({ view }: { view?: "ledger" | "history" | "
 /* ---- Lifecycle actions (amend / revoke, maker-checker) ---- */
 function LifecycleActions() {
   const { role } = useRole();
-  const maker = roleByKey(role);
+  const maker = previewRoleOf(role);
   const { state, current, dispatch } = useCert();
   const [reason, setReason] = useState("");
   const [effective, setEffective] = useState("");

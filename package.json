@@ -19,6 +19,7 @@
     "local:destroy": "bash scripts/local/destroy.sh",
     "local:rt1": "bash scripts/local/rt1-proof.sh",
     "local:auth": "bash -c 'source scripts/local/lib.sh && node scripts/local/auth-check.cjs --with-expiry'",
+    "local:browser": "bash -c 'source scripts/local/lib.sh && node scripts/local/browser-check.cjs'",
     "web:test": "node --test scripts/local/oidc.test.mjs",
     "api:test": "JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -q -B -f backend/pom.xml test"
   },

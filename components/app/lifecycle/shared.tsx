@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { Stars } from "@/components/ui/Stars";
-import { useRole } from "@/components/app/RoleContext";
-import { roleByKey } from "@/lib/roles";
+import { previewRoleOf, useRole } from "@/components/app/RoleContext";
 import {
   ModelApplication,
   STAGE_META,
@@ -16,7 +15,7 @@ import {
 /** The display name used as the "actor" when the current role acts. */
 export function useActor(): string {
   const { role } = useRole();
-  return roleByKey(role).name;
+  return previewRoleOf(role).name;
 }
 
 export function StageBadge({ app }: { app: ModelApplication }) {

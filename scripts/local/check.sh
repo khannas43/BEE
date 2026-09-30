@@ -114,6 +114,13 @@ read -r a_pass a_fail <<<"$(sed -nE 's/^auth checks: ([0-9]+) passed, ([0-9]+) f
 if [[ -z "${a_pass:-}" ]]; then check "auth.run" 0 "auth-check did not complete: $(tail -1 <<<"$auth_out")"
 else pass=$((pass + a_pass)); fail=$((fail + a_fail)); fi
 
+# ---- signed-in screens identify the preview, not a fake identity (scripts/local/browser-check.cjs)
+br_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$br_out"
+read -r b_pass b_fail <<<"$(sed -nE 's/^browser checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$br_out")"
+if [[ -z "${b_pass:-}" ]]; then check "browser.run" 0 "browser-check did not complete: $(tail -1 <<<"$br_out")"
+else pass=$((pass + b_pass)); fail=$((fail + b_fail)); fi
+
 # ---- memory against ADR-001 D-RT8 (MB)
 mem_mb() { docker stats --no-stream --format '{{.MemUsage}}' "$1" 2>/dev/null | awk '{v=$1; u=v; gsub(/[0-9.]/,"",u); gsub(/[A-Za-z]/,"",v); if(u=="GiB")v*=1024; else if(u=="KiB")v/=1024; printf "%d", v}'; }
 pg_mb="$(mem_mb bee-local-postgres)"; kc_mb="$(mem_mb bee-local-keycloak)"

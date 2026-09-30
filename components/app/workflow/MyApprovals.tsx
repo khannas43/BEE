@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Card, Status, OK, WARN, BAD } from "@/components/app/ScreenScaffold";
-import { useRole } from "@/components/app/RoleContext";
-import { roleByKey } from "@/lib/roles";
+import { previewRoleOf, useRole } from "@/components/app/RoleContext";
 import { PRIMARY_CERT } from "@/lib/mock/certificate";
 
 /* ================================================================== *
@@ -31,7 +30,7 @@ const ITEMS: Item[] = [
 
 export function MyApprovals() {
   const { role } = useRole();
-  const officer = roleByKey(role);
+  const officer = previewRoleOf(role);
   const [done, setDone] = useState<Record<string, string>>({});
   const mine = ITEMS.filter((i) => (i.who as string[]).includes(role));
 

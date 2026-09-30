@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Card, ScreenChrome, Status, OK, WARN, BAD, INFO } from "@/components/app/ScreenScaffold";
-import { useRole } from "@/components/app/RoleContext";
-import { isExternalRole, roleByKey } from "@/lib/roles";
+import { previewRoleOf, useRole } from "@/components/app/RoleContext";
+import { isExternalRole } from "@/lib/roles";
 import { Module, Screen } from "@/lib/screens";
 import { PARTNER_PAYMENTS, PartnerPaymentRow, PayStatus, inr } from "@/lib/mock/payments";
 import { StageScreen } from "./StageScreen";
@@ -27,7 +27,7 @@ export function ModelPaymentScreen({ module, screen }: { module: Module; screen:
 
 function PartnerPayments({ module, screen }: { module: Module; screen: Screen }) {
   const { role } = useRole();
-  const org = roleByKey(role);
+  const org = previewRoleOf(role);
   const set = PARTNER_PAYMENTS[role];
   const [receipt, setReceipt] = useState<PartnerPaymentRow | null>(null);
 

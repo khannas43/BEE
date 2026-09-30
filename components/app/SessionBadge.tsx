@@ -3,40 +3,52 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 
-interface SpringMe {
+export interface SpringIdentity {
   displayName: string;
   effectiveRoles: { role: string; scope: string }[];
   organisations: { code: string }[];
 }
 
-/**
- * Shows the signed-in identity as Spring reports it (roles and organisation from
- * the BEE database), fetched through the Next.js server. No token is involved on
- * this side: the browser only sends its httpOnly session cookie.
- */
-export function SessionBadge({ signedOut }: { signedOut?: React.ReactNode }) {
-  const [me, setMe] = useState<SpringMe | null>(null);
+export type IdentityState = { status: "loading" } | { status: "signed-out" } | { status: "signed-in"; me: SpringIdentity };
 
+// One request per page load, shared by the preview banner and the top-bar badge.
+let pending: Promise<IdentityState> | null = null;
+const loadIdentity = () =>
+  (pending ??= fetch("/api/runtime/me", { cache: "no-store" })
+    .then(async (r): Promise<IdentityState> => (r.ok ? { status: "signed-in", me: (await r.json()) as SpringIdentity } : { status: "signed-out" }))
+    .catch((): IdentityState => ({ status: "signed-out" })));
+
+/**
+ * The signed-in identity as Spring reports it (roles and organisation from the
+ * BEE database), fetched through the Next.js server. The browser sends only its
+ * httpOnly session cookie; no token is involved on this side.
+ */
+export function useSpringIdentity(): IdentityState {
+  const [state, setState] = useState<IdentityState>({ status: "loading" });
   useEffect(() => {
     let live = true;
-    fetch("/api/runtime/me", { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<SpringMe>) : null))
-      .then((body) => live && setMe(body))
-      .catch(() => live && setMe(null));
+    loadIdentity().then((s) => live && setState(s));
     return () => {
       live = false;
     };
   }, []);
+  return state;
+}
 
-  if (!me) return <>{signedOut}</>;
-  const roles = me.effectiveRoles.map((r) => `${r.role} (${r.scope})`).join(", ");
-  const orgs = me.organisations.map((o) => o.code).join(", ");
+export const rolesText = (me: SpringIdentity) => me.effectiveRoles.map((r) => `${r.role} (${r.scope})`).join(", ");
+export const orgsText = (me: SpringIdentity) => me.organisations.map((o) => o.code).join(", ");
+
+export function SessionBadge({ signedOut }: { signedOut?: React.ReactNode }) {
+  const id = useSpringIdentity();
+  if (id.status !== "signed-in") return <>{signedOut}</>;
+  const orgs = orgsText(id.me);
   return (
     <div className="flex items-center gap-space-sm" data-testid="session-badge">
       <div className="hidden md:block leading-tight text-right">
-        <div className="font-label-md text-label-md text-on-surface font-semibold">{me.displayName}</div>
+        <div className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide">Signed in</div>
+        <div className="font-label-md text-label-md text-on-surface font-semibold">{id.me.displayName}</div>
         <div className="font-label-sm text-label-sm text-on-surface-variant">
-          {roles}
+          {rolesText(id.me)}
           {orgs ? ` · ${orgs}` : ""}
         </div>
       </div>

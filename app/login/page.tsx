@@ -56,21 +56,22 @@ export default function LoginPage() {
           </div>
         </Link>
         <div className="relative z-10">
-          <h1 className="font-display-lg text-display-lg font-bold leading-tight">Secure stakeholder & officer access</h1>
+          <h1 className="font-display-lg text-display-lg font-bold leading-tight">Stakeholder & officer sign-in</h1>
           <p className="font-body-lg text-body-lg text-forest-light/85 mt-space-md max-w-md">
-            Registration, model & label lifecycle, fees, production, enforcement, MIS and audit — governed by role, delegation and workflow state.
+            Local development build. What this sign-in does today:
           </p>
-          <div className="flex items-center gap-space-md mt-space-xl">
+          {/* Only controls implemented and checked now (WP02.1); add others when they are demonstrated. */}
+          <ul className="mt-space-md space-y-space-xs" data-testid="implemented-controls">
             {[
-              { icon: "shield_lock", t: "MFA enforced" },
-              { icon: "verified_user", t: "RBAC + object policy" },
-              { icon: "history_edu", t: "Every action audited" },
+              { icon: "login", t: "Sign-in through the BEE identity service (Keycloak, authorization code with PKCE)" },
+              { icon: "cookie", t: "Session kept on the server; the browser holds only an opaque, httpOnly cookie" },
+              { icon: "badge", t: "Roles and organisation read from BEE records, not from the sign-in token" },
             ].map((f) => (
-              <div key={f.t} className="flex items-center gap-1.5 font-label-md text-label-md text-forest-light/90">
-                <Icon name={f.icon} size={18} /> {f.t}
-              </div>
+              <li key={f.t} className="flex items-start gap-1.5 font-label-md text-label-md text-forest-light/90">
+                <Icon name={f.icon} size={18} className="mt-0.5 shrink-0" /> {f.t}
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
         <div className="font-label-sm text-label-sm text-forest-light/60 relative z-10">© {new Date().getFullYear()} BEE, Ministry of Power, Government of India</div>
       </div>

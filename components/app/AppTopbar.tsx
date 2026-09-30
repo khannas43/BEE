@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { ROLES, RoleKey, roleByKey } from "@/lib/roles";
+import { ROLES, RoleKey } from "@/lib/roles";
 import { countForRole } from "@/lib/screens";
 import { ROLE_PREVIEW_ENABLED, useRole } from "./RoleContext";
 import { SessionBadge } from "./SessionBadge";
@@ -11,7 +11,6 @@ import { useLang } from "@/components/i18n/LangProvider";
 export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
   const { role, setRole } = useRole();
   const { t, lang, toggle } = useLang();
-  const current = roleByKey(role);
 
   return (
     <header className="h-[60px] shrink-0 bg-surface-container-lowest border-b border-border-subtle flex items-center gap-space-md px-space-md">
@@ -43,9 +42,9 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
 
         {/* Role switcher — development preview only; local display state, never a server session */}
         {ROLE_PREVIEW_ENABLED && (
-        <div className="flex items-center gap-space-sm bg-forest-light px-space-sm py-1.5 rounded-lg" title={t("app.previewRoleHint")}>
-          <Icon name="visibility" size={16} className="text-primary" />
-          <span className="hidden lg:inline font-label-sm text-label-sm text-forest-dark/70 uppercase tracking-wide">{t("app.previewRole")}</span>
+        <div data-preview-role className="flex items-center gap-space-sm bg-solar-gold-light border border-dashed border-solar-gold px-space-sm py-1.5 rounded-lg" title={t("app.previewRoleHint")}>
+          <Icon name="visibility" size={16} className="text-solar-gold-dark" />
+          <span className="font-label-sm text-label-sm text-solar-gold-dark uppercase tracking-wide">{t("app.previewRole")}</span>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as RoleKey)}
@@ -71,20 +70,11 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
           <span className="absolute -top-1 -right-1 w-4 h-4 bg-error text-on-error rounded-full text-[10px] font-bold flex items-center justify-center">7</span>
         </button>
 
-        <div className="flex items-center gap-space-sm">
-          <div className="w-9 h-9 rounded-full bg-primary text-on-primary flex items-center justify-center font-title-lg text-title-lg">
-            {current.short.charAt(0)}
-          </div>
-          <div className="hidden sm:block leading-tight">
-            <div className="font-label-md text-label-md text-on-surface font-semibold">{t(`role.${role}`)}</div>
-            <div className="font-label-sm text-label-sm text-on-surface-variant">BEE • New Delhi</div>
-          </div>
-        </div>
-
+        {/* The only identity shown here is the signed-in one, as Spring reports it. */}
         <SessionBadge
           signedOut={
-            <Link href="/login" className="text-on-surface-variant hover:text-error" title={t("app.signOut")}>
-              <Icon name="logout" size={20} />
+            <Link href="/login" className="flex items-center gap-1 font-label-md text-label-md text-primary hover:text-forest-dark">
+              <Icon name="login" size={20} /> Sign in
             </Link>
           }
         />

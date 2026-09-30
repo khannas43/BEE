@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "audit:access": "bash scripts/access-audit.sh",
+    "matrix": "bash scripts/screen-matrix.sh"
   },
   "dependencies": {
     "next": "16.3.5",

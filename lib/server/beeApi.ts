@@ -3,6 +3,8 @@
  * route handlers or other server code: the browser never calls Spring directly
  * and never receives a token.
  */
+import "server-only";
+
 const API_BASE = process.env.BEE_API_URL ?? "http://127.0.0.1:8090";
 const TIMEOUT_MS = 3000;
 

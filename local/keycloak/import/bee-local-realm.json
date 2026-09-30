@@ -66,20 +66,22 @@
     {
       "clientId": "bee-web",
       "name": "BEE portal (Next.js server, authorization code + PKCE)",
+      "description": "Short access tokens so local checks exercise refresh. The organisation claim is wrong for every user on purpose: Spring must ignore it.",
       "enabled": true,
       "publicClient": false,
       "secret": "bee-local-web-secret",
       "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "http://127.0.0.1:3100/*"
+        "http://127.0.0.1:3100/api/auth/callback"
       ],
-      "webOrigins": [
-        "http://127.0.0.1:3100"
-      ],
+      "webOrigins": [],
       "attributes": {
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "60",
+        "post.logout.redirect.uris": "http://127.0.0.1:3100/login"
       },
       "protocolMappers": [
         {
@@ -91,6 +93,20 @@
             "included.custom.audience": "bee-api",
             "access.token.claim": "true",
             "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "misleading-organisation-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "organisation",
+            "claim.value": "Bureau of Energy Efficiency (local)",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
           }
         }
       ]

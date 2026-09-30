@@ -1,21 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { Emblem } from "@/components/chrome/Emblem";
 import { ROLES, RoleKey } from "@/lib/roles";
 import { countForRole } from "@/lib/screens";
-import { persistRole } from "@/components/app/RoleContext";
+import { persistRole, ROLE_PREVIEW_ENABLED } from "@/components/app/RoleContext";
+
+const SIGN_IN_ERRORS: Record<string, string> = {
+  no_active_account: "Your identity was confirmed, but there is no active BEE portal account for it.",
+  no_effective_role: "Your identity was confirmed, but you have no active BEE role that matches your sign-in.",
+  access_denied: "Sign-in was cancelled or refused.",
+  login_expired: "The sign-in attempt expired or was already used. Please start again.",
+  invalid_state: "The sign-in response did not match this browser's request. Please start again.",
+  invalid_issuer: "The sign-in response came from an unexpected identity provider.",
+  invalid_id_token: "The identity token could not be verified.",
+  code_exchange_failed: "The sign-in could not be completed with the identity provider.",
+  identity_unavailable: "The identity service is not reachable.",
+  api_unreachable: "The BEE service is not reachable, so access could not be checked.",
+};
+
+const noSubscribe = () => () => {};
+
+function noticeFor(q: URLSearchParams): { kind: "error" | "info"; text: string } | null {
+  const error = q.get("error");
+  if (error) return { kind: "error", text: SIGN_IN_ERRORS[error] ?? "Sign-in failed. Please try again." };
+  if (q.get("signedOut")) return { kind: "info", text: "You have signed out." };
+  return null;
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"credentials" | "mfa">("credentials");
   const [role, setRole] = useState<RoleKey>("admin");
-  const [otp, setOtp] = useState("");
+  const search = useSyncExternalStore(noSubscribe, () => window.location.search, () => "");
+  const notice = noticeFor(new URLSearchParams(search));
 
-  function signIn() {
+  /** Preview only: sets a local display role. No identity check and no server session. */
+  function openPreview() {
     persistRole(role);
     router.push("/app");
   }
@@ -60,20 +83,29 @@ export default function LoginPage() {
             <span className="font-headline-sm text-headline-sm text-primary">BEE S&L Portal</span>
           </Link>
 
-          {step === "credentials" ? (
-            <>
-              <h2 className="font-headline-md text-headline-md text-on-surface">Sign in</h2>
-              <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 mb-space-lg">
-                Federated Keycloak realm. For this prototype, pick the role you want to explore.
+          <h2 className="font-headline-md text-headline-md text-on-surface">Sign in</h2>
+          <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 mb-space-lg">
+            You sign in with the BEE identity service (Keycloak). Your roles and organisation come from the BEE portal&apos;s own records.
+          </p>
+          {notice && (
+            <div role={notice.kind === "error" ? "alert" : "status"} className={`mb-space-md rounded-lg px-3 py-2 font-body-sm text-body-sm ${notice.kind === "error" ? "bg-error-container text-on-error-container" : "bg-forest-light text-forest-dark"}`}>
+              {notice.text}
+            </div>
+          )}
+          <a
+            href="/api/auth/login?returnTo=/app"
+            className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-lg text-label-lg flex items-center justify-center gap-2 hover:bg-forest-dark transition-all"
+          >
+            <Icon name="login" size={18} /> Sign in with BEE identity
+          </a>
+
+          {ROLE_PREVIEW_ENABLED && (
+            <div className="mt-space-lg pt-space-md border-t border-border-subtle">
+              <p className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide mb-1">Development preview only</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant mb-space-md">
+                Explore the prototype screens as a chosen role. This does not sign you in, checks no credentials and creates no server session.
               </p>
-
-              <label className="font-label-sm text-label-sm text-on-surface-variant block mb-1">User ID</label>
-              <input defaultValue="officer@beeindia.gov.in" className="w-full py-2.5 px-3 rounded-lg bg-surface-ground font-body-md text-body-md outline-none mb-space-md" />
-
-              <label className="font-label-sm text-label-sm text-on-surface-variant block mb-1">Password</label>
-              <input type="password" defaultValue="demo-password" className="w-full py-2.5 px-3 rounded-lg bg-surface-ground font-body-md text-body-md outline-none mb-space-md" />
-
-              <label className="font-label-sm text-label-sm text-on-surface-variant block mb-1">Sign in as role</label>
+              <label className="font-label-sm text-label-sm text-on-surface-variant block mb-1">Preview as role</label>
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value as RoleKey)}
@@ -88,39 +120,14 @@ export default function LoginPage() {
               <p className="font-label-sm text-label-sm text-on-surface-variant mb-space-lg">
                 Role controls which of the 140 screens appear, per DDD Annex A.1.
               </p>
-
               <button
-                onClick={() => setStep("mfa")}
-                className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-lg text-label-lg flex items-center justify-center gap-2 hover:bg-forest-dark transition-all"
+                onClick={openPreview}
+                className="w-full border border-primary text-primary py-2.5 rounded-lg font-label-lg text-label-lg flex items-center justify-center gap-2 hover:bg-forest-light transition-all"
                 type="button"
               >
-                Continue <Icon name="arrow_forward" size={18} />
+                <Icon name="visibility" size={18} /> Open preview
               </button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => setStep("credentials")} className="text-primary font-label-sm text-label-sm flex items-center gap-1 mb-space-md" type="button">
-                <Icon name="arrow_back" size={16} /> Back
-              </button>
-              <h2 className="font-headline-md text-headline-md text-on-surface">Two-factor verification</h2>
-              <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 mb-space-lg">
-                Enter the 6-digit OTP sent to your registered mobile ending 4821. (Any value works in this demo.)
-              </p>
-              <input
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="••••••"
-                inputMode="numeric"
-                className="w-full py-3 px-3 rounded-lg bg-surface-ground font-headline-md text-headline-md tracking-[0.5em] text-center outline-none mb-space-lg"
-              />
-              <button
-                onClick={signIn}
-                className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-lg text-label-lg flex items-center justify-center gap-2 hover:bg-forest-dark transition-all"
-                type="button"
-              >
-                <Icon name="lock_open" size={18} /> Verify & sign in
-              </button>
-            </>
+            </div>
           )}
 
           <div className="mt-space-lg pt-space-md border-t border-border-subtle text-center">

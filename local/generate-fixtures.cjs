@@ -50,6 +50,9 @@ const USERS = [
 
 const audience = { name: "bee-api-audience", protocol: "openid-connect", protocolMapper: "oidc-audience-mapper", consentRequired: false, config: { "included.custom.audience": "bee-api", "access.token.claim": "true", "id.token.claim": "false" } };
 
+const misleadingOrg = (value) => ({ name: "misleading-organisation-claim", protocol: "openid-connect", protocolMapper: "oidc-hardcoded-claim-mapper", consentRequired: false, config: { "claim.name": "organisation", "claim.value": value, "jsonType.label": "String", "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false" } });
+const WEB_ACCESS_TOKEN_SECONDS = 60;
+
 const realm = {
   realm: REALM,
   enabled: true,
@@ -63,16 +66,18 @@ const realm = {
     {
       clientId: "bee-web",
       name: "BEE portal (Next.js server, authorization code + PKCE)",
+      description: "Short access tokens so local checks exercise refresh. The organisation claim is wrong for every user on purpose: Spring must ignore it.",
       enabled: true,
       publicClient: false,
       secret: "bee-local-web-secret",
       standardFlowEnabled: true,
+      implicitFlowEnabled: false,
       directAccessGrantsEnabled: false,
       serviceAccountsEnabled: false,
-      redirectUris: [`http://127.0.0.1:${WEB_PORT}/*`],
-      webOrigins: [`http://127.0.0.1:${WEB_PORT}`],
-      attributes: { "pkce.code.challenge.method": "S256" },
-      protocolMappers: [audience],
+      redirectUris: [`http://127.0.0.1:${WEB_PORT}/api/auth/callback`],
+      webOrigins: [],
+      attributes: { "pkce.code.challenge.method": "S256", "access.token.lifespan": String(WEB_ACCESS_TOKEN_SECONDS), "post.logout.redirect.uris": `http://127.0.0.1:${WEB_PORT}/login` },
+      protocolMappers: [audience, misleadingOrg("Bureau of Energy Efficiency (local)")],
     },
     {
       clientId: "bee-local-check",
@@ -82,10 +87,7 @@ const realm = {
       publicClient: true,
       standardFlowEnabled: false,
       directAccessGrantsEnabled: true,
-      protocolMappers: [
-        audience,
-        { name: "misleading-organisation-claim", protocol: "openid-connect", protocolMapper: "oidc-hardcoded-claim-mapper", consentRequired: false, config: { "claim.name": "organisation", "claim.value": "PixelCert Agency (synthetic)", "jsonType.label": "String", "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false" } },
-      ],
+      protocolMappers: [audience, misleadingOrg("PixelCert Agency (synthetic)")],
     },
   ],
   users: USERS.map((u) => ({

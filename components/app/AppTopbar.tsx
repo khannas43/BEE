@@ -4,7 +4,8 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { ROLES, RoleKey, roleByKey } from "@/lib/roles";
 import { countForRole } from "@/lib/screens";
-import { useRole } from "./RoleContext";
+import { ROLE_PREVIEW_ENABLED, useRole } from "./RoleContext";
+import { SessionBadge } from "./SessionBadge";
 import { useLang } from "@/components/i18n/LangProvider";
 
 export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
@@ -40,7 +41,8 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
           {lang === "en" ? "हिन्दी" : "English"}
         </button>
 
-        {/* Role switcher — prototype preview mechanism, not real authentication */}
+        {/* Role switcher — development preview only; local display state, never a server session */}
+        {ROLE_PREVIEW_ENABLED && (
         <div className="flex items-center gap-space-sm bg-forest-light px-space-sm py-1.5 rounded-lg" title={t("app.previewRoleHint")}>
           <Icon name="visibility" size={16} className="text-primary" />
           <span className="hidden lg:inline font-label-sm text-label-sm text-forest-dark/70 uppercase tracking-wide">{t("app.previewRole")}</span>
@@ -62,6 +64,7 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
             </optgroup>
           </select>
         </div>
+        )}
 
         <button className="relative text-on-surface-variant hover:text-on-surface" type="button" aria-label="Notifications">
           <Icon name="notifications" size={22} />
@@ -78,9 +81,13 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
           </div>
         </div>
 
-        <Link href="/login" className="text-on-surface-variant hover:text-error" title={t("app.signOut")}>
-          <Icon name="logout" size={20} />
-        </Link>
+        <SessionBadge
+          signedOut={
+            <Link href="/login" className="text-on-surface-variant hover:text-error" title={t("app.signOut")}>
+              <Icon name="logout" size={20} />
+            </Link>
+          }
+        />
       </div>
     </header>
   );

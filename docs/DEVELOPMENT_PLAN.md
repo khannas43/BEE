@@ -9,7 +9,7 @@ Location: Code/docs | Status: Active planning baseline
 
 **Effort snapshot.** The retained v0.3 estimates total **1,205 person-days / 9,640 hours** across **34 activities**. A separate 20% reserve is **241 person-days / 1,928 hours**, for **1,446 person-days / 11,568 hours**. These carryover estimates need a local-scope re-estimate after the first vertical slice. At one active 8-hour developer on the single workstation, the former T0+6/7/8 production schedule is infeasible; Section 15 shows the calendar implication.
 
-**Completion snapshot.** Local work packages accepted: **1/11 (9.1%)**: WP01 is accepted as documentation and design evidence. RT1 has passed as WP03.2 local runtime proof on this MacBook, but WP03 and all business behavior remain unaccepted. The prototype remains input, not accepted local implementation. Document preparation: **15/15 sections and 29/29 numbered subsections drafted (100%)**. The section table tracks document status, not delivery progress.
+**Completion snapshot.** Local work packages accepted: **1/11 (9.1%)**: WP01 is accepted as documentation and design evidence. WP02.1 local Keycloak sign-in and Next.js session work is accepted as an activity; MFA, role/object policy and the rest of WP02 remain open. RT1 passed as WP03.2 local runtime proof, but WP03 and business behavior remain unaccepted. The prototype remains input, not accepted local implementation. Document preparation: **15/15 sections and 29/29 numbered subsections drafted (100%)**. The section table tracks document status, not delivery progress.
 
 | Section | Subsections drafted | Document status |
 | --- | ---: | --- |
@@ -113,6 +113,8 @@ The solution's 25 services and full stack are a future target catalogue, not a r
 | WP09 | Certificate and Fabric | Local Fabric chaincode/adapter for issue/amend/revoke and versioned hash proof | No Active before confirmed test-network commit; retry/mismatch paths visible |
 | WP10 | Enforcement and helpdesk | Case/sampling/testing flow and integrated local ticket workspace | Partner/case assignment scope and ticket resolution work with seeded records |
 | WP11 | MIS and AI | Local dashboards and five use-case demonstrations with evidence and human control | Output cites data/model version; disposition and override persist; no automatic adverse decision |
+
+**WP02.1 activity review (30 September 2026).** Accepted for local Keycloak authorization-code/PKCE sign-in, server-held Next.js session, Spring-backed identity check, expiry/refresh and logout. Commit `d6aa367` includes the development-preview banner and browser checks that distinguish the selected preview role from the real signed-in identity. The reported local check passed 89/89 and the 16 OIDC unit tests passed on review. In-memory sessions and HTTP cookies are local-runtime limits. MFA policy/demo remains in WP02.3; role/object authorization and business screens remain in WP02.2 and later packages. This accepts no WP02 work package or screen-matrix grant.
 
 **Excluded work packages:** WP12 external adapters, WP13 migration and WP14 quality/release. Feature-level local checks remain part of WP01–WP11; they do not imply a CI/CD pipeline, audit, load campaign, formal UAT or production release.
 
@@ -271,9 +273,9 @@ Planning starts **Friday, 2 October 2026**. One person-day is **8 hours**; a nom
 | WP01.1 | Scope/trace | RFP-to-feature inventory and gap register | Stage A | 18 | 144 |
 | WP01.2 | Scope/trace | Screen and role/action matrix | Stage A | 12 | 96 |
 | WP01.3 | Scope/trace | Architecture decisions and acceptance mapping | Stage A | 10 | 80 |
-| WP02.1 | Identity | Keycloak federation/MFA/session design | Stage A | 25 | 200 |
+| WP02.1 | Identity | Local Keycloak authorization-code/PKCE sign-in, Next.js server session and Spring identity check | Stage A | 25 | 200 |
 | WP02.2 | Identity | Organization and object authorization | Stage A | 35 | 280 |
-| WP02.3 | Identity | Delegation, denial and access tests | Stage A | 20 | 160 |
+| WP02.3 | Identity | Local MFA policy/demo, delegation, denial and access tests | Stage A | 20 | 160 |
 | WP03.1 | Contracts | Gateway and OpenAPI/error standards | Stage A | 25 | 200 |
 | WP03.2 | Contracts | Common service/BFF integration | Stage A | 30 | 240 |
 | WP03.3 | Contracts | Contract tests and correlation | Stage A | 20 | 160 |
@@ -314,4 +316,4 @@ If one developer works sequentially on this one MacBook at 8 hours on every week
 
 ### 15.4 Progress calculation and change control
 
-Delivery progress is accepted WP01–WP11 against Section 14: currently **1/11 (9.1%)**, WP01 documentation and design only; RT1 is passed local evidence under WP03.2, not WP03 acceptance. Actual person-days and the local-scope remaining estimate have not yet been reconciled. The Section 0 table describes drafted document sections only. Track actual person-days, remaining estimate, accepted WPs and the next locally runnable increment weekly. When an estimate or scope changes, record old and new totals and the reason; do not hide excluded WP12–WP14 effort inside another row.
+Delivery progress is accepted WP01–WP11 against Section 14: currently **1/11 (9.1%)**, WP01 documentation and design only. WP02.1 is accepted as a local sign-in/session activity, while MFA and server-side role/object policy remain in WP02.3/WP02.2; WP02 is not accepted. RT1 is passed local evidence under WP03.2, not WP03 acceptance. Actual person-days and the local-scope remaining estimate have not yet been reconciled. The Section 0 table describes drafted document sections only. Track actual person-days, remaining estimate, accepted WPs and the next locally runnable increment weekly. When an estimate or scope changes, record old and new totals and the reason; do not hide excluded WP12–WP14 effort inside another row.

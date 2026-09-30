@@ -1,0 +1,457 @@
+{
+  "realm": "bee-local",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "verifyEmail": false,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "BEE persona: admin"
+      },
+      {
+        "name": "programme",
+        "description": "BEE persona: programme"
+      },
+      {
+        "name": "reviewer",
+        "description": "BEE persona: reviewer"
+      },
+      {
+        "name": "director",
+        "description": "BEE persona: director"
+      },
+      {
+        "name": "secretary",
+        "description": "BEE persona: secretary"
+      },
+      {
+        "name": "finance",
+        "description": "BEE persona: finance"
+      },
+      {
+        "name": "helpdesk",
+        "description": "BEE persona: helpdesk"
+      },
+      {
+        "name": "auditor",
+        "description": "BEE persona: auditor"
+      },
+      {
+        "name": "manufacturer",
+        "description": "BEE persona: manufacturer"
+      },
+      {
+        "name": "agency",
+        "description": "BEE persona: agency"
+      },
+      {
+        "name": "iame",
+        "description": "BEE persona: iame"
+      },
+      {
+        "name": "sda",
+        "description": "BEE persona: sda"
+      },
+      {
+        "name": "laboratory",
+        "description": "BEE persona: laboratory"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bee-web",
+      "name": "BEE portal (Next.js server, authorization code + PKCE)",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "bee-local-web-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:3100/*"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:3100"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "bee-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "bee-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "bee-local-check",
+      "name": "Local checks only (password grant; not used by the portal)",
+      "description": "Adds a deliberately misleading organisation claim so checks can prove Spring ignores token attributes for access.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "bee-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "bee-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "misleading-organisation-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "organisation",
+            "claim.value": "PixelCert Agency (synthetic)",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "00000000-0000-4000-a000-000000000001",
+      "username": "nova.applicant",
+      "email": "nova.applicant@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Nova",
+      "lastName": "Applicant",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "manufacturer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000002",
+      "username": "pixel.applicant",
+      "email": "pixel.applicant@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Pixel",
+      "lastName": "Applicant",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "agency"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000003",
+      "username": "bee.finance",
+      "email": "bee.finance@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Finance",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "finance"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000004",
+      "username": "iame.officer",
+      "email": "iame.officer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "IAME",
+      "lastName": "Officer",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "iame"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000005",
+      "username": "bee.reviewer",
+      "email": "bee.reviewer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Reviewer",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "reviewer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000006",
+      "username": "bee.programme",
+      "email": "bee.programme@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Programme",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "programme"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000007",
+      "username": "bee.director",
+      "email": "bee.director@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Director",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "director"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000008",
+      "username": "bee.secretary",
+      "email": "bee.secretary@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Secretary",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "secretary"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000009",
+      "username": "bee.admin",
+      "email": "bee.admin@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Admin",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000010",
+      "username": "bee.helpdesk",
+      "email": "bee.helpdesk@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Helpdesk",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "helpdesk"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000011",
+      "username": "bee.auditor",
+      "email": "bee.auditor@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Auditor",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "auditor"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000012",
+      "username": "sda.officer",
+      "email": "sda.officer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "SDA",
+      "lastName": "Officer",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "sda"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000013",
+      "username": "lab.officer",
+      "email": "lab.officer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Lab",
+      "lastName": "Officer",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "laboratory"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000014",
+      "username": "no.account",
+      "email": "no.account@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "No",
+      "lastName": "Account",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "manufacturer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000015",
+      "username": "inactive.role",
+      "email": "inactive.role@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Inactive",
+      "lastName": "Role",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "reviewer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000016",
+      "username": "role.mismatch",
+      "email": "role.mismatch@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Role",
+      "lastName": "Mismatch",
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "finance"
+      ]
+    }
+  ]
+}

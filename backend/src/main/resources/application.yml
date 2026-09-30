@@ -1,0 +1,36 @@
+server:
+  address: 127.0.0.1
+  port: ${BEE_API_PORT:8090}
+
+spring:
+  application:
+    name: bee-api
+  main:
+    banner-mode: "off"
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:${BEE_PG_PORT:5434}/${BEE_APP_DB:bee_app}?currentSchema=app
+    username: ${BEE_APP_DB_USER:bee_app}
+    password: ${BEE_APP_DB_PASSWORD:bee-local-app}
+    hikari:
+      maximum-pool-size: 5
+  flyway:
+    schemas: app
+    default-schema: app
+    create-schemas: false
+
+bee:
+  security:
+    issuer: http://127.0.0.1:${BEE_KC_PORT:8180}/realms/${BEE_REALM:bee-local}
+    audience: bee-api
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-components: always
+      show-details: never
+      probes:
+        enabled: true

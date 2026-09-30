@@ -8,7 +8,17 @@
     "start": "next start",
     "lint": "eslint",
     "audit:access": "bash scripts/access-audit.sh",
-    "matrix": "bash scripts/screen-matrix.sh"
+    "matrix": "bash scripts/screen-matrix.sh",
+    "local:up": "bash scripts/local/up.sh",
+    "local:health": "bash scripts/local/health.sh",
+    "local:seed": "bash scripts/local/seed.sh",
+    "local:reset": "bash scripts/local/reset.sh",
+    "local:reset:identity": "bash scripts/local/reset-identity.sh",
+    "local:check": "bash scripts/local/check.sh",
+    "local:down": "bash scripts/local/down.sh",
+    "local:destroy": "bash scripts/local/destroy.sh",
+    "local:rt1": "bash scripts/local/rt1-proof.sh",
+    "api:test": "JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -q -B -f backend/pom.xml test"
   },
   "dependencies": {
     "next": "16.3.5",

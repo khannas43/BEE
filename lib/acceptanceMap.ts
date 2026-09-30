@@ -27,6 +27,7 @@ export type CheckType = "document-review" | "structure-script" | "unit" | "api" 
 export type Status =
   | "passed-documentation-review"
   | "pending-documentation-review"
+  | "passed-local-proof"
   | "not-started";
 
 export type ItemKind = "exit" | "step" | "acceptance" | "denial" | "runtime";
@@ -144,7 +145,7 @@ export const ACCEPTANCE_ITEMS: AcceptanceItem[] = [
   { id: "N10", kind: "denial", ref: 10, title: "Helpdesk, Admin or Auditor performing any slice transition is denied", requirements: ["R6", "R11"], owner: "WP02.3", checkType: "api", check: "api: default-deny for non-slice roles", api: [API.fee, API.recommend, API.rating, API.decision], ...FUTURE, note: "Implements only reviewed slice rules; no matrix capacity is imported (ADR-001 D-RT4)." },
 
   /* ---------- Runtime proof (moved to WP03, does not block WP01) ---------- */
-  { id: "RT1", kind: "runtime", title: "Local runtime starts, seeds, resets and passes health checks reproducibly; memory and ports measured", requirements: [], owner: "WP03.2", checkType: "command", check: "command: local:up, local:seed, local:check, local:reset (twice from clean)", ...FUTURE, note: "Executable proof of ADR-001. Measures the provisional 3.6 GB budget and ports." },
+  { id: "RT1", kind: "runtime", title: "Local runtime starts, seeds, resets and passes health checks reproducibly; memory and ports measured", requirements: [], owner: "WP03.2", checkType: "command", check: "command: npm run local:rt1 -- --allow-destroy; docs/wp03/RT1_PROOF.md", ...FUTURE, status: "passed-local-proof", note: "Executable proof of ADR-001 on this MacBook. WP03 is not accepted; recheck under slice load." },
 ];
 
 export const REQUIREMENTS: RequirementTrace[] = [

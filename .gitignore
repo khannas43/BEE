@@ -40,6 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# local runtime (scripts/local): pid files, logs, check output; Maven build
+/.local/
+/backend/target/
+
 # local tooling
 .claude/
 .claude-flow/

@@ -1,0 +1,55 @@
+# Local runtime containers (ADR-001 D-RT3, D-RT5). Started by scripts/local/up.sh.
+# Ports bind to 127.0.0.1 only.
+name: bee-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bee-local-postgres
+    environment:
+      POSTGRES_USER: bee_super
+      POSTGRES_PASSWORD: ${BEE_PG_SUPER_PASSWORD}
+      POSTGRES_DB: postgres
+      BEE_APP_DB_PASSWORD: ${BEE_APP_DB_PASSWORD}
+      BEE_KC_DB_PASSWORD: ${BEE_KC_DB_PASSWORD}
+    ports:
+      - "127.0.0.1:${BEE_PG_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./seed:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bee_super -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    labels:
+      bee.local.role: database
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    container_name: bee-local-keycloak
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${BEE_KC_DB_PASSWORD}
+      KC_HOSTNAME: http://127.0.0.1:${BEE_KC_PORT}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${BEE_KC_ADMIN_PASSWORD}
+      JAVA_OPTS_KC_HEAP: "-Xms256m -Xmx768m"
+    ports:
+      - "127.0.0.1:${BEE_KC_PORT}:8080"
+    volumes:
+      - ./keycloak/import:/opt/keycloak/data/import:ro
+    labels:
+      bee.local.role: identity
+
+volumes:
+  pgdata:

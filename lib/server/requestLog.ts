@@ -13,6 +13,7 @@ export type WebRoute =
   | "/api/runtime/health"
   | "/api/runtime/me"
   | "/api/runtime/model-applications"
+  | "/api/runtime/model-applications/eligible-brands"
   | "/api/runtime/model-applications/{id}"
   | "/api/auth/session"
   | "/api/auth/login"
@@ -20,7 +21,12 @@ export type WebRoute =
   | "/api/auth/logout"
   | "/api/{unmatched}";
 
-export type SpringRoute = "/actuator/health" | "/api/me" | "/api/model-applications" | "/api/model-applications/{id}";
+export type SpringRoute =
+  | "/actuator/health"
+  | "/api/me"
+  | "/api/model-applications"
+  | "/api/model-applications/eligible-brands"
+  | "/api/model-applications/{id}";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
 
@@ -29,7 +35,7 @@ export type IdentityOutcome = "ok" | (typeof OAUTH_ERRORS)[number] | "refused" |
 
 export type LogLine =
   | { event: "request"; correlationId: string; method: string; route: WebRoute; status: number; outcome: string; durationMs: number }
-  | { event: "upstream"; correlationId: string; method: "GET"; route: SpringRoute; status: number; outcome: string; durationMs: number }
+  | { event: "upstream"; correlationId: string; method: string; route: SpringRoute; status: number; outcome: string; durationMs: number }
   | { event: "identity"; correlationId: string; operation: IdentityOperation; status: number; outcome: IdentityOutcome; durationMs: number };
 
 export const RETENTION = { file: "web-requests.jsonl", maxBytes: 5 * 1024 * 1024, maxRotatedFiles: 3, maxAgeDays: 7 } as const;
@@ -43,7 +49,8 @@ export const safeOutcome = (code: unknown): string => (typeof code === "string" 
 /** Spring path (as Next calls it) to its documented route template. */
 export function springRoute(path: string): SpringRoute {
   const p = path.split("?")[0];
-  if (p === "/api/me" || p === "/api/model-applications" || p === "/actuator/health") return p;
+  if (p === "/api/me" || p === "/api/model-applications" || p === "/api/model-applications/eligible-brands" || p === "/actuator/health") return p;
+  if (p.startsWith("/api/model-applications/")) return "/api/model-applications/{id}";
   return "/api/model-applications/{id}";
 }
 

@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
-import { SPRING_READ, springIdSegment } from "@/lib/server/apiContract";
-import { sessionRead } from "@/lib/server/bff";
+import { SPRING_PATCH, SPRING_READ, springIdSegment } from "@/lib/server/apiContract";
+import { sessionRead, sessionWrite } from "@/lib/server/bff";
 import { logged, methodNotAllowed } from "@/lib/server/http";
 
 export const dynamic = "force-dynamic";
@@ -16,5 +16,9 @@ export const GET = logged("/api/runtime/model-applications/{id}", async (request
 
 export const POST = logged("/api/runtime/model-applications/{id}", methodNotAllowed("GET"));
 export const PUT = POST;
-export const PATCH = POST;
+export const PATCH = logged("/api/runtime/model-applications/{id}", async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const { id } = await params;
+  const body = await request.text();
+  return sessionWrite(request, "PATCH", `/api/model-applications/${springIdSegment(id)}`, body, SPRING_PATCH);
+});
 export const DELETE = POST;

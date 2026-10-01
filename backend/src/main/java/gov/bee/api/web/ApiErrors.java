@@ -23,6 +23,14 @@ public final class ApiErrors {
         Map.entry("no_effective_role", "There is no active BEE role for this identity."),
         Map.entry("no_read_scope", "This role has no read access to model applications."),
         Map.entry("not_found", "No such record is available to you."),
+        Map.entry("no_write_scope", "This role cannot create or edit model application drafts."),
+        Map.entry("brand_not_permitted", "This brand is not available to your organisation."),
+        Map.entry("not_editable", "Only draft applications can be edited."),
+        Map.entry("validation_failed", "The request could not be accepted."),
+        Map.entry("version_conflict", "The record has changed since it was loaded."),
+        Map.entry("idempotency_key_required", "An Idempotency-Key header is required for this request."),
+        Map.entry("idempotency_key_conflict", "This Idempotency-Key was already used with a different request body."),
+        Map.entry("idempotency_in_progress", "A request with this Idempotency-Key is still in progress."),
         Map.entry("service_unavailable", "The service is temporarily unavailable. Try again later."),
         Map.entry("internal_error", "The request could not be completed."));
 

@@ -39,7 +39,7 @@ const key = (route, method, status, code) => `${method} ${route} ${status} ${cod
 const pairs = [];
 for (const [route, p] of Object.entries(doc.paths)) {
   for (const [m, op] of Object.entries(p)) {
-    if (!["get", "post"].includes(m)) continue;
+    if (!["get", "post", "patch"].includes(m)) continue;
     for (const [status, spec] of Object.entries(op.responses)) {
       for (const code of spec["x-error-codes"] || ["-"]) pairs.push({ audience: p["x-bee-audience"], route, method: m.toUpperCase(), status: Number(status), code });
     }

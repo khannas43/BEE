@@ -204,15 +204,22 @@ async function main() {
   check("bff.expired-membership", [exp.l, exp.d, exp.s, exp.sd].every((x) => x.status === 403 && x.json?.error === "no_read_scope" && !/LOCAL-MA/.test(x.text)) && e3.length === 0,
     `membership valid_to in the past: BFF list ${exp.l.status} ${exp.l.json?.error}, detail ${exp.d.status} ${exp.d.json?.error}; direct Spring list ${exp.s.status} ${exp.s.json?.error}, detail ${exp.sd.status} ${exp.sd.json?.error}; restored${show(e3)}`);
 
-  /* ---------- no write through the BFF ---------- */
+  /* ---------- draft writes vs unsupported methods (WP05.1b) ---------- */
   const snap = sql("SELECT string_agg(id || ':' || state || ':' || version, ',' ORDER BY id) FROM app.model_application");
-  const writes = [];
-  for (const m of ["POST", "PUT", "PATCH", "DELETE"]) for (const p of [LIST, `/api/runtime/model-applications/${nid}`]) {
-    writes.push(await call(`${WEB}${p}`, { method: m, jar: nova, correlationId: cid("write"), headers: { Origin: WEB, "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ state: "approved", version: 99 }) }));
+  const feeId = byRef["LOCAL-MA-0002"].id;
+  const badCreate = await call(`${WEB}${LIST}`, { method: "POST", jar: nova, correlationId: cid("write"), headers: { Origin: WEB, "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID().replace(/-/g, "").slice(0, 24) }, body: JSON.stringify({ state: "approved", version: 99 }) });
+  const badPatch = await call(`${WEB}/api/runtime/model-applications/${feeId}`, { method: "PATCH", jar: nova, correlationId: cid("write-fee"), headers: { Origin: WEB, "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID().replace(/-/g, "").slice(0, 24) }, body: JSON.stringify({ version: 0, category: "RAC", modelNumber: "X" }) });
+  const blocked = [];
+  for (const m of ["PUT", "DELETE"]) for (const p of [LIST, `/api/runtime/model-applications/${nid}`]) {
+    blocked.push(await call(`${WEB}${p}`, { method: m, jar: nova, correlationId: cid("write"), headers: { Origin: WEB, "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ state: "approved" }) }));
   }
-  const we = writes.flatMap((x, i) => contract.conforms(doc, i % 2 ? DETAIL : LIST, "GET", x));
-  check("bff.unsupported-methods", writes.every((x) => x.status === 405 && x.json?.error === "method_not_allowed" && x.headers.get("allow") === "GET" && sameCorr(x)) && we.length === 0 && snap === sql("SELECT string_agg(id || ':' || state || ':' || version, ',' ORDER BY id) FROM app.model_application"),
-    `POST/PUT/PATCH/DELETE on list and detail (with an Idempotency-Key) -> ${writes.length} x 405 method_not_allowed, Allow: GET; no row changed${show(we)}`);
+  blocked.push(await call(`${WEB}/api/runtime/model-applications/${nid}`, { method: "POST", jar: nova, correlationId: cid("write-post-detail"), headers: { Origin: WEB, "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID().replace(/-/g, "").slice(0, 24) }, body: "{}" }));
+  check("bff.draft-write-guards",
+    badCreate.status === 422 && badCreate.json?.error === "validation_failed" &&
+    badPatch.status === 403 && badPatch.json?.error === "not_editable" &&
+    blocked.every((x) => x.status === 405 && x.json?.error === "method_not_allowed" && x.headers.get("allow") && sameCorr(x)) &&
+    snap === sql("SELECT string_agg(id || ':' || state || ':' || version, ',' ORDER BY id) FROM app.model_application"),
+    `invalid POST create -> ${badCreate.status} ${badCreate.json?.error}; PATCH fee_due -> ${badPatch.status} ${badPatch.json?.error}; PUT/DELETE/POST detail -> ${blocked.length} x 405; no row changed`);
 
   /* ---------- Spring outage, planted values via a stand-in, restart ---------- */
   const realList = (await springGet(T.nova, "/api/model-applications")).json;
@@ -290,7 +297,8 @@ async function main() {
   expect("unsafe segment", nf[4][1], both(DETAIL, "/api/model-applications/{id}", 404, "not_found"));
   expect("no session", anon[0], { web: [/^request GET \/api\/runtime\/model-applications 401 no_session$/] }, (t) => t.web.length === 1 && t.api.length === 0);
   expect("outage", down[0], { web: [/^upstream GET \/api\/model-applications 503 api_unreachable$/, /^request GET \/api\/runtime\/model-applications 503 api_unreachable$/] }, (t) => t.api.length === 0);
-  expect("unsupported method", writes[0], { web: [/^request POST \/api\/runtime\/model-applications 405 method_not_allowed$/] }, (t) => t.api.length === 0);
+  expect("invalid create", badCreate, { web: [/^request POST \/api\/runtime\/model-applications 422 validation_failed$/] }, (t) => t.api.length === 1);
+  expect("unsupported method", blocked[0], { web: [/^request PUT \/api\/runtime\/model-applications 405 method_not_allowed$/] }, (t) => t.api.length === 0);
   check("bff.correlation", cor.every((c) => c.ok), cor.map((c) => `${c.label}: ${c.ok ? "ok" : "MISSING " + traced(c.t)}`).join("; "));
 
   /* ---------- expiry: refresh keeps a live session, a refused refresh ends it (opt-in, waits for token expiry) ---------- */

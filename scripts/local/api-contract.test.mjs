@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { acceptCorrelationId, callbackOutcome, CONTRACT_VERSION, correlationIdFrom, ERROR_MESSAGES, errorBody, fromUpstream, LOGIN_REDIRECT_CODES, ME_OPTIONAL, ME_REQUIRED, safeLoginCode, SPRING_LIST, SPRING_LIST_ERRORS, SPRING_ME, SPRING_ME_ERRORS, SPRING_READ, SPRING_READ_ERRORS, springIdSegment, MODEL_APPLICATION_KEYS, MODEL_APPLICATION_LIST_KEYS, MODEL_STATES } from "../../lib/server/apiContract.ts";
+import { acceptCorrelationId, callbackOutcome, CONTRACT_VERSION, correlationIdFrom, ERROR_MESSAGES, errorBody, fromUpstream, LOGIN_REDIRECT_CODES, ME_OPTIONAL, ME_REQUIRED, safeLoginCode, SPRING_CREATE, SPRING_LIST, SPRING_LIST_ERRORS, SPRING_ME, SPRING_ME_ERRORS, SPRING_READ, SPRING_READ_ERRORS, springIdSegment, MODEL_APPLICATION_KEYS, MODEL_APPLICATION_LIST_KEYS, MODEL_APPLICATION_OPTIONAL, MODEL_STATES } from "../../lib/server/apiContract.ts";
 
 const contract = JSON.parse(readFileSync(new URL("../../docs/wp03/bee-local-api.openapi.json", import.meta.url), "utf8"));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -152,6 +152,8 @@ test("valid model list and detail pass through unchanged", () => {
   assert.deepEqual(fromUpstream(200, LIST, SPRING_LIST), { ok: true, status: 200, body: LIST });
   assert.deepEqual(fromUpstream(200, { items: [], count: 0, authority: "spring-database" }, SPRING_LIST).ok, true);
   assert.deepEqual(fromUpstream(200, APP, SPRING_READ), { ok: true, status: 200, body: APP });
+  const draft = { ...APP, id: "00000000-0000-4000-c000-000000000099", state: "draft", version: 0, brandId: "00000000-0000-4000-d000-000000000001", principalOrganisation: "NOVA" };
+  assert.deepEqual(fromUpstream(201, draft, SPRING_CREATE), { ok: true, status: 201, body: draft });
 });
 
 test("a planted secret anywhere in a list or detail is a fixed 502 without the secret", () => {
@@ -199,7 +201,7 @@ test("detail IDs are not shape-checked in Next; only unsafe path segments are re
 test("the model read operations enforce exactly what the artifact documents", () => {
   const app = contract.components.schemas.ModelApplication, list = contract.components.schemas.ModelApplicationList;
   assert.deepEqual([...MODEL_APPLICATION_KEYS].sort(), app.required.slice().sort());
-  assert.deepEqual([...MODEL_APPLICATION_KEYS].sort(), Object.keys(app.properties).sort());
+  assert.deepEqual([...MODEL_APPLICATION_KEYS, ...MODEL_APPLICATION_OPTIONAL].sort(), Object.keys(app.properties).sort());
   assert.deepEqual([...MODEL_APPLICATION_LIST_KEYS].sort(), list.required.slice().sort());
   assert.equal(app.additionalProperties, false);
   assert.equal(list.additionalProperties, false);
@@ -216,5 +218,5 @@ test("the model read operations enforce exactly what the artifact documents", ()
     for (const status of ["403", "404"]) if (sp[status]) assert.deepEqual(b[status]["x-error-codes"], sp[status]["x-error-codes"], `${bff} ${status}`);
   }
   assert.equal(contract["x-bee-deferred"].some((d) => /runtime\/model-applications/.test(d.route)), false);
-  assert.match(contract["x-bee-idempotency"].status, /not implemented/);
+  assert.match(contract["x-bee-idempotency"].status, /implemented/);
 });

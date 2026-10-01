@@ -14,6 +14,8 @@ export interface ApiResult {
   status: number;
   body: unknown;
   correlationId: string;
+  /** Selected upstream response headers safe to forward to the browser. */
+  forwardHeaders?: Record<string, string>;
 }
 
 /**
@@ -21,14 +23,25 @@ export interface ApiResult {
  * status and documented error code. The log line never includes the token, headers,
  * record ID or body.
  */
-export async function callBeeApi(path: string, init: { correlationId: string; accessToken?: string }): Promise<ApiResult> {
+export async function callBeeApi(
+  path: string,
+  init: { correlationId: string; accessToken?: string; method?: string; body?: string; extraHeaders?: Record<string, string> },
+): Promise<ApiResult> {
   const { correlationId } = init;
-  const headers: Record<string, string> = { Accept: "application/json", [CORRELATION_HEADER]: correlationId };
+  const method = init.method ?? "GET";
+  const headers: Record<string, string> = { Accept: "application/json", [CORRELATION_HEADER]: correlationId, ...init.extraHeaders };
   if (init.accessToken) headers.Authorization = `Bearer ${init.accessToken}`;
+  if (init.body !== undefined) headers["Content-Type"] = "application/json";
   const start = Date.now();
   let result: ApiResult;
   try {
-    const res = await fetch(`${API_BASE}${path}`, { headers, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: init.body,
+      cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     const text = await res.text();
     let body: unknown = null;
     try {
@@ -36,7 +49,13 @@ export async function callBeeApi(path: string, init: { correlationId: string; ac
     } catch {
       body = { error: "invalid_api_response" };
     }
-    result = { status: res.status, body, correlationId };
+    const replay = res.headers.get("Idempotency-Replayed");
+    result = {
+      status: res.status,
+      body,
+      correlationId,
+      forwardHeaders: replay ? { "Idempotency-Replayed": replay } : undefined,
+    };
   } catch {
     result = { status: 503, body: { error: "api_unreachable" }, correlationId };
   }
@@ -44,7 +63,7 @@ export async function callBeeApi(path: string, init: { correlationId: string; ac
   writeLogLine({
     event: "upstream",
     correlationId,
-    method: "GET",
+    method,
     route: springRoute(path),
     status: result.status,
     outcome: isErrorCode(error) ? error : error === undefined && result.status < 400 ? "ok" : "unlisted",

@@ -90,6 +90,28 @@ public class BrandAuthRepository {
             this::mapAuthorisation, agencyOrganisationId, brandId);
     }
 
+    public record EligibleAgencyBrand(UUID brandId, String brandName, UUID principalOrganisationId, String principalOrganisationCode) {
+    }
+
+    public List<Brand> listOwnedActiveBrands(UUID ownerOrganisationId) {
+        return jdbc.query(
+            "SELECT " + BRAND_COLS + " FROM brand WHERE owner_organisation_id = ? AND status = 'active' ORDER BY name",
+            this::mapBrand, ownerOrganisationId);
+    }
+
+    /** Brands an agency may file on today: active authorisation, active brand, half-open period. */
+    public List<EligibleAgencyBrand> listAgencyEligibleBrands(UUID agencyOrganisationId, LocalDate at) {
+        Date d = Date.valueOf(at);
+        return jdbc.query(
+            "SELECT b.id, b.name, p.id AS principal_id, p.code AS principal_code FROM agency_authorisation aa "
+                + "JOIN brand b ON b.id = aa.brand_id JOIN organisation p ON p.id = aa.principal_organisation_id "
+                + "WHERE aa.agency_organisation_id = ? AND aa.status = 'active' AND b.status = 'active' "
+                + "AND aa.valid_from <= ? AND (aa.valid_to IS NULL OR ? < aa.valid_to) ORDER BY b.name",
+            (rs, i) -> new EligibleAgencyBrand(rs.getObject("id", UUID.class), rs.getString("name"),
+                rs.getObject("principal_id", UUID.class), rs.getString("principal_code")),
+            agencyOrganisationId, d, d);
+    }
+
     private Brand mapBrand(ResultSet rs, int i) throws SQLException {
         return new Brand(rs.getObject("id", UUID.class), rs.getString("name"),
             rs.getObject("owner_organisation_id", UUID.class), rs.getString("status"), provenance(rs));

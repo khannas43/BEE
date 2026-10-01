@@ -187,10 +187,17 @@ async function main() {
     ["bee.admin", "POST", `/api/model-applications/${id}/decision`],
     ["nova.applicant", "GET", `/api/model-applications/${id}/history`],
   ];
-  const results = [];
-  for (const [u, m, p] of writes) results.push([u, m, p, await call(u, p, m)]);
-  check("actions.transitions-denied", results.every(([, , , x]) => x.status === 403 && x.json?.error === "denied_by_default"),
-    `${results.filter(([, , , x]) => x.status === 403).length}/${results.length} denied_by_default: ` + results.map(([u, m, p, x]) => `${u} ${m} ${p.replace(/\/api\/model-applications\/?/, "/").replace(/00000000-0000-4000-c000-0+/, "#")} ${x.status}`).join("; "));
+  const draftWrites = writes.slice(0, 2);
+  const transitions = writes.slice(2);
+  const draftResults = [];
+  for (const [u, m, p] of draftWrites) draftResults.push([u, m, p, await call(u, p, m)]);
+  const transitionResults = [];
+  for (const [u, m, p] of transitions) transitionResults.push([u, m, p, await call(u, p, m)]);
+  check("actions.draft-routes-mapped",
+    draftResults.every(([, , , x]) => x.status === 422 && x.json?.error === "idempotency_key_required"),
+    `draft POST/PATCH without Idempotency-Key -> ${draftResults.map(([u, m, p, x]) => `${u} ${m} ${x.status} ${x.json?.error}`).join("; ")}`);
+  check("actions.transitions-denied", transitionResults.every(([, , , x]) => x.status === 403 && x.json?.error === "denied_by_default"),
+    `${transitionResults.filter(([, , , x]) => x.status === 403).length}/${transitionResults.length} denied_by_default: ` + transitionResults.map(([u, m, p, x]) => `${u} ${m} ${p.replace(/\/api\/model-applications\/?/, "/").replace(/00000000-0000-4000-c000-0+/, "#")} ${x.status}`).join("; "));
   const after = snapshot();
   const workflowTables = sql("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('transition', 'fee_confirmation', 'rating_result', 'approval_decision')");
   check("actions.no-state-change", before === after && workflowTables === "0", `model_application id:state:version unchanged (${after.split(",").length} rows); workflow tables present: ${workflowTables}`);

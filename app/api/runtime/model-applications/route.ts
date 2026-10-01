@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
-import { SPRING_LIST } from "@/lib/server/apiContract";
-import { sessionRead } from "@/lib/server/bff";
+import { SPRING_CREATE, SPRING_LIST } from "@/lib/server/apiContract";
+import { sessionRead, sessionWrite } from "@/lib/server/bff";
 import { logged, methodNotAllowed } from "@/lib/server/http";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,11 @@ export const GET = logged("/api/runtime/model-applications", async (request: Nex
   return sessionRead(request, "/api/model-applications", SPRING_LIST);
 });
 
-export const POST = logged("/api/runtime/model-applications", methodNotAllowed("GET"));
-export const PUT = POST;
-export const PATCH = POST;
-export const DELETE = POST;
+export const POST = logged("/api/runtime/model-applications", async (request: NextRequest) => {
+  const body = await request.text();
+  return sessionWrite(request, "POST", "/api/model-applications", body, SPRING_CREATE);
+});
+const allowReadCreate = methodNotAllowed("GET, POST");
+export const PUT = logged("/api/runtime/model-applications", allowReadCreate);
+export const PATCH = logged("/api/runtime/model-applications", allowReadCreate);
+export const DELETE = logged("/api/runtime/model-applications", allowReadCreate);

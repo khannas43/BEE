@@ -21,14 +21,17 @@ import org.springframework.stereotype.Repository;
 public class ModelApplicationRepository {
 
     public record Row(UUID id, String reference, UUID organisationId, String organisationCode, String brandName,
-                      String category, String modelNumber, String state, int version, Set<String> assignedStagesForCaller) {
+                      String category, String modelNumber, String state, int version, Set<String> assignedStagesForCaller,
+                      UUID principalOrganisationId, UUID brandId, String principalOrganisationCode) {
     }
 
     private static final String SELECT = """
         SELECT a.id, a.reference, a.organisation_id, o.code, a.brand_name, a.category, a.model_number, a.state, a.version,
+               a.principal_organisation_id, a.brand_id, po.code AS principal_code,
                COALESCE((SELECT string_agg(s.stage, ',') FROM assignment s
                           WHERE s.subject_type = 'model_application' AND s.subject_id = a.id AND s.user_id = ? AND s.active AND s.stage = a.state), '') AS stages
         FROM model_application a JOIN organisation o ON o.id = a.organisation_id
+        LEFT JOIN organisation po ON po.id = a.principal_organisation_id
         """;
 
     private final JdbcTemplate jdbc;
@@ -50,6 +53,43 @@ public class ModelApplicationRepository {
         args.add(id);
         String where = "a.id = ? AND (" + scopePredicate(scope, callerId, args) + ")";
         return jdbc.query(SELECT + " WHERE " + where, this::row, args.toArray()).stream().findFirst();
+    }
+
+    public Optional<Row> findOwned(UUID id, UUID filingOrganisationId) {
+        List<Object> args = new ArrayList<>();
+        args.add(UUID.randomUUID());
+        args.add(id);
+        args.add(filingOrganisationId);
+        return jdbc.query(SELECT + " WHERE a.id = ? AND a.organisation_id = ?", this::row, args.toArray()).stream().findFirst();
+    }
+
+    public String organisationCode(UUID organisationId) {
+        return jdbc.queryForObject("SELECT code FROM organisation WHERE id = ?", String.class, organisationId);
+    }
+
+    public String nextReference() {
+        Integer n = jdbc.queryForObject(
+            "SELECT COALESCE(MAX(CAST(substring(reference FROM 10) AS integer)), 0) + 1 FROM model_application WHERE reference LIKE 'LOCAL-MA-%'",
+            Integer.class);
+        return "LOCAL-MA-" + String.format("%04d", n == null ? 1 : n);
+    }
+
+    public Row insertDraft(UUID id, String reference, UUID filingOrganisationId, UUID principalOrganisationId, UUID brandId,
+                           String brandName, String category, String modelNumber) {
+        jdbc.update(
+            "INSERT INTO model_application (id, reference, organisation_id, principal_organisation_id, brand_id, brand_name, category, model_number, state, version) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0)",
+            id, reference, filingOrganisationId, principalOrganisationId, brandId, brandName, category, modelNumber);
+        return findOwned(id, filingOrganisationId).orElseThrow();
+    }
+
+    public Optional<Row> updateDraft(UUID id, UUID filingOrganisationId, int expectedVersion, String modelNumber, String category,
+                                     UUID brandId, UUID principalOrganisationId, String brandName) {
+        int n = jdbc.update(
+            "UPDATE model_application SET model_number = ?, category = ?, brand_id = ?, principal_organisation_id = ?, brand_name = ?, version = version + 1 "
+                + "WHERE id = ? AND organisation_id = ? AND state = 'draft' AND version = ?",
+            modelNumber, category, brandId, principalOrganisationId, brandName, id, filingOrganisationId, expectedVersion);
+        return n == 1 ? findOwned(id, filingOrganisationId) : Optional.empty();
     }
 
     private static String scopePredicate(ReadScope scope, UUID callerId, List<Object> args) {
@@ -78,6 +118,7 @@ public class ModelApplicationRepository {
         return new Row(rs.getObject("id", UUID.class), rs.getString("reference"), rs.getObject("organisation_id", UUID.class),
             rs.getString("code"), rs.getString("brand_name"), rs.getString("category"), rs.getString("model_number"),
             rs.getString("state"), rs.getInt("version"),
-            stages.isEmpty() ? Set.of() : Set.copyOf(Arrays.asList(stages.split(","))));
+            stages.isEmpty() ? Set.of() : Set.copyOf(Arrays.asList(stages.split(","))),
+            rs.getObject("principal_organisation_id", UUID.class), rs.getObject("brand_id", UUID.class), rs.getString("principal_code"));
     }
 }

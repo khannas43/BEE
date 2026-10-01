@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.3.0";
+export const CONTRACT_VERSION = "0.4.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -26,6 +26,14 @@ export const ERROR_MESSAGES = {
   no_active_account: "There is no active BEE account for this identity.",
   no_effective_role: "There is no active BEE role for this identity.",
   no_read_scope: "This role has no read access to model applications.",
+  no_write_scope: "This role cannot create or edit model application drafts.",
+  brand_not_permitted: "This brand is not available to your organisation.",
+  not_editable: "Only draft applications can be edited.",
+  validation_failed: "The request could not be accepted.",
+  version_conflict: "The record has changed since it was loaded.",
+  idempotency_key_required: "An Idempotency-Key header is required for this request.",
+  idempotency_key_conflict: "This Idempotency-Key was already used with a different request body.",
+  idempotency_in_progress: "A request with this Idempotency-Key is still in progress.",
   not_found: "No such record is available to you.",
   service_unavailable: "The service is temporarily unavailable. Try again later.",
   internal_error: "The request could not be completed.",
@@ -119,12 +127,15 @@ export const validateMe: Validator<Me> = (body) => {
  * unknown code, 500, unparseable body) becomes a fixed 502, so Spring's text never
  * reaches the browser.
  */
-export function fromUpstream<T>(status: number, body: unknown, op: { errors: UpstreamErrors; validate: Validator<T> }):
+export type UpstreamOp<T> = { errors: UpstreamErrors; validate: Validator<T>; successStatuses?: readonly number[] };
+
+export function fromUpstream<T>(status: number, body: unknown, op: UpstreamOp<T>):
   { ok: true; status: number; body: T } | { ok: false; status: number; body: ErrorBody } {
   const code = (body as { error?: unknown } | null)?.error;
   if (code === "api_unreachable") return { ok: false, status: 503, body: errorBody("api_unreachable") };
   if (code === "invalid_api_response") return { ok: false, status: 502, body: errorBody("invalid_api_response") };
-  if (status === 200) {
+  const success = op.successStatuses ?? [200];
+  if (success.includes(status)) {
     const valid = op.validate(body);
     return valid ? { ok: true, status, body: valid } : { ok: false, status: 502, body: errorBody("invalid_api_response") };
   }
@@ -156,6 +167,8 @@ export interface ModelApplication {
   state: ModelState;
   version: number;
   readBasis: string[];
+  brandId?: string;
+  principalOrganisation?: string;
 }
 
 export interface ModelApplicationList {
@@ -165,20 +178,76 @@ export interface ModelApplicationList {
 }
 
 export const MODEL_APPLICATION_KEYS = ["id", "reference", "organisation", "brandName", "category", "modelNumber", "state", "version", "readBasis"] as const;
+export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation"] as const;
 export const MODEL_APPLICATION_LIST_KEYS = ["items", "count", "authority"] as const;
 const READ_BASIS = /^(own-org|assigned|stage:[a-z_]+)$/;
 
 export const validateModelApplication: Validator<ModelApplication> = (body) => {
-  if (!exactKeys(body, MODEL_APPLICATION_KEYS)) return null;
+  if (!exactKeys(body, MODEL_APPLICATION_KEYS, MODEL_APPLICATION_OPTIONAL)) return null;
   const b = body;
   const ok =
     isString(b.id) && UUID.test(b.id) &&
     ["reference", "organisation", "brandName", "category", "modelNumber"].every((k) => isString(b[k])) &&
     (MODEL_STATES as readonly unknown[]).includes(b.state) &&
     Number.isInteger(b.version) && (b.version as number) >= 0 &&
-    arrayOf(b.readBasis, (x) => isString(x) && READ_BASIS.test(x), 1);
+    arrayOf(b.readBasis, (x) => isString(x) && READ_BASIS.test(x), 1) &&
+    (b.brandId === undefined || (isString(b.brandId) && UUID.test(b.brandId))) &&
+    (b.principalOrganisation === undefined || isString(b.principalOrganisation));
   return ok ? (b as unknown as ModelApplication) : null;
 };
+
+export interface EligibleBrand {
+  brandId: string;
+  brandName: string;
+  principalOrganisation: string;
+  principalOrganisationId: string;
+}
+
+export interface EligibleBrandList {
+  items: EligibleBrand[];
+  count: number;
+  authority: "spring-database";
+}
+
+export const validateEligibleBrandList: Validator<EligibleBrandList> = (body) => {
+  if (!exactKeys(body, ["items", "count", "authority"])) return null;
+  const b = body;
+  if (b.authority !== "spring-database" || !Array.isArray(b.items) || b.count !== b.items.length) return null;
+  const itemOk = (x: unknown) => {
+    if (!exactKeys(x, ["brandId", "brandName", "principalOrganisation", "principalOrganisationId"])) return false;
+    const row = x as Record<string, unknown>;
+    return isString(row.brandId) && UUID.test(row.brandId) && isString(row.brandName) &&
+      isString(row.principalOrganisation) && isString(row.principalOrganisationId) && UUID.test(row.principalOrganisationId);
+  };
+  return b.items.every(itemOk) ? (b as unknown as EligibleBrandList) : null;
+};
+
+const WRITE_DENIALS = [...RESOLVER_DENIALS, "no_write_scope", "brand_not_permitted", "not_editable"] as const;
+
+export const SPRING_ELIGIBLE_BRANDS_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: WRITE_DENIALS,
+  503: ["service_unavailable"],
+};
+
+export const SPRING_CREATE_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: WRITE_DENIALS,
+  409: ["idempotency_key_conflict", "idempotency_in_progress"],
+  422: ["validation_failed", "idempotency_key_required"],
+  503: ["service_unavailable"],
+};
+
+export const SPRING_PATCH_ERRORS: UpstreamErrors = {
+  ...SPRING_CREATE_ERRORS,
+  403: [...WRITE_DENIALS],
+  404: ["not_found"],
+  409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress"],
+};
+
+export const SPRING_ELIGIBLE_BRANDS = { errors: SPRING_ELIGIBLE_BRANDS_ERRORS, validate: validateEligibleBrandList };
+export const SPRING_CREATE = { errors: SPRING_CREATE_ERRORS, validate: validateModelApplication, successStatuses: [201] as const };
+export const SPRING_PATCH = { errors: SPRING_PATCH_ERRORS, validate: validateModelApplication, successStatuses: [200] as const };
 
 /** Every item is a valid ModelApplication and count is the item count. */
 export const validateModelApplicationList: Validator<ModelApplicationList> = (body) => {

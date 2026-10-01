@@ -52,7 +52,7 @@ async function kcTwins(tag) {
 async function teardown(tag = "test") {
   for (const u of await kcTwins(tag)) await kc(`/users/${u.id}`, { method: "DELETE" });
   const ids = USERS.map((u) => q(usr(TAGS[tag] + u.n))).join(",");
-  sql(`BEGIN; DELETE FROM app.assignment WHERE user_id IN (${ids}); DELETE FROM app.role_assignment WHERE user_id IN (${ids}); DELETE FROM app.organisation_membership WHERE user_id IN (${ids}); DELETE FROM app.user_account WHERE id IN (${ids}); COMMIT;`);
+  sql(`BEGIN; DELETE FROM app.idempotency_record WHERE account_id IN (${ids}); DELETE FROM app.assignment WHERE user_id IN (${ids}); DELETE FROM app.role_assignment WHERE user_id IN (${ids}); DELETE FROM app.organisation_membership WHERE user_id IN (${ids}); DELETE FROM app.user_account WHERE id IN (${ids}); COMMIT;`);
   for (const u of USERS) { try { fs.unlinkSync(path.join(totp.DIR, `${name(u.username, tag)}.json`)); } catch {} }
 }
 

@@ -22,6 +22,7 @@
     "local:access": "bash -c 'source scripts/local/lib.sh && node scripts/local/access-check.cjs'",
     "local:browser": "bash -c 'source scripts/local/lib.sh && node scripts/local/browser-check.cjs'",
     "local:read-ui": "bash -c 'source scripts/local/lib.sh && node scripts/local/read-ui-browser-check.cjs'",
+    "local:model-drafts": "bash -c 'source scripts/local/lib.sh && node scripts/local/model-drafts-browser-check.cjs'",
     "local:mfa": "bash -c 'source scripts/local/lib.sh && node scripts/local/mfa-check.cjs'",
     "local:mfa:misbind": "bash -c 'source scripts/local/lib.sh && node scripts/local/mfa-misbind-check.cjs'",
     "local:contract": "bash -c 'source scripts/local/lib.sh && node scripts/local/contract-check.cjs'",

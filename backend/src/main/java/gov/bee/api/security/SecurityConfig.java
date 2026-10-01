@@ -44,7 +44,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(a -> a
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/me").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/model-applications/eligible-brands").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/model-applications", "/api/model-applications/*").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/model-applications").authenticated()
+                .requestMatchers(HttpMethod.PATCH, "/api/model-applications/*").authenticated()
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o -> o
                 .jwt(Customizer.withDefaults())

@@ -85,17 +85,7 @@ public class ModelApplicationController {
     }
 
     private static Map<String, Object> view(ModelApplicationRepository.Row r, ReadScope scope) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", r.id().toString());
-        m.put("reference", r.reference());
-        m.put("organisation", r.organisationCode());
-        m.put("brandName", r.brandName());
-        m.put("category", r.category());
-        m.put("modelNumber", r.modelNumber());
-        m.put("state", r.state());
-        m.put("version", r.version());
-        m.put("readBasis", SlicePolicy.readBasis(scope, facts(r)));
-        return m;
+        return ModelApplicationDraftService.view(r, scope);
     }
 
     private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String code) {

@@ -67,7 +67,7 @@ class ModelApplicationControllerSecurityTest {
     }
 
     static ModelApplicationRepository.Row row(UUID id, UUID org, String code, String state, String... stages) {
-        return new ModelApplicationRepository.Row(id, "LOCAL-MA", org, code, "Brand", "RAC", "M-1", state, 0, Set.of(stages));
+        return new ModelApplicationRepository.Row(id, "LOCAL-MA", org, code, "Brand", "RAC", "M-1", state, 0, Set.of(stages), null, null, null);
     }
 
     @Test
@@ -167,7 +167,7 @@ class ModelApplicationControllerSecurityTest {
         mvc.perform(get("/api/model-applications").header("X-Correlation-Id", "contract-test-1"))
             .andExpect(status().isUnauthorized()).andExpect(header().string("X-Correlation-Id", "contract-test-1"))
             .andExpect(content().json(body.formatted("unauthenticated", "A valid access token is required."), true));
-        mvc.perform(post("/api/model-applications").with(token("manufacturer")).header("X-Correlation-Id", "contract-test-2"))
+        mvc.perform(post("/api/model-applications/{id}/submit", NOVA_APP).with(token("manufacturer")).header("X-Correlation-Id", "contract-test-2"))
             .andExpect(status().isForbidden()).andExpect(header().string("X-Correlation-Id", "contract-test-2"))
             .andExpect(content().json(body.formatted("denied_by_default", "This operation is not available."), true));
         mvc.perform(get("/api/model-applications").with(jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")))))
@@ -222,8 +222,7 @@ class ModelApplicationControllerSecurityTest {
     /** Every FIRST_SLICE.md §7 write and the history read stay denied, even for the step's own actor. */
     @ParameterizedTest
     @CsvSource({
-        "POST,/api/model-applications,manufacturer",
-        "PATCH,/api/model-applications/{id},manufacturer",
+        "PATCH,/api/model-applications/{id}/submit,manufacturer",
         "POST,/api/model-applications/{id}/submit,manufacturer",
         "POST,/api/model-applications/{id}/fee/confirm,finance",
         "POST,/api/model-applications/{id}/recommend,iame",

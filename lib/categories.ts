@@ -70,7 +70,7 @@ export const CATEGORIES: Category[] = [
       { en: "Agency registrations", hi: "एजेंसी पंजीकरण", href: "/app/registrations/record", icon: "domain", ext: ["agency"] },
       { en: "Brands", hi: "ब्रांड", href: "/app/agency-brand/brand-registration", icon: "sell", ext: MFR_AGENCY },
       { en: "Model applications", hi: "मॉडल आवेदन", href: "/app/model-label/new-model-application", icon: "note_add", ext: MFR_AGENCY },
-      { en: "Approved models", hi: "अनुमोदित मॉडल", href: "/app/model-label/model-dashboard", icon: "verified", ext: MFR_AGENCY },
+      { en: "My model applications", hi: "मेरे मॉडल आवेदन", href: "/app/model-label/model-dashboard", icon: "view_list", ext: MFR_AGENCY },
       { en: "Renewals and changes", hi: "नवीनीकरण एवं परिवर्तन", href: "/app/model-label/renewal-or-degradation", icon: "autorenew", ext: MFR_AGENCY },
       { en: "Withdrawals", hi: "वापसी", href: "/app/withdrawal/brand-withdrawal", icon: "cancel", ext: MFR_AGENCY },
       // Partner-only: an applicant's own fee status and receipts for their

@@ -257,7 +257,7 @@ export const MODULES: Module[] = [
     icon: "label",
     blurb: "Model application, scrutiny, approval, rating and label lifecycle.",
     screens: [
-      s("model-label", "Model dashboard", P.VR, "dashboard"),
+      s("model-label", "My model applications", P.VR, "dashboard"),
       s("model-label", "New model application", P.VR, "form"),
       s("model-label", "Family models", P.VR, "table"),
       s("model-label", "Test reports", P.VR, "detail"),

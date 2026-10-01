@@ -75,9 +75,9 @@ class MastersDatabaseTest {
     }
 
     /**
-     * A new throwaway schema, either upgraded as the shared runtime was (V3 with the V2 rows,
-     * then V4 and its seed, then the rest) or migrated fresh as a targeted reset is. The
-     * caller seeds it (again).
+     * A new throwaway schema, either upgraded from V3 with the V2 legacy rows or
+     * migrated fresh as a targeted reset is. Seed after all migrations because the
+     * current fixture includes V6 brand records. The caller may seed it again.
      */
     static JdbcTemplate build(String schema, boolean upgrade) {
         createSchema(schema);
@@ -88,9 +88,9 @@ class MastersDatabaseTest {
             t.update("INSERT INTO fee_rule (id, category, version, amount_inr, status, note) VALUES ('RAC-DEMO', 'RAC', '0-unverified', 1000.00, 'unverified', 'Synthetic local amount only; BEE fee decision pending')");
             t.update("INSERT INTO rating_formula (id, category, version, status, definition, note) VALUES ('RAC-STAR-DEMO', 'RAC', '0-unverified', 'unverified', '{}'::jsonb, 'Placeholder only; no official rating may be computed')");
             flyway(schema, "4").migrate();
-            t.execute(seed);
         }
         flyway(schema, null).migrate();
+        if (upgrade) t.execute(seed);
         return t;
     }
 

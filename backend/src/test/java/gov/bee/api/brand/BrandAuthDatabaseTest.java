@@ -38,11 +38,10 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
  * WP04.2a against real PostgreSQL (bee-local-postgres), in throwaway schemas wp042_test_*
  * that are dropped afterwards; schema "app" is never migrated or seeded by this suite.
  * Tagged "db": excluded from npm run api:test; run by npm run api:test:brand-auth (and by
- * api:test:masters / local:check once V5 is on this branch). Fails if the database is unreachable.
+ * api:test:masters / local:check). Fails if the database is unreachable.
  *
- * <p>This branch temporarily has V4 then V6 (V5 master supersession lives on the parallel
- * checkout). Throwaway schemas therefore skip V5; do not apply V6 to bee_app.app until V5
- * is merged and applied.
+ * <p>Throwaway schemas migrate V1 through V6. The shared app schema is snapshotted before
+ * and after this suite, and the suite never migrates or seeds it.
  */
 @Tag("db")
 class BrandAuthDatabaseTest {
@@ -66,6 +65,9 @@ class BrandAuthDatabaseTest {
     static int appUsersBefore;
     static int appOrgsBefore;
     static int appBrandTablesBefore;
+    static int appVersionBefore;
+    static List<Map<String, Object>> appBrandsBefore;
+    static List<Map<String, Object>> appAuthorisationsBefore;
 
     static String env(String k, String d) {
         String v = System.getenv(k);
@@ -97,6 +99,9 @@ class BrandAuthDatabaseTest {
         appBrandTablesBefore = admin.queryForObject(
             "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('brand', 'agency_authorisation')",
             Integer.class);
+        appVersionBefore = admin.queryForObject("SELECT max(version::int) FROM app.flyway_schema_history WHERE success", Integer.class);
+        appBrandsBefore = admin.queryForList("SELECT id::text AS id, to_jsonb(t)::text AS body FROM app.brand t ORDER BY id");
+        appAuthorisationsBefore = admin.queryForList("SELECT id::text AS id, to_jsonb(t)::text AS body FROM app.agency_authorisation t ORDER BY id");
         seed = Files.readString(SEED);
         createSchema(MAIN);
         flyway(MAIN).migrate();
@@ -119,8 +124,16 @@ class BrandAuthDatabaseTest {
                 "organisations in app schema untouched");
             assertEquals(appBrandTablesBefore, admin.queryForObject(
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('brand', 'agency_authorisation')",
-                Integer.class), "V6 not applied to shared app schema");
-            assertEquals(0, appBrandTablesBefore, "shared app must not have brand tables until V5+V6 merge");
+                Integer.class), "shared app brand table count unchanged");
+            assertEquals(appVersionBefore, admin.queryForObject(
+                "SELECT max(version::int) FROM app.flyway_schema_history WHERE success", Integer.class),
+                "shared app migration version unchanged");
+            assertEquals(appBrandsBefore, admin.queryForList(
+                "SELECT id::text AS id, to_jsonb(t)::text AS body FROM app.brand t ORDER BY id"),
+                "shared app brands unchanged");
+            assertEquals(appAuthorisationsBefore, admin.queryForList(
+                "SELECT id::text AS id, to_jsonb(t)::text AS body FROM app.agency_authorisation t ORDER BY id"),
+                "shared app agency authorisations unchanged");
         }
     }
 
@@ -300,20 +313,19 @@ class BrandAuthDatabaseTest {
     }
 
     @Test
-    void flywayOnThrowawaySkippedV5AndDidNotTouchApp() {
+    void flywayOnThrowawayIncludesV5AndV6AndDoesNotTouchApp() {
         Integer max = db.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class);
         List<Map<String, Object>> versions = db.queryForList(
             "SELECT version, script FROM flyway_schema_history WHERE success ORDER BY installed_rank");
         assertTrue(versions.stream().anyMatch(v -> "4".equals(String.valueOf(v.get("version")))));
         assertTrue(versions.stream().anyMatch(v -> "6".equals(String.valueOf(v.get("version")))));
-        assertFalse(versions.stream().anyMatch(v -> "5".equals(String.valueOf(v.get("version")))),
-            "V5 is absent on this branch; throwaway migrate is V4 then V6");
-        assertEquals(0, admin.queryForObject(
+        assertTrue(versions.stream().anyMatch(v -> "5".equals(String.valueOf(v.get("version")))));
+        assertEquals(6, max, "throwaway schema migrated V1 through V6");
+        assertEquals(appBrandTablesBefore, admin.queryForObject(
             "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('brand', 'agency_authorisation')",
             Integer.class));
-        assertEquals(5, admin.queryForObject("SELECT max(version::int) FROM app.flyway_schema_history WHERE success", Integer.class),
-            "shared app remains at V5 master supersession only");
-        assertTrue(max >= 5);
+        assertEquals(appVersionBefore, admin.queryForObject(
+            "SELECT max(version::int) FROM app.flyway_schema_history WHERE success", Integer.class));
     }
 
     List<Map<String, Object>> snapshot() {

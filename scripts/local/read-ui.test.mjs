@@ -287,3 +287,18 @@ test("detail href stays on model-dashboard; state labels are humanised", () => {
   assert.equal(stateLabel("bee_scrutiny"), "bee scrutiny");
   assert.equal(stateLabel("draft"), "draft");
 });
+
+test("runtime route: menu entry follows Spring roles, never the preview role, and covers only the model dashboard", async () => {
+  const { RUNTIME_ROUTES, runtimeNavFor, runtimeRouteFor } = await import("../../lib/runtimeRoutes.ts");
+  assert.deepEqual(RUNTIME_ROUTES.map((r) => r.href), ["/app/model-label/model-dashboard"]);
+  assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).length, 1);
+  assert.equal(runtimeNavFor([{ role: "agency", scope: "own-org" }]).length, 1);
+  for (const roles of [null, [], [{ role: "laboratory", scope: "assigned" }], [{ role: "secretary", scope: "all" }]]) {
+    assert.equal(runtimeNavFor(roles).length, 0, JSON.stringify(roles));
+  }
+  assert.ok(runtimeRouteFor("/app/model-label/model-dashboard"));
+  for (const p of ["/app/model-label/new-model-application", "/app/registrations/record", "/app", "/app/model-label/model-dashboard/x"]) {
+    assert.equal(runtimeRouteFor(p), undefined, p);
+  }
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/model-dashboard").implemented], ["List", "View detail"]);
+});

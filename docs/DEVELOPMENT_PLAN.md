@@ -162,7 +162,8 @@ WP04.1 is accepted as an internal local master-data activity. WP04 remains open 
 - **Defects fixed.** Verification found and fixed an unreachable route (a screen-title rename had changed its slug; `matrix` and `audit:access` report it) and an endless loading state on network failure.
 - **Results.** `local:check` passed 222/222 after refreshing the Spring contract-test report.
 - **Scope.** No write, permission, route-policy change, fixture fallback or preview-based access was added.
-- **Remaining gap.** The screen is still displayed only under a manufacturer or agency preview role. Evidence: [WP05.1_READ_UI.md](wp05/WP05.1_READ_UI.md).
+- **Runtime route (follow-up).** The dashboard is now reachable from a fresh profile without choosing a preview role. Its sidebar entry comes from Spring's reported manufacturer or agency role, and the preview display filter, simulated-scoping banner and preview access chips are bypassed only on this route, which shows "Implemented here: List · View detail". Identity loading, sign-out, session expiry and role revocation clear the records. `local:read-ui` 26/26 (Nova and PixelCert under the default preview, menu link, list, detail, no read access, revocation, expiry, preview switching, preview unchanged elsewhere); `web:test` 61, `local:browser` 23, matrix, access audit, typecheck and build pass. Spring permissions and the BFF are unchanged.
+- **Remaining gaps.** Revocation and expiry clear the screen on the next focus or 30 s revalidation rather than instantly; MFA-required and inactive-account states not observed live. Evidence: [WP05.1_READ_UI.md](wp05/WP05.1_READ_UI.md).
 
 WP05.1 and WP05 are not accepted; the count stays 1/11.
 

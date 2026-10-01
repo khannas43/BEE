@@ -7,6 +7,8 @@ import { Icon } from "@/components/ui/Icon";
 import { Emblem } from "@/components/chrome/Emblem";
 import { categoriesForRole, categoryForPath } from "@/lib/categories";
 import { useRole } from "./RoleContext";
+import { useSpringIdentity } from "./SessionBadge";
+import { runtimeNavFor } from "@/lib/runtimeRoutes";
 import { useLang } from "@/components/i18n/LangProvider";
 
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -14,6 +16,8 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t, lang } = useLang();
   const pathname = usePathname();
   const categories = categoriesForRole(role);
+  const identity = useSpringIdentity();
+  const runtimeNav = runtimeNavFor(identity.status === "signed-in" ? identity.me.effectiveRoles : null);
 
   // Which category the current route belongs to (for auto-open + highlight)
   const activeCat = categoryForPath(pathname)?.id ?? categories[0]?.id ?? null;
@@ -37,6 +41,14 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
 
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">
+        {runtimeNav.length > 0 && (
+          <div className="pb-space-sm mb-space-sm border-b border-white/10" data-testid="runtime-nav">
+            <div className="px-space-md py-1 font-label-sm text-label-sm uppercase tracking-wide text-forest-light/60">Your BEE records</div>
+            {runtimeNav.map((r) => (
+              <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} />
+            ))}
+          </div>
+        )}
         <div>
           {categories.map((c) => {
             const isOpen = open === c.id;
@@ -96,14 +108,15 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarLink({
-  href, icon, label, active, onNavigate,
+  href, icon, label, active, onNavigate, testId,
 }: {
-  href: string; icon: string; label: string; active: boolean; onNavigate?: () => void;
+  href: string; icon: string; label: string; active: boolean; onNavigate?: () => void; testId?: string;
 }) {
   return (
     <Link
       href={href}
       onClick={onNavigate}
+      data-testid={testId}
       className={`flex items-center gap-space-sm px-space-md py-2 font-label-lg text-label-lg transition-colors ${
         active ? "bg-primary-container text-on-primary" : "text-forest-light hover:text-on-primary hover:bg-white/5"
       }`}

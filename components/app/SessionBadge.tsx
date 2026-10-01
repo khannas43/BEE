@@ -11,12 +11,25 @@ export interface SpringIdentity {
 
 export type IdentityState = { status: "loading" } | { status: "signed-out" } | { status: "signed-in"; me: SpringIdentity };
 
-// One request per page load, shared by the preview banner and the top-bar badge.
+// One request per page load, shared by the preview banner, the top-bar badge and the
+// sidebar, until refreshIdentity() asks again.
 let pending: Promise<IdentityState> | null = null;
-const loadIdentity = () =>
-  (pending ??= fetch("/api/runtime/me", { cache: "no-store" })
+const listeners = new Set<(s: IdentityState) => void>();
+const fetchIdentity = () =>
+  fetch("/api/runtime/me", { cache: "no-store" })
     .then(async (r): Promise<IdentityState> => (r.ok ? { status: "signed-in", me: (await r.json()) as SpringIdentity } : { status: "signed-out" }))
-    .catch((): IdentityState => ({ status: "signed-out" })));
+    .catch((): IdentityState => ({ status: "signed-out" }));
+const loadIdentity = () => (pending ??= fetchIdentity());
+
+/** Re-reads the identity (after sign-out elsewhere, expiry or revocation) and updates every subscriber. */
+export function refreshIdentity(): Promise<IdentityState> {
+  const next = fetchIdentity();
+  pending = next;
+  return next.then((s) => {
+    if (pending === next) listeners.forEach((l) => l(s));
+    return s;
+  });
+}
 
 /**
  * The signed-in identity as Spring reports it (roles and organisation from the
@@ -27,9 +40,13 @@ export function useSpringIdentity(): IdentityState {
   const [state, setState] = useState<IdentityState>({ status: "loading" });
   useEffect(() => {
     let live = true;
-    loadIdentity().then((s) => live && setState(s));
+    const update = (s: IdentityState) => live && setState(s);
+    listeners.add(update);
+    const first = loadIdentity();
+    first.then((s) => pending === first && update(s));
     return () => {
       live = false;
+      listeners.delete(update);
     };
   }, []);
   return state;

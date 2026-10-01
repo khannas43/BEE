@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Card, FakeTable, ScreenChrome } from "@/components/app/ScreenScaffold";
-import { orgsText, rolesText, useSpringIdentity } from "@/components/app/SessionBadge";
+import { orgsText, refreshIdentity, rolesText, useSpringIdentity } from "@/components/app/SessionBadge";
 import {
   type DetailRead,
   type ListRead,
@@ -16,13 +16,22 @@ import {
   readModelApplicationList,
   stateLabel,
 } from "@/lib/client/runtimeModelApplications";
+import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
 /**
  * WP05.1a read-only list/detail on the existing model-dashboard route.
  * Rows come only from the authenticated BFF; lifecycle localStorage is not used here.
  * Create/edit/submit/fee/rating/approval controls are not offered as operational actions.
+ *
+ * Records are shown only while the Spring identity is signed in. The identity, list and
+ * selected detail are read again when the tab regains focus or becomes visible, when the
+ * page is restored from the back-forward cache, and every 30 s; a failed read (sign-out,
+ * expiry, revoked role, outage) replaces the records instead of leaving them on screen.
  */
+const REVALIDATE_MS = 30_000;
+const SIGNED_OUT = { ok: false, failure: { kind: "session", code: "no_session", message: READ_UI_MESSAGES.no_session } } as const;
+
 export function ModelDashboard({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
   const params = useSearchParams();
@@ -30,6 +39,31 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
 
   const [listRead, setListRead] = useState<ListRead | null>(null);
   const [detail, setDetail] = useState<{ id: string; read: DetailRead } | null>(null);
+  const [epoch, setEpoch] = useState(0);
+
+  useEffect(() => {
+    const revalidate = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshIdentity();
+      setEpoch((e) => e + 1);
+    };
+    const restored = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      setListRead(null);
+      setDetail(null);
+      revalidate();
+    };
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", revalidate);
+    window.addEventListener("pageshow", restored);
+    const timer = window.setInterval(revalidate, REVALIDATE_MS);
+    return () => {
+      window.removeEventListener("focus", revalidate);
+      document.removeEventListener("visibilitychange", revalidate);
+      window.removeEventListener("pageshow", restored);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -39,7 +73,7 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
     return () => {
       live = false;
     };
-  }, []);
+  }, [epoch]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -50,28 +84,37 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
     return () => {
       live = false;
     };
-  }, [selectedId]);
+  }, [selectedId, epoch]);
 
   const detailRead = selectedId && detail?.id === selectedId ? detail.read : null;
+  const shownList = gate(identity, listRead);
+  const shownDetail = gate(identity, detailRead);
 
   return (
-    <ScreenChrome module={module} screen={screen} subtitle="Server-persisted applications you may read">
+    <ScreenChrome module={module} screen={screen} subtitle="Server-persisted applications you may read" implemented={runtimeRouteFor(modelDashboardHref())?.implemented}>
       <div className="space-y-space-md" data-testid="model-applications-read">
         <IdentityStrip identity={identity} />
 
         <div className={`grid grid-cols-1 gap-space-md ${selectedId ? "lg:grid-cols-5" : ""}`}>
           <div className={selectedId ? "lg:col-span-3" : ""}>
-            <ListPanel listRead={listRead} selectedId={selectedId} />
+            <ListPanel listRead={shownList} selectedId={selectedId} />
           </div>
           {selectedId ? (
             <div className="lg:col-span-2">
-              <DetailPanel selectedId={selectedId} detailRead={detailRead} />
+              <DetailPanel selectedId={selectedId} detailRead={shownDetail} />
             </div>
           ) : null}
         </div>
       </div>
     </ScreenChrome>
   );
+}
+
+/** Nothing while the identity is loading; never records unless Spring reports a signed-in identity. */
+function gate<T extends ListRead | DetailRead>(identity: ReturnType<typeof useSpringIdentity>, read: T | null): T | null {
+  if (identity.status === "loading") return null;
+  if (identity.status === "signed-out") return (read && !read.ok ? read : SIGNED_OUT) as T;
+  return read;
 }
 
 function IdentityStrip({ identity }: { identity: ReturnType<typeof useSpringIdentity> }) {
@@ -82,9 +125,9 @@ function IdentityStrip({ identity }: { identity: ReturnType<typeof useSpringIden
         <div className="min-w-0">
           <div className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide">Signed-in identity (BEE records)</div>
           {identity.status === "loading" ? (
-            <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">Loading identity…</p>
+            <p className="font-body-sm text-body-sm text-on-surface-variant mt-1" data-testid="model-applications-identity-loading">Checking your sign-in…</p>
           ) : identity.status === "signed-out" ? (
-            <p className="font-body-sm text-body-sm text-on-surface mt-1">{READ_UI_MESSAGES.no_session}</p>
+            <p className="font-body-sm text-body-sm text-on-surface mt-1">No signed-in BEE identity with an active role.</p>
           ) : (
             <p className="font-body-sm text-body-sm text-on-surface mt-1">
               <span className="font-semibold">{identity.me.displayName}</span>

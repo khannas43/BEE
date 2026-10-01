@@ -7,6 +7,7 @@ import { PREVIEW_SUFFIX, previewRoleOf, useRole } from "./RoleContext";
 import { useLang } from "@/components/i18n/LangProvider";
 import { canRoleAccessPath, categoriesForRole } from "@/lib/categories";
 import { isExternalRole } from "@/lib/roles";
+import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 
 /**
  * Client route guard for the development preview — the same screen filter as the
@@ -15,6 +16,9 @@ import { isExternalRole } from "@/lib/roles";
  * path belongs to sees a refusal, not the page. (Hiding the link is not
  * enough; this also blocks direct-URL access within the app.) External
  * partner roles get a scoped-view banner.
+ *
+ * Runtime routes (lib/runtimeRoutes.ts) are exempt from both: they show real BEE records
+ * that Spring scopes to the signed-in identity, whatever the preview role.
  */
 export function RouteGuard({ children }: { children: React.ReactNode }) {
   const { role } = useRole();
@@ -23,6 +27,8 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const allowed = canRoleAccessPath(role, pathname);
   const external = isExternalRole(role);
   const home = categoriesForRole(role)[0]?.items[0]?.href ?? "/app";
+
+  if (runtimeRouteFor(pathname)) return <>{children}</>;
 
   if (!allowed) {
     return (

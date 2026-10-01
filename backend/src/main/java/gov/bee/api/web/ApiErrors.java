@@ -26,6 +26,8 @@ public final class ApiErrors {
         Map.entry("no_write_scope", "This role cannot create or edit model application drafts."),
         Map.entry("brand_not_permitted", "This brand is not available to your organisation."),
         Map.entry("not_editable", "Only draft applications can be edited."),
+        Map.entry("not_submittable", "Only draft applications can be submitted."),
+        Map.entry("rule_not_available", "Required category, standard or fee rules are not available."),
         Map.entry("validation_failed", "The request could not be accepted."),
         Map.entry("version_conflict", "The record has changed since it was loaded."),
         Map.entry("idempotency_key_required", "An Idempotency-Key header is required for this request."),

@@ -15,6 +15,7 @@ export type WebRoute =
   | "/api/runtime/model-applications"
   | "/api/runtime/model-applications/eligible-brands"
   | "/api/runtime/model-applications/{id}"
+  | "/api/runtime/model-applications/{id}/submit"
   | "/api/auth/session"
   | "/api/auth/login"
   | "/api/auth/callback"
@@ -26,7 +27,8 @@ export type SpringRoute =
   | "/api/me"
   | "/api/model-applications"
   | "/api/model-applications/eligible-brands"
-  | "/api/model-applications/{id}";
+  | "/api/model-applications/{id}"
+  | "/api/model-applications/{id}/submit";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
 

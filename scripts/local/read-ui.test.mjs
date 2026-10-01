@@ -304,8 +304,8 @@ test("runtime routes: Spring identity menu for dashboard and draft form, not the
   for (const p of ["/app/registrations/record", "/app", "/app/model-label/model-dashboard/x"]) {
     assert.equal(runtimeRouteFor(p), undefined, p);
   }
-  assert.deepEqual([...runtimeRouteFor("/app/model-label/model-dashboard").implemented], ["List", "View detail", "Edit draft"]);
-  assert.deepEqual([...runtimeRouteFor("/app/model-label/new-model-application").implemented], ["Create draft", "Edit draft"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/model-dashboard").implemented], ["List", "View detail", "Edit draft", "Submit draft"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/new-model-application").implemented], ["Create draft", "Edit draft", "Submit draft"]);
 });
 
 test("draft idempotency gate reuses a key until cleared or the payload changes", async () => {

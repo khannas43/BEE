@@ -201,11 +201,11 @@ function inventory() {
   const internalPaths = internal.map(([r]) => r).sort();
   const springPaths = [...mappings, "/actuator/health"].sort();
   if (springPaths.join() !== internalPaths.join()) problems.push(`Spring GET mappings ${springPaths} vs contract ${internalPaths}`);
-  const expectAllowed = ["GET /actuator/health", "GET /actuator/health/**", "GET /api/me", "GET /api/model-applications/eligible-brands", "GET /api/model-applications", "GET /api/model-applications/*", "POST /api/model-applications", "PATCH /api/model-applications/*"];
+  const expectAllowed = ["GET /actuator/health", "GET /actuator/health/**", "GET /api/me", "GET /api/model-applications/eligible-brands", "GET /api/model-applications", "GET /api/model-applications/*", "GET /api/model-applications/*/submit", "POST /api/model-applications", "PATCH /api/model-applications/*", "POST /api/model-applications/*/submit"];
   if (allowed.sort().join() !== expectAllowed.sort().join()) problems.push(`SecurityConfig matchers changed: ${allowed}`);
   check("contract.inventory", problems.length === 0,
     `${routes.length} Next route files vs ${browser.length} browser paths + catch-all; ${springPaths.length} Spring GET routes vs ${internalPaths.length} internal paths; SecurityConfig matchers unchanged (${allowed.length})${show(problems)}`);
-  check("contract.deferred-not-operational", doc["x-bee-deferred"].length >= 5 && doc["x-bee-deferred"].every((d) => d.owner && d.status !== "operational"),
+  check("contract.deferred-not-operational", doc["x-bee-deferred"].length >= 4 && doc["x-bee-deferred"].every((d) => d.owner && d.status !== "operational"),
     `${doc["x-bee-deferred"].length} deferred routes with owners (${[...new Set(doc["x-bee-deferred"].map((d) => d.owner))].join(", ")}); none operational`);
 }
 
@@ -259,9 +259,9 @@ async function springChecks(nova, inactive, noAmr) {
   check("spring.inactive-role", ina.every((m) => m.x.status === 403 && m.x.json?.error === "no_effective_role" && m.e.length === 0 && sameCorr(m.x)),
     `test.inactive.role: ${ina.map((m) => `${m.p.replace(NOVA_APP, "{id}")} ${m.x.status} ${m.x.json?.error}`).join(", ")}${show(ina.flatMap((m) => m.e))}`);
 
-  const draftMissingKey = [["POST", "/api/model-applications"], ["PATCH", `/api/model-applications/${NOVA_APP}`]];
+  const draftMissingKey = [["POST", "/api/model-applications"], ["PATCH", `/api/model-applications/${NOVA_APP}`], ["POST", `/api/model-applications/${NOVA_APP}/submit`]];
   const deniedWrites = [["PUT", `/api/model-applications/${NOVA_APP}`], ["DELETE", `/api/model-applications/${NOVA_APP}`],
-    ["POST", `/api/model-applications/${NOVA_APP}/submit`], ["GET", `/api/model-applications/${NOVA_APP}/history`], ["POST", "/api/me"], ["GET", "/actuator/env"]];
+    ["GET", `/api/model-applications/${NOVA_APP}/history`], ["POST", "/api/me"], ["GET", "/actuator/env"]];
   const want = JSON.stringify({ error: "denied_by_default", message: doc["x-bee-error-codes"].denied_by_default.message });
   const denied = [];
   for (const [m, p] of deniedWrites) {
@@ -276,7 +276,7 @@ async function springChecks(nova, inactive, noAmr) {
   const anon = await call(`${API}/api/model-applications`, { method: "POST", correlationId: cid("spring-write-anon"), body: "{}", headers: { "Content-Type": "application/json" } });
   for (const d of denied) contract.record({ route: "default-deny", method: d.m, status: d.x.status, code: d.x.json?.error ?? null, ok: d.x.status === 403 && d.x.text === want && d.e.length === 0 && sameCorr(d.x) && noStore(d.x) });
   for (const d of missingKey) {
-    const route = d.p.includes(NOVA_APP) ? "/api/model-applications/{id}" : d.p.replace(`${API}`, "");
+    const route = d.p.includes("/submit") ? "/api/model-applications/{id}/submit" : d.p.includes(NOVA_APP) ? "/api/model-applications/{id}" : d.p.replace(`${API}`, "");
     contract.record({ route, method: d.m, status: d.x.status, code: d.x.json?.error ?? null, ok: d.x.status === 422 && d.x.json?.error === "idempotency_key_required" && d.e.length === 0 && sameCorr(d.x) && noStore(d.x) });
   }
   contract.record({ route: "default-deny", method: "POST", status: anon.status, code: anon.json?.error ?? null, ok: anon.status === 401 && contract.validate(doc.components.schemas.Error, anon.json, doc).length === 0 && noStore(anon) });

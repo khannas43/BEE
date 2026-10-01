@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.4.1";
+export const CONTRACT_VERSION = "0.4.2";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -29,6 +29,8 @@ export const ERROR_MESSAGES = {
   no_write_scope: "This role cannot create or edit model application drafts.",
   brand_not_permitted: "This brand is not available to your organisation.",
   not_editable: "Only draft applications can be edited.",
+  not_submittable: "Only draft applications can be submitted.",
+  rule_not_available: "Required category, standard or fee rules are not available.",
   validation_failed: "The request could not be accepted.",
   version_conflict: "The record has changed since it was loaded.",
   idempotency_key_required: "An Idempotency-Key header is required for this request.",
@@ -222,7 +224,7 @@ export const validateEligibleBrandList: Validator<EligibleBrandList> = (body) =>
   return b.items.every(itemOk) ? (b as unknown as EligibleBrandList) : null;
 };
 
-const WRITE_DENIALS = [...RESOLVER_DENIALS, "no_write_scope", "brand_not_permitted", "not_editable"] as const;
+const WRITE_DENIALS = [...RESOLVER_DENIALS, "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"] as const;
 
 export const SPRING_ELIGIBLE_BRANDS_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
@@ -248,6 +250,81 @@ export const SPRING_PATCH_ERRORS: UpstreamErrors = {
 export const SPRING_ELIGIBLE_BRANDS = { errors: SPRING_ELIGIBLE_BRANDS_ERRORS, validate: validateEligibleBrandList };
 export const SPRING_CREATE = { errors: SPRING_CREATE_ERRORS, validate: validateModelApplication, successStatuses: [201] as const };
 export const SPRING_PATCH = { errors: SPRING_PATCH_ERRORS, validate: validateModelApplication, successStatuses: [200] as const };
+
+export interface SubmissionFee {
+  amountInr: string;
+  currency: string;
+  feeRuleKey: string;
+  feeRuleVersion: number;
+  verificationStatus: string;
+  localDemoFee: boolean;
+  label: string;
+  sourceReference?: string;
+}
+
+export interface SubmitPreview {
+  ready: boolean;
+  version: number;
+  intakeNote: string;
+  submissionFee?: SubmissionFee;
+}
+
+export interface ModelApplicationSubmitted extends ModelApplication {
+  submissionFee: SubmissionFee;
+}
+
+const SUBMISSION_FEE_KEYS = ["amountInr", "currency", "feeRuleKey", "feeRuleVersion", "verificationStatus", "localDemoFee", "label"] as const;
+const SUBMISSION_FEE_OPTIONAL = ["sourceReference"] as const;
+
+export const validateSubmissionFee: Validator<SubmissionFee> = (body) => {
+  if (!exactKeys(body, SUBMISSION_FEE_KEYS, SUBMISSION_FEE_OPTIONAL)) return null;
+  const b = body;
+  const ok =
+    isString(b.amountInr) && isString(b.currency) && b.currency === "INR" &&
+    isString(b.feeRuleKey) && Number.isInteger(b.feeRuleVersion) && (b.feeRuleVersion as number) >= 1 &&
+    isString(b.verificationStatus) && typeof b.localDemoFee === "boolean" && isString(b.label) &&
+    (b.sourceReference === undefined || isString(b.sourceReference));
+  return ok ? (b as unknown as SubmissionFee) : null;
+};
+
+export const validateSubmitPreview: Validator<SubmitPreview> = (body) => {
+  if (!exactKeys(body, ["ready", "version", "intakeNote"], ["submissionFee"])) return null;
+  const b = body;
+  const ok =
+    typeof b.ready === "boolean" && Number.isInteger(b.version) && (b.version as number) >= 0 &&
+    isString(b.intakeNote) &&
+    (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null);
+  return ok ? (b as unknown as SubmitPreview) : null;
+};
+
+export const validateModelApplicationSubmitted: Validator<ModelApplicationSubmitted> = (body) => {
+  if (!isObject(body)) return null;
+  const keys = Object.keys(body);
+  const allowed = [...MODEL_APPLICATION_KEYS, ...MODEL_APPLICATION_OPTIONAL, "submissionFee"];
+  if (!keys.every((k) => (allowed as readonly string[]).includes(k))) return null;
+  const { submissionFee, ...appFields } = body;
+  if (validateModelApplication(appFields) === null || validateSubmissionFee(submissionFee) === null) return null;
+  return body as unknown as ModelApplicationSubmitted;
+};
+
+export const SPRING_SUBMIT_PREVIEW_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: [...RESOLVER_DENIALS, "no_write_scope", "not_submittable"],
+  404: ["not_found"],
+  503: ["service_unavailable"],
+};
+
+export const SPRING_SUBMIT_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: [...RESOLVER_DENIALS, "no_write_scope", "brand_not_permitted", "not_submittable"],
+  404: ["not_found"],
+  409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress"],
+  422: ["validation_failed", "idempotency_key_required", "rule_not_available"],
+  503: ["service_unavailable"],
+};
+
+export const SPRING_SUBMIT_PREVIEW = { errors: SPRING_SUBMIT_PREVIEW_ERRORS, validate: validateSubmitPreview };
+export const SPRING_SUBMIT = { errors: SPRING_SUBMIT_ERRORS, validate: validateModelApplicationSubmitted, successStatuses: [200] as const };
 
 /** Every item is a valid ModelApplication and count is the item count. */
 export const validateModelApplicationList: Validator<ModelApplicationList> = (body) => {

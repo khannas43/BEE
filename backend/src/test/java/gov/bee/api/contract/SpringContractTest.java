@@ -18,11 +18,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.fasterxml.jackson.databind.JsonNode;
 import gov.bee.api.application.IdempotencyRepository;
 import gov.bee.api.application.ModelApplicationRepository;
+import gov.bee.api.application.ModelApplicationSubmitRepository;
 import gov.bee.api.brand.BrandAuth;
 import gov.bee.api.brand.BrandAuthRepository;
 import gov.bee.api.identity.IdentityRepository;
 import gov.bee.api.masters.MasterDataRepository;
+import gov.bee.api.masters.MasterVersion;
+import gov.bee.api.masters.Masters;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -106,6 +111,9 @@ class SpringContractTest {
     /** WP04.2a brand/agency authorisation is internal and unused by any route; mocked likewise. */
     @MockitoBean
     BrandAuthRepository brandAuth;
+
+    @MockitoBean
+    ModelApplicationSubmitRepository submissions;
 
     @BeforeAll
     static void load() throws Exception {
@@ -281,7 +289,7 @@ class SpringContractTest {
     void everythingElseIsDeniedByDefault() throws Exception {
         account("manufacturer", "own-org");
         conforms("default-deny", post(LIST).contentType("application/json").content("{\"secret\":\"" + PLANTED + "\"}"), 401, "unauthenticated");
-        for (MockHttpServletRequestBuilder b : List.of(post(path(DETAIL) + "/submit"), delete(path(DETAIL)), get(path(DETAIL) + "/history"), post(ME), get("/actuator/env"))) {
+        for (MockHttpServletRequestBuilder b : List.of(delete(path(DETAIL)), get(path(DETAIL) + "/history"), post(ME), get("/actuator/env"))) {
             conforms("default-deny", b.with(token("manufacturer")), 403, "denied_by_default");
         }
     }
@@ -295,12 +303,17 @@ class SpringContractTest {
         ids[0] = conforms(DETAIL, get("/api/model-applications/" + PLANTED + "?code=" + PLANTED + "&state=" + PLANTED)
             .with(token("manufacturer")).header("Cookie", "bee_session=" + PLANTED), 404, "not_found").getHeader("X-Correlation-Id");
         ids[1] = conforms(LIST, get(LIST).header("Authorization", "Bearer " + PLANTED), 401, "unauthenticated").getHeader("X-Correlation-Id");
-        ids[2] = conforms("default-deny", post(path(DETAIL) + "/submit").with(token("manufacturer")).contentType("application/json").content("{\"password\":\"" + PLANTED + "\"}"), 403, "denied_by_default").getHeader("X-Correlation-Id");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        when(masters.category(any(), any())).thenReturn(Optional.of(new Masters.Category(feeVersion(), "RAC", "Room AC")));
+        when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
+        when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
+        ids[2] = conforms("/api/model-applications/{id}/submit", get(path(DETAIL) + "/submit").with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
         ids[3] = conforms(ME, get(ME).with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
         String log = Files.readString(file);
         assertFalse(log.contains(PLANTED), "planted value in api-requests.jsonl");
         assertFalse(log.contains("nova.applicant") || log.contains("Nova Applicant"), "personal data in api-requests.jsonl");
-        String[][] want = {{"/api/model-applications/{id}", "404", "not_found"}, {"/api/model-applications", "401", "unauthenticated"}, {"/api/model-applications/{id}/submit", "403", "denied_by_default"}, {"/api/me", "200", "ok"}};
+        String[][] want = {{"/api/model-applications/{id}", "404", "not_found"}, {"/api/model-applications", "401", "unauthenticated"}, {"/api/model-applications/{id}/submit", "200", "ok"}, {"/api/me", "200", "ok"}};
         for (int i = 0; i < ids.length; i++) {
             String id = ids[i];
             List<String> lines = log.lines().filter(l -> l.contains("\"correlationId\":\"" + id + "\"")).toList();
@@ -322,6 +335,15 @@ class SpringContractTest {
     static ModelApplicationRepository.Row draftRow(UUID id, String model, int version) {
         return new ModelApplicationRepository.Row(id, "LOCAL-MA-9999", NOVA, "NOVA", "Nova Cool", "RAC", model, "draft", version,
             Set.of(), NOVA, NOVA_COOL, "NOVA");
+    }
+
+    static MasterVersion feeVersion() {
+        return new MasterVersion(UUID.randomUUID(), "RAC:new_model", 2, LocalDate.of(2026, 10, 1), null, "ref",
+            MasterVersion.Verification.PROVISIONAL, "note", null, null);
+    }
+
+    static Masters.FeeRule racFee() {
+        return new Masters.FeeRule(feeVersion(), "RAC", "new_model", new BigDecimal("24000.00"));
     }
 
     @Test
@@ -426,6 +448,89 @@ class SpringContractTest {
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
         conforms("/api/model-applications/{id}", patch("/api/model-applications/" + NOVA_APP).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 409, "idempotency_in_progress");
+
+        String submitBody = "{\"version\":0}";
+        String submitPath = "/api/model-applications/" + NOVA_APP + "/submit";
+        conforms("/api/model-applications/{id}/submit", get(submitPath), 401, "unauthenticated");
+        conforms("/api/model-applications/{id}/submit", post(submitPath).contentType("application/json").content(submitBody), 401, "unauthenticated");
+        conforms("/api/model-applications/{id}/submit", get(submitPath).with(pwdOnly), 403, "mfa_required");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms("/api/model-applications/{id}/submit", get(submitPath).with(token("manufacturer")), 403, "no_active_account");
+        account("auditor", "all");
+        conforms("/api/model-applications/{id}/submit", get(submitPath).with(token("auditor")), 403, "no_write_scope");
+        account("manufacturer", "own-org");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.empty());
+        conforms("/api/model-applications/{id}/submit", get(submitPath).with(token("manufacturer")), 404, "not_found");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 404, "not_found");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(
+            new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "fee_due", 1, Set.of(), NOVA, NOVA_COOL, "NOVA")));
+        conforms("/api/model-applications/{id}/submit", get(submitPath).with(token("manufacturer")), 403, "not_submittable");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        when(masters.category(any(), any())).thenReturn(Optional.empty());
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123459").contentType("application/json").content(submitBody), 422, "rule_not_available");
+        when(masters.category(any(), any())).thenReturn(Optional.of(new Masters.Category(feeVersion(), "RAC", "Room AC")));
+        when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
+        when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).contentType("application/json").content(submitBody), 422, "idempotency_key_required");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        var feeSnap = new ModelApplicationSubmitRepository.FeeSnapshotRow(UUID.randomUUID(), new BigDecimal("24000.00"), "INR", "RAC:new_model", 2,
+            "provisional", "ref", "note", java.time.Instant.now());
+        when(submissions.submit(any(), any(), anyInt(), any(), any(), any(), any(), anyInt(), any(), any(), any()))
+            .thenReturn(Optional.of(new ModelApplicationSubmitRepository.SubmissionResult(
+                new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-9999", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "fee_due", 1,
+                    Set.of(), NOVA, NOVA_COOL, "NOVA"),
+                UUID.randomUUID(), feeSnap)));
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 200, null);
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        conforms("/api/model-applications/{id}/submit", get(submitPath).with(token("manufacturer")), 200, null);
+        conforms("/api/model-applications/{id}/submit", get(submitPath).with(token("finance")), 403, "no_effective_role");
+        account("manufacturer", "own-org");
+        doThrow(new DataAccessResourceFailureException("down")).when(identity).activeMemberships(any());
+        conforms("/api/model-applications/{id}/submit", get(submitPath).with(token("manufacturer")), 503, "service_unavailable");
+        reset(identity, applications, brandAuth, idempotency, masters, submissions);
+        account("manufacturer", "own-org");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.empty());
+        when(masters.category(any(), any())).thenReturn(Optional.of(new Masters.Category(feeVersion(), "RAC", "Room AC")));
+        when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
+        when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "brand_not_permitted");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(
+            new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "fee_due", 1, Set.of(), NOVA, NOVA_COOL, "NOVA")));
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "not_submittable");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 2)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 409, "version_conflict");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        doThrow(new DataAccessResourceFailureException("down")).when(submissions).submit(any(), any(), anyInt(), any(), any(), any(), any(), anyInt(), any(), any(), any());
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123458").contentType("application/json").content(submitBody), 503, "service_unavailable");
+        reset(submissions);
+        account("auditor", "all");
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "no_write_scope");
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "mfa_required");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "no_active_account");
+        account("manufacturer", "own-org");
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "no_effective_role");
     }
 
     @Test

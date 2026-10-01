@@ -13,12 +13,13 @@ import {
   patchModelApplicationDraft,
 } from "@/lib/client/runtimeModelDrafts";
 import { modelDashboardHref, readModelApplication, stateLabel } from "@/lib/client/runtimeModelApplications";
+import { previewModelApplicationSubmit, submitModelApplicationDraft, type SubmitPreview, type SubmissionFee } from "@/lib/client/runtimeModelSubmit";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
 type Brand = { brandId: string; brandName: string; principalOrganisation: string };
 
-/** WP05.1b: create or edit a draft through the BFF; submit and fee steps stay unavailable. */
+/** WP05.1b–c: create, edit and submit a draft through the BFF (provisional local-demo fee only). */
 export function NewModelApplication({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
   const params = useSearchParams();
@@ -34,7 +35,12 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const [saved, setSaved] = useState<{ reference: string; id: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [legacyUnlinked, setLegacyUnlinked] = useState(false);
+  const [submitPreview, setSubmitPreview] = useState<SubmitPreview | null>(null);
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitDone, setSubmitDone] = useState<{ reference: string; id: string; fee: SubmissionFee } | null>(null);
   const idemGate = useRef(new DraftIdempotencyGate());
+  const submitIdem = useRef<string | null>(null);
 
   const implemented = runtimeRouteFor("/app/model-label/new-model-application")?.implemented;
   const isEdit = !!editId;
@@ -110,19 +116,98 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       return;
     }
     idemGate.current.clear();
+    const nextVersion = res.application.version as number;
+    setVersion(nextVersion);
     setSaved({ reference: String(res.application.reference), id: String(res.application.id) });
   }
 
-  if (saved) {
+  async function openSubmitConfirm(appId: string) {
+    setSubmitError(null);
+    setLoading(true);
+    const prev = await previewModelApplicationSubmit(appId);
+    setLoading(false);
+    if (!prev.ok) {
+      setSubmitError(prev.failure.message);
+      return;
+    }
+    setSubmitPreview(prev.preview);
+    setSubmitOpen(true);
+  }
+
+  async function confirmSubmit(appId: string) {
+    if (!submitPreview) return;
+    setLoading(true);
+    setSubmitError(null);
+    if (!submitIdem.current) submitIdem.current = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
+    const res = await submitModelApplicationDraft(appId, submitPreview.version, submitIdem.current);
+    setLoading(false);
+    if (!res.ok) {
+      setSubmitError(res.failure.message);
+      return;
+    }
+    submitIdem.current = null;
+    setSubmitOpen(false);
+    setSubmitDone({ reference: res.application.reference, id: res.application.id, fee: res.submissionFee });
+  }
+
+  const activeId = editId ?? saved?.id ?? null;
+
+  if (submitDone) {
     return (
-      <ScreenChrome module={module} screen={screen} subtitle={isEdit ? "Draft updated" : "Draft saved"} implemented={implemented}>
+      <ScreenChrome module={module} screen={screen} subtitle="Submitted for fee" implemented={implemented}>
+        <Card data-testid="model-submit-success">
+          <p className="font-body-md text-body-md">
+            Application <strong>{submitDone.reference}</strong> is now <strong>{stateLabel("fee_due")}</strong>.
+          </p>
+          <p className="font-body-sm text-on-surface-variant mt-space-sm">
+            {submitDone.fee.label}: ₹{Number(submitDone.fee.amountInr).toLocaleString("en-IN")} ({submitDone.fee.feeRuleKey} v{submitDone.fee.feeRuleVersion}).
+            {submitDone.fee.localDemoFee ? " This amount is for local demo only and is not a BEE-approved fee." : ""}
+          </p>
+          <p className="font-label-sm text-on-surface-variant mt-space-sm">
+            Test evidence, accreditation and full RFP intake checks are not part of this step (deferred to WP05.1 / WP06.1).
+          </p>
+          <Link href={modelDashboardHref(submitDone.id)} className="inline-flex mt-space-md text-primary font-label-md">
+            Refresh dashboard
+          </Link>
+        </Card>
+      </ScreenChrome>
+    );
+  }
+
+  if (saved && !isEdit) {
+    return (
+      <ScreenChrome module={module} screen={screen} subtitle="Draft saved" implemented={implemented}>
         <Card>
           <p className="font-body-md text-body-md">
-            Draft <strong>{saved.reference}</strong> was saved. Submit and fee confirmation are not available on this screen yet.
+            Draft <strong>{saved.reference}</strong> was saved.
           </p>
-          <Link href={modelDashboardHref(saved.id)} className="inline-flex mt-space-md text-primary font-label-md">
-            View on dashboard
-          </Link>
+          {submitError && <p className="text-error font-body-sm mt-space-sm" data-testid="model-submit-error">{submitError}</p>}
+          <div className="flex flex-col gap-space-sm mt-space-md">
+            <button
+              type="button"
+              disabled={loading}
+              className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
+              data-testid="model-draft-submit"
+              onClick={() => openSubmitConfirm(saved.id)}
+            >
+              {loading ? "Loading…" : "Review submit and provisional fee"}
+            </button>
+            <Link href={modelDraftFormHref(saved.id)} className="text-center text-primary font-label-md">
+              Edit draft first
+            </Link>
+            <Link href={modelDashboardHref(saved.id)} className="text-center text-on-surface-variant font-label-sm">
+              View on dashboard
+            </Link>
+          </div>
+          {submitOpen && submitPreview ? (
+            <SubmitConfirmCard
+              preview={submitPreview}
+              loading={loading}
+              error={submitError}
+              onCancel={() => { setSubmitOpen(false); setSubmitError(null); }}
+              onConfirm={() => confirmSubmit(saved.id)}
+            />
+          ) : null}
         </Card>
       </ScreenChrome>
     );
@@ -197,13 +282,88 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             >
               {loading ? "Saving…" : isEdit ? "Save changes" : "Save draft"}
             </button>
+            {isEdit && activeId ? (
+              <>
+                {submitError && !submitOpen ? (
+                  <p className="text-error font-body-sm" data-testid="model-submit-error">{submitError}</p>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => openSubmitConfirm(activeId)}
+                  className="w-full border border-primary text-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
+                  data-testid="model-draft-submit"
+                >
+                  {loading && submitOpen ? "Loading…" : "Review submit and provisional fee"}
+                </button>
+              </>
+            ) : null}
+            {submitOpen && submitPreview && activeId ? (
+              <SubmitConfirmCard
+                preview={submitPreview}
+                loading={loading}
+                error={submitError}
+                onCancel={() => { setSubmitOpen(false); setSubmitError(null); }}
+                onConfirm={() => confirmSubmit(activeId)}
+              />
+            ) : null}
             <p className="font-label-sm text-on-surface-variant text-center">
-              Records are stored in the BEE service. Submit, fees, rating and approval are not offered here.
+              Finance confirmation, rating and approval are not offered on this screen. Submit stores a provisional fee snapshot for local demo when rules allow.
             </p>
           </>
         )}
       </div>
     </ScreenChrome>
+  );
+}
+
+function SubmitConfirmCard({
+  preview,
+  loading,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  preview: SubmitPreview;
+  loading: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Card title="Confirm submit" data-testid="model-submit-confirm">
+      <p className="font-body-sm text-on-surface-variant">{preview.intakeNote}</p>
+      {!preview.ready || !preview.submissionFee ? (
+        <p className="text-error font-body-sm mt-space-sm">This draft is not ready to submit. Check brand authorisation and master rules.</p>
+      ) : (
+        <div className="mt-space-md space-y-1 font-body-sm">
+          <p>
+            <span className="font-semibold">{preview.submissionFee.label}</span>
+            {" · "}
+            ₹{Number(preview.submissionFee.amountInr).toLocaleString("en-IN")} {preview.submissionFee.currency}
+          </p>
+          <p className="text-on-surface-variant">
+            Rule {preview.submissionFee.feeRuleKey} v{preview.submissionFee.feeRuleVersion} ({preview.submissionFee.verificationStatus}).
+            {preview.submissionFee.localDemoFee ? " Not a BEE-approved fee." : ""}
+          </p>
+        </div>
+      )}
+      {error ? <p className="text-error font-body-sm mt-space-sm">{error}</p> : null}
+      <div className="flex gap-space-sm mt-space-md">
+        <button type="button" className="flex-1 py-2 rounded-lg border border-outline font-label-md" onClick={onCancel} disabled={loading}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="flex-1 py-2 rounded-lg bg-primary text-on-primary font-label-md disabled:opacity-50"
+          data-testid="model-submit-confirm"
+          disabled={loading || !preview.ready || !preview.submissionFee}
+          onClick={onConfirm}
+        >
+          {loading ? "Submitting…" : "Submit to fee due"}
+        </button>
+      </div>
+    </Card>
   );
 }
 

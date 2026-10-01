@@ -167,7 +167,7 @@ class ModelApplicationControllerSecurityTest {
         mvc.perform(get("/api/model-applications").header("X-Correlation-Id", "contract-test-1"))
             .andExpect(status().isUnauthorized()).andExpect(header().string("X-Correlation-Id", "contract-test-1"))
             .andExpect(content().json(body.formatted("unauthenticated", "A valid access token is required."), true));
-        mvc.perform(post("/api/model-applications/{id}/submit", NOVA_APP).with(token("manufacturer")).header("X-Correlation-Id", "contract-test-2"))
+        mvc.perform(patch("/api/model-applications/{id}/submit", NOVA_APP).with(token("manufacturer")).header("X-Correlation-Id", "contract-test-2"))
             .andExpect(status().isForbidden()).andExpect(header().string("X-Correlation-Id", "contract-test-2"))
             .andExpect(content().json(body.formatted("denied_by_default", "This operation is not available."), true));
         mvc.perform(get("/api/model-applications").with(jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")))))
@@ -223,7 +223,6 @@ class ModelApplicationControllerSecurityTest {
     @ParameterizedTest
     @CsvSource({
         "PATCH,/api/model-applications/{id}/submit,manufacturer",
-        "POST,/api/model-applications/{id}/submit,manufacturer",
         "POST,/api/model-applications/{id}/fee/confirm,finance",
         "POST,/api/model-applications/{id}/recommend,iame",
         "POST,/api/model-applications/{id}/recommend,reviewer",

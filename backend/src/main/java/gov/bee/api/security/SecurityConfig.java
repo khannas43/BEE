@@ -48,6 +48,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/model-applications", "/api/model-applications/*").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/model-applications").authenticated()
                 .requestMatchers(HttpMethod.PATCH, "/api/model-applications/*").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/model-applications/*/submit").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/model-applications/*/submit").authenticated()
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o -> o
                 .jwt(Customizer.withDefaults())

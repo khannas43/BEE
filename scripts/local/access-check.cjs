@@ -176,6 +176,7 @@ async function main() {
     ["nova.applicant", "POST", "/api/model-applications"],
     ["nova.applicant", "PATCH", `/api/model-applications/${byRef["LOCAL-MA-0001"].id}`],
     ["nova.applicant", "POST", `/api/model-applications/${byRef["LOCAL-MA-0001"].id}/submit`],
+    ["nova.applicant", "GET", `/api/model-applications/${byRef["LOCAL-MA-0001"].id}/submit`],
     ["bee.finance", "POST", `/api/model-applications/${id}/fee/confirm`],
     ["iame.officer", "POST", `/api/model-applications/${pid}/recommend`],
     ["bee.reviewer", "POST", `/api/model-applications/${byRef["LOCAL-MA-0004"].id}/recommend`],
@@ -187,15 +188,15 @@ async function main() {
     ["bee.admin", "POST", `/api/model-applications/${id}/decision`],
     ["nova.applicant", "GET", `/api/model-applications/${id}/history`],
   ];
-  const draftWrites = writes.slice(0, 2);
-  const transitions = writes.slice(2);
+  const draftWrites = writes.slice(0, 4);
+  const transitions = writes.slice(4);
   const draftResults = [];
   for (const [u, m, p] of draftWrites) draftResults.push([u, m, p, await call(u, p, m)]);
   const transitionResults = [];
   for (const [u, m, p] of transitions) transitionResults.push([u, m, p, await call(u, p, m)]);
   check("actions.draft-routes-mapped",
-    draftResults.every(([, , , x]) => x.status === 422 && x.json?.error === "idempotency_key_required"),
-    `draft POST/PATCH without Idempotency-Key -> ${draftResults.map(([u, m, p, x]) => `${u} ${m} ${x.status} ${x.json?.error}`).join("; ")}`);
+    draftResults.every(([, m, , x]) => (m === "GET" ? x.status === 200 : x.status === 422 && x.json?.error === "idempotency_key_required")),
+    `draft GET preview or POST/PATCH without Idempotency-Key -> ${draftResults.map(([u, m, p, x]) => `${u} ${m} ${x.status} ${x.json?.error}`).join("; ")}`);
   check("actions.transitions-denied", transitionResults.every(([, , , x]) => x.status === 403 && x.json?.error === "denied_by_default"),
     `${transitionResults.filter(([, , , x]) => x.status === 403).length}/${transitionResults.length} denied_by_default: ` + transitionResults.map(([u, m, p, x]) => `${u} ${m} ${p.replace(/\/api\/model-applications\/?/, "/").replace(/00000000-0000-4000-c000-0+/, "#")} ${x.status}`).join("; "));
   const after = snapshot();

@@ -21,6 +21,10 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   code_exchange_failed: "The sign-in could not be completed with the identity provider.",
   identity_unavailable: "The identity service is not reachable.",
   api_unreachable: "The BEE service is not reachable, so access could not be checked.",
+  service_unavailable: "The BEE service is temporarily unavailable, so access could not be checked.",
+  invalid_api_response: "The BEE service returned an unexpected response, so you were not signed in.",
+  api_error: "The BEE service could not check your access, so you were not signed in.",
+  subject_mismatch: "The BEE service answered for a different identity, so you were not signed in.",
 };
 
 const noSubscribe = () => () => {};

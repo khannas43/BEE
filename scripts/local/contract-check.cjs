@@ -12,6 +12,7 @@
  * and starts it again. Appends JSON lines to $AUTH_RESULTS when set.
  */
 const fs = require("fs");
+const http = require("http");
 const path = require("path");
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
@@ -30,6 +31,29 @@ const NO_AMR_CLIENT = "bee-contract-no-amr";
 const NOVA_APP = app(2), PIXEL_APP = app(3);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const doc = contract.load();
+let realMe = null;
+
+/* ---------- stand-in for Spring on its port while Spring is stopped: planted values ---------- */
+const PLANTED_SECRET = `planted-secret-${crypto.randomBytes(6).toString("hex")}`;
+const PLANTED_SQL = `ERROR: relation "app.user_account" does not exist; SELECT password_hash FROM app.user_account WHERE marker='${crypto.randomBytes(4).toString("hex")}' -- at gov.bee.api.Repo`;
+const PLANTED = [PLANTED_SECRET, PLANTED_SQL, encodeURIComponent(PLANTED_SQL), "password_hash", "SELECT password", PLANTED_SQL.slice(-30)];
+function standIn() {
+  const seen = [];
+  let mode = "extra-field";
+  const server = http.createServer((req, res) => {
+    const id = req.headers["x-correlation-id"];
+    seen.push({ mode, path: req.url, correlationId: id, bearer: /^Bearer \S+$/.test(req.headers.authorization || "") });
+    const [status, body] = mode === "extra-field" ? [200, { ...realMe, secretToken: PLANTED_SECRET }] : [403, { error: PLANTED_SQL, message: PLANTED_SQL }];
+    res.writeHead(status, { "Content-Type": "application/json", ...(id ? { "X-Correlation-Id": id } : {}) });
+    res.end(JSON.stringify(body));
+  });
+  return {
+    seen,
+    set: (m) => { mode = m; },
+    listen: () => new Promise((ok, ko) => server.once("error", ko).listen(Number(env("BEE_API_PORT", "8090")), "127.0.0.1", ok)),
+    close: () => new Promise((ok) => { server.closeAllConnections(); server.close(() => ok()); }),
+  };
+}
 
 let pass = 0, fail = 0;
 function check(id, ok, detail) {
@@ -43,6 +67,8 @@ const show = (errs) => (errs.length ? `; ${errs.slice(0, 3).join("; ")}` : "");
 
 /* ---------- HTTP with an optional cookie jar; every error body is kept for the leak scan ---------- */
 const errorBodies = [];
+/** Everything the portal sent back (body and Location), for the planted-value scan. */
+const webSeen = [];
 const secrets = new Set();
 class Jar {
   constructor() { this.c = new Map(); }
@@ -68,6 +94,7 @@ async function call(url, { method = "GET", token, jar, correlationId, headers = 
   let json = null;
   try { json = JSON.parse(text); } catch {}
   const out = { status: res.status, headers: res.headers, text, body: text, json, location: res.headers.get("location"), sent: correlationId };
+  if (url.startsWith(WEB)) webSeen.push(`${res.status} ${url}\n${out.location || ""}\n${[...res.headers.entries()].map(([k, v]) => `${k}: ${v}`).join("\n")}\n${text}`);
   if (res.status >= 400 && (url.startsWith(WEB) || url.startsWith(API)) && !url.includes("/health")) errorBodies.push({ url, status: res.status, text });
   return out;
 }
@@ -171,6 +198,7 @@ async function springChecks(nova, inactive, noAmr) {
   check("spring.nova-list", r.status === 200 && r.json?.count === 3 && e.length === 0 && sameCorr(r), `HTTP ${r.status} count=${r.json?.count}; matches ModelApplicationList${show(e)}`);
   r = await call(`${API}/api/me`, { token: nova, correlationId: cid("spring-me") });
   e = contract.conforms(doc, "/api/me", "GET", r);
+  realMe = r.json;
   check("spring.nova-me", r.status === 200 && r.json?.authority === "spring-database" && e.length === 0 && sameCorr(r), `HTTP ${r.status} orgs=${r.json?.organisations?.map((o) => o.code)}; matches Me${show(e)}`);
 
   const cases = [["other organisation", PIXEL_APP], ["unknown", crypto.randomUUID()], ["malformed reference", "LOCAL-MA-0003"], ["malformed", "1"]];
@@ -276,6 +304,42 @@ async function nextChecks(jar, novaToken) {
   return { meId, replaced };
 }
 
+/**
+ * With Spring stopped, a stand-in on Spring's port answers /api/me with (a) a valid Me plus
+ * an undocumented secret field and (b) a 403 whose code and message are SQL-like text.
+ * Neither value may reach a portal body, redirect URL or log; correlation IDs must survive.
+ */
+async function plantedValues(sessionJar, webStart) {
+  const fake = standIn();
+  const results = {};
+  try {
+    await fake.listen();
+    for (const mode of ["extra-field", "sql-error"]) {
+      fake.set(mode);
+      const r = await call(`${WEB}/api/runtime/me`, { jar: sessionJar, correlationId: cid(`planted-${mode}`) });
+      const signIn = await portalSignIn(ids.name(mode === "extra-field" ? "bee.finance" : "bee.programme"));
+      results[mode] = { r, signIn, e: contract.conforms(doc, "/api/runtime/me", "GET", r) };
+    }
+  } finally {
+    await fake.close();
+  }
+  const extra = results["extra-field"], sql = results["sql-error"];
+  const sawId = (x) => fake.seen.some((v) => v.correlationId === x.sent && v.path === "/api/me" && v.bearer);
+  check("next.planted-extra-field", extra.r.status === 502 && extra.r.json?.error === "invalid_api_response" && extra.e.length === 0 && sameCorr(extra.r) && sawId(extra.r) && !extra.r.text.includes(PLANTED_SECRET),
+    `stand-in /api/me 200 = valid Me + secretToken: /api/runtime/me -> ${extra.r.status} ${extra.r.json?.error}; body ${extra.r.text}; correlation ${extra.r.sent} echoed and seen upstream${show(extra.e)}`);
+  check("next.planted-sql-error", sql.r.status === 502 && sql.r.json?.error === "api_error" && sql.e.length === 0 && sameCorr(sql.r) && sawId(sql.r) && !PLANTED.some((x) => sql.r.text.includes(x)),
+    `stand-in /api/me 403 {error: SQL text}: /api/runtime/me -> ${sql.r.status} ${sql.r.json?.error}; body ${sql.r.text}; correlation echoed and seen upstream${show(sql.e)}`);
+  const cbOk = (x, code) => x.signIn.final?.pathname === "/login" && x.signIn.final.search === `?error=${code}` && !x.signIn.jar.has("bee_session") && sameCorr(x.signIn.cb) && fake.seen.some((v) => v.correlationId === x.signIn.cb?.sent);
+  check("next.planted-callback", cbOk(extra, "invalid_api_response") && cbOk(sql, "api_error"),
+    `callback with stand-in: extra field -> 303 ${extra.signIn.final?.pathname}${extra.signIn.final?.search}, SQL error -> 303 ${sql.signIn.final?.pathname}${sql.signIn.final?.search}; no session either way; callback correlation IDs echoed and seen upstream`);
+  const webLog = logSince("web.log", webStart);
+  const inPortal = PLANTED.filter((x) => webSeen.some((t) => t.includes(x)));
+  const inLogs = PLANTED.filter((x) => webLog.includes(x) || logSince("api.log", 0).includes(x) || logSince("api.before-contract-restart.log", 0).includes(x));
+  const upstreamLines = [extra.r.sent, sql.r.sent].map((id) => webLog.split("\n").find((l) => l.includes(`bee.upstream correlationId=${id} `)) || "");
+  check("next.planted-values-contained", inPortal.length === 0 && inLogs.length === 0 && upstreamLines.every((l) => /status=(200|403) durationMs=/.test(l)),
+    `planted secret and SQL text in ${webSeen.length} portal responses (bodies, headers, Location): ${inPortal.length ? "FOUND " + inPortal.length : "none"}; in web.log/api.log: ${inLogs.length ? "FOUND " + inLogs.length : "none"}; upstream log lines keep the correlation ID and status only ("${upstreamLines[1].replace(/^.*bee\.upstream /, "")}")`);
+}
+
 async function main() {
   inventory();
   const webStart = logSize("web.log");
@@ -283,6 +347,9 @@ async function main() {
   const inactive = await totp.accessToken(ids.name("inactive.role"));
   const noAmr = await tokenWithoutAmr(ids.name("pixel.applicant"));
   for (const t of [nova, inactive, noAmr]) secrets.add(t);
+
+  /* enrolled now so their portal sign-ins later need no setup page and no step wait */
+  for (const p of ["bee.programme", "bee.finance"]) await totp.ensureEnrolled(ids.name(p));
 
   const readId = await springChecks(nova, inactive, noAmr);
 
@@ -315,6 +382,7 @@ async function main() {
     down = await call(`${WEB}/api/runtime/me`, { jar: s.jar, correlationId: cid("next-down") });
     health = await call(`${WEB}/api/runtime/health`, { correlationId: cid("next-down-health") });
     sessionDuring = await call(`${WEB}/api/auth/session`, { jar: s.jar });
+    await plantedValues(s.jar, webStart);
   } finally {
     runtime("start_api");
   }
@@ -353,7 +421,7 @@ if (require.main === module) (async () => {
     try { await deleteNoAmrClient(); } catch {}
     const left = await totp.admin(`/clients?clientId=${NO_AMR_CLIENT}`).catch(() => null);
     check("contract.temp-client-removed", Array.isArray(left) && left.length === 0, `${NO_AMR_CLIENT} clients left: ${Array.isArray(left) ? left.length : "unknown"}`);
-    for (const p of ["nova.applicant", "inactive.role", "pixel.applicant"]) await totp.logoutUser(ids.name(p)).catch(() => {});
+    for (const p of ["nova.applicant", "inactive.role", "pixel.applicant", "bee.programme", "bee.finance"]) await totp.logoutUser(ids.name(p)).catch(() => {});
     console.log(`contract checks: ${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);
   });

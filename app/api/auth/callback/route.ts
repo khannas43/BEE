@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { callbackOutcome, safeLoginCode } from "@/lib/server/apiContract";
 import { AUTH } from "@/lib/server/authConfig";
 import { callBeeApi } from "@/lib/server/beeApi";
 import { correlationIdOf, methodNotAllowed, withContractHeaders } from "@/lib/server/http";
@@ -9,7 +10,7 @@ import { clearLoginCookie, createSession, destroySession, sessionCookieOf, setSe
 export const dynamic = "force-dynamic";
 
 function failWith(correlationId: string, code: string) {
-  const res = NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(code)}`, AUTH.webOrigin), 303);
+  const res = NextResponse.redirect(new URL(`/login?error=${safeLoginCode(code)}`, AUTH.webOrigin), 303);
   clearLoginCookie(res);
   return withContractHeaders(res, correlationId);
 }
@@ -65,11 +66,10 @@ export async function GET(request: NextRequest) {
   const username = claims.preferred_username ?? claims.sub;
 
   const me = await callBeeApi("/api/me", { correlationId, accessToken: tokens.access_token });
-  const body = me.body as { subject?: string; error?: string } | null;
-  if (me.status !== 200 || body?.subject !== subject) {
+  const outcome = callbackOutcome(me.status, me.body, subject);
+  if (!outcome.ok) {
     await endKeycloakSession(tokens.refresh_token);
-    if (body?.error === "api_unreachable") return fail("api_unreachable");
-    return fail(me.status === 200 ? "subject_mismatch" : (body?.error ?? "access_denied"));
+    return fail(outcome.code);
   }
 
   destroySession(sessionCookieOf(request));

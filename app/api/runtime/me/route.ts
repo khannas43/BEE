@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { fromUpstream } from "@/lib/server/apiContract";
+import { fromUpstream, SPRING_ME } from "@/lib/server/apiContract";
 import { callBeeApi } from "@/lib/server/beeApi";
 import { correlationIdOf, errorResponse, jsonResponse, methodNotAllowed } from "@/lib/server/http";
 import { activeSession, clearSessionCookie, sessionCookieOf } from "@/lib/server/session";
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     return res;
   }
   const api = await callBeeApi("/api/me", { correlationId, accessToken: active.session.accessToken });
-  const out = fromUpstream(api.status, api.body);
+  const out = fromUpstream(api.status, api.body, SPRING_ME);
   return jsonResponse(out.body, out.status, correlationId);
 }
 

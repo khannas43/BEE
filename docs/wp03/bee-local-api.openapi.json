@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
-    "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. No write route is operational.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
+    "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. No write route is operational.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
   "tags": [
     {
@@ -1017,7 +1017,7 @@
             ]
           },
           "502": {
-            "description": "Spring answered outside the contract.",
+            "description": "Spring answered outside the contract: a 200 that is not exactly Me, or an error code not documented for springMe. Nothing from Spring's body is forwarded.",
             "headers": {
               "X-Correlation-Id": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -1308,7 +1308,7 @@
         ],
         "security": [],
         "summary": "Complete sign-in: verify state, exchange code, verify ID token and amr (pwd+otp), then ask Spring /api/me.",
-        "description": "The server session is created only when Spring returns 200 for the same subject. Failures redirect to /login?error=<code>; the codes are listed in x-bee-login-redirect-codes.",
+        "description": "The server session is created only when Spring returns 200 with a body that matches Me exactly, for the same subject. Failures redirect to /login?error=<code>, where code is always one of x-bee-login-redirect-codes: a Spring error code passes only if documented for springMe, a 200 that is not exactly Me becomes invalid_api_response, and anything else becomes api_error.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -1706,6 +1706,15 @@
           },
           "ignoredTokenClaims": {
             "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "organisation"
+            ],
+            "properties": {
+              "organisation": {
+                "type": "string"
+              }
+            },
             "description": "Token attributes shown for transparency and never used for access."
           }
         }
@@ -2009,13 +2018,13 @@
       "status": 502,
       "layer": "next",
       "message": "The BEE service returned an unexpected response.",
-      "when": "Spring answered with a body that is not JSON."
+      "when": "Spring answered 200 with a body that is not JSON or does not match the operation's schema exactly (missing, mistyped or undocumented field). The body is discarded."
     },
     "api_error": {
       "status": 502,
       "layer": "next",
       "message": "The BEE service could not complete the request.",
-      "when": "Spring answered with a status/code pair outside this contract (for example 500 internal_error)."
+      "when": "Spring answered with a status/code pair not documented for the operation (for example 500 internal_error, or an unknown code). Spring's text is discarded."
     },
     "cross_origin": {
       "status": 403,
@@ -2051,15 +2060,14 @@
     "code_exchange_failed",
     "invalid_id_token",
     "mfa_required",
-    "api_unreachable",
     "subject_mismatch",
     "unauthenticated",
     "no_active_account",
     "no_effective_role",
-    "api_error",
-    "invalid_api_response",
     "service_unavailable",
-    "internal_error"
+    "api_unreachable",
+    "invalid_api_response",
+    "api_error"
   ],
   "x-bee-unmatched": {
     "browser": {

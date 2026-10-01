@@ -90,6 +90,7 @@ async function openPage(cdp) {
       return r.result.value;
     },
     goto: (url) => cdp.send("Page.navigate", { url }, sessionId),
+    send: (method, params = {}) => cdp.send(method, params, sessionId),
     waitFor: async (expression, timeoutMs = 60000) => {
       const end = Date.now() + timeoutMs;
       while (Date.now() < end) {
@@ -210,9 +211,13 @@ async function main() {
   }
 }
 
-ids.withIdentities("test", main)
-  .catch((e) => check("browser.run", false, `aborted: ${e.message}`))
-  .then(() => {
-    console.log(`browser checks: ${pass} passed, ${fail} failed`);
-    process.exit(fail ? 1 : 0);
-  });
+module.exports = { WEB, PASSWORD, CHROME, RUN_DIR, launchChrome, openPage, signIn };
+
+if (require.main === module) {
+  ids.withIdentities("test", main)
+    .catch((e) => check("browser.run", false, `aborted: ${e.message}`))
+    .then(() => {
+      console.log(`browser checks: ${pass} passed, ${fail} failed`);
+      process.exit(fail ? 1 : 0);
+    });
+}

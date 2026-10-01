@@ -116,6 +116,17 @@ function failureFrom(status: number, body: unknown): ReadFailure {
   return { kind: "unavailable", message: messageFor(code || "api_error", READ_UI_MESSAGES.api_error) };
 }
 
+/** A request that never reached the BFF (network failure, portal down) reads as unreachable, not as endless loading. */
+async function send(fetchImpl: FetchLike, path: string): Promise<Response | null> {
+  try {
+    return await fetchImpl(path, runtimeReadInit());
+  } catch {
+    return null;
+  }
+}
+
+const UNREACHABLE: ReadFailure = { kind: "unavailable", message: READ_UI_MESSAGES.api_unreachable };
+
 async function parseJson(res: Response): Promise<unknown> {
   try {
     return await res.json();
@@ -140,7 +151,8 @@ function asApplication(body: unknown): ModelApplication | null {
 
 /** GET /api/runtime/model-applications — scope is whatever Spring returned. */
 export async function readModelApplicationList(fetchImpl: FetchLike = fetch): Promise<ListRead> {
-  const res = await fetchImpl(LIST_PATH, runtimeReadInit());
+  const res = await send(fetchImpl, LIST_PATH);
+  if (!res) return { ok: false, failure: UNREACHABLE };
   const body = await parseJson(res);
   if (res.ok) {
     const list = asList(body);
@@ -155,7 +167,8 @@ export async function readModelApplicationList(fetchImpl: FetchLike = fetch): Pr
  * Out-of-scope and unknown IDs share one not_found failure; the UI must not distinguish them.
  */
 export async function readModelApplication(id: string, fetchImpl: FetchLike = fetch): Promise<DetailRead> {
-  const res = await fetchImpl(detailPath(id), runtimeReadInit());
+  const res = await send(fetchImpl, detailPath(id));
+  if (!res) return { ok: false, failure: UNREACHABLE };
   const body = await parseJson(res);
   if (res.ok) {
     const application = asApplication(body);

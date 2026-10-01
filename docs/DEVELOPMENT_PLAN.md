@@ -153,6 +153,19 @@ WP04.1 is accepted as an internal local master-data activity. WP04 remains open 
 
 **WP04.2a brand authorisation foundation review (1 October 2026): accepted as a local activity.** The branch was rebased onto the reviewed V5 tip and V6 migrated and seeded the shared local schema in order. V6 adds brand ownership and time bounded agency authorisations with organisation kind, principal ownership and overlap guards; an internal Spring service resolves a named agency, principal, brand and date. Synthetic Nova Cool and PixelCert fixtures are not BEE approvals. No route, registration workflow, model submission permission, screen grant or brand-owner read was added. Focused brand DB tests passed 7/7; combined brand and master DB tests passed 19/19. `api:test` passed 76, matrix 24, access audit 9, typecheck and build passed. `local:check` passed 220 items; two coverage items were stale after the test edits, then `api:test` plus `local:coverage` passed all 84/84 contract pairs. Protected identities were unchanged and no test identity remained. Evidence: [WP04.2_BRAND_AUTH.md](wp04/WP04.2_BRAND_AUTH.md). WP04.2a is a foundation only; WP04 remains open and the accepted work-package count is 1/11.
 
+**WP05.1a read-only model-application UI (1 October 2026): implemented and verified live locally, awaiting review.**
+- **What it does.** On branch `wp05.1-read-ui`, rebased onto `1c76ce4`, the manufacturer/agency model dashboard lists and opens model applications through the existing Next.js BFF reads. Spring alone decides scope.
+- **Live check.** `local:read-ui` (21/21) signs in through Keycloak with password and TOTP:
+  - Nova sees only NOVA's three records and PixelCert only PIXEL's one;
+  - cross-organisation, unknown and malformed ids show the same safe not-found state;
+  - loading, empty, forbidden, service-unavailable and session-expired states are observed against the real stack.
+- **Defects fixed.** Verification found and fixed an unreachable route (a screen-title rename had changed its slug; `matrix` and `audit:access` report it) and an endless loading state on network failure.
+- **Results.** `local:check` passed 222/222 after refreshing the Spring contract-test report.
+- **Scope.** No write, permission, route-policy change, fixture fallback or preview-based access was added.
+- **Remaining gap.** The screen is still displayed only under a manufacturer or agency preview role. Evidence: [WP05.1_READ_UI.md](wp05/WP05.1_READ_UI.md).
+
+WP05.1 and WP05 are not accepted; the count stays 1/11.
+
 **Excluded work packages:** WP12 external adapters, WP13 migration and WP14 quality/release. Feature-level local checks remain part of WP01–WP11; they do not imply a CI/CD pipeline, audit, load campaign, formal UAT or production release.
 
 ## 6. Screen consolidation and role navigation

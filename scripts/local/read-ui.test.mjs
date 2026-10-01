@@ -270,6 +270,17 @@ test("browser: empty list is a distinct no-records state", async () => {
   assert.equal(READ_UI_MESSAGES.empty_list.includes("No model applications"), true);
 });
 
+test("a request that never reaches the BFF is shown as unreachable, not left loading", async () => {
+  const offline = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+  for (const read of [await readModelApplicationList(offline), await readModelApplication(NOVA_1.id, offline)]) {
+    assert.equal(read.ok, false);
+    assert.equal(read.failure.kind, "unavailable");
+    assert.equal(read.failure.message, READ_UI_MESSAGES.api_unreachable);
+  }
+});
+
 test("detail href stays on model-dashboard; state labels are humanised", () => {
   assert.equal(modelDashboardHref(), "/app/model-label/model-dashboard");
   assert.equal(modelDashboardHref(NOVA_1.id), `/app/model-label/model-dashboard?id=${NOVA_1.id}`);

@@ -33,6 +33,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ reference: string; id: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [legacyUnlinked, setLegacyUnlinked] = useState(false);
   const idemGate = useRef(new DraftIdempotencyGate());
 
   const implemented = runtimeRouteFor("/app/model-label/new-model-application")?.implemented;
@@ -67,7 +68,13 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       setModelNumber(r.application.modelNumber);
       setVersion(r.application.version);
       const bid = (r.application as { brandId?: string }).brandId;
-      if (bid) setBrandId(bid);
+      if (bid) {
+        setBrandId(bid);
+        setLegacyUnlinked(false);
+      } else {
+        setLegacyUnlinked(true);
+        setBrandId("");
+      }
     });
     return () => {
       live = false;
@@ -75,11 +82,11 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   }, [editId, identity.status]);
 
   useEffect(() => {
-    if (brandId || !brands.length) return;
+    if (isEdit || brandId || !brands.length) return;
     setBrandId(brands[0].brandId);
-  }, [brands, brandId]);
+  }, [brands, brandId, isEdit]);
 
-  const payload = useMemo(
+  const createPayload = useMemo(
     () => ({ brandId, category: "RAC" as const, modelNumber: modelNumber.trim() }),
     [brandId, modelNumber],
   );
@@ -87,10 +94,16 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   async function saveDraft() {
     setLoading(true);
     setError(null);
-    const key = idemGate.current.keyFor(isEdit ? { ...payload, version, editId } : payload);
+    const patchBody = {
+      version,
+      category: "RAC" as const,
+      modelNumber: modelNumber.trim(),
+      ...(brandId ? { brandId } : {}),
+    };
+    const key = idemGate.current.keyFor(isEdit ? { ...patchBody, editId } : createPayload);
     const res = isEdit && editId
-      ? await patchModelApplicationDraft(editId, { version, ...payload }, key)
-      : await createModelApplicationDraft(payload, key);
+      ? await patchModelApplicationDraft(editId, patchBody, key)
+      : await createModelApplicationDraft(createPayload, key);
     setLoading(false);
     if (!res.ok) {
       setError(res.failure.message);
@@ -149,6 +162,9 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                     className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
                     data-testid="model-draft-brand"
                   >
+                    {legacyUnlinked ? (
+                      <option value="">Select a brand (required if the stored name is ambiguous)</option>
+                    ) : null}
                     {brands.map((b) => (
                       <option key={b.brandId} value={b.brandId}>
                         {b.brandName} ({b.principalOrganisation})
@@ -174,7 +190,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             )}
             <button
               type="button"
-              disabled={loading || !brandId || !modelNumber.trim() || (isEdit && !editId)}
+              disabled={loading || !modelNumber.trim() || (isEdit && !editId) || (!isEdit && !brandId)}
               onClick={saveDraft}
               className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
               data-testid="model-draft-save"

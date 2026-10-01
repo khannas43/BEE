@@ -102,6 +102,29 @@ async function runDraftChecks(runLabel, nova, pixel) {
     if (r.body?.id) createdIds.push(r.body.id);
     check(`${runLabel}.pixel.create`, r.status === 201 && r.body?.principalOrganisation === "NOVA", `filing PIXEL principal ${r.body?.principalOrganisation}`);
 
+    const legModel = `LEG-${runLabel}-${Date.now()}`;
+    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, { brandId: NOVA_COOL, category: "RAC", modelNumber: legModel }, key());
+    const legId = r.body?.id;
+    if (legId) createdIds.push(legId);
+    sql(`UPDATE app.model_application SET brand_id = NULL, principal_organisation_id = NULL WHERE id = '${legId}'`);
+    r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${legId}`, { version: 0, category: "RAC", modelNumber: `${legModel}-recon` }, key());
+    const reconciled = sql(`SELECT brand_id::text || '|' || brand_name || '|' || coalesce(principal_organisation_id::text, '') FROM app.model_application WHERE id = '${legId}'`);
+    check(`${runLabel}.nova.legacy-unique-reconcile`, r.status === 200 && reconciled === `${NOVA_COOL}|Nova Cool|00000000-0000-4000-b000-000000000001`, `PATCH without brandId -> ${r.status}`);
+
+    const EXTRA_BRAND = "00000000-0000-4000-d000-0000000000f2";
+    sql(`INSERT INTO brand (id, name, owner_organisation_id, status, source_reference, verification_status, note) VALUES ('${EXTRA_BRAND}', 'Nova Warm', '00000000-0000-4000-b000-000000000001', 'active', 'test', 'synthetic', 'disposable') ON CONFLICT (id) DO NOTHING`);
+    try {
+      sql(`UPDATE app.model_application SET brand_id = NULL, principal_organisation_id = NULL, brand_name = 'Legacy Mismatch', version = 1 WHERE id = '${legId}'`);
+      r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${legId}`, { version: 1, category: "RAC", modelNumber: `${legModel}-bad` }, key());
+      const still = sql(`SELECT brand_id IS NULL AND brand_name = 'Legacy Mismatch' FROM app.model_application WHERE id = '${legId}'`);
+      check(`${runLabel}.nova.legacy-mismatch-blocked`, r.status === 422 && r.body?.error === "validation_failed" && still === "t", `${r.status} ${r.body?.error}; row unchanged`);
+      r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${legId}`, { version: 1, category: "RAC", modelNumber: `${legModel}-pick`, brandId: NOVA_COOL }, key());
+      const picked = sql(`SELECT brand_id::text || '|' || brand_name FROM app.model_application WHERE id = '${legId}'`);
+      check(`${runLabel}.nova.legacy-explicit-brand`, r.status === 200 && picked === `${NOVA_COOL}|Nova Cool`, "explicit brandId after ambiguous legacy name");
+    } finally {
+      sql(`DELETE FROM brand WHERE id = '${EXTRA_BRAND}'`);
+    }
+
     const legacy = sql("SELECT brand_id IS NULL FROM app.model_application WHERE reference = 'LOCAL-MA-0002'");
     check(`${runLabel}.legacy-rows-preserved`, legacy === "t", "fee_due row still without brand_id link");
 

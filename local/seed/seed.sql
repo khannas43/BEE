@@ -141,6 +141,6 @@ ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = EX
 INSERT INTO model_application_reference_allocator (scope, next_value)
 SELECT 'LOCAL-MA', COALESCE(MAX(CAST(substring(reference FROM 10) AS integer)), 0)
 FROM model_application WHERE reference LIKE 'LOCAL-MA-%'
-ON CONFLICT (scope) DO UPDATE SET next_value = EXCLUDED.next_value;
+ON CONFLICT (scope) DO UPDATE SET next_value = GREATEST(model_application_reference_allocator.next_value, EXCLUDED.next_value);
 INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1'), ('wp04.1-masters-v1'), ('wp04.2-brand-auth-v1') ON CONFLICT (seed_version) DO NOTHING;
 COMMIT;

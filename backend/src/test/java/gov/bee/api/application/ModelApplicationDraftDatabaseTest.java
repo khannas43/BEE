@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HexFormat;
-import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -117,5 +117,22 @@ class ModelApplicationDraftDatabaseTest {
         assertNotEquals(left.get(), right.get(), "two concurrent allocations must not collide");
         assertTrue(left.get().startsWith("LOCAL-MA-"));
         assertTrue(right.get().startsWith("LOCAL-MA-"));
+    }
+
+    @Test
+    void seedReplayDoesNotRewindAllocatorAfterDraftRemoved() {
+        UUID filing = UUID.fromString("00000000-0000-4000-b000-000000000001");
+        UUID principal = filing;
+        UUID brand = UUID.fromString("00000000-0000-4000-d000-000000000001");
+        String ref1 = applications.nextReference();
+        UUID draftId = UUID.fromString("00000000-0000-4000-c000-00000000f001");
+        applications.insertDraft(draftId, ref1, filing, principal, brand, "Nova Cool", "RAC", "SEED-TEST-1");
+        db.update("DELETE FROM model_application WHERE id = ?", draftId);
+        int beforeReseed = db.queryForObject("SELECT next_value FROM model_application_reference_allocator WHERE scope = 'LOCAL-MA'", Integer.class);
+        db.execute(seed);
+        int afterReseed = db.queryForObject("SELECT next_value FROM model_application_reference_allocator WHERE scope = 'LOCAL-MA'", Integer.class);
+        assertTrue(afterReseed >= beforeReseed, "seed must not lower next_value after a higher reference was issued");
+        String ref2 = applications.nextReference();
+        assertNotEquals(ref1, ref2, "re-seed must not reuse a reference that was already allocated");
     }
 }

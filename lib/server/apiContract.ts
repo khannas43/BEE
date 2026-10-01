@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.2.0";
+export const CONTRACT_VERSION = "0.3.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -133,6 +133,74 @@ export function fromUpstream<T>(status: number, body: unknown, op: { errors: Ups
 }
 
 export const SPRING_ME = { errors: SPRING_ME_ERRORS, validate: validateMe };
+
+export const SPRING_LIST_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: [...RESOLVER_DENIALS, "no_read_scope"],
+  503: ["service_unavailable"],
+};
+
+/** Not found is one answer for out-of-scope, unknown, malformed and stale-assignment IDs. */
+export const SPRING_READ_ERRORS: UpstreamErrors = { ...SPRING_LIST_ERRORS, 404: ["not_found"] };
+
+export const MODEL_STATES = ["draft", "fee_due", "iame_scrutiny", "bee_scrutiny", "rating", "director_review", "secretary_approval", "approved", "returned", "rejected"] as const;
+export type ModelState = (typeof MODEL_STATES)[number];
+
+export interface ModelApplication {
+  id: string;
+  reference: string;
+  organisation: string;
+  brandName: string;
+  category: string;
+  modelNumber: string;
+  state: ModelState;
+  version: number;
+  readBasis: string[];
+}
+
+export interface ModelApplicationList {
+  items: ModelApplication[];
+  count: number;
+  authority: "spring-database";
+}
+
+export const MODEL_APPLICATION_KEYS = ["id", "reference", "organisation", "brandName", "category", "modelNumber", "state", "version", "readBasis"] as const;
+export const MODEL_APPLICATION_LIST_KEYS = ["items", "count", "authority"] as const;
+const READ_BASIS = /^(own-org|assigned|stage:[a-z_]+)$/;
+
+export const validateModelApplication: Validator<ModelApplication> = (body) => {
+  if (!exactKeys(body, MODEL_APPLICATION_KEYS)) return null;
+  const b = body;
+  const ok =
+    isString(b.id) && UUID.test(b.id) &&
+    ["reference", "organisation", "brandName", "category", "modelNumber"].every((k) => isString(b[k])) &&
+    (MODEL_STATES as readonly unknown[]).includes(b.state) &&
+    Number.isInteger(b.version) && (b.version as number) >= 0 &&
+    arrayOf(b.readBasis, (x) => isString(x) && READ_BASIS.test(x), 1);
+  return ok ? (b as unknown as ModelApplication) : null;
+};
+
+/** Every item is a valid ModelApplication and count is the item count. */
+export const validateModelApplicationList: Validator<ModelApplicationList> = (body) => {
+  if (!exactKeys(body, MODEL_APPLICATION_LIST_KEYS)) return null;
+  const b = body;
+  const ok =
+    b.authority === "spring-database" &&
+    Array.isArray(b.items) && b.items.every((i) => validateModelApplication(i) !== null) &&
+    b.count === b.items.length;
+  return ok ? (b as unknown as ModelApplicationList) : null;
+};
+
+export const SPRING_LIST = { errors: SPRING_LIST_ERRORS, validate: validateModelApplicationList };
+export const SPRING_READ = { errors: SPRING_READ_ERRORS, validate: validateModelApplication };
+
+/**
+ * The detail ID as one Spring path segment. The ID is not checked for UUID shape here, so
+ * Next never answers "no such record" itself; Spring decides scope first and then 404s.
+ * A value that cannot travel safely as one segment is replaced by a fixed non-UUID, which
+ * Spring answers exactly like any other malformed ID.
+ */
+export const springIdSegment = (id: string): string => (/^[A-Za-z0-9._~-]{1,128}$/.test(id) && id !== "." && id !== ".." ? id : "-");
 
 /** Every code the sign-in callback may put in /login?error=. Anything else is replaced. */
 export const LOGIN_REDIRECT_CODES = [

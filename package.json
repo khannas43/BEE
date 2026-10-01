@@ -24,6 +24,7 @@
     "local:mfa": "bash -c 'source scripts/local/lib.sh && node scripts/local/mfa-check.cjs'",
     "local:mfa:misbind": "bash -c 'source scripts/local/lib.sh && node scripts/local/mfa-misbind-check.cjs'",
     "local:contract": "bash -c 'source scripts/local/lib.sh && node scripts/local/contract-check.cjs'",
+    "local:bff": "bash -c 'source scripts/local/lib.sh && node scripts/local/bff-check.cjs --with-expiry'",
     "web:test": "node --test scripts/local/oidc.test.mjs scripts/local/api-contract.test.mjs",
     "api:test": "JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -q -B -f backend/pom.xml test"
   },

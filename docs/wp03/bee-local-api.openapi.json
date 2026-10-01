@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
-    "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. No write route is operational.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
+    "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. No write route is operational.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
   "tags": [
     {
@@ -1127,6 +1127,573 @@
         }
       }
     },
+    "/api/runtime/model-applications": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "get": {
+        "operationId": "runtimeListModelApplications",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "Spring's model-application list for this browser's server session.",
+        "description": "Next.js calls Spring GET /api/model-applications with the session's access token and this request's correlation ID. Query parameters are not forwarded. Spring alone decides scope. A 200 passes only if it matches ModelApplicationList exactly at every depth (count equal to items); otherwise 502.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As Spring's list.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelApplicationList"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "00000000-0000-4000-c000-000000000002",
+                      "reference": "LOCAL-MA-0002",
+                      "organisation": "NOVA",
+                      "brandName": "Nova Cool",
+                      "category": "RAC",
+                      "modelNumber": "NC-RAC-18F",
+                      "state": "fee_due",
+                      "version": 1,
+                      "readBasis": [
+                        "own-org"
+                      ]
+                    }
+                  ],
+                  "count": 1,
+                  "authority": "spring-database"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No usable session (cookie cleared), or Spring rejected the session's token.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Spring denied the identity or the role has no read rule.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "no_read_scope": {
+                    "value": {
+                      "error": "no_read_scope",
+                      "message": "This role has no read access to model applications."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "no_read_scope"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "A dependency is unavailable; retry later. Session kept.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "api_unreachable": {
+                    "value": {
+                      "error": "api_unreachable",
+                      "message": "The BEE service is not reachable. Try again later."
+                    }
+                  },
+                  "identity_unavailable": {
+                    "value": {
+                      "error": "identity_unavailable",
+                      "message": "The identity service is not reachable. Try again later."
+                    }
+                  },
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "api_unreachable",
+              "identity_unavailable",
+              "service_unavailable"
+            ]
+          },
+          "405": {
+            "description": "Method not supported on this route.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "method_not_allowed": {
+                    "value": {
+                      "error": "method_not_allowed",
+                      "message": "This method is not supported for this resource."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "method_not_allowed"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/model-applications/{id}": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "get": {
+        "operationId": "runtimeReadModelApplication",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "One model application for this browser's server session, if Spring lets it read it.",
+        "description": "Next.js does not check the ID's shape, cache, or redirect, so it never answers for a record itself. The ID goes to Spring as one path segment; a value that cannot travel safely as one segment is replaced by a fixed non-UUID that Spring answers like any malformed ID. Out-of-scope, unknown, malformed and stale-assignment IDs therefore get the same 404 after Spring's identity and scope checks.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Model application UUID; any other value is answered as not_found by Spring.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "00000000-0000-4000-c000-000000000002"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Readable record.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelApplication"
+                },
+                "example": {
+                  "id": "00000000-0000-4000-c000-000000000002",
+                  "reference": "LOCAL-MA-0002",
+                  "organisation": "NOVA",
+                  "brandName": "Nova Cool",
+                  "category": "RAC",
+                  "modelNumber": "NC-RAC-18F",
+                  "state": "fee_due",
+                  "version": 1,
+                  "readBasis": [
+                    "own-org"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No usable session (cookie cleared), or Spring rejected the session's token.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Spring denied the identity or the role has no read rule.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "no_read_scope": {
+                    "value": {
+                      "error": "no_read_scope",
+                      "message": "This role has no read access to model applications."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "no_read_scope"
+            ]
+          },
+          "404": {
+            "description": "Not available to this session. Unknown, malformed, out-of-scope and stale-assignment IDs are indistinguishable.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "A dependency is unavailable; retry later. Session kept.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "api_unreachable": {
+                    "value": {
+                      "error": "api_unreachable",
+                      "message": "The BEE service is not reachable. Try again later."
+                    }
+                  },
+                  "identity_unavailable": {
+                    "value": {
+                      "error": "identity_unavailable",
+                      "message": "The identity service is not reachable. Try again later."
+                    }
+                  },
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "api_unreachable",
+              "identity_unavailable",
+              "service_unavailable"
+            ]
+          },
+          "405": {
+            "description": "Method not supported on this route.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "method_not_allowed": {
+                    "value": {
+                      "error": "method_not_allowed",
+                      "message": "This method is not supported for this resource."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "method_not_allowed"
+            ]
+          }
+        }
+      }
+    },
     "/api/auth/session": {
       "servers": [
         {
@@ -1754,18 +2321,33 @@
             "type": "string"
           },
           "state": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "draft",
+              "fee_due",
+              "iame_scrutiny",
+              "bee_scrutiny",
+              "rating",
+              "director_review",
+              "secretary_approval",
+              "approved",
+              "returned",
+              "rejected"
+            ]
           },
           "version": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "description": "Persisted row version; the expected-version input of future writes (409 version_conflict)."
           },
           "readBasis": {
             "type": "array",
             "minItems": 1,
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^(own-org|assigned|stage:[a-z_]+)$"
             },
-            "description": "Which database rule allowed the read (own-org, assigned, stage)."
+            "description": "Which database rule allowed the read (own-org, assigned, stage:<state>)."
           }
         }
       },
@@ -2044,7 +2626,7 @@
     "403": "Identity known but not allowed (MFA, account, role, read scope, default deny, wrong origin).",
     "404": "Record not available to this caller; does not reveal whether it exists.",
     "405": "Method not supported on a browser-facing route.",
-    "409": "Reserved: stale version or duplicate idempotency key on future writes (WP03.2/WP05). Not returned today.",
+    "409": "Reserved for future writes: version_conflict, idempotency_key_conflict, idempotency_in_progress (see x-bee-idempotency). Not returned today.",
     "422": "Reserved: semantically invalid write input (WP05.1). Not returned today.",
     "500": "Unexpected Spring failure; internal only, mapped to 502 at the browser boundary.",
     "502": "Spring answered outside this contract.",
@@ -2072,21 +2654,41 @@
   "x-bee-unmatched": {
     "browser": {
       "route": "/api/[...unmatched]",
-      "description": "Any /api path or method on the portal without its own route returns 404 not_found in the Error body, with X-Correlation-Id and no-store (not the HTML page). Includes the WP03.2 /api/runtime/model-applications paths until they exist.",
+      "description": "Any /api path or method on the portal without its own route returns 404 not_found in the Error body, with X-Correlation-Id and no-store (not the HTML page), for example /api/runtime/model-applications/{id}/history.",
       "status": 404,
       "error": "not_found"
     }
+  },
+  "x-bee-idempotency": {
+    "status": "contract recorded for future write commands; not implemented and no store exists (WP03.2 decision)",
+    "owner": "first reviewed write endpoint (WP05.1 create/edit/submit or WP07.1 fee)",
+    "header": {
+      "name": "Idempotency-Key",
+      "pattern": "^[A-Za-z0-9-]{16,64}$",
+      "description": "Client-generated (UUID v4 recommended), one per user intent; required on every write command. Reads never take one."
+    },
+    "scope": "bee_app account id + HTTP method + route template + target record id. A key never matches across accounts, routes or records.",
+    "authorization": "Spring re-evaluates identity, role and scope before any replay; a caller who has lost access gets the current denial, never the stored result.",
+    "stored": "Key scope, SHA-256 of the canonical request body, response status and body, resulting record version, created time. Written in the same database transaction as the state change; local retention 24 hours.",
+    "replay": "Same key, scope and body hash after completion: the original status and body with Idempotency-Replayed: true; no second state change or audit event.",
+    "conflicts": {
+      "409 idempotency_key_conflict": "Same key and scope, different body hash.",
+      "409 idempotency_in_progress": "Same key while the first request is still running.",
+      "409 version_conflict": "Expected record version (ModelApplication.version) differs from the persisted version; nothing is stored under the key."
+    },
+    "missing_key": "422 idempotency_key_required, before any state change.",
+    "boundary": "Next.js validates the header syntax and forwards it unchanged with the session token; Spring owns the store and the decision.",
+    "reserved_codes": [
+      "version_conflict",
+      "idempotency_key_conflict",
+      "idempotency_in_progress",
+      "idempotency_key_required"
+    ]
   },
   "x-bee-default-deny": {
     "spring": "Any method/path other than the GETs above: 401 unauthenticated without a token, 403 denied_by_default with a valid token. Includes POST/PUT/PATCH/DELETE on /api/model-applications[/{id}], /api/model-applications/{id}/history and /actuator/* other than health."
   },
   "x-bee-deferred": [
-    {
-      "route": "GET /api/runtime/model-applications, GET /api/runtime/model-applications/{id}",
-      "status": "not implemented",
-      "owner": "WP03.2",
-      "note": "Browser-facing BFF list/detail over the Spring routes above."
-    },
     {
       "route": "POST /api/model-applications, PATCH /api/model-applications/{id}, POST /api/model-applications/{id}/submit",
       "status": "denied by default",
@@ -2113,9 +2715,9 @@
     },
     {
       "route": "Idempotency-Key on writes",
-      "status": "not implemented",
-      "owner": "WP03.2",
-      "note": "Contract reserves 409."
+      "status": "contract recorded, not implemented",
+      "owner": "first reviewed write endpoint (WP05.1 or WP07.1)",
+      "note": "See x-bee-idempotency. No store exists until a write exists."
     }
   ]
 }

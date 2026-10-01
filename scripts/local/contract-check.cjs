@@ -146,7 +146,7 @@ function inventory() {
   const problems = [];
   const codeRoutes = {};
   for (const f of routes) {
-    const route = "/" + path.relative(path.join(ROOT, "app"), path.dirname(f)).split(path.sep).join("/");
+    const route = "/" + path.relative(path.join(ROOT, "app"), path.dirname(f)).split(path.sep).join("/").replace(/\[(\w+)\]/g, "{$1}");
     const src = fs.readFileSync(f, "utf8");
     const handled = METHODS.filter((m) => new RegExp(`export (async )?function ${m}\\b`).test(src));
     const declared = METHODS.filter((m) => new RegExp(`export const ${m}\\b`).test(src));
@@ -295,12 +295,12 @@ async function nextChecks(jar, novaToken) {
   check("next.denied-write", m405.every((x) => x.x.status === 405 && x.x.json?.error === "method_not_allowed" && x.x.headers.get("allow") && sameCorr(x.x)) && cross.status === 403 && cross.json?.error === "cross_origin" && still.status === 200 && e.length === 0,
     `${m405.length} unsupported methods -> 405 method_not_allowed with Allow; cross-origin logout -> ${cross.status} ${cross.json?.error}; session still valid (${still.status})${show(e)}`);
   const um = [];
-  for (const [m, p] of [["GET", "/api/runtime/model-applications"], ["GET", `/api/runtime/model-applications/${NOVA_APP}`], ["POST", "/api/runtime/model-applications"], ["GET", "/api/nothing-here"]]) {
+  for (const [m, p] of [["GET", `/api/runtime/model-applications/${NOVA_APP}/history`], ["POST", `/api/runtime/model-applications/${NOVA_APP}/submit`], ["GET", "/api/runtime/model-applications/a/b"], ["GET", "/api/nothing-here"]]) {
     const x = await call(`${WEB}${p}`, { method: m, jar, correlationId: cid("next-404"), body: m === "GET" ? undefined : "{}", headers: { "Content-Type": "application/json" } });
     um.push({ m, p, x, e: contract.validate(doc.components.schemas.Error, x.json, doc) });
   }
   check("next.unmatched-not-found", um.every((x) => x.x.status === 404 && x.x.json?.error === "not_found" && x.e.length === 0 && sameCorr(x.x) && noStore(x.x)),
-    `${um.map((x) => `${x.m} ${x.p.replace(NOVA_APP, "{id}")} ${x.x.status}`).join(", ")} (WP03.2 BFF routes are not implemented; JSON 404, not the HTML page)`);
+    `${um.map((x) => `${x.m} ${x.p.replace(NOVA_APP, "{id}")} ${x.x.status}`).join(", ")} (no history or workflow route exists; JSON 404, not the HTML page)`);
   return { meId, replaced };
 }
 

@@ -155,6 +155,13 @@ read -r k_pass k_fail <<<"$(sed -nE 's/^contract checks: ([0-9]+) passed, ([0-9]
 if [[ -z "${k_pass:-}" ]]; then check "contract.run" 0 "contract-check did not complete: $(tail -1 <<<"$ct_out")"
 else pass=$((pass + k_pass)); fail=$((fail + k_fail)); fi
 
+# ---- WP03.2 browser-facing model reads through the Next.js BFF (scripts/local/bff-check.cjs)
+bf_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/bff-check.cjs" --with-expiry 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$bf_out"
+read -r f_pass f_fail <<<"$(sed -nE 's/^bff checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$bf_out")"
+if [[ -z "${f_pass:-}" ]]; then check "bff.run" 0 "bff-check did not complete: $(tail -1 <<<"$bf_out")"
+else pass=$((pass + f_pass)); fail=$((fail + f_fail)); fi
+
 # ---- WP02.3: seeded users' OTP credentials and sessions, and the realm flows, unchanged
 node "$ROOT/scripts/local/test-identities.cjs" teardown test >/dev/null 2>&1
 trap - EXIT

@@ -122,6 +122,14 @@ The solution's 25 services and full stack are a future target catalogue, not a r
 
 **WP03.1 contract activity review (1 October 2026).** Reviewed and accepted the local contract, error and correlation work after the `09728cd` boundary correction. The reported live `local:check` passed 183/183; during review `web:test` passed 28/28. On branch `wp03.1-api-contract`, `docs/wp03/bee-local-api.openapi.json` (contract 0.2.0) describes the existing Spring routes as internal and the Next.js routes as browser-facing. Both layers now return one `{error, message}` body, with a 401/403/404/405/502/503 table and 409/422 reserved. `X-Correlation-Id` is validated or issued at the Next boundary, propagated to Spring and logged without sensitive data. The boundary now checks Spring's `/api/me` successes against the `Me` schema and accepts only documented error codes, including in the sign-in redirect. `npm run local:contract` passed 30/30 live cross-layer checks, including planted secret and SQL values that reached no response, redirect or log; these checks are also part of `local:check`. The evidence is in [WP03.1_CONTRACT.md](wp03/WP03.1_CONTRACT.md). No gateway was added, no route or matcher was widened, and create/edit/transition/history remain deferred with owners. The BFF model routes and idempotency remain WP03.2. This accepts no WP03 work package or screen-matrix proposal.
 
+**WP03.2 BFF read activity (1 October 2026, implemented, awaiting review).** On branch `wp03.2-model-bff`, GET `/api/runtime/model-applications` and `/{id}` call the existing Spring reads with the server session's token. They validate every success body at every depth and allow only each operation's documented status/code pairs. Spring alone decides scope. Contract 0.3.0 adds both operations, removes only their deferred entry and records the idempotency/409 contract for the first write (WP05.1 or WP07.1) without building a store. `npm run local:bff` passed 24/24 with disposable twins signed in through Keycloak TOTP:
+- the BFF, direct Spring and the database agree on the record set, ID, state and version (Nova 3, PixelCert 1, no cross visibility);
+- the forged-session, bearer-injection, role-revocation, expired-membership, assignment, stage, outage/restart, refresh and expiry cases pass;
+- 8 kinds of not-found ID give one indistinguishable 404;
+- planted secret and SQL values reached no response or log.
+
+Evidence: [WP03.2_BFF.md](wp03/WP03.2_BFF.md). No prototype screen consumes these routes yet (WP05.1). Not accepted; WP03 remains open and the work-package count stays 1/11.
+
 **Excluded work packages:** WP12 external adapters, WP13 migration and WP14 quality/release. Feature-level local checks remain part of WP01–WP11; they do not imply a CI/CD pipeline, audit, load campaign, formal UAT or production release.
 
 ## 6. Screen consolidation and role navigation

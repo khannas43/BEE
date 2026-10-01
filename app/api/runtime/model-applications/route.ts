@@ -1,17 +1,13 @@
 import { type NextRequest } from "next/server";
-import { SPRING_ME } from "@/lib/server/apiContract";
+import { SPRING_LIST } from "@/lib/server/apiContract";
 import { sessionRead } from "@/lib/server/bff";
 import { methodNotAllowed } from "@/lib/server/http";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Calls Spring's GET /api/me with the access token held in this browser's server
- * session, refreshing it if it is about to expire. The browser's own
- * Authorization header is never forwarded, and Spring alone decides access.
- */
+/** Model applications this session may read, as decided by Spring. Query parameters are not forwarded. */
 export async function GET(request: NextRequest) {
-  return sessionRead(request, "/api/me", SPRING_ME);
+  return sessionRead(request, "/api/model-applications", SPRING_LIST);
 }
 
 export const POST = methodNotAllowed("GET");

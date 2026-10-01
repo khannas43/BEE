@@ -143,6 +143,14 @@ Evidence: [WP03.3_CONTRACT_TESTS.md](wp03/WP03.3_CONTRACT_TESTS.md). No write, i
 
 Review blocker: every current seeded key ends in an open-ended version. V4 forbids changing that end date and rejects a later version as overlapping, so the planned verified fee or formula cannot be inserted. A controlled, attributable closure/successor mechanism needs a V5 migration and database tests against both upgraded and freshly reset schemas. The BEE policy for who may initiate a closure remains pending; no UI grant is implied. Evidence: [WP04.1_MASTERS.md](wp04/WP04.1_MASTERS.md). WP04.1 and WP04 are not accepted; the work-package count stays 1/11.
 
+**WP04.1 correction (1 October 2026): implemented locally, awaiting re-review.**
+- **Mechanism.** Flyway V5 adds `master_closure` and `master_supersede()`. In one statement, they close an open-ended version of any of the five masters and insert its successor from the closure date. The closure records the closure date, actor, source and reason. The original row is unchanged. A second closure, an overlap, an invalid date and a direct closure insert are refused.
+- **Tests.** Throwaway-schema tests run on both upgraded and freshly reset schemas. They close the seeded fee v2 and formula v1 (and the other three keys), and show the old version resolving the day before the boundary and the test-only successor on it. Failed attempts leave no closure or successor. Repeat seeding and a reset still produce the seeded state.
+- **Results.** `api:test:masters` passed 12/12, `api:test` 76 and `local:check` 222/222. Nothing is seeded as verified or closed.
+- **Scope.** No route, permission or UI was added. Who may close a version remains BEE decision M6.
+
+WP04.1 and WP04 remain unaccepted; the count stays 1/11.
+
 **Excluded work packages:** WP12 external adapters, WP13 migration and WP14 quality/release. Feature-level local checks remain part of WP01–WP11; they do not imply a CI/CD pipeline, audit, load campaign, formal UAT or production release.
 
 ## 6. Screen consolidation and role navigation

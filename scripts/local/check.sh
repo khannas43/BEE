@@ -67,8 +67,9 @@ rule_state="$(psql_app -F ' ' -c "SELECT
   (SELECT count(*) FROM (SELECT verification_status FROM app.master_category UNION ALL SELECT verification_status FROM app.master_standard UNION ALL SELECT verification_status FROM app.master_lab_accreditation
      UNION ALL SELECT verification_status FROM app.master_fee_rule UNION ALL SELECT verification_status FROM app.master_rating_formula) v WHERE verification_status = 'verified'),
   (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('fee_rule', 'rating_formula')),
-  (SELECT count(*) FROM app.seed_run WHERE seed_version IN ('rt1-local-v2', 'wp04.1-masters-v1'))" 2>/dev/null || true)"
-check "db.provisional-rules" "$(ok test "$rule_state" = "1:1000.00:synthetic:RAC-DEMO:2026-01-01..2026-10-01,2:24000.00:provisional:-:2026-10-01..open 1 0 0 2")" "RAC fee versions ${rule_state%% *}; placeholder formula not computable; BEE-verified rows, V2 tables, seed markers: $(cut -d' ' -f2- <<<"$rule_state") (expected 1 0 0 2)"
+  (SELECT count(*) FROM app.seed_run WHERE seed_version IN ('rt1-local-v2', 'wp04.1-masters-v1')),
+  (SELECT count(*) FROM app.master_closure)" 2>/dev/null || true)"
+check "db.provisional-rules" "$(ok test "$rule_state" = "1:1000.00:synthetic:RAC-DEMO:2026-01-01..2026-10-01,2:24000.00:provisional:-:2026-10-01..open 1 0 0 2 0")" "RAC fee versions ${rule_state%% *}; placeholder formula not computable; BEE-verified rows, V2 tables, seed markers, closures: $(cut -d' ' -f3- <<<"$rule_state") (expected 0 0 2 0)"
 scope_want="$(jq -r '"\(.modelApplications) \(.assignments) \(.activeAssignments)"' <<<"$want")"
 scope_got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.model_application), (SELECT count(*) FROM app.assignment), (SELECT count(*) FROM app.assignment WHERE active)" 2>/dev/null || true)"
 wf_tables="$(psql_app -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('transition','fee_confirmation','rating_result','approval_decision')" 2>/dev/null || echo x)"
@@ -183,7 +184,7 @@ read -r v_pass v_fail <<<"$(sed -nE 's/^coverage checks: ([0-9]+) passed, ([0-9]
 if [[ -z "${v_pass:-}" ]]; then check "coverage.run" 0 "contract-coverage did not complete: $(tail -1 <<<"$cv_out")"
 else pass=$((pass + v_pass)); fail=$((fail + v_fail)); fi
 
-# ---- WP04.1 master resolution, overlap, gap, immutability, seeding and reset tests (real PostgreSQL, throwaway schemas)
+# ---- WP04.1 master resolution, overlap, gap, immutability, supersession, rollback, seeding and reset tests (real PostgreSQL, throwaway schemas)
 JAVA_HOME="$(/usr/libexec/java_home -v 17)" mvn -q -B -f "$ROOT/backend/pom.xml" test -Dgroups=db -Dbee.test.excludedGroups=none -Dsurefire.failIfNoSpecifiedTests=false > "$RUN_DIR/masters-test.log" 2>&1
 mt_rc=$?
 mt_xml="$ROOT/backend/target/surefire-reports/TEST-gov.bee.api.masters.MastersDatabaseTest.xml"

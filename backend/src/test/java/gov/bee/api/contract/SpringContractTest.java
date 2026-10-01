@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.fasterxml.jackson.databind.JsonNode;
 import gov.bee.api.application.ModelApplicationRepository;
+import gov.bee.api.brand.BrandAuthRepository;
 import gov.bee.api.identity.IdentityRepository;
 import gov.bee.api.masters.MasterDataRepository;
 import java.nio.charset.StandardCharsets;
@@ -91,6 +92,10 @@ class SpringContractTest {
     /** WP04.1 masters are internal and unused by any route; mocked so the context needs no database. */
     @MockitoBean
     MasterDataRepository masters;
+
+    /** WP04.2a brand/agency authorisation is internal and unused by any route; mocked likewise. */
+    @MockitoBean
+    BrandAuthRepository brandAuth;
 
     @BeforeAll
     static void load() throws Exception {

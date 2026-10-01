@@ -109,6 +109,24 @@ DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES
 ) AS f (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, category_code, formula_label, inputs, definition, computation_allowed) JOIN master_rating_formula m ON m.rule_key = f.rule_key AND m.version = f.version
   WHERE (m.effective_from, m.effective_to, m.source_reference, m.verification_status, m.note, m.legacy_id, m.category_code, m.formula_label, m.inputs, m.definition, m.computation_allowed) IS DISTINCT FROM (f.effective_from, f.effective_to, f.source_reference, f.verification_status, f.note, f.legacy_id, f.category_code, f.formula_label, f.inputs, f.definition, f.computation_allowed)) THEN
   RAISE EXCEPTION 'master_rating_formula: a stored version differs from the fixture; versions are immutable, add a new version instead'; END IF; END $$;
+-- WP04.2a brand ownership and agency authorisation: synthetic only; not BEE-approved.
+-- Inserted once per id; a stored row that differs from the fixture fails the seed.
+INSERT INTO brand (id, name, owner_organisation_id, status, source_reference, verification_status, note) VALUES
+  ('00000000-0000-4000-d000-000000000001', 'Nova Cool', '00000000-0000-4000-b000-000000000001', 'active', 'FIRST_SLICE.md §1 Nova Cool brand (synthetic local seed); not BEE-approved', 'synthetic', 'Synthetic manufacturer brand for local brand-ownership checks')
+ON CONFLICT (id) DO NOTHING;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES
+  ('00000000-0000-4000-d000-000000000001'::uuid, 'Nova Cool'::text, '00000000-0000-4000-b000-000000000001'::uuid, 'active'::text, 'FIRST_SLICE.md §1 Nova Cool brand (synthetic local seed); not BEE-approved'::text, 'synthetic'::text, 'Synthetic manufacturer brand for local brand-ownership checks'::text)
+) AS f (id, name, owner_organisation_id, status, source_reference, verification_status, note) JOIN brand b ON b.id = f.id
+  WHERE (b.name, b.owner_organisation_id, b.status, b.source_reference, b.verification_status, b.note) IS DISTINCT FROM (f.name, f.owner_organisation_id, f.status, f.source_reference, f.verification_status, f.note)) THEN
+  RAISE EXCEPTION 'brand: a stored row differs from the fixture'; END IF; END $$;
+INSERT INTO agency_authorisation (id, agency_organisation_id, principal_organisation_id, brand_id, valid_from, valid_to, status, source_reference, verification_status, note) VALUES
+  ('00000000-0000-4000-e000-000000000001', '00000000-0000-4000-b000-000000000002', '00000000-0000-4000-b000-000000000001', '00000000-0000-4000-d000-000000000001', '2026-01-01'::date, NULL::date, 'active', 'FIRST_SLICE.md §1 PixelCert authorised for Nova Cool (synthetic); not BEE-approved', 'synthetic', 'Synthetic agency authorisation for half-open period resolution tests')
+ON CONFLICT (id) DO NOTHING;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES
+  ('00000000-0000-4000-e000-000000000001'::uuid, '00000000-0000-4000-b000-000000000002'::uuid, '00000000-0000-4000-b000-000000000001'::uuid, '00000000-0000-4000-d000-000000000001'::uuid, '2026-01-01'::date, NULL::date, 'active'::text, 'FIRST_SLICE.md §1 PixelCert authorised for Nova Cool (synthetic); not BEE-approved'::text, 'synthetic'::text, 'Synthetic agency authorisation for half-open period resolution tests'::text)
+) AS f (id, agency_organisation_id, principal_organisation_id, brand_id, valid_from, valid_to, status, source_reference, verification_status, note) JOIN agency_authorisation a ON a.id = f.id
+  WHERE (a.agency_organisation_id, a.principal_organisation_id, a.brand_id, a.valid_from, a.valid_to, a.status, a.source_reference, a.verification_status, a.note) IS DISTINCT FROM (f.agency_organisation_id, f.principal_organisation_id, f.brand_id, f.valid_from, f.valid_to, f.status, f.source_reference, f.verification_status, f.note)) THEN
+  RAISE EXCEPTION 'agency_authorisation: a stored row differs from the fixture'; END IF; END $$;
 -- WP02.2 scope fixtures: seeded states only; version reset to 0 on every seed.
 INSERT INTO model_application (id, reference, organisation_id, brand_name, category, model_number, state, version) VALUES
   ('00000000-0000-4000-c000-000000000001', 'LOCAL-MA-0001', '00000000-0000-4000-b000-000000000001', 'Nova Cool', 'RAC', 'NC-RAC-12D', 'draft', 0),
@@ -120,5 +138,5 @@ INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES
   ('00000000-0000-4000-a000-000000000004', 'model_application', '00000000-0000-4000-c000-000000000003', 'iame_scrutiny', true),
   ('00000000-0000-4000-a000-000000000005', 'model_application', '00000000-0000-4000-c000-000000000004', 'bee_scrutiny', false)
 ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = EXCLUDED.active;
-INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1'), ('wp04.1-masters-v1') ON CONFLICT (seed_version) DO NOTHING;
+INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1'), ('wp04.1-masters-v1'), ('wp04.2-brand-auth-v1') ON CONFLICT (seed_version) DO NOTHING;
 COMMIT;

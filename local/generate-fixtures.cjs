@@ -16,6 +16,8 @@ const ROLES = ["admin", "programme", "reviewer", "director", "secretary", "finan
 const org = (n) => `00000000-0000-4000-b000-${String(n).padStart(12, "0")}`;
 const usr = (n) => `00000000-0000-4000-a000-${String(n).padStart(12, "0")}`;
 const app = (n) => `00000000-0000-4000-c000-${String(n).padStart(12, "0")}`;
+const brand = (n) => `00000000-0000-4000-d000-${String(n).padStart(12, "0")}`;
+const auth = (n) => `00000000-0000-4000-e000-${String(n).padStart(12, "0")}`;
 
 const ORGS = [
   { id: org(1), code: "NOVA", kind: "manufacturer", name: "Nova Cool Appliances Pvt Ltd (synthetic)" },
@@ -63,6 +65,27 @@ const APPLICATIONS = [
 const ASSIGNMENTS = [
   { user: 4, app: 3, stage: "iame_scrutiny", active: true },
   { user: 5, app: 4, stage: "bee_scrutiny", active: false },
+];
+
+/**
+ * WP04.2a brand ownership and agency authorisation (docs/wp04/WP04.2_BRAND_AUTH.md).
+ * Synthetic only — not BEE-approved. Does not change model_application.brand_name or grant
+ * brand owners read access to agency-filed applications.
+ */
+const BRANDS = [
+  {
+    id: brand(1), name: "Nova Cool", owner: "NOVA", status: "active", verification_status: "synthetic",
+    source_reference: "FIRST_SLICE.md §1 Nova Cool brand (synthetic local seed); not BEE-approved",
+    note: "Synthetic manufacturer brand for local brand-ownership checks",
+  },
+];
+const AGENCY_AUTHORISATIONS = [
+  {
+    id: auth(1), agency: "PIXEL", principal: "NOVA", brand: 1, status: "active",
+    valid_from: "2026-01-01", valid_to: null, verification_status: "synthetic",
+    source_reference: "FIRST_SLICE.md §1 PixelCert authorised for Nova Cool (synthetic); not BEE-approved",
+    note: "Synthetic agency authorisation for half-open period resolution tests",
+  },
 ];
 
 const audience = { name: "bee-api-audience", protocol: "openid-connect", protocolMapper: "oidc-audience-mapper", consentRequired: false, config: { "included.custom.audience": "bee-api", "access.token.claim": "true", "id.token.claim": "false" } };
@@ -234,6 +257,32 @@ S.push("ON CONFLICT (user_id, role) DO UPDATE SET scope = EXCLUDED.scope, active
 S.push("-- WP04.1 effective-dated masters: synthetic or provisional, none BEE-approved; no official fee or star rating.");
 S.push("-- Inserted once per (rule_key, version); a stored version that differs from the fixture fails the seed.");
 for (const m of MASTERS) S.push(masterSql(m));
+S.push("-- WP04.2a brand ownership and agency authorisation: synthetic only; not BEE-approved.");
+S.push("-- Inserted once per id; a stored row that differs from the fixture fails the seed.");
+S.push("INSERT INTO brand (id, name, owner_organisation_id, status, source_reference, verification_status, note) VALUES");
+S.push(BRANDS.map((b) => `  (${q(b.id)}, ${q(b.name)}, ${q(ORGS.find((o) => o.code === b.owner).id)}, ${q(b.status)}, ${q(b.source_reference)}, ${q(b.verification_status)}, ${q(b.note)})`).join(",\n"));
+S.push("ON CONFLICT (id) DO NOTHING;");
+S.push(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES`);
+S.push(BRANDS.map((b) => `  (${q(b.id)}::uuid, ${q(b.name)}::text, ${q(ORGS.find((o) => o.code === b.owner).id)}::uuid, ${q(b.status)}::text, ${q(b.source_reference)}::text, ${q(b.verification_status)}::text, ${q(b.note)}::text)`).join(",\n"));
+S.push(`) AS f (id, name, owner_organisation_id, status, source_reference, verification_status, note) JOIN brand b ON b.id = f.id`);
+S.push(`  WHERE (b.name, b.owner_organisation_id, b.status, b.source_reference, b.verification_status, b.note) IS DISTINCT FROM (f.name, f.owner_organisation_id, f.status, f.source_reference, f.verification_status, f.note)) THEN`);
+S.push(`  RAISE EXCEPTION 'brand: a stored row differs from the fixture'; END IF; END $$;`);
+S.push("INSERT INTO agency_authorisation (id, agency_organisation_id, principal_organisation_id, brand_id, valid_from, valid_to, status, source_reference, verification_status, note) VALUES");
+S.push(AGENCY_AUTHORISATIONS.map((a) => {
+  const from = `${q(a.valid_from)}::date`;
+  const to = a.valid_to == null ? "NULL::date" : `${q(a.valid_to)}::date`;
+  return `  (${q(a.id)}, ${q(ORGS.find((o) => o.code === a.agency).id)}, ${q(ORGS.find((o) => o.code === a.principal).id)}, ${q(BRANDS.find((b) => b.id === brand(a.brand)).id)}, ${from}, ${to}, ${q(a.status)}, ${q(a.source_reference)}, ${q(a.verification_status)}, ${q(a.note)})`;
+}).join(",\n"));
+S.push("ON CONFLICT (id) DO NOTHING;");
+S.push(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES`);
+S.push(AGENCY_AUTHORISATIONS.map((a) => {
+  const from = `${q(a.valid_from)}::date`;
+  const to = a.valid_to == null ? "NULL::date" : `${q(a.valid_to)}::date`;
+  return `  (${q(a.id)}::uuid, ${q(ORGS.find((o) => o.code === a.agency).id)}::uuid, ${q(ORGS.find((o) => o.code === a.principal).id)}::uuid, ${q(BRANDS.find((b) => b.id === brand(a.brand)).id)}::uuid, ${from}, ${to}, ${q(a.status)}::text, ${q(a.source_reference)}::text, ${q(a.verification_status)}::text, ${q(a.note)}::text)`;
+}).join(",\n"));
+S.push(`) AS f (id, agency_organisation_id, principal_organisation_id, brand_id, valid_from, valid_to, status, source_reference, verification_status, note) JOIN agency_authorisation a ON a.id = f.id`);
+S.push(`  WHERE (a.agency_organisation_id, a.principal_organisation_id, a.brand_id, a.valid_from, a.valid_to, a.status, a.source_reference, a.verification_status, a.note) IS DISTINCT FROM (f.agency_organisation_id, f.principal_organisation_id, f.brand_id, f.valid_from, f.valid_to, f.status, f.source_reference, f.verification_status, f.note)) THEN`);
+S.push(`  RAISE EXCEPTION 'agency_authorisation: a stored row differs from the fixture'; END IF; END $$;`);
 S.push("-- WP02.2 scope fixtures: seeded states only; version reset to 0 on every seed.");
 S.push("INSERT INTO model_application (id, reference, organisation_id, brand_name, category, model_number, state, version) VALUES");
 S.push(APPLICATIONS.map((a) => `  (${q(app(a.n))}, ${q(a.reference)}, ${q(ORGS.find((o) => o.code === a.org).id)}, ${q(a.brand)}, 'RAC', ${q(a.model)}, ${q(a.state)}, 0)`).join(",\n"));
@@ -241,7 +290,7 @@ S.push("ON CONFLICT (id) DO UPDATE SET reference = EXCLUDED.reference, organisat
 S.push("INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES");
 S.push(ASSIGNMENTS.map((a) => `  (${q(usr(a.user))}, 'model_application', ${q(app(a.app))}, ${q(a.stage)}, ${a.active})`).join(",\n"));
 S.push("ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = EXCLUDED.active;");
-S.push("INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1'), ('wp04.1-masters-v1') ON CONFLICT (seed_version) DO NOTHING;");
+S.push("INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1'), ('wp04.1-masters-v1'), ('wp04.2-brand-auth-v1') ON CONFLICT (seed_version) DO NOTHING;");
 S.push("COMMIT;");
 S.push("");
 
@@ -251,7 +300,7 @@ if (require.main === module) {
     [path.join(__dirname, "seed/seed.sql"), S.join("\n")],
   ];
   if (process.argv.includes("--counts")) {
-    console.log(JSON.stringify({ organisations: ORGS.length, keycloakUsers: USERS.length, userAccounts: dbUsers.length, memberships: dbUsers.length, roleAssignments: dbUsers.length, activeRoleAssignments: dbUsers.filter((u) => u.db.active).length, masters: Object.fromEntries(MASTERS.map((m) => [m.table, m.rows.length])), modelApplications: APPLICATIONS.length, assignments: ASSIGNMENTS.length, activeAssignments: ASSIGNMENTS.filter((a) => a.active).length }));
+    console.log(JSON.stringify({ organisations: ORGS.length, keycloakUsers: USERS.length, userAccounts: dbUsers.length, memberships: dbUsers.length, roleAssignments: dbUsers.length, activeRoleAssignments: dbUsers.filter((u) => u.db.active).length, masters: Object.fromEntries(MASTERS.map((m) => [m.table, m.rows.length])), brands: BRANDS.length, agencyAuthorisations: AGENCY_AUTHORISATIONS.length, modelApplications: APPLICATIONS.length, assignments: ASSIGNMENTS.length, activeAssignments: ASSIGNMENTS.filter((a) => a.active).length }));
     process.exit(0);
   }
   const CHECK = process.argv.includes("--check");
@@ -265,7 +314,7 @@ if (require.main === module) {
     }
   });
   if (CHECK && stale) process.exit(1);
-  if (!CHECK) console.log(`wrote ${OUT.length} fixture files (${ORGS.length} organisations, ${USERS.length} Keycloak users, ${dbUsers.length} Spring accounts)`);
+  if (!CHECK) console.log(`wrote ${OUT.length} fixture files (${ORGS.length} organisations, ${USERS.length} Keycloak users, ${dbUsers.length} Spring accounts, ${BRANDS.length} brands, ${AGENCY_AUTHORISATIONS.length} agency authorisations)`);
 }
 
-module.exports = { ORGS, USERS, APPLICATIONS, ASSIGNMENTS, MASTERS, usr, org, app, REALM, DEV_PASSWORD };
+module.exports = { ORGS, USERS, APPLICATIONS, ASSIGNMENTS, MASTERS, BRANDS, AGENCY_AUTHORISATIONS, usr, org, app, brand, auth, REALM, DEV_PASSWORD };

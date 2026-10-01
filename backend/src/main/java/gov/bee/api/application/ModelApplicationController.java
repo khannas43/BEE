@@ -5,6 +5,7 @@ import gov.bee.api.identity.CallerResolver;
 import gov.bee.api.policy.ApplicationFacts;
 import gov.bee.api.policy.SlicePolicy;
 import gov.bee.api.policy.SlicePolicy.ReadScope;
+import gov.bee.api.web.ApiErrors;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +99,6 @@ public class ModelApplicationController {
     }
 
     private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String code) {
-        return ResponseEntity.status(status).body(Map.of("error", code));
+        return ApiErrors.response(status, code);
     }
 }

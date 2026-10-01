@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,7 +36,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @WebMvcTest(controllers = ModelApplicationController.class)
-@Import({SecurityConfig.class, CallerResolver.class})
+@Import({SecurityConfig.class, CallerResolver.class, gov.bee.api.web.CorrelationIdFilter.class, gov.bee.api.web.ApiExceptionHandler.class})
 class ModelApplicationControllerSecurityTest {
 
     static final UUID USER = UUID.fromString("00000000-0000-4000-a000-000000000001");
@@ -43,7 +44,7 @@ class ModelApplicationControllerSecurityTest {
     static final UUID PIXEL = UUID.fromString("00000000-0000-4000-b000-000000000002");
     static final UUID NOVA_APP = UUID.fromString("00000000-0000-4000-c000-000000000002");
     static final UUID PIXEL_APP = UUID.fromString("00000000-0000-4000-c000-000000000003");
-    static final String NOT_FOUND = "{\"error\":\"not_found\"}";
+    static final String NOT_FOUND = "{\"error\":\"not_found\",\"message\":\"No such record is available to you.\"}";
 
     @Autowired
     MockMvc mvc;
@@ -107,9 +108,9 @@ class ModelApplicationControllerSecurityTest {
     void nonSliceRolesHaveNoReadScope(String role) throws Exception {
         account(role, "all");
         mvc.perform(get("/api/model-applications").with(token(role)))
-            .andExpect(status().isForbidden()).andExpect(content().json("{\"error\":\"no_read_scope\"}", true));
+            .andExpect(status().isForbidden()).andExpect(content().json("{\"error\":\"no_read_scope\",\"message\":\"This role has no read access to model applications.\"}", true));
         mvc.perform(get("/api/model-applications/" + NOVA_APP).with(token(role)))
-            .andExpect(status().isForbidden()).andExpect(content().json("{\"error\":\"no_read_scope\"}", true));
+            .andExpect(status().isForbidden()).andExpect(content().json("{\"error\":\"no_read_scope\",\"message\":\"This role has no read access to model applications.\"}", true));
         verifyNoInteractions(applications);
     }
 
@@ -149,10 +150,52 @@ class ModelApplicationControllerSecurityTest {
     void deniedAndUnknownAndMalformedReadsLookTheSame() throws Exception {
         account("agency", "own-org", PIXEL);
         when(applications.find(any(), any(), eq(USER))).thenReturn(Optional.empty());
-        for (String id : List.of(NOVA_APP.toString(), UUID.randomUUID().toString(), "LOCAL-MA-0002", "1")) {
-            mvc.perform(get("/api/model-applications/" + id).with(token("agency")))
-                .andExpect(status().isNotFound()).andExpect(content().json(NOT_FOUND, true));
+        List<String> bodies = new java.util.ArrayList<>();
+        for (String id : List.of(NOVA_APP.toString(), UUID.randomUUID().toString(), "LOCAL-MA-0002", "1", "")) {
+            var r = mvc.perform(get("/api/model-applications/" + id).with(token("agency")))
+                .andExpect(status().isNotFound()).andExpect(content().json(NOT_FOUND, true))
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andReturn().getResponse();
+            bodies.add(r.getContentAsString() + "|" + r.getContentType());
         }
+        org.junit.jupiter.api.Assertions.assertEquals(1, bodies.stream().distinct().count(), "404 bodies differ: " + bodies);
+    }
+
+    @Test
+    void everyErrorUsesTheContractBodyAndCarriesTheCorrelationId() throws Exception {
+        String body = "{\"error\":\"%s\",\"message\":\"%s\"}";
+        mvc.perform(get("/api/model-applications").header("X-Correlation-Id", "contract-test-1"))
+            .andExpect(status().isUnauthorized()).andExpect(header().string("X-Correlation-Id", "contract-test-1"))
+            .andExpect(content().json(body.formatted("unauthenticated", "A valid access token is required."), true));
+        mvc.perform(post("/api/model-applications").with(token("manufacturer")).header("X-Correlation-Id", "contract-test-2"))
+            .andExpect(status().isForbidden()).andExpect(header().string("X-Correlation-Id", "contract-test-2"))
+            .andExpect(content().json(body.formatted("denied_by_default", "This operation is not available."), true));
+        mvc.perform(get("/api/model-applications").with(jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")))))
+            .andExpect(status().isForbidden())
+            .andExpect(content().json(body.formatted("mfa_required", "Sign-in must include a verified one-time code."), true));
+        account("admin", "all", NOVA);
+        mvc.perform(get("/api/model-applications").with(token("admin")))
+            .andExpect(status().isForbidden())
+            .andExpect(content().json(body.formatted("no_read_scope", "This role has no read access to model applications."), true));
+    }
+
+    @Test
+    void unsafeCorrelationIdIsReplaced() throws Exception {
+        for (String bad : List.of("has space", "x".repeat(65), "semi;colon", "\u00e9")) {
+            var r = mvc.perform(get("/api/model-applications").header("X-Correlation-Id", bad)).andReturn().getResponse();
+            String echoed = r.getHeader("X-Correlation-Id");
+            org.junit.jupiter.api.Assertions.assertNotEquals(bad, echoed);
+            UUID.fromString(echoed);
+        }
+    }
+
+    @Test
+    void databaseFailureIsServiceUnavailableWithoutDetail() throws Exception {
+        account("manufacturer", "own-org", NOVA);
+        when(applications.list(any(), eq(USER))).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("connection to 127.0.0.1:5434 refused; SELECT * FROM app.model_application"));
+        mvc.perform(get("/api/model-applications").with(token("manufacturer")))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(content().json("{\"error\":\"service_unavailable\",\"message\":\"The service is temporarily unavailable. Try again later.\"}", true));
     }
 
     @Test

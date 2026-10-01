@@ -148,6 +148,13 @@ read -r m_pass m_fail <<<"$(sed -nE 's/^mfa checks: ([0-9]+) passed, ([0-9]+) fa
 if [[ -z "${m_pass:-}" ]]; then check "mfa.run" 0 "mfa-check did not complete: $(tail -1 <<<"$mf_out")"
 else pass=$((pass + m_pass)); fail=$((fail + m_fail)); fi
 
+# ---- WP03.1 OpenAPI contract, errors and correlation across Spring and Next.js (scripts/local/contract-check.cjs)
+ct_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/contract-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$ct_out"
+read -r k_pass k_fail <<<"$(sed -nE 's/^contract checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$ct_out")"
+if [[ -z "${k_pass:-}" ]]; then check "contract.run" 0 "contract-check did not complete: $(tail -1 <<<"$ct_out")"
+else pass=$((pass + k_pass)); fail=$((fail + k_fail)); fi
+
 # ---- WP02.3: seeded users' OTP credentials and sessions, and the realm flows, unchanged
 node "$ROOT/scripts/local/test-identities.cjs" teardown test >/dev/null 2>&1
 trap - EXIT

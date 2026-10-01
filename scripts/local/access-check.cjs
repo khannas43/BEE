@@ -38,7 +38,7 @@ const byRef = Object.fromEntries(APPLICATIONS.map((a) => [a.reference, { ...a, i
 const NOVA_REFS = APPLICATIONS.filter((a) => a.org === "NOVA").map((a) => a.reference);
 const PIXEL_REFS = APPLICATIONS.filter((a) => a.org === "PIXEL").map((a) => a.reference);
 const idsOf = (refs) => refs.map((r) => byRef[r].id);
-const NOT_FOUND = JSON.stringify({ error: "not_found" });
+const NOT_FOUND = JSON.stringify({ error: "not_found", message: "No such record is available to you." });
 
 const tokens = {};
 async function token(username) {

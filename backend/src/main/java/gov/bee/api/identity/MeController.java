@@ -1,5 +1,6 @@
 package gov.bee.api.identity;
 
+import gov.bee.api.web.ApiErrors;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -75,6 +76,6 @@ public class MeController {
     }
 
     private static ResponseEntity<Map<String, Object>> deny(String reason) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", reason));
+        return ApiErrors.response(HttpStatus.FORBIDDEN, reason);
     }
 }

@@ -1,17 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { AUTH } from "@/lib/server/authConfig";
 import { callBeeApi } from "@/lib/server/beeApi";
+import { correlationIdOf, methodNotAllowed, withContractHeaders } from "@/lib/server/http";
 import { endKeycloakSession, exchangeCode, signingKeys, type TokenSet } from "@/lib/server/keycloak";
 import { authMethods, IdTokenError, meetsMfaPolicy, safeEqual, verifyIdToken, type IdTokenClaims } from "@/lib/server/oidc";
 import { clearLoginCookie, createSession, destroySession, sessionCookieOf, setSessionCookie, takeLogin } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
-function fail(code: string) {
+function failWith(correlationId: string, code: string) {
   const res = NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(code)}`, AUTH.webOrigin), 303);
   clearLoginCookie(res);
-  res.headers.set("Cache-Control", "no-store");
-  return res;
+  return withContractHeaders(res, correlationId);
 }
 
 const kidOf = (jwt: string): string | undefined => {
@@ -29,6 +29,8 @@ const kidOf = (jwt: string): string | undefined => {
  * token also carries).
  */
 export async function GET(request: NextRequest) {
+  const correlationId = correlationIdOf(request);
+  const fail = (code: string) => failWith(correlationId, code);
   const q = request.nextUrl.searchParams;
   const tx = takeLogin(request.cookies.get(AUTH.loginCookie)?.value);
   if (!tx) return fail("login_expired");
@@ -62,11 +64,11 @@ export async function GET(request: NextRequest) {
   const subject = claims.sub;
   const username = claims.preferred_username ?? claims.sub;
 
-  const me = await callBeeApi("/api/me", { accessToken: tokens.access_token });
+  const me = await callBeeApi("/api/me", { correlationId, accessToken: tokens.access_token });
   const body = me.body as { subject?: string; error?: string } | null;
   if (me.status !== 200 || body?.subject !== subject) {
     await endKeycloakSession(tokens.refresh_token);
-    if (me.status === 502) return fail("api_unreachable");
+    if (body?.error === "api_unreachable") return fail("api_unreachable");
     return fail(me.status === 200 ? "subject_mismatch" : (body?.error ?? "access_denied"));
   }
 
@@ -75,6 +77,10 @@ export async function GET(request: NextRequest) {
   const res = NextResponse.redirect(new URL(tx.returnTo, AUTH.webOrigin), 303);
   clearLoginCookie(res);
   setSessionCookie(res, cookie);
-  res.headers.set("Cache-Control", "no-store");
-  return res;
+  return withContractHeaders(res, correlationId);
 }
+
+export const POST = methodNotAllowed("GET");
+export const PUT = POST;
+export const PATCH = POST;
+export const DELETE = POST;

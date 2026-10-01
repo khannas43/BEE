@@ -95,6 +95,7 @@ export default function LoginPage() {
               {notice.text}
             </div>
           )}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a route handler that redirects to Keycloak, so a full navigation is required */}
           <a
             href="/api/auth/login?returnTo=/app"
             className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-lg text-label-lg flex items-center justify-center gap-2 hover:bg-forest-dark transition-all"

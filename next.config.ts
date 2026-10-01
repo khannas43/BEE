@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  logging: {
+    // The callback query carries the one-time authorization code and state.
+    incomingRequests: { ignore: [/\/api\/auth\/callback/] },
+  },
 };
 
 export default nextConfig;

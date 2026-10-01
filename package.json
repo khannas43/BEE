@@ -23,7 +23,8 @@
     "local:browser": "bash -c 'source scripts/local/lib.sh && node scripts/local/browser-check.cjs'",
     "local:mfa": "bash -c 'source scripts/local/lib.sh && node scripts/local/mfa-check.cjs'",
     "local:mfa:misbind": "bash -c 'source scripts/local/lib.sh && node scripts/local/mfa-misbind-check.cjs'",
-    "web:test": "node --test scripts/local/oidc.test.mjs",
+    "local:contract": "bash -c 'source scripts/local/lib.sh && node scripts/local/contract-check.cjs'",
+    "web:test": "node --test scripts/local/oidc.test.mjs scripts/local/api-contract.test.mjs",
     "api:test": "JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -q -B -f backend/pom.xml test"
   },
   "dependencies": {

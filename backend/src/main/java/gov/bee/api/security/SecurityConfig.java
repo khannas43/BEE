@@ -1,13 +1,12 @@
 package gov.bee.api.security;
 
+import gov.bee.api.web.ApiErrors;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -69,16 +68,10 @@ public class SecurityConfig {
     }
 
     private static AuthenticationEntryPoint unauthenticated() {
-        return (request, response, ex) -> write(response, HttpServletResponse.SC_UNAUTHORIZED, "unauthenticated");
+        return (request, response, ex) -> ApiErrors.write(response, HttpServletResponse.SC_UNAUTHORIZED, "unauthenticated");
     }
 
     private static AccessDeniedHandler denied() {
-        return (request, response, ex) -> write(response, HttpServletResponse.SC_FORBIDDEN, "denied_by_default");
-    }
-
-    static void write(HttpServletResponse response, int status, String error) throws IOException {
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write("{\"error\":\"" + error + "\"}");
+        return (request, response, ex) -> ApiErrors.write(response, HttpServletResponse.SC_FORBIDDEN, "denied_by_default");
     }
 }

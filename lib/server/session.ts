@@ -134,9 +134,10 @@ export type ActiveSession =
 
 /**
  * Returns a session whose access token is valid for at least the refresh leeway,
- * refreshing it once if needed. A rejected refresh ends the session.
+ * refreshing it once if needed. A rejected refresh ends the session. The refresh is
+ * logged under the correlation ID of the request that triggered it.
  */
-export async function activeSession(cookie: string | undefined): Promise<ActiveSession> {
+export async function activeSession(cookie: string | undefined, correlationId: string): Promise<ActiveSession> {
   if (!cookie) return { ok: false, reason: "no_session" };
   sweep();
   const session = stores.sessions.get(sha256(cookie));
@@ -152,7 +153,7 @@ export async function activeSession(cookie: string | undefined): Promise<ActiveS
   if (!pending) {
     pending = (async () => {
       try {
-        const t = await refreshTokens(session.refreshToken);
+        const t = await refreshTokens(session.refreshToken, correlationId);
         Object.assign(session, fromTokens(t, Date.now()), { idToken: t.id_token ?? session.idToken, refreshCount: session.refreshCount + 1 });
         return session;
       } catch (err) {

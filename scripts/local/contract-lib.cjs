@@ -61,6 +61,13 @@ function validate(schema, value, doc, at = "$") {
  * are present. Returns problems (empty = conforms).
  */
 function conforms(doc, route, method, res) {
+  const errs = check(doc, route, method, res);
+  const spec = doc.paths[route]?.[method.toLowerCase()]?.responses?.[String(res.status)];
+  record({ route, method: method.toUpperCase(), status: res.status, code: spec?.["x-error-codes"] ? res.json?.error ?? null : "-", ok: errs.length === 0 });
+  return errs;
+}
+
+function check(doc, route, method, res) {
   const op = doc.paths[route]?.[method.toLowerCase()];
   if (!op) return [`${method} ${route} is not in the contract`];
   const spec = op.responses[String(res.status)];
@@ -82,4 +89,18 @@ function conforms(doc, route, method, res) {
   return errs;
 }
 
-module.exports = { FILE, load, validate, conforms };
+/**
+ * WP03.3 coverage evidence: when $CONTRACT_OBSERVED is set, every conforms() result (and
+ * every record() for the default-deny and catch-all rules) is appended as one JSON line,
+ * labelled with the current source: "live" (real Spring, Keycloak and database) or
+ * "live-stand-in" (real Next.js boundary, controlled stand-in on Spring's port).
+ */
+let source = "live";
+const setSource = (s) => { source = s; };
+function record(o) {
+  /* only the live check scripts record; unit tests importing this file (ESM, no require.main) never do */
+  if (!process.env.CONTRACT_OBSERVED || !require.main?.filename) return;
+  fs.appendFileSync(process.env.CONTRACT_OBSERVED, JSON.stringify({ ...o, source, suite: path.basename(require.main.filename) }) + "\n");
+}
+
+module.exports = { FILE, load, validate, conforms, record, setSource };

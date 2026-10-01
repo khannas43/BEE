@@ -130,6 +130,15 @@ The solution's 25 services and full stack are a future target catalogue, not a r
 
 Evidence: [WP03.2_BFF.md](wp03/WP03.2_BFF.md). No prototype screen consumes these routes yet (WP05.1). Executable idempotency is deferred to the first reviewed write command in WP05.1 or WP07.1; WP03 remains open and the work-package count stays 1/11.
 
+**WP03.3 contract test and correlation activity (1 October 2026): implemented, awaiting review.** On branch `wp03.3-contract-tests`, Java and Node tests pin contract artifact 0.3.0 by version and hash. Spring MockMvc tests validate every documented Spring status and body against the artifact, and fail unless every internal pair is exercised.
+
+- **Request logs.** Spring and Next.js write structured request logs to a documented schema, with bounded retention. Lines carry route templates and fixed outcomes, never queries, codes, state, tokens, cookies, bodies or personal data. Next.js logs its Keycloak calls under the request's correlation ID; Keycloak itself is not sent the ID.
+- **Live suite.** The live suite follows one correlation ID from browser to Next.js to Spring for reads, sign-in, sign-in failure, denials, malformed IDs, refresh, refused refresh and outage. A coverage matrix gives every documented (operation, status, code) pair evidence: 84/84. On the browser side, 42 are live, 11 live stand-in only and 3 unit only. On the Spring side, 21 are live and 7 MockMvc only.
+- **Results.** `local:check` passed 220/220, `local:wp033` 38 + 26 + 3, `api:test` 76 and `web:test` 47/47. A log-leak mutation and a contract-drift mutation were each caught and reverted.
+- **Defects fixed.** The new checks found and fixed two logging defects: missing outcomes on passed-through Spring errors, and Next dev printing raw request URLs.
+
+Evidence: [WP03.3_CONTRACT_TESTS.md](wp03/WP03.3_CONTRACT_TESTS.md). No write, idempotency store, audit persistence, UI wiring, permission or gateway was added. Executable idempotency remains with WP05.1 or WP07.1. WP03 remains open and the work-package count stays 1/11.
+
 **Excluded work packages:** WP12 external adapters, WP13 migration and WP14 quality/release. Feature-level local checks remain part of WP01–WP11; they do not imply a CI/CD pipeline, audit, load campaign, formal UAT or production release.
 
 ## 6. Screen consolidation and role navigation

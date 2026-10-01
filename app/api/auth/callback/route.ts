@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { callbackOutcome, safeLoginCode } from "@/lib/server/apiContract";
 import { AUTH } from "@/lib/server/authConfig";
 import { callBeeApi } from "@/lib/server/beeApi";
-import { correlationIdOf, methodNotAllowed, withContractHeaders } from "@/lib/server/http";
+import { correlationIdOf, logged, methodNotAllowed, setOutcome, withContractHeaders } from "@/lib/server/http";
 import { endKeycloakSession, exchangeCode, signingKeys, type TokenSet } from "@/lib/server/keycloak";
 import { authMethods, IdTokenError, meetsMfaPolicy, safeEqual, verifyIdToken, type IdTokenClaims } from "@/lib/server/oidc";
 import { clearLoginCookie, createSession, destroySession, sessionCookieOf, setSessionCookie, takeLogin } from "@/lib/server/session";
@@ -10,9 +10,10 @@ import { clearLoginCookie, createSession, destroySession, sessionCookieOf, setSe
 export const dynamic = "force-dynamic";
 
 function failWith(correlationId: string, code: string) {
-  const res = NextResponse.redirect(new URL(`/login?error=${safeLoginCode(code)}`, AUTH.webOrigin), 303);
+  const safe = safeLoginCode(code);
+  const res = NextResponse.redirect(new URL(`/login?error=${safe}`, AUTH.webOrigin), 303);
   clearLoginCookie(res);
-  return withContractHeaders(res, correlationId);
+  return setOutcome(withContractHeaders(res, correlationId), safe);
 }
 
 const kidOf = (jwt: string): string | undefined => {
@@ -29,7 +30,7 @@ const kidOf = (jwt: string): string | undefined => {
  * access authority, accepts the user (active account and an active role that the
  * token also carries).
  */
-export async function GET(request: NextRequest) {
+export const GET = logged("/api/auth/callback", async (request: NextRequest) => {
   const correlationId = correlationIdOf(request);
   const fail = (code: string) => failWith(correlationId, code);
   const q = request.nextUrl.searchParams;
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   let tokens: TokenSet;
   try {
-    tokens = await exchangeCode(code, tx.codeVerifier);
+    tokens = await exchangeCode(code, tx.codeVerifier, correlationId);
   } catch {
     return fail("code_exchange_failed");
   }
@@ -53,13 +54,13 @@ export async function GET(request: NextRequest) {
   let claims: IdTokenClaims;
   try {
     if (!tokens.id_token) throw new IdTokenError("missing");
-    claims = verifyIdToken(tokens.id_token, { issuer: AUTH.issuer, clientId: AUTH.clientId, nonce: tx.nonce, jwks: await signingKeys(kidOf(tokens.id_token)) });
+    claims = verifyIdToken(tokens.id_token, { issuer: AUTH.issuer, clientId: AUTH.clientId, nonce: tx.nonce, jwks: await signingKeys(kidOf(tokens.id_token), correlationId) });
   } catch {
-    await endKeycloakSession(tokens.refresh_token);
+    await endKeycloakSession(tokens.refresh_token, correlationId);
     return fail("invalid_id_token");
   }
   if (!meetsMfaPolicy(claims)) {
-    await endKeycloakSession(tokens.refresh_token);
+    await endKeycloakSession(tokens.refresh_token, correlationId);
     return fail("mfa_required");
   }
   const subject = claims.sub;
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
   const me = await callBeeApi("/api/me", { correlationId, accessToken: tokens.access_token });
   const outcome = callbackOutcome(me.status, me.body, subject);
   if (!outcome.ok) {
-    await endKeycloakSession(tokens.refresh_token);
+    await endKeycloakSession(tokens.refresh_token, correlationId);
     return fail(outcome.code);
   }
 
@@ -78,9 +79,9 @@ export async function GET(request: NextRequest) {
   clearLoginCookie(res);
   setSessionCookie(res, cookie);
   return withContractHeaders(res, correlationId);
-}
+});
 
-export const POST = methodNotAllowed("GET");
+export const POST = logged("/api/auth/callback", methodNotAllowed("GET"));
 export const PUT = POST;
 export const PATCH = POST;
 export const DELETE = POST;

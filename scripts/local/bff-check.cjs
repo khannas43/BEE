@@ -11,6 +11,8 @@
  * database row it changes belongs to a twin or is a model_application state/version, is
  * saved first and restored in a finally block, and the run fails if any differs after.
  * Spring is stopped once for the outage and planted-value cases and always started again.
+ * WP03.3: each case's correlation ID is followed through the structured request logs
+ * (Next.js request/upstream/identity lines, Spring request line).
  * Appends JSON lines to $AUTH_RESULTS when set.
  */
 const fs = require("fs");
@@ -22,6 +24,7 @@ const totp = require("./totp.cjs");
 const ids = require("./test-identities.cjs");
 const contract = require("./contract-lib.cjs");
 const pc = require("./portal-client.cjs");
+const logs = require("./request-logs.cjs");
 const { WEB, API, call, cid, sameCorr, noStore } = pc;
 
 const env = (k, d) => process.env[k] || d;
@@ -60,11 +63,21 @@ const items = (r) => (r.json?.items || []).map((i) => i.reference).sort();
 const detail = (jar, id, label = "detail") => call(`${WEB}/api/runtime/model-applications/${id}`, { jar, correlationId: cid(label) });
 const list = (jar, label = "list", q = "") => call(`${WEB}${LIST}${q}`, { jar, correlationId: cid(label) });
 const springGet = (token, p) => call(`${API}${p}`, { token, correlationId: cid("spring") });
+/** True when each pattern matches a line of that layer's trace, in order. */
+function follows(t, want) {
+  return ["web", "api"].every((layer) => {
+    const got = t[layer].map(logs.describe);
+    let i = 0;
+    for (const re of want[layer] || []) { while (i < got.length && !re.test(got[i])) i++; if (i++ >= got.length) return false; }
+    return true;
+  });
+}
+const traced = (t) => `web [${t.web.map(logs.describe).join("; ")}] api [${t.api.map(logs.describe).join("; ")}]`;
 const shape = (x) => [x.status, x.text, x.headers.get("content-type"), x.headers.get("content-length"), x.headers.get("cache-control"), [...x.headers.keys()].sort().join()].join("|");
 
 async function main() {
   const before = rowState();
-  const webStart = pc.logSize("web.log");
+  const m0 = logs.mark();
 
   /* sign-ins first (one TOTP step per twin), then direct tokens */
   for (const p of PERSONAS) await totp.ensureEnrolled(twin(p));
@@ -171,24 +184,25 @@ async function main() {
   let rev;
   try {
     sql(`UPDATE app.role_assignment SET active = false WHERE user_id = '${novaAcct}'`);
-    rev = { l: await list(nova, "revoked"), d: await detail(nova, nid, "revoked"), s: await springGet(T.nova, "/api/model-applications") };
+    rev = { l: await list(nova, "revoked"), d: await detail(nova, nid, "revoked"), m: await call(`${WEB}/api/runtime/me`, { jar: nova, correlationId: cid("revoked") }), s: await springGet(T.nova, "/api/model-applications") };
   } finally {
     for (const row of roles) { const [id, active] = row.split(":"); sql(`UPDATE app.role_assignment SET active = ${active === "true"} WHERE id = '${id}'`); }
   }
   const back = await list(nova, "restored");
-  check("bff.role-revoked-after-sign-in", [rev.l, rev.d].every((x) => x.status === 403 && x.json?.error === "no_effective_role" && !/LOCAL-MA/.test(x.text)) && rev.s.json?.error === "no_effective_role" && back.status === 200 && back.json.count === 3,
-    `role deactivated in bee_app during a live session: BFF list ${rev.l.status} ${rev.l.json?.error}, detail ${rev.d.status} ${rev.d.json?.error} (direct Spring the same); restored: list ${back.status} count ${back.json?.count}, session kept`);
+  const re2 = [...contract.conforms(doc, LIST, "GET", rev.l), ...contract.conforms(doc, DETAIL, "GET", rev.d), ...contract.conforms(doc, "/api/runtime/me", "GET", rev.m), ...contract.conforms(doc, "/api/model-applications", "GET", rev.s)];
+  check("bff.role-revoked-after-sign-in", re2.length === 0 && [rev.l, rev.d, rev.m].every((x) => x.status === 403 && x.json?.error === "no_effective_role" && !/LOCAL-MA/.test(x.text)) && rev.s.json?.error === "no_effective_role" && back.status === 200 && back.json.count === 3,
+    `role deactivated in bee_app during a live session: BFF list ${rev.l.status} ${rev.l.json?.error}, detail ${rev.d.status} ${rev.d.json?.error}, /api/runtime/me ${rev.m.status} ${rev.m.json?.error} (direct Spring the same); restored: list ${back.status} count ${back.json?.count}, session kept${show(re2)}`);
   const mem = sql(`SELECT organisation_id || '|' || active || '|' || valid_to FROM app.organisation_membership WHERE user_id = '${novaAcct}'`).split("\n");
   let exp;
   try {
     sql(`UPDATE app.organisation_membership SET valid_to = now() - interval '1 day' WHERE user_id = '${novaAcct}'`);
-    exp = { l: await list(nova, "expired"), d: await detail(nova, nid, "expired") };
+    exp = { l: await list(nova, "expired"), d: await detail(nova, nid, "expired"), s: await springGet(T.nova, "/api/model-applications"), sd: await springGet(T.nova, `/api/model-applications/${nid}`) };
   } finally {
     for (const row of mem) { const [org, active, validTo] = row.split("|"); sql(`UPDATE app.organisation_membership SET active = ${active === "true"}, valid_to = '${validTo}' WHERE user_id = '${novaAcct}' AND organisation_id = '${org}'`); }
   }
-  const e3 = [...contract.conforms(doc, LIST, "GET", exp.l), ...contract.conforms(doc, DETAIL, "GET", exp.d)];
-  check("bff.expired-membership", [exp.l, exp.d].every((x) => x.status === 403 && x.json?.error === "no_read_scope" && !/LOCAL-MA/.test(x.text)) && e3.length === 0,
-    `membership valid_to in the past: list ${exp.l.status} ${exp.l.json?.error}, detail ${exp.d.status} ${exp.d.json?.error}; restored${show(e3)}`);
+  const e3 = [...contract.conforms(doc, LIST, "GET", exp.l), ...contract.conforms(doc, DETAIL, "GET", exp.d), ...contract.conforms(doc, "/api/model-applications", "GET", exp.s), ...contract.conforms(doc, "/api/model-applications/{id}", "GET", exp.sd)];
+  check("bff.expired-membership", [exp.l, exp.d, exp.s, exp.sd].every((x) => x.status === 403 && x.json?.error === "no_read_scope" && !/LOCAL-MA/.test(x.text)) && e3.length === 0,
+    `membership valid_to in the past: BFF list ${exp.l.status} ${exp.l.json?.error}, detail ${exp.d.status} ${exp.d.json?.error}; direct Spring list ${exp.s.status} ${exp.s.json?.error}, detail ${exp.sd.status} ${exp.sd.json?.error}; restored${show(e3)}`);
 
   /* ---------- no write through the BFF ---------- */
   const snap = sql("SELECT string_agg(id || ':' || state || ':' || version, ',' ORDER BY id) FROM app.model_application");
@@ -255,39 +269,59 @@ async function main() {
   const bad = outcome.filter((o) => !(o.x.status === o.status && o.x.json?.error === o.code && sameCorr(o.x) && o.upstream));
   check("bff.planted-values-rejected", bad.length === 0 && pe.length === 0,
     `${outcome.map((o) => `${o.label} -> ${o.x.status} ${o.x.json?.error}`).join("; ")}; correlation echoed and seen by the stand-in with the session's bearer${bad.length ? `; wrong: ${bad.map((o) => o.label).join(", ")}` : ""}${show(pe)}`);
-  const webLog = pc.logSince("web.log", webStart);
-  const logs = webLog + pc.logSince("api.log") + pc.logSince("api.before-contract-restart.log");
+  const allLogs = logs.allText(m0);
   const inPortal = PLANTED.filter((v) => pc.portalSeen.some((t) => t.includes(v)));
-  const inLogs = PLANTED.filter((v) => logs.includes(v));
-  const tokensInLogs = Object.values(T).some((t) => logs.includes(t.slice(-40)));
+  const inLogs = PLANTED.filter((v) => allLogs.includes(v));
+  const tokensInLogs = Object.values(T).some((t) => allLogs.includes(t.slice(-40)));
   check("bff.planted-values-contained", inPortal.length === 0 && inLogs.length === 0 && !tokensInLogs,
-    `planted secret and SQL text in ${pc.portalSeen.length} portal responses (bodies, headers, Location): ${inPortal.length ? "FOUND" : "none"}; in web.log/api.log: ${inLogs.length ? "FOUND" : "none"}; tokens in logs: ${tokensInLogs ? "FOUND" : "none"}`);
-  const springLine = pc.logSince("api.log").split("\n").find((l) => l.includes(`correlationId=${after.sent} `)) || "";
-  check("bff.correlation-propagated", /path=\/api\/model-applications status=200/.test(springLine) && webLog.includes(`bee.upstream correlationId=${after.sent} path=/api/model-applications status=200`),
-    `BFF list ${after.sent}: Next upstream log and Spring access log "${springLine.replace(/^.*correlationId=/, "correlationId=").replace(/ durationMs=.*$/, "")}"`);
+    `planted secret and SQL text in ${pc.portalSeen.length} portal responses (bodies, headers, Location): ${inPortal.length ? "FOUND" : "none"}; in structured and console logs: ${inLogs.length ? "FOUND" : "none"}; tokens in logs: ${tokensInLogs ? "FOUND" : "none"}`);
+
+  /* ---------- one correlation ID per case, browser -> Next.js -> Spring ---------- */
+  const esc = (r) => r.replace(/[{}]/g, "\\$&");
+  const both = (route, sroute, status, outcome) => ({ web: [new RegExp(`^upstream GET ${esc(sroute)} ${status} ${outcome}$`), new RegExp(`^request GET ${esc(route)} ${status} ${outcome}$`)], api: [new RegExp(`^request GET ${esc(sroute)} ${status} ${outcome}$`)] });
+  const cor = [];
+  const expect = (label, x, want, extra = () => true) => { const t = logs.trace(x?.sent, m0); cor.push({ label, ok: !!x?.sent && follows(t, want) && extra(t), t }); };
+  expect("list read", after, both(LIST, "/api/model-applications", 200, "ok"));
+  expect("detail read", bv, both(DETAIL, "/api/model-applications/{id}", 200, "ok"));
+  expect("role denial", rev.l, both(LIST, "/api/model-applications", 403, "no_effective_role"));
+  expect("scope denial", exp.d, both(DETAIL, "/api/model-applications/{id}", 403, "no_read_scope"));
+  expect("other organisation", nf[0][1], both(DETAIL, "/api/model-applications/{id}", 404, "not_found"));
+  expect("malformed ID", nf[3][1], both(DETAIL, "/api/model-applications/{id}", 404, "not_found"));
+  expect("unsafe segment", nf[4][1], both(DETAIL, "/api/model-applications/{id}", 404, "not_found"));
+  expect("no session", anon[0], { web: [/^request GET \/api\/runtime\/model-applications 401 no_session$/] }, (t) => t.web.length === 1 && t.api.length === 0);
+  expect("outage", down[0], { web: [/^upstream GET \/api\/model-applications 503 api_unreachable$/, /^request GET \/api\/runtime\/model-applications 503 api_unreachable$/] }, (t) => t.api.length === 0);
+  expect("unsupported method", writes[0], { web: [/^request POST \/api\/runtime\/model-applications 405 method_not_allowed$/] }, (t) => t.api.length === 0);
+  check("bff.correlation", cor.every((c) => c.ok), cor.map((c) => `${c.label}: ${c.ok ? "ok" : "MISSING " + traced(c.t)}`).join("; "));
 
   /* ---------- expiry: refresh keeps a live session, a refused refresh ends it (opt-in, waits for token expiry) ---------- */
   if (process.argv.includes("--with-expiry")) {
     const view = async (p) => (await call(`${WEB}/api/auth/session`, { jar: S[p].jar })).json;
     const novaBefore = await view("nova.applicant");
-    const expiries = await Promise.all(["nova.applicant", "pixel.applicant", "iame.officer"].map(async (p) => new Date((await view(p)).accessExpiresAt).getTime()));
+    const expiries = await Promise.all(["nova.applicant", "pixel.applicant", "iame.officer", "bee.reviewer"].map(async (p) => new Date((await view(p)).accessExpiresAt).getTime()));
     await totp.logoutUser(twin("pixel.applicant"));
     await totp.logoutUser(twin("iame.officer"));
+    await totp.logoutUser(twin("bee.reviewer"));
     const waitMs = Math.max(0, Math.max(...expiries) - Date.now() - 10_000);
     console.log(`     waiting ${Math.round(waitMs / 1000)} s for the access tokens to near expiry...`);
     await new Promise((ok) => setTimeout(ok, waitMs));
     const nl = await list(nova, "refresh"), nd = await detail(nova, nid, "refresh");
     const novaAfter = await view("nova.applicant");
-    const gone = [await list(S["pixel.applicant"].jar, "expired"), await detail(S["iame.officer"].jar, byRef["LOCAL-MA-0003"].id, "expired")];
+    const gone = [await list(S["pixel.applicant"].jar, "expired"), await detail(S["iame.officer"].jar, byRef["LOCAL-MA-0003"].id, "expired"), await call(`${WEB}/api/runtime/me`, { jar: S["bee.reviewer"].jar, correlationId: cid("expired") })];
     const again = await list(S["pixel.applicant"].jar, "expired-again");
-    const xe = [...contract.conforms(doc, LIST, "GET", nl), ...contract.conforms(doc, DETAIL, "GET", nd), ...gone.flatMap((x, i) => contract.conforms(doc, i ? DETAIL : LIST, "GET", x))];
+    const xe = [...contract.conforms(doc, LIST, "GET", nl), ...contract.conforms(doc, DETAIL, "GET", nd), ...gone.flatMap((x, i) => contract.conforms(doc, [LIST, DETAIL, "/api/runtime/me"][i], "GET", x))];
     check("bff.refresh", nl.status === 200 && nd.status === 200 && novaAfter.refreshCount > novaBefore.refreshCount && novaAfter.accessExpiresAt > novaBefore.accessExpiresAt,
       `access token near expiry: BFF list ${nl.status}, detail ${nd.status}; refreshCount ${novaBefore.refreshCount} -> ${novaAfter.refreshCount}`);
+    const rt = logs.trace(nl.sent, m0), gt = logs.trace(gone[0].sent, m0);
+    const refreshOk = follows(rt, { web: [/^identity token\.refresh 200 ok$/, /^upstream GET \/api\/model-applications 200 ok$/, /^request GET \/api\/runtime\/model-applications 200 ok$/], api: [/^request GET \/api\/model-applications 200 ok$/] });
+    const refusedOk = follows(gt, { web: [/^identity token\.refresh 400 invalid_grant$/, /^request GET \/api\/runtime\/model-applications 401 session_expired$/] }) && !gt.web.some((l) => l.event === "upstream") && gt.api.length === 0;
+    check("bff.correlation-refresh", refreshOk && refusedOk, `refresh: ${traced(rt)}; refused refresh: ${traced(gt)} (Keycloak calls logged by the portal with the request's ID; the ID is not sent to Keycloak)`);
     check("bff.expired-session", gone.every((x) => x.status === 401 && x.json?.error === "session_expired" && sameCorr(x) && x.setCookie.some((c) => /^bee_session=;/.test(c))) && again.status === 401 && again.json?.error === "no_session" && xe.length === 0,
-      `Keycloak sessions ended by admin, refresh refused: PixelCert list ${gone[0].status} ${gone[0].json?.error}, IAME detail ${gone[1].status} ${gone[1].json?.error}, cookies cleared; next request ${again.status} ${again.json?.error}${show(xe)}`);
+      `Keycloak sessions ended by admin, refresh refused: PixelCert list ${gone[0].status} ${gone[0].json?.error}, IAME detail ${gone[1].status} ${gone[1].json?.error}, reviewer /api/runtime/me ${gone[2].status} ${gone[2].json?.error}, cookies cleared; next request ${again.status} ${again.json?.error}${show(xe)}`);
   }
 
   for (const p of PERSONAS) await call(`${WEB}/api/auth/logout`, { method: "POST", jar: S[p].jar, headers: { Origin: WEB } });
+  const problems = logs.problems(m0), n = logs.count(m0);
+  check("bff.log-format", problems.length === 0 && n.api > 20 && n.web > 40, `${n.api} Spring and ${n.web} Next.js structured lines since this run, each valid against docs/wp03/request-log.schema.json${show(problems)}`);
   const afterRows = rowState();
   check("bff.rows-restored", afterRows === before, `model_application state/version and the twins' role, membership and assignment rows ${afterRows === before ? "identical" : "DIFFER"} before and after`);
 }

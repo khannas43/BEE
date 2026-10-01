@@ -26,9 +26,21 @@ public final class ApiErrors {
         Map.entry("service_unavailable", "The service is temporarily unavailable. Try again later."),
         Map.entry("internal_error", "The request could not be completed."));
 
+    /** The code of the error body built on this request thread, for the request log's outcome. */
+    private static final ThreadLocal<String> LAST_CODE = new ThreadLocal<>();
+
     private ApiErrors() {}
 
+    static String lastCode() {
+        return LAST_CODE.get();
+    }
+
+    static void clearLastCode() {
+        LAST_CODE.remove();
+    }
+
     public static Map<String, Object> body(String code) {
+        LAST_CODE.set(MESSAGES.containsKey(code) ? code : "internal_error");
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("error", code);
         body.put("message", MESSAGES.getOrDefault(code, MESSAGES.get("internal_error")));

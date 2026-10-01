@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { SPRING_ME } from "@/lib/server/apiContract";
 import { sessionRead } from "@/lib/server/bff";
-import { methodNotAllowed } from "@/lib/server/http";
+import { logged, methodNotAllowed } from "@/lib/server/http";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +10,11 @@ export const dynamic = "force-dynamic";
  * session, refreshing it if it is about to expire. The browser's own
  * Authorization header is never forwarded, and Spring alone decides access.
  */
-export async function GET(request: NextRequest) {
+export const GET = logged("/api/runtime/me", async (request: NextRequest) => {
   return sessionRead(request, "/api/me", SPRING_ME);
-}
+});
 
-export const POST = methodNotAllowed("GET");
+export const POST = logged("/api/runtime/me", methodNotAllowed("GET"));
 export const PUT = POST;
 export const PATCH = POST;
 export const DELETE = POST;

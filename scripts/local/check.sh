@@ -148,6 +148,10 @@ read -r m_pass m_fail <<<"$(sed -nE 's/^mfa checks: ([0-9]+) passed, ([0-9]+) fa
 if [[ -z "${m_pass:-}" ]]; then check "mfa.run" 0 "mfa-check did not complete: $(tail -1 <<<"$mf_out")"
 else pass=$((pass + m_pass)); fail=$((fail + m_fail)); fi
 
+# ---- WP03.3: contract-check and bff-check record every conforms() result here for the coverage matrix
+export CONTRACT_OBSERVED="$RUN_DIR/contract-observed.jsonl"
+: > "$CONTRACT_OBSERVED"
+
 # ---- WP03.1 OpenAPI contract, errors and correlation across Spring and Next.js (scripts/local/contract-check.cjs)
 ct_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/contract-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$ct_out"
@@ -161,6 +165,13 @@ grep -E '^(PASS|FAIL) ' <<<"$bf_out"
 read -r f_pass f_fail <<<"$(sed -nE 's/^bff checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$bf_out")"
 if [[ -z "${f_pass:-}" ]]; then check "bff.run" 0 "bff-check did not complete: $(tail -1 <<<"$bf_out")"
 else pass=$((pass + f_pass)); fail=$((fail + f_fail)); fi
+
+# ---- WP03.3 coverage: every documented (operation, status, code) has live, stand-in, MockMvc or unit evidence
+cv_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/contract-coverage.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$cv_out"
+read -r v_pass v_fail <<<"$(sed -nE 's/^coverage checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$cv_out")"
+if [[ -z "${v_pass:-}" ]]; then check "coverage.run" 0 "contract-coverage did not complete: $(tail -1 <<<"$cv_out")"
+else pass=$((pass + v_pass)); fail=$((fail + v_fail)); fi
 
 # ---- WP02.3: seeded users' OTP credentials and sessions, and the realm flows, unchanged
 node "$ROOT/scripts/local/test-identities.cjs" teardown test >/dev/null 2>&1

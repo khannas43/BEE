@@ -1,0 +1,5 @@
+{
+  "$comment": "WP03.3 contract pin. Tests in api:test and web:test fail if docs/wp03/bee-local-api.openapi.json changes without a version bump and a new pin here, or if code and artifact versions differ.",
+  "version": "0.3.0",
+  "sha256": "65fb76ea34d52ffed385864aeba17f41606dae0a1e4c14eed298a1b232acb959"
+}

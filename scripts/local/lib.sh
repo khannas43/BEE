@@ -9,6 +9,8 @@ source "$ROOT/local/local.env"
 RUN_DIR="$ROOT/.local/run"
 LOG_DIR="$ROOT/.local/logs"
 mkdir -p "$RUN_DIR" "$LOG_DIR"
+# Structured request logs (docs/wp03/request-log.schema.json): Spring api-requests.jsonl, Next.js web-requests.jsonl.
+export BEE_LOG_DIR="$LOG_DIR"
 
 API_JAR="$ROOT/backend/target/bee-api.jar"
 API_PID="$RUN_DIR/api.pid"

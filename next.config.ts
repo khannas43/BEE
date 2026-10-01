@@ -2,8 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   logging: {
-    // The callback query carries the one-time authorization code and state.
-    incomingRequests: { ignore: [/\/api\/auth\/callback/] },
+    // Off: the dev server's request lines include raw query strings (authorization code,
+    // state, returnTo, probe parameters). Every /api route writes a structured line
+    // instead (lib/server/requestLog.ts, docs/wp03/request-log.schema.json).
+    incomingRequests: false,
   },
 };
 

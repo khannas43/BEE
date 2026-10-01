@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * WP03.1 cross-layer contract checks: live Spring (direct, as Next's server code calls it)
+ * WP03.1/WP03.3 cross-layer contract checks: live Spring (direct, as Next's server code calls it)
  * and live Next.js routes (as a browser calls them) compared with
  * docs/wp03/bee-local-api.openapi.json.
  *
@@ -20,6 +20,7 @@ const { app } = require("../../local/generate-fixtures.cjs");
 const totp = require("./totp.cjs");
 const ids = require("./test-identities.cjs");
 const contract = require("./contract-lib.cjs");
+const logs = require("./request-logs.cjs");
 
 const env = (k, d) => process.env[k] || d;
 const ROOT = path.join(__dirname, "../..");
@@ -39,17 +40,17 @@ const PLANTED_SQL = `ERROR: relation "app.user_account" does not exist; SELECT p
 const PLANTED = [PLANTED_SECRET, PLANTED_SQL, encodeURIComponent(PLANTED_SQL), "password_hash", "SELECT password", PLANTED_SQL.slice(-30)];
 function standIn() {
   const seen = [];
-  let mode = "extra-field";
+  let mode = "extra-field", answer = null;
   const server = http.createServer((req, res) => {
     const id = req.headers["x-correlation-id"];
     seen.push({ mode, path: req.url, correlationId: id, bearer: /^Bearer \S+$/.test(req.headers.authorization || "") });
-    const [status, body] = mode === "extra-field" ? [200, { ...realMe, secretToken: PLANTED_SECRET }] : [403, { error: PLANTED_SQL, message: PLANTED_SQL }];
+    const [status, body] = mode === "documented" ? answer : mode === "extra-field" ? [200, { ...realMe, secretToken: PLANTED_SECRET }] : [403, { error: PLANTED_SQL, message: PLANTED_SQL }];
     res.writeHead(status, { "Content-Type": "application/json", ...(id ? { "X-Correlation-Id": id } : {}) });
     res.end(JSON.stringify(body));
   });
   return {
     seen,
-    set: (m) => { mode = m; },
+    set: (m, a = null) => { mode = m; answer = a; },
     listen: () => new Promise((ok, ko) => server.once("error", ko).listen(Number(env("BEE_API_PORT", "8090")), "127.0.0.1", ok)),
     close: () => new Promise((ok) => { server.closeAllConnections(); server.close(() => ok()); }),
   };
@@ -103,9 +104,19 @@ const noStore = (r) => /no-store/.test(r.headers.get("cache-control") || "");
 const sameCorr = (r) => corr(r) === r.sent;
 
 /* ---------- logs ---------- */
-const logSize = (f) => { try { return fs.statSync(path.join(LOG_DIR, f)).size; } catch { return 0; } };
-const logSince = (f, from) => { try { return fs.readFileSync(path.join(LOG_DIR, f)).subarray(from).toString("utf8"); } catch { return ""; } };
-const accessLine = (log, id) => log.split("\n").find((l) => l.includes(`correlationId=${id} `)) || "";
+/** True when each pattern matches a line of that layer's trace, in order. */
+function follows(t, want) {
+  return ["web", "api"].every((layer) => {
+    const got = t[layer].map(logs.describe);
+    let i = 0;
+    for (const re of want[layer] || []) { while (i < got.length && !re.test(got[i])) i++; if (i++ >= got.length) return false; }
+    return true;
+  });
+}
+const traced = (t) => `web [${t.web.map(logs.describe).join("; ")}] api [${t.api.map(logs.describe).join("; ")}]`;
+function sqlq(statement) {
+  return execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${env("BEE_APP_DB_PASSWORD", "bee-local-app")}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", "bee_app", "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", statement]).toString().trim();
+}
 const runtime = (fn) => execFileSync("bash", ["-c", `source "${ROOT}/scripts/local/lib.sh"; ${fn}`], { stdio: ["ignore", "pipe", "pipe"], timeout: 180000 }).toString();
 
 /* ---------- Keycloak: tokens and a temporary client without the amr mapper ---------- */
@@ -148,13 +159,27 @@ function inventory() {
   for (const f of routes) {
     const route = "/" + path.relative(path.join(ROOT, "app"), path.dirname(f)).split(path.sep).join("/").replace(/\[(\w+)\]/g, "{$1}");
     const src = fs.readFileSync(f, "utf8");
-    const handled = METHODS.filter((m) => new RegExp(`export (async )?function ${m}\\b`).test(src));
-    const declared = METHODS.filter((m) => new RegExp(`export const ${m}\\b`).test(src));
+    if (METHODS.some((m) => new RegExp(`export (async )?function ${m}\\b`).test(src))) problems.push(`${route} exports an unlogged handler function`);
+    /* every method export is logged("<template>", handler), logged("<template>", methodNotAllowed(...)) or an alias of one */
+    const exp = Object.fromEntries([...src.matchAll(/^export const (GET|POST|PUT|PATCH|DELETE) = (.+)$/gm)].map((m) => [m[1], m[2]]));
+    const kind = (m, seen = 0) => {
+      const rhs = exp[m] || "";
+      if (/^[A-Z]+;$/.test(rhs) && seen < 3) return kind(rhs.slice(0, -1), seen + 1);
+      if (/^logged\("[^"]+", methodNotAllowed\(/.test(rhs) || (/^notFound;$/.test(rhs))) return "405";
+      if (/^logged\("[^"]+", /.test(rhs)) return "handled";
+      return rhs ? "unlogged" : "missing";
+    };
+    const handled = METHODS.filter((m) => kind(m) === "handled");
+    const declared = METHODS.filter((m) => kind(m) === "405");
+    for (const m of METHODS.filter((x) => kind(x) === "unlogged")) problems.push(`${route} ${m} is not wrapped in logged()`);
+    const loggedRoutes = [...new Set([...src.matchAll(/logged\("([^"]+)"/g)].map((m) => m[1]))];
     codeRoutes[route] = { handled, declared };
     if (/\[\.\.\./.test(route)) {
       if (doc["x-bee-unmatched"]?.browser?.route !== route) problems.push(`${route} not described in x-bee-unmatched`);
+      if (loggedRoutes.join() !== "/api/{unmatched}") problems.push(`${route} logs as ${loggedRoutes}`);
       continue;
     }
+    if (loggedRoutes.join() !== route) problems.push(`${route} logs as ${loggedRoutes}`);
     const p = doc.paths[route];
     if (!p || p["x-bee-audience"] !== "browser") { problems.push(`${route} not a browser path in the contract`); continue; }
     const want = METHODS.filter((m) => p[m.toLowerCase()]);
@@ -229,12 +254,12 @@ async function springChecks(nova, inactive, noAmr) {
     `token from ${NO_AMR_CLIENT} (password+OTP, no amr claim): ${mfa.map((m) => `${m.p.replace(PIXEL_APP, "{id}")} ${m.x.status} ${m.x.json?.error}`).join(", ")}${show(mfa.flatMap((m) => m.e))}`);
 
   const ina = [];
-  for (const [p, op] of [["/api/me", "/api/me"], ["/api/model-applications", "/api/model-applications"]]) {
+  for (const [p, op] of [["/api/me", "/api/me"], ["/api/model-applications", "/api/model-applications"], [`/api/model-applications/${NOVA_APP}`, R]]) {
     const x = await call(`${API}${p}`, { token: inactive, correlationId: cid("spring-inactive") });
     ina.push({ p, x, e: contract.conforms(doc, op, "GET", x) });
   }
   check("spring.inactive-role", ina.every((m) => m.x.status === 403 && m.x.json?.error === "no_effective_role" && m.e.length === 0 && sameCorr(m.x)),
-    `test.inactive.role: ${ina.map((m) => `${m.p} ${m.x.status} ${m.x.json?.error}`).join(", ")}${show(ina.flatMap((m) => m.e))}`);
+    `test.inactive.role: ${ina.map((m) => `${m.p.replace(NOVA_APP, "{id}")} ${m.x.status} ${m.x.json?.error}`).join(", ")}${show(ina.flatMap((m) => m.e))}`);
 
   const writes = [["POST", "/api/model-applications"], ["PUT", `/api/model-applications/${NOVA_APP}`], ["PATCH", `/api/model-applications/${NOVA_APP}`], ["DELETE", `/api/model-applications/${NOVA_APP}`],
     ["POST", `/api/model-applications/${NOVA_APP}/submit`], ["GET", `/api/model-applications/${NOVA_APP}/history`], ["POST", "/api/me"], ["GET", "/actuator/env"]];
@@ -245,8 +270,14 @@ async function springChecks(nova, inactive, noAmr) {
   }
   const want = JSON.stringify({ error: "denied_by_default", message: doc["x-bee-error-codes"].denied_by_default.message });
   const anon = await call(`${API}/api/model-applications`, { method: "POST", correlationId: cid("spring-write-anon"), body: "{}", headers: { "Content-Type": "application/json" } });
+  for (const d of denied) contract.record({ route: "default-deny", method: d.m, status: d.x.status, code: d.x.json?.error ?? null, ok: d.x.status === 403 && d.x.text === want && d.e.length === 0 && sameCorr(d.x) && noStore(d.x) });
+  contract.record({ route: "default-deny", method: "POST", status: anon.status, code: anon.json?.error ?? null, ok: anon.status === 401 && contract.validate(doc.components.schemas.Error, anon.json, doc).length === 0 && noStore(anon) });
   check("spring.denied-write", denied.every((d) => d.x.status === 403 && d.x.text === want && d.e.length === 0 && sameCorr(d.x) && noStore(d.x)) && anon.status === 401 && anon.json?.error === "unauthenticated",
     `${denied.length} unmapped methods/paths with Nova token -> ${[...new Set(denied.map((d) => `${d.x.status} ${d.x.json?.error}`))].join(", ")} (incl. history, submit, actuator/env); without token POST -> ${anon.status} ${anon.json?.error}`);
+
+  const h = await call(`${API}/actuator/health`, { correlationId: cid("spring-health") });
+  const he = contract.conforms(doc, "/actuator/health", "GET", h);
+  check("spring.health", h.status === 200 && h.json?.status === "UP" && he.length === 0 && sameCorr(h) && noStore(h), `GET /actuator/health without a token: HTTP ${h.status} ${h.json?.status}; matches SpringHealth; correlation echoed; no-store${show(he)}`);
 
   const bad = ["has space", "x".repeat(65), "a;b", "é", "../x"];
   const repl = [];
@@ -299,6 +330,7 @@ async function nextChecks(jar, novaToken) {
     const x = await call(`${WEB}${p}`, { method: m, jar, correlationId: cid("next-404"), body: m === "GET" ? undefined : "{}", headers: { "Content-Type": "application/json" } });
     um.push({ m, p, x, e: contract.validate(doc.components.schemas.Error, x.json, doc) });
   }
+  for (const x of um) contract.record({ route: "unmatched", method: x.m, status: x.x.status, code: x.x.json?.error ?? null, ok: x.x.status === 404 && x.e.length === 0 && sameCorr(x.x) && noStore(x.x) });
   check("next.unmatched-not-found", um.every((x) => x.x.status === 404 && x.x.json?.error === "not_found" && x.e.length === 0 && sameCorr(x.x) && noStore(x.x)),
     `${um.map((x) => `${x.m} ${x.p.replace(NOVA_APP, "{id}")} ${x.x.status}`).join(", ")} (no history or workflow route exists; JSON 404, not the HTML page)`);
   return { meId, replaced };
@@ -308,19 +340,35 @@ async function nextChecks(jar, novaToken) {
  * With Spring stopped, a stand-in on Spring's port answers /api/me with (a) a valid Me plus
  * an undocumented secret field and (b) a 403 whose code and message are SQL-like text.
  * Neither value may reach a portal body, redirect URL or log; correlation IDs must survive.
+ * Then it answers every documented Spring error code in turn, so each browser read route's
+ * documented mapping (pass through, or 502 api_error when that code is not listed for the
+ * route) is exercised at the real Next.js boundary; evidence labelled "live-stand-in".
  */
-async function plantedValues(sessionJar, webStart) {
+async function plantedValues(sessionJar, m0) {
   const fake = standIn();
   const results = {};
+  const documented = [];
+  const SPRING_ERRORS = [[401, "unauthenticated"], [403, "mfa_required"], [403, "no_active_account"], [403, "no_effective_role"], [403, "no_read_scope"], [404, "not_found"], [503, "service_unavailable"]];
+  const READS = [["/api/runtime/me", "/api/runtime/me"], ["/api/runtime/model-applications", "/api/runtime/model-applications"], ["/api/runtime/model-applications/{id}", `/api/runtime/model-applications/${NOVA_APP}`]];
   try {
     await fake.listen();
+    contract.setSource("live-stand-in");
     for (const mode of ["extra-field", "sql-error"]) {
       fake.set(mode);
       const r = await call(`${WEB}/api/runtime/me`, { jar: sessionJar, correlationId: cid(`planted-${mode}`) });
       const signIn = await portalSignIn(ids.name(mode === "extra-field" ? "bee.finance" : "bee.programme"));
       results[mode] = { r, signIn, e: contract.conforms(doc, "/api/runtime/me", "GET", r) };
     }
+    for (const [route, url] of READS) {
+      for (const [status, code] of SPRING_ERRORS) {
+        fake.set("documented", [status, { error: code, message: doc["x-bee-error-codes"][code].message }]);
+        const x = await call(`${WEB}${url}`, { jar: sessionJar, correlationId: cid("standin-documented") });
+        const listed = doc.paths[route].get.responses[String(status)]?.["x-error-codes"]?.includes(code);
+        documented.push({ route, status, code, x, want: listed ? [status, code] : [502, "api_error"], e: contract.conforms(doc, route, "GET", x) });
+      }
+    }
   } finally {
+    contract.setSource("live");
     await fake.close();
   }
   const extra = results["extra-field"], sql = results["sql-error"];
@@ -332,17 +380,65 @@ async function plantedValues(sessionJar, webStart) {
   const cbOk = (x, code) => x.signIn.final?.pathname === "/login" && x.signIn.final.search === `?error=${code}` && !x.signIn.jar.has("bee_session") && sameCorr(x.signIn.cb) && fake.seen.some((v) => v.correlationId === x.signIn.cb?.sent);
   check("next.planted-callback", cbOk(extra, "invalid_api_response") && cbOk(sql, "api_error"),
     `callback with stand-in: extra field -> 303 ${extra.signIn.final?.pathname}${extra.signIn.final?.search}, SQL error -> 303 ${sql.signIn.final?.pathname}${sql.signIn.final?.search}; no session either way; callback correlation IDs echoed and seen upstream`);
-  const webLog = logSince("web.log", webStart);
+
+  const badDoc = documented.filter((d) => {
+    const t = logs.trace(d.x.sent, m0);
+    const upstreamRoute = d.route === "/api/runtime/me" ? "/api/me" : d.route.replace("/api/runtime", "/api");
+    const traceOk = follows(t, { web: [new RegExp(`^upstream GET ${upstreamRoute.replace(/[{}]/g, "\\$&")} ${d.status} ${d.code}$`), new RegExp(`^request GET ${d.route.replace(/[{}]/g, "\\$&")} ${d.want[0]} ${d.want[1]}$`)] }) && t.api.length === 0;
+    return !(d.x.status === d.want[0] && d.x.json?.error === d.want[1] && d.e.length === 0 && sameCorr(d.x) && traceOk);
+  });
+  check("next.stand-in-documented-errors", documented.length === 21 && badDoc.length === 0,
+    `stand-in returned each of ${SPRING_ERRORS.length} documented Spring errors to /api/runtime/me, list and detail: ${documented.filter((d) => d.want[0] !== 502).length} passed through as documented, ${documented.filter((d) => d.want[0] === 502).length} not listed for the route -> 502 api_error; each traced web upstream -> request with the same correlation ID${badDoc.length ? `; wrong: ${badDoc.slice(0, 3).map((d) => `${d.route} ${d.status} ${d.code} -> ${d.x.status} ${d.x.json?.error} ${traced(logs.trace(d.x.sent, m0))}`).join(" | ")}` : ""}${show(badDoc.flatMap((d) => d.e))}`);
+
+  const allLogs = logs.allText(m0);
   const inPortal = PLANTED.filter((x) => webSeen.some((t) => t.includes(x)));
-  const inLogs = PLANTED.filter((x) => webLog.includes(x) || logSince("api.log", 0).includes(x) || logSince("api.before-contract-restart.log", 0).includes(x));
-  const upstreamLines = [extra.r.sent, sql.r.sent].map((id) => webLog.split("\n").find((l) => l.includes(`bee.upstream correlationId=${id} `)) || "");
-  check("next.planted-values-contained", inPortal.length === 0 && inLogs.length === 0 && upstreamLines.every((l) => /status=(200|403) durationMs=/.test(l)),
-    `planted secret and SQL text in ${webSeen.length} portal responses (bodies, headers, Location): ${inPortal.length ? "FOUND " + inPortal.length : "none"}; in web.log/api.log: ${inLogs.length ? "FOUND " + inLogs.length : "none"}; upstream log lines keep the correlation ID and status only ("${upstreamLines[1].replace(/^.*bee\.upstream /, "")}")`);
+  const inLogs = PLANTED.filter((x) => allLogs.includes(x));
+  const upstreamLines = [extra.r.sent, sql.r.sent].map((id) => logs.trace(id, m0).web.filter((l) => l.event === "upstream").map(logs.describe)[0] || "");
+  check("next.planted-values-contained", inPortal.length === 0 && inLogs.length === 0 && upstreamLines[0] === "upstream GET /api/me 200 ok" && upstreamLines[1] === "upstream GET /api/me 403 unlisted",
+    `planted secret and SQL text in ${webSeen.length} portal responses (bodies, headers, Location): ${inPortal.length ? "FOUND " + inPortal.length : "none"}; in structured and console logs: ${inLogs.length ? "FOUND " + inLogs.length : "none"}; upstream lines "${upstreamLines.join('", "')}" (SQL-like code logged as "unlisted")`);
+}
+
+/** Planted request values the portal and Spring must never echo or log. */
+const PLANT = {
+  query: `plantedq${crypto.randomBytes(5).toString("hex")}`,
+  cookie: `plantedc${crypto.randomBytes(5).toString("hex")}`,
+  bearer: `plantedb${crypto.randomBytes(5).toString("hex")}`,
+  body: `plantedy${crypto.randomBytes(5).toString("hex")}`,
+  segment: `plantedp${crypto.randomBytes(5).toString("hex")}`,
+  code: `plantedo${crypto.randomBytes(5).toString("hex")}`,
+  state: `planteds${crypto.randomBytes(5).toString("hex")}`,
+  correlation: `plantedx ${crypto.randomBytes(5).toString("hex")}`,
+};
+
+async function plantedRequests(jar, nova) {
+  const out = [];
+  const q = `?returnTo=/app&token=${PLANT.query}&email=${PLANT.query}`;
+  const withCookie = (j) => { const c = new Jar(); for (const [k, v] of j.c) c.c.set(k, v); c.c.set(`127.0.0.1|plant`, PLANT.cookie); return c; };
+  for (const [m, p, opts] of [
+    ["GET", `/api/runtime/me${q}`, { jar: withCookie(jar) }],
+    ["GET", `/api/runtime/model-applications${q}`, { jar: withCookie(jar), token: PLANT.bearer }],
+    ["GET", `/api/runtime/model-applications/${PLANT.segment}${q}`, { jar }],
+    ["GET", `/api/runtime/${PLANT.segment}/x${q}`, { jar }],
+    ["POST", `/api/runtime/me${q}`, { jar, body: JSON.stringify({ password: PLANT.body }), headers: { Origin: WEB, "Content-Type": "application/json" } }],
+    ["GET", `/api/auth/session${q}`, { jar: withCookie(jar) }],
+    ["GET", `/api/auth/login${q}`, { jar: new Jar() }],
+    ["GET", `/api/auth/callback?code=${PLANT.code}&state=${PLANT.state}&iss=${encodeURIComponent(ISSUER)}&session_state=${PLANT.query}`, { jar: withCookie(new Jar()) }],
+    ["GET", `/api/runtime/health${q}`, {}],
+  ]) {
+    out.push({ m, p, x: await call(`${WEB}${p}`, { method: m, correlationId: cid("plant"), ...opts }) });
+  }
+  const unsafe = await call(`${WEB}/api/runtime/me`, { jar, correlationId: PLANT.correlation });
+  const springSide = [
+    await call(`${API}/api/me${q}`, { token: nova, correlationId: cid("plant-spring"), headers: { Cookie: `plant=${PLANT.cookie}` } }),
+    await call(`${API}/api/model-applications/${PLANT.segment}${q}`, { token: PLANT.bearer, correlationId: cid("plant-spring") }),
+    await call(`${API}/api/model-applications${q}`, { method: "POST", token: nova, correlationId: cid("plant-spring"), headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: PLANT.body }) }),
+  ];
+  return { out, unsafe, springSide };
 }
 
 async function main() {
   inventory();
-  const webStart = logSize("web.log");
+  const m0 = logs.mark();
   const nova = await totp.accessToken(ids.name("nova.applicant"));
   const inactive = await totp.accessToken(ids.name("inactive.role"));
   const noAmr = await tokenWithoutAmr(ids.name("pixel.applicant"));
@@ -354,24 +450,60 @@ async function main() {
   const readId = await springChecks(nova, inactive, noAmr);
 
   const s = await portalSignIn(ids.name("nova.applicant"));
-  check("next.sign-in", s.final?.pathname === "/app" && s.jar.has("bee_session") && sameCorr(s.cb) && noStore(s.cb) && sameCorr(s.login),
-    `portal sign-in as test.nova.applicant: callback 303 -> ${s.final?.pathname}; correlation echoed on login and callback redirects`);
+  const se = [...contract.conforms(doc, "/api/auth/login", "GET", s.login), ...contract.conforms(doc, "/api/auth/callback", "GET", s.cb)];
+  check("next.sign-in", s.final?.pathname === "/app" && s.jar.has("bee_session") && sameCorr(s.cb) && noStore(s.cb) && sameCorr(s.login) && se.length === 0,
+    `portal sign-in as test.nova.applicant: login 303, callback 303 -> ${s.final?.pathname}; both match the contract; correlation echoed on login and callback redirects${show(se)}`);
   const deniedLogin = await portalSignIn(ids.name("inactive.role"));
-  check("next.inactive-role-sign-in", deniedLogin.final?.searchParams.get("error") === "no_effective_role" && !deniedLogin.jar.has("bee_session") && sameCorr(deniedLogin.cb),
-    `test.inactive.role password+OTP -> callback 303 /login?error=${deniedLogin.final?.searchParams.get("error")}; no portal session (code listed in x-bee-login-redirect-codes: ${doc["x-bee-login-redirect-codes"].includes(deniedLogin.final?.searchParams.get("error"))})`);
+  const de = contract.conforms(doc, "/api/auth/callback", "GET", deniedLogin.cb);
+  check("next.inactive-role-sign-in", deniedLogin.final?.searchParams.get("error") === "no_effective_role" && !deniedLogin.jar.has("bee_session") && sameCorr(deniedLogin.cb) && de.length === 0,
+    `test.inactive.role password+OTP -> callback 303 /login?error=${deniedLogin.final?.searchParams.get("error")}; no portal session (code listed in x-bee-login-redirect-codes: ${doc["x-bee-login-redirect-codes"].includes(deniedLogin.final?.searchParams.get("error"))})${show(de)}`);
+  const stale = await call(`${WEB}/api/auth/callback?code=${PLANT.code}&state=${PLANT.state}`, { correlationId: cid("callback-stale") });
+  const ste = contract.conforms(doc, "/api/auth/callback", "GET", stale);
+  check("next.callback-without-login", stale.status === 303 && new URL(stale.location, WEB).search === "?error=login_expired" && sameCorr(stale) && ste.length === 0,
+    `callback with a planted code and state but no login cookie -> ${stale.status} ${stale.location}${show(ste)}`);
 
   const { meId, replaced } = await nextChecks(s.jar, nova);
 
-  const apiLog = logSince("api.log", 0);
-  const webLog = logSince("web.log", webStart);
-  const springRead = accessLine(apiLog, readId);
-  const propagated = accessLine(apiLog, meId);
-  const upstream = webLog.split("\n").find((l) => l.includes(`bee.upstream correlationId=${meId} `)) || "";
-  const replacedLine = accessLine(apiLog, replaced || "none");
-  check("correlation.propagated", /method=GET path=\/api\/me status=200/.test(propagated) && /path=\/api\/me status=200/.test(upstream) && /status=200/.test(springRead),
-    `Next X-Correlation-Id ${meId} -> Spring access log "${propagated.replace(/^.*correlationId=/, "correlationId=").slice(0, 90)}" and Next upstream log line; direct Spring read logged with its ID`);
-  check("correlation.unsafe-replaced-and-propagated", UUID_RE.test(replaced || "") && /path=\/api\/me status=200/.test(replacedLine),
-    `browser sent "bad id; drop" -> Next issued ${replaced}; Spring logged the same replacement ID`);
+  /* ---------- correlation: browser -> Next.js -> Spring (and Keycloak calls in the portal log) ---------- */
+  const cor = [];
+  const expect = (label, id, want, extra = () => true) => { const t = logs.trace(id, m0); cor.push({ label, id, ok: !!id && follows(t, want) && extra(t), t }); };
+  expect("successful read", meId, { web: [/^upstream GET \/api\/me 200 ok$/, /^request GET \/api\/runtime\/me 200 ok$/], api: [/^request GET \/api\/me 200 ok$/] });
+  expect("direct Spring read", readId, { api: [/^request GET \/api\/model-applications\/\{id\} 200 ok$/] }, (t) => t.web.length === 0);
+  expect("sign-in", s.cb?.sent, { web: [/^identity token\.code 200 ok$/, /^upstream GET \/api\/me 200 ok$/, /^request GET \/api\/auth\/callback 303 ok$/], api: [/^request GET \/api\/me 200 ok$/] });
+  expect("login redirect", s.login?.sent, { web: [/^request GET \/api\/auth\/login 303 ok$/] });
+  expect("sign-in failure", deniedLogin.cb?.sent, { web: [/^identity token\.code 200 ok$/, /^upstream GET \/api\/me 403 no_effective_role$/, /^identity logout 2\d\d ok$/, /^request GET \/api\/auth\/callback 303 no_effective_role$/], api: [/^request GET \/api\/me 403 no_effective_role$/] });
+  expect("callback without login", stale.sent, { web: [/^request GET \/api\/auth\/callback 303 login_expired$/] }, (t) => t.web.length === 1 && t.api.length === 0);
+  expect("unsafe ID replaced", replaced, { web: [/^upstream GET \/api\/me 200 ok$/, /^request GET \/api\/runtime\/me 200 ok$/], api: [/^request GET \/api\/me 200 ok$/] }, () => UUID_RE.test(replaced || ""));
+  check("correlation.sign-in-and-reads", cor.every((c) => c.ok),
+    `${cor.map((c) => `${c.label}: ${c.ok ? "ok" : "MISSING " + traced(c.t)}`).join("; ")} (one correlation ID across the browser response, the Next.js request/upstream/identity lines and the Spring request line; Keycloak is not sent the ID)`);
+
+  /* ---------- an inactive account (twin user_account.status) on a live session, restored at once ---------- */
+  const novaAcct = ids.accountId("nova.applicant");
+  const status0 = sqlq(`SELECT status FROM app.user_account WHERE id = '${novaAcct}'`);
+  let dis;
+  try {
+    sqlq(`UPDATE app.user_account SET status = 'disabled' WHERE id = '${novaAcct}'`);
+    dis = {
+      sm: await call(`${API}/api/me`, { token: nova, correlationId: cid("disabled") }),
+      sl: await call(`${API}/api/model-applications`, { token: nova, correlationId: cid("disabled") }),
+      sd: await call(`${API}/api/model-applications/${NOVA_APP}`, { token: nova, correlationId: cid("disabled") }),
+      bm: await call(`${WEB}/api/runtime/me`, { jar: s.jar, correlationId: cid("disabled") }),
+      bl: await call(`${WEB}/api/runtime/model-applications`, { jar: s.jar, correlationId: cid("disabled") }),
+      bd: await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}`, { jar: s.jar, correlationId: cid("disabled") }),
+    };
+  } finally {
+    sqlq(`UPDATE app.user_account SET status = '${status0}' WHERE id = '${novaAcct}'`);
+  }
+  const ops = { sm: "/api/me", sl: "/api/model-applications", sd: "/api/model-applications/{id}", bm: "/api/runtime/me", bl: "/api/runtime/model-applications", bd: "/api/runtime/model-applications/{id}" };
+  const dise = Object.entries(dis).flatMap(([k, x]) => contract.conforms(doc, ops[k], "GET", x));
+  const disTrace = follows(logs.trace(dis.bl.sent, m0), { web: [/^upstream GET \/api\/model-applications 403 no_active_account$/, /^request GET \/api\/runtime\/model-applications 403 no_active_account$/], api: [/^request GET \/api\/model-applications 403 no_active_account$/] });
+  const restored = sqlq(`SELECT status FROM app.user_account WHERE id = '${novaAcct}'`);
+  const backAfter = await call(`${WEB}/api/runtime/me`, { jar: s.jar, correlationId: cid("disabled-restored") });
+  check("contract.inactive-account", Object.values(dis).every((x) => x.status === 403 && x.json?.error === "no_active_account" && sameCorr(x) && !/LOCAL-MA|NOVA/.test(x.text)) && dise.length === 0 && disTrace && restored === status0 && backAfter.status === 200,
+    `test.nova.applicant user_account.status '${status0}' -> 'disabled': Spring me/list/detail ${[dis.sm, dis.sl, dis.sd].map((x) => `${x.status} ${x.json?.error}`).join(", ")}; browser ${[dis.bm, dis.bl, dis.bd].map((x) => `${x.status} ${x.json?.error}`).join(", ")}; correlated through both layers; restored '${restored}', next read ${backAfter.status}${show(dise)}`);
+
+  /* ---------- planted request values: never echoed, never logged ---------- */
+  const pr = await plantedRequests(s.jar, nova);
 
   /* upstream unavailable: stop Spring, check the boundary, start it again */
   const before = await call(`${WEB}/api/runtime/me`, { jar: s.jar, correlationId: cid("next-before") });
@@ -382,7 +514,7 @@ async function main() {
     down = await call(`${WEB}/api/runtime/me`, { jar: s.jar, correlationId: cid("next-down") });
     health = await call(`${WEB}/api/runtime/health`, { correlationId: cid("next-down-health") });
     sessionDuring = await call(`${WEB}/api/auth/session`, { jar: s.jar });
-    await plantedValues(s.jar, webStart);
+    await plantedValues(s.jar, m0);
   } finally {
     runtime("start_api");
   }
@@ -390,11 +522,23 @@ async function main() {
   const e = [...contract.conforms(doc, "/api/runtime/me", "GET", down), ...contract.conforms(doc, "/api/runtime/health", "GET", health)];
   check("next.upstream-unavailable", before.status === 200 && down.status === 503 && down.json?.error === "api_unreachable" && sameCorr(down) && noStore(down) && health.status === 503 && health.json?.api === "UNKNOWN" && sessionDuring.json?.authenticated === true && after.status === 200 && e.length === 0,
     `Spring stopped: /api/runtime/me ${down.status} ${down.json?.error}, /api/runtime/health ${health.status} api=${health.json?.api}, session kept; Spring restarted: /api/runtime/me ${after.status}${show(e)}`);
+  const dt = logs.trace(down.sent, m0), ht = logs.trace(health.sent, m0), at = logs.trace(after.sent, m0);
+  const outageOk = follows(dt, { web: [/^upstream GET \/api\/me 503 api_unreachable$/, /^request GET \/api\/runtime\/me 503 api_unreachable$/] }) && dt.api.length === 0
+    && follows(ht, { web: [/^upstream GET \/actuator\/health 503 api_unreachable$/, /^request GET \/api\/runtime\/health 503 api_unreachable$/] }) && ht.api.length === 0
+    && follows(at, { web: [/^upstream GET \/api\/me 200 ok$/, /^request GET \/api\/runtime\/me 200 ok$/], api: [/^request GET \/api\/me 200 ok$/] });
+  check("correlation.outage", outageOk,
+    `Spring down: ${traced(dt)}; health: ${traced(ht)}; after restart: ${traced(at)}`);
 
   const out = await call(`${WEB}/api/auth/logout`, { method: "POST", jar: s.jar, correlationId: cid("next-logout"), headers: { Origin: WEB } });
   const gone = await call(`${WEB}/api/runtime/me`, { jar: s.jar, correlationId: cid("next-gone") });
   const le = contract.conforms(doc, "/api/auth/logout", "POST", out);
-  check("next.logout", out.status === 200 && out.json?.keycloakSessionEnded === true && gone.status === 401 && le.length === 0 && sameCorr(out), `logout ${out.status} (Keycloak session ended: ${out.json?.keycloakSessionEnded}); then /api/runtime/me ${gone.status} ${gone.json?.error}${show(le)}`);
+  const lt = logs.trace(out.sent, m0);
+  check("next.logout", out.status === 200 && out.json?.keycloakSessionEnded === true && gone.status === 401 && le.length === 0 && sameCorr(out) && follows(lt, { web: [/^identity logout 2\d\d ok$/, /^request POST \/api\/auth\/logout 200 ok$/] }),
+    `logout ${out.status} (Keycloak session ended: ${out.json?.keycloakSessionEnded}); then /api/runtime/me ${gone.status} ${gone.json?.error}; ${traced(lt)}${show(le)}`);
+  const form = await call(`${WEB}/api/auth/logout`, { method: "POST", correlationId: cid("next-logout-form"), headers: { Origin: WEB, Accept: "text/html" } });
+  const fe = contract.conforms(doc, "/api/auth/logout", "POST", form);
+  check("next.logout-form", form.status === 303 && /^\/login\b/.test(new URL(form.location, WEB).pathname) && sameCorr(form) && noStore(form) && fe.length === 0,
+    `POST /api/auth/logout with Accept: text/html and no session -> ${form.status} ${form.location}${show(fe)}`);
 
   /* error bodies and logs must not carry tokens, internals or other records */
   const FORBIDDEN = /Exception|SELECT |\bSQL|jdbc|stack|\bat gov\.|org\.spring|keycloak|realm|eyJ[A-Za-z0-9_-]{10}|Bearer|127\.0\.0\.1|5434|8180/i;
@@ -406,11 +550,35 @@ async function main() {
   });
   check("contract.error-bodies-safe", errorBodies.length > 30 && leaks.length === 0,
     `${errorBodies.length} error responses: all exactly {error, message} with the contract message; no record IDs, tokens, SQL, stack traces or Keycloak detail${leaks.length ? `; offending: ${leaks.slice(0, 2).map((l) => `${l.status} ${l.url} ${l.text.slice(0, 80)}`).join(" | ")}` : ""}`);
-  const logs = logSince("api.before-contract-restart.log", 0) + logSince("api.log", 0) + logSince("web.log", webStart);
-  const tokenInLog = [...secrets].some((t) => logs.includes(t.slice(-40))) || /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/.test(logs);
-  const codeInLog = /\/api\/auth\/callback\?|[?&]code=[^&\s]+/.test(logSince("web.log", webStart));
-  check("logs.no-sensitive-data", !tokenInLog && !codeInLog && /bee\.access|correlationId=/.test(logs),
-    `api.log and web.log since this run: tokens ${tokenInLog ? "FOUND" : "absent"}, callback code/state ${codeInLog ? "FOUND" : "absent"}; lines hold correlation ID, method, path, status and duration only`);
+
+  const all = logs.allText(m0);
+  const structured = logs.since(m0, "api") + logs.since(m0, "web");
+  const responses = webSeen.map((t) => t.split("\n").slice(1).join("\n"));
+  const plantedHits = Object.entries(PLANT).flatMap(([k, v]) => [
+    ...(all.includes(v) ? [`${k} in a log`] : []),
+    ...(responses.some((t) => t.includes(v)) ? [`${k} in a portal response`] : []),
+    ...(pr.springSide.some((x) => x.text.includes(v) || [...x.headers.values()].some((h) => h.includes(v))) ? [`${k} in a Spring response`] : []),
+  ]);
+  const plantedTraces = pr.out.map((o) => logs.trace(o.x.sent, m0).web.find((l) => l.event === "request"));
+  const routesOk = plantedTraces.every((l) => l && !/planted|\?/.test(l.route));
+  const unsafeId = corr(pr.unsafe);
+  check("logs.planted-request-values", plantedHits.length === 0 && routesOk && UUID_RE.test(unsafeId || "") && logs.trace(unsafeId, m0).api.length === 1,
+    `${pr.out.length} portal and ${pr.springSide.length} direct Spring requests with planted query values, cookie, bearer, JSON body, path segment, OAuth code/state and an unsafe correlation ID: ${plantedHits.length ? "FOUND " + plantedHits.join(", ") : "none"} in portal or Spring responses (bodies, headers, Location) or any log; logged routes ${[...new Set(plantedTraces.map((l) => l?.route))].join(", ")}; unsafe ID replaced by ${unsafeId} and propagated`);
+
+  const twins = sqlq(`SELECT string_agg(username || '|' || display_name || '|' || keycloak_subject, E'\\n') FROM app.user_account WHERE username LIKE 'test.%'`).split("\n").filter(Boolean);
+  const personal = twins.flatMap((r) => { const [u, d, sub] = r.split("|"); return [u, `${u}@bee.local.invalid`, d, sub]; });
+  const personalHits = personal.filter((v) => structured.includes(v));
+  check("logs.no-personal-data", twins.length >= 5 && personalHits.length === 0,
+    `${twins.length} test identities' usernames, emails, display names and Keycloak subjects: ${personalHits.length ? "FOUND " + personalHits.length : "none"} in the structured request logs`);
+
+  const tokenInLog = [...secrets].some((t) => all.includes(t.slice(-40))) || /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/.test(all);
+  const codeInLog = /\/api\/auth\/callback\?|[?&](code|state)=[^&\s]+|bee_session=|Set-Cookie|Authorization/i.test(all);
+  const problems = logs.problems(m0);
+  const n = logs.count(m0);
+  check("logs.structured-format", problems.length === 0 && n.api > 40 && n.web > 60,
+    `${n.api} Spring and ${n.web} Next.js lines since this run, each one valid against docs/wp03/request-log.schema.json (route templates, no free text)${show(problems)}`);
+  check("logs.no-sensitive-data", !tokenInLog && !codeInLog,
+    `structured and console logs since this run: tokens ${tokenInLog ? "FOUND" : "absent"}; callback query, code/state, session cookie and Authorization ${codeInLog ? "FOUND" : "absent"}`);
 }
 
 if (require.main === module) (async () => {

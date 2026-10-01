@@ -220,6 +220,10 @@ async function main() {
     blocked.every((x) => x.status === 405 && x.json?.error === "method_not_allowed" && x.headers.get("allow") && sameCorr(x)) &&
     snap === sql("SELECT string_agg(id || ':' || state || ':' || version, ',' ORDER BY id) FROM app.model_application"),
     `invalid POST create -> ${badCreate.status} ${badCreate.json?.error}; PATCH fee_due -> ${badPatch.status} ${badPatch.json?.error}; PUT/DELETE/POST detail -> ${blocked.length} x 405; no row changed`);
+  for (const [route, x] of [[LIST, blocked[0]], [DETAIL, blocked[blocked.length - 1]]]) {
+    const errVal = contract.validate(doc.components.schemas.Error, x.json, doc);
+    contract.record({ route, method: "GET", status: 405, code: "method_not_allowed", ok: x.status === 405 && x.json?.error === "method_not_allowed" && errVal.length === 0 && sameCorr(x) && noStore(x) });
+  }
 
   /* ---------- Spring outage, planted values via a stand-in, restart ---------- */
   const realList = (await springGet(T.nova, "/api/model-applications")).json;

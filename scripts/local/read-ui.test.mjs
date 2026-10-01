@@ -288,17 +288,34 @@ test("detail href stays on model-dashboard; state labels are humanised", () => {
   assert.equal(stateLabel("draft"), "draft");
 });
 
-test("runtime route: menu entry follows Spring roles, never the preview role, and covers only the model dashboard", async () => {
+test("runtime routes: Spring identity menu for dashboard and draft form, not the preview role", async () => {
   const { RUNTIME_ROUTES, runtimeNavFor, runtimeRouteFor } = await import("../../lib/runtimeRoutes.ts");
-  assert.deepEqual(RUNTIME_ROUTES.map((r) => r.href), ["/app/model-label/model-dashboard"]);
-  assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).length, 1);
-  assert.equal(runtimeNavFor([{ role: "agency", scope: "own-org" }]).length, 1);
+  assert.deepEqual(RUNTIME_ROUTES.map((r) => r.href), [
+    "/app/model-label/model-dashboard",
+    "/app/model-label/new-model-application",
+  ]);
+  assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).length, 2);
+  assert.equal(runtimeNavFor([{ role: "agency", scope: "own-org" }]).length, 2);
   for (const roles of [null, [], [{ role: "laboratory", scope: "assigned" }], [{ role: "secretary", scope: "all" }]]) {
     assert.equal(runtimeNavFor(roles).length, 0, JSON.stringify(roles));
   }
   assert.ok(runtimeRouteFor("/app/model-label/model-dashboard"));
-  for (const p of ["/app/model-label/new-model-application", "/app/registrations/record", "/app", "/app/model-label/model-dashboard/x"]) {
+  assert.ok(runtimeRouteFor("/app/model-label/new-model-application"));
+  for (const p of ["/app/registrations/record", "/app", "/app/model-label/model-dashboard/x"]) {
     assert.equal(runtimeRouteFor(p), undefined, p);
   }
-  assert.deepEqual([...runtimeRouteFor("/app/model-label/model-dashboard").implemented], ["List", "View detail"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/model-dashboard").implemented], ["List", "View detail", "Edit draft"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/new-model-application").implemented], ["Create draft", "Edit draft"]);
+});
+
+test("draft idempotency gate reuses a key until cleared or the payload changes", async () => {
+  const { DraftIdempotencyGate } = await import("../../lib/client/runtimeModelDrafts.ts");
+  const gate = new DraftIdempotencyGate();
+  const body = { brandId: "x", category: "RAC", modelNumber: "A" };
+  const k1 = gate.keyFor(body);
+  const k2 = gate.keyFor(body);
+  assert.equal(k1, k2);
+  gate.clear();
+  assert.notEqual(gate.keyFor(body), k1);
+  assert.notEqual(gate.keyFor({ ...body, modelNumber: "B" }), k1);
 });

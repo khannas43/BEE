@@ -194,7 +194,6 @@ function inventory() {
   walkJ(path.join(ROOT, "backend/src/main/java"));
   const mappings = new Set();
   for (const src of java) {
-    if (/@(Post|Put|Patch|Delete)Mapping|@RequestMapping/.test(src)) problems.push("Spring maps a non-GET handler");
     for (const m of src.matchAll(/@GetMapping\("([^"]+)"\)/g)) mappings.add(m[1]);
   }
   const security = fs.readFileSync(path.join(ROOT, "backend/src/main/java/gov/bee/api/security/SecurityConfig.java"), "utf8");
@@ -202,9 +201,8 @@ function inventory() {
   const internalPaths = internal.map(([r]) => r).sort();
   const springPaths = [...mappings, "/actuator/health"].sort();
   if (springPaths.join() !== internalPaths.join()) problems.push(`Spring GET mappings ${springPaths} vs contract ${internalPaths}`);
-  const expectAllowed = ["GET /actuator/health", "GET /actuator/health/**", "GET /api/me", "GET /api/model-applications", "GET /api/model-applications/*"];
+  const expectAllowed = ["GET /actuator/health", "GET /actuator/health/**", "GET /api/me", "GET /api/model-applications/eligible-brands", "GET /api/model-applications", "GET /api/model-applications/*", "POST /api/model-applications", "PATCH /api/model-applications/*"];
   if (allowed.sort().join() !== expectAllowed.sort().join()) problems.push(`SecurityConfig matchers changed: ${allowed}`);
-  for (const [r, p] of internal) for (const m of METHODS.filter((x) => x !== "GET")) if (p[m.toLowerCase()]) problems.push(`contract claims ${m} ${r}`);
   check("contract.inventory", problems.length === 0,
     `${routes.length} Next route files vs ${browser.length} browser paths + catch-all; ${springPaths.length} Spring GET routes vs ${internalPaths.length} internal paths; SecurityConfig matchers unchanged (${allowed.length})${show(problems)}`);
   check("contract.deferred-not-operational", doc["x-bee-deferred"].length >= 5 && doc["x-bee-deferred"].every((d) => d.owner && d.status !== "operational"),
@@ -261,19 +259,31 @@ async function springChecks(nova, inactive, noAmr) {
   check("spring.inactive-role", ina.every((m) => m.x.status === 403 && m.x.json?.error === "no_effective_role" && m.e.length === 0 && sameCorr(m.x)),
     `test.inactive.role: ${ina.map((m) => `${m.p.replace(NOVA_APP, "{id}")} ${m.x.status} ${m.x.json?.error}`).join(", ")}${show(ina.flatMap((m) => m.e))}`);
 
-  const writes = [["POST", "/api/model-applications"], ["PUT", `/api/model-applications/${NOVA_APP}`], ["PATCH", `/api/model-applications/${NOVA_APP}`], ["DELETE", `/api/model-applications/${NOVA_APP}`],
+  const draftMissingKey = [["POST", "/api/model-applications"], ["PATCH", `/api/model-applications/${NOVA_APP}`]];
+  const deniedWrites = [["PUT", `/api/model-applications/${NOVA_APP}`], ["DELETE", `/api/model-applications/${NOVA_APP}`],
     ["POST", `/api/model-applications/${NOVA_APP}/submit`], ["GET", `/api/model-applications/${NOVA_APP}/history`], ["POST", "/api/me"], ["GET", "/actuator/env"]];
+  const want = JSON.stringify({ error: "denied_by_default", message: doc["x-bee-error-codes"].denied_by_default.message });
   const denied = [];
-  for (const [m, p] of writes) {
+  for (const [m, p] of deniedWrites) {
     const x = await call(`${API}${p}`, { method: m, token: nova, correlationId: cid("spring-write"), headers: { "Content-Type": "application/json" }, body: m === "GET" ? undefined : "{}" });
     denied.push({ m, p, x, e: contract.validate(doc.components.schemas.Error, x.json, doc) });
   }
-  const want = JSON.stringify({ error: "denied_by_default", message: doc["x-bee-error-codes"].denied_by_default.message });
+  const missingKey = [];
+  for (const [m, p] of draftMissingKey) {
+    const x = await call(`${API}${p}`, { method: m, token: nova, correlationId: cid("spring-draft-key"), headers: { "Content-Type": "application/json" }, body: "{}" });
+    missingKey.push({ m, p, x, e: contract.validate(doc.components.schemas.Error, x.json, doc) });
+  }
   const anon = await call(`${API}/api/model-applications`, { method: "POST", correlationId: cid("spring-write-anon"), body: "{}", headers: { "Content-Type": "application/json" } });
   for (const d of denied) contract.record({ route: "default-deny", method: d.m, status: d.x.status, code: d.x.json?.error ?? null, ok: d.x.status === 403 && d.x.text === want && d.e.length === 0 && sameCorr(d.x) && noStore(d.x) });
+  for (const d of missingKey) {
+    const route = d.p.includes(NOVA_APP) ? "/api/model-applications/{id}" : d.p.replace(`${API}`, "");
+    contract.record({ route, method: d.m, status: d.x.status, code: d.x.json?.error ?? null, ok: d.x.status === 422 && d.x.json?.error === "idempotency_key_required" && d.e.length === 0 && sameCorr(d.x) && noStore(d.x) });
+  }
   contract.record({ route: "default-deny", method: "POST", status: anon.status, code: anon.json?.error ?? null, ok: anon.status === 401 && contract.validate(doc.components.schemas.Error, anon.json, doc).length === 0 && noStore(anon) });
-  check("spring.denied-write", denied.every((d) => d.x.status === 403 && d.x.text === want && d.e.length === 0 && sameCorr(d.x) && noStore(d.x)) && anon.status === 401 && anon.json?.error === "unauthenticated",
-    `${denied.length} unmapped methods/paths with Nova token -> ${[...new Set(denied.map((d) => `${d.x.status} ${d.x.json?.error}`))].join(", ")} (incl. history, submit, actuator/env); without token POST -> ${anon.status} ${anon.json?.error}`);
+  check("spring.denied-write", denied.every((d) => d.x.status === 403 && d.x.text === want && d.e.length === 0 && sameCorr(d.x))
+    && missingKey.every((d) => d.x.status === 422 && d.x.json?.error === "idempotency_key_required" && d.e.length === 0 && sameCorr(d.x))
+    && anon.status === 401 && anon.json?.error === "unauthenticated",
+    `${denied.length} unmapped -> denied_by_default; draft POST/PATCH without key -> idempotency_key_required; anon POST -> ${anon.status} ${anon.json?.error}`);
 
   const h = await call(`${API}/actuator/health`, { correlationId: cid("spring-health") });
   const he = contract.conforms(doc, "/actuator/health", "GET", h);

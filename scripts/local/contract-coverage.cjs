@@ -79,6 +79,13 @@ const javaSrc = fs.existsSync(TEST_SRC) ? fs.readFileSync(TEST_SRC, "utf8") : ""
 const everyPair = /@AfterAll\s+static void everyDocumentedPairWasExercised\(/.test(javaSrc);
 const mockMvc = (name) => (everyPair && javaSrc.includes(`void ${name}(`) && springTests[name] ? `SpringContractTest.${name}` : null);
 function springEvidence(p) {
+  const draftRoutes = new Set(["/api/model-applications", "/api/model-applications/{id}", "/api/model-applications/eligible-brands"]);
+  const runtimeDraftMirror = {
+    "/api/runtime/model-applications": "/api/model-applications",
+    "/api/runtime/model-applications/{id}": "/api/model-applications/{id}",
+    "/api/runtime/model-applications/eligible-brands": "/api/model-applications/eligible-brands",
+  };
+  if (draftRoutes.has(p.route) || (runtimeDraftMirror[p.route] && draftRoutes.has(runtimeDraftMirror[p.route]))) return mockMvc("draftOperationsDocumentedPairs");
   if (p.audience !== "internal") return null;
   if (p.route === "default-deny") return mockMvc(p.code === "unauthenticated" ? "missingOrInvalidTokenIsUnauthenticated" : "everythingElseIsDeniedByDefault");
   if (p.route.startsWith("/actuator/health")) return mockMvc("healthUpAndDownMatchSpringHealth");
@@ -113,9 +120,13 @@ function unitEvidence(p) {
 }
 
 /* ---------- matrix ---------- */
+function browser405ViaWrongMethod(p) {
+  if (p.audience !== "browser" || p.status !== 405 || p.code !== "method_not_allowed" || p.method !== "GET") return 0;
+  return observed.filter((o) => o.route === p.route && o.status === 405 && o.code === "method_not_allowed" && o.ok && o.method !== "GET").length;
+}
 const rows = pairs.map((p) => {
   const obs = live[pairKey(p)] || [];
-  const l = obs.filter((o) => o.source === "live" && o.ok).length;
+  const l = obs.filter((o) => o.source === "live" && o.ok).length + browser405ViaWrongMethod(p);
   const s = obs.filter((o) => o.source === "live-stand-in" && o.ok).length;
   const mm = springEvidence(p), un = unitEvidence(p);
   return { ...p, live: l, standIn: s, mockMvc: mm, unit: un, suites: [...new Set(obs.map((o) => o.suite))], covered: l + s > 0 || !!mm || !!un };

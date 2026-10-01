@@ -22,7 +22,15 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "मेरे मॉडल आवेदन",
     icon: "view_list",
     navRoles: ["manufacturer", "agency"],
-    implemented: ["List", "View detail"],
+    implemented: ["List", "View detail", "Edit draft"],
+  },
+  {
+    href: "/app/model-label/new-model-application",
+    en: "New model application",
+    hi: "नया मॉडल आवेदन",
+    icon: "note_add",
+    navRoles: ["manufacturer", "agency"],
+    implemented: ["Create draft", "Edit draft"],
   },
 ];
 

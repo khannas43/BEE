@@ -18,8 +18,8 @@ const { validate } = createRequire(import.meta.url)("./contract-lib.cjs");
 const operations = () => Object.entries(contract.paths).flatMap(([route, item]) =>
   Object.entries(item).filter(([, op]) => typeof op === "object" && op.responses).map(([method, op]) => ({ route, method, op, audience: item["x-bee-audience"] })));
 
-test("the artifact is pinned: version 0.4.0, content hash, and the code's version agree", () => {
-  assert.equal(pin.version, "0.4.0");
+test("the artifact is pinned: version 0.4.1, content hash, and the code's version agree", () => {
+  assert.equal(pin.version, "0.4.1");
   assert.equal(contract.info.version, pin.version, "artifact info.version differs from scripts/local/contract-pin.json");
   assert.equal(CONTRACT_VERSION, pin.version, "lib/server/apiContract.ts CONTRACT_VERSION differs from the pin");
   assert.equal(createHash("sha256").update(read(ARTIFACT)).digest("hex"), pin.sha256, "artifact content changed without a version bump and a new pin");

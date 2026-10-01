@@ -29,6 +29,8 @@ export interface ModelApplication {
   state: ModelState;
   version: number;
   readBasis: string[];
+  brandId?: string;
+  principalOrganisation?: string;
 }
 
 export interface ModelApplicationList {

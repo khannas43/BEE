@@ -199,7 +199,7 @@ async function main() {
       await preview(nova, "manufacturer");
       await nova.goto(`${WEB}${other}`);
       const denied = await nova.waitFor(`location.pathname === ${JSON.stringify(other)} && document.body.innerText.includes("Not in this preview")`, 30000);
-      await nova.goto(`${WEB}/app/model-label/new-model-application`);
+      await nova.goto(`${WEB}/app/model-label/model-payment`);
       const banner = await nova.waitFor(`document.body.innerText.includes("Scoping is simulated") && document.body.innerText.includes("Your access")`, 30000);
       await preview(nova, "admin");
       await nova.goto(`${WEB}${other}`);

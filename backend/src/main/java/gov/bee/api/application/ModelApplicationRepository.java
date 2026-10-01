@@ -67,11 +67,15 @@ public class ModelApplicationRepository {
         return jdbc.queryForObject("SELECT code FROM organisation WHERE id = ?", String.class, organisationId);
     }
 
+    /** Allocates the next LOCAL-MA sequence under row lock (V8 allocator). */
     public String nextReference() {
         Integer n = jdbc.queryForObject(
-            "SELECT COALESCE(MAX(CAST(substring(reference FROM 10) AS integer)), 0) + 1 FROM model_application WHERE reference LIKE 'LOCAL-MA-%'",
+            "UPDATE model_application_reference_allocator SET next_value = next_value + 1 WHERE scope = 'LOCAL-MA' RETURNING next_value",
             Integer.class);
-        return "LOCAL-MA-" + String.format("%04d", n == null ? 1 : n);
+        if (n == null) {
+            throw new IllegalStateException("model_application_reference_allocator missing LOCAL-MA row");
+        }
+        return "LOCAL-MA-" + String.format("%04d", n);
     }
 
     public Row insertDraft(UUID id, String reference, UUID filingOrganisationId, UUID principalOrganisationId, UUID brandId,

@@ -290,6 +290,10 @@ S.push("ON CONFLICT (id) DO UPDATE SET reference = EXCLUDED.reference, organisat
 S.push("INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES");
 S.push(ASSIGNMENTS.map((a) => `  (${q(usr(a.user))}, 'model_application', ${q(app(a.app))}, ${q(a.stage)}, ${a.active})`).join(",\n"));
 S.push("ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = EXCLUDED.active;");
+S.push("INSERT INTO model_application_reference_allocator (scope, next_value)");
+S.push("SELECT 'LOCAL-MA', COALESCE(MAX(CAST(substring(reference FROM 10) AS integer)), 0)");
+S.push("FROM model_application WHERE reference LIKE 'LOCAL-MA-%'");
+S.push("ON CONFLICT (scope) DO UPDATE SET next_value = EXCLUDED.next_value;");
 S.push("INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1'), ('wp04.1-masters-v1'), ('wp04.2-brand-auth-v1') ON CONFLICT (seed_version) DO NOTHING;");
 S.push("COMMIT;");
 S.push("");

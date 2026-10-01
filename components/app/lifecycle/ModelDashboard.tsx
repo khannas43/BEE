@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Card, FakeTable, ScreenChrome } from "@/components/app/ScreenScaffold";
 import { orgsText, refreshIdentity, rolesText, useSpringIdentity } from "@/components/app/SessionBadge";
+import { modelDraftFormHref } from "@/lib/client/runtimeModelDrafts";
 import {
   type DetailRead,
   type ListRead,
@@ -91,7 +92,19 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
   const shownDetail = gate(identity, detailRead);
 
   return (
-    <ScreenChrome module={module} screen={screen} subtitle="Server-persisted applications you may read" implemented={runtimeRouteFor(modelDashboardHref())?.implemented}>
+    <ScreenChrome
+      module={module}
+      screen={screen}
+      subtitle="Server-persisted applications you may read"
+      implemented={runtimeRouteFor(modelDashboardHref())?.implemented}
+      actions={
+        identity.status === "signed-in" ? (
+          <Link href={modelDraftFormHref()} className="inline-flex items-center gap-1 px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md" data-testid="model-app-new-draft">
+            New application <Icon name="note_add" size={18} />
+          </Link>
+        ) : null
+      }
+    >
       <div className="space-y-space-md" data-testid="model-applications-read">
         <IdentityStrip identity={identity} />
 
@@ -184,14 +197,24 @@ function ListPanel({ listRead, selectedId }: { listRead: ListRead | null; select
           </div>,
           a.category,
           <span key="s" className="capitalize">{stateLabel(a.state)}</span>,
-          <Link
-            key="open"
-            href={modelDashboardHref(a.id)}
-            className={`font-label-sm text-label-sm inline-flex items-center gap-1 ${a.id === selectedId ? "text-on-surface font-semibold" : "text-primary hover:underline"}`}
-            data-testid={`model-app-open-${a.reference}`}
-          >
-            {a.id === selectedId ? "Selected" : "View"} <Icon name="arrow_forward" size={14} />
-          </Link>,
+          <span key="acts" className="inline-flex flex-col gap-1 items-start">
+            <Link
+              href={modelDashboardHref(a.id)}
+              className={`font-label-sm text-label-sm inline-flex items-center gap-1 ${a.id === selectedId ? "text-on-surface font-semibold" : "text-primary hover:underline"}`}
+              data-testid={`model-app-open-${a.reference}`}
+            >
+              {a.id === selectedId ? "Selected" : "View"} <Icon name="arrow_forward" size={14} />
+            </Link>
+            {a.state === "draft" ? (
+              <Link
+                href={modelDraftFormHref(a.id)}
+                className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1"
+                data-testid={`model-app-edit-${a.reference}`}
+              >
+                Edit <Icon name="edit" size={14} />
+              </Link>
+            ) : null}
+          </span>,
         ])}
       />
     </Card>
@@ -214,7 +237,18 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
         ) : !detailRead.ok ? (
           <FailureBanner failure={detailRead.failure} testId="model-applications-detail-error" />
         ) : (
-          <DetailFields application={detailRead.application} />
+          <>
+            <DetailFields application={detailRead.application} />
+            {detailRead.application.state === "draft" ? (
+              <Link
+                href={modelDraftFormHref(detailRead.application.id)}
+                className="inline-flex items-center gap-1 mt-space-md px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md"
+                data-testid="model-app-detail-edit"
+              >
+                Edit draft <Icon name="edit" size={18} />
+              </Link>
+            ) : null}
+          </>
         )}
       </div>
     </Card>

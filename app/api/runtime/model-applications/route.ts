@@ -14,7 +14,6 @@ export const POST = logged("/api/runtime/model-applications", async (request: Ne
   const body = await request.text();
   return sessionWrite(request, "POST", "/api/model-applications", body, SPRING_CREATE);
 });
-const allowReadCreate = methodNotAllowed("GET, POST");
-export const PUT = logged("/api/runtime/model-applications", allowReadCreate);
-export const PATCH = logged("/api/runtime/model-applications", allowReadCreate);
-export const DELETE = logged("/api/runtime/model-applications", allowReadCreate);
+export const PUT = logged("/api/runtime/model-applications", methodNotAllowed("GET, POST"));
+export const PATCH = PUT;
+export const DELETE = PUT;

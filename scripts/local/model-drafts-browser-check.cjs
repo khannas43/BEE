@@ -1,14 +1,13 @@
 /* eslint-disable */
-/** WP05.1b: draft create/edit through the real BFF and Spring API (headless Chrome + Keycloak twins). */
-const fs = require("fs");
+/** WP05.1b: draft create/edit through BFF + Spring; baseline-preserving, run twice. */
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 const totp = require("./totp.cjs");
 const ids = require("./test-identities.cjs");
+const { USERS } = require("../../local/generate-fixtures.cjs");
 const { WEB, launchChrome, openPage, signIn } = require("./browser-check.cjs");
 
 const NOVA_COOL = "00000000-0000-4000-d000-000000000001";
-const DRAFT1 = "00000000-0000-4000-c000-000000000001";
 const PIXEL_APP = "00000000-0000-4000-c000-000000000003";
 const key = () => crypto.randomUUID().replace(/-/g, "").slice(0, 24);
 
@@ -19,10 +18,98 @@ function sql(q) {
   return execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${process.env.BEE_APP_DB_PASSWORD || "bee-local-app"}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", "bee_app", "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", q]).toString().trim();
 }
 
+function modelBaseline() {
+  return sql("SELECT count(*)::text || '|' || coalesce(string_agg(reference || ':' || state || ':' || version, ',' ORDER BY reference), '') FROM app.model_application");
+}
+
+function twinAccountIds() {
+  return USERS.map((u) => `'${ids.accountId(u.username)}'`).join(",");
+}
+
+function cleanupDisposable(createdIds) {
+  if (createdIds.length) {
+    const inList = createdIds.map((id) => `'${id}'`).join(",");
+    sql(`DELETE FROM app.model_application WHERE id IN (${inList})`);
+  }
+  sql(`DELETE FROM app.idempotency_record WHERE account_id IN (${twinAccountIds()})`);
+}
+
 async function api(page, method, path, body, idem) {
   const headers = { "Content-Type": "application/json", ...(idem ? { "Idempotency-Key": idem } : {}) };
   const bodySnippet = body == null ? "undefined" : `JSON.stringify(${JSON.stringify(body)})`;
   return page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store", headers: ${JSON.stringify(headers)}, body: ${bodySnippet} }).then(async (r) => ({ status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null) }))`);
+}
+
+async function runDraftChecks(runLabel, nova, pixel) {
+  const createdIds = [];
+  const before = modelBaseline();
+  try {
+    let r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/eligible-brands`, null, null);
+    check(`${runLabel}.nova.eligible-brands`, r.status === 200 && r.body?.count >= 1 && r.body.items.some((b) => b.brandId === NOVA_COOL), `status ${r.status}, count ${r.body?.count}`);
+
+    r = await api(pixel, "GET", `${WEB}/api/runtime/model-applications/eligible-brands`, null, null);
+    check(`${runLabel}.pixel.eligible-brands`, r.status === 200 && r.body.items.some((b) => b.principalOrganisation === "NOVA"), "principal NOVA for agency");
+
+    const createBody = { brandId: NOVA_COOL, category: "RAC", modelNumber: `NC-DRAFT-${runLabel}-${Date.now()}` };
+    const k1 = key();
+    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, createBody, k1);
+    const createdId = r.body?.id;
+    if (createdId) createdIds.push(createdId);
+    check(`${runLabel}.nova.create`, r.status === 201 && r.body?.state === "draft" && r.body?.brandId === NOVA_COOL, `${r.status} ref ${r.body?.reference}`);
+
+    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, createBody, k1);
+    check(`${runLabel}.nova.create-replay`, r.status === 201 && r.replay === "true" && r.body?.id === createdId, "Idempotency-Replayed, same id");
+
+    const lostKey = key();
+    const lostBody = { brandId: NOVA_COOL, category: "RAC", modelNumber: `NC-LOST-${runLabel}-${Date.now()}` };
+    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, lostBody, lostKey);
+    const lostId = r.body?.id;
+    if (lostId) createdIds.push(lostId);
+    check(`${runLabel}.nova.lost-response-first`, r.status === 201 && lostId, "first POST succeeded");
+    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, lostBody, lostKey);
+    const rowCount = sql(`SELECT count(*) FROM app.model_application WHERE model_number = '${lostBody.modelNumber.replace(/'/g, "''")}'`);
+    check(`${runLabel}.nova.lost-response-retry`, r.status === 201 && r.replay === "true" && rowCount === "1", `retry replay, rows=${rowCount}`);
+
+    r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${createdId}`, { version: 0, category: "RAC", modelNumber: "NC-EDIT-1" }, key());
+    check(`${runLabel}.nova.edit-draft`, r.status === 200 && r.body?.modelNumber === "NC-EDIT-1" && r.body?.version === 1, `version ${r.body?.version}`);
+
+    r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${createdId}`, { version: 0, category: "RAC", modelNumber: "NC-STALE" }, key());
+    check(`${runLabel}.nova.stale-version`, r.status === 409 && r.body?.error === "version_conflict", r.body?.error);
+
+    r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${PIXEL_APP}`, { version: 0, category: "RAC", modelNumber: "X" }, key());
+    check(`${runLabel}.nova.cross-org-edit`, r.status === 404 && r.body?.error === "not_found", "cross-org patch");
+
+    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, { brandId: "00000000-0000-4000-d000-000000009999", category: "RAC", modelNumber: "BAD" }, key());
+    check(`${runLabel}.nova.wrong-brand`, r.status === 403 && r.body?.error === "brand_not_permitted", r.body?.error);
+
+    sql("UPDATE app.brand SET status = 'revoked' WHERE id = '" + NOVA_COOL + "'");
+    try {
+      r = await api(pixel, "POST", `${WEB}/api/runtime/model-applications`, { brandId: NOVA_COOL, category: "RAC", modelNumber: `AU-BAD-${runLabel}` }, key());
+      check(`${runLabel}.pixel.revoked-brand`, r.status === 403 && r.body?.error === "brand_not_permitted", "revoked brand");
+    } finally {
+      sql("UPDATE app.brand SET status = 'active' WHERE id = '" + NOVA_COOL + "'");
+    }
+
+    sql("UPDATE app.agency_authorisation SET valid_from = '2020-01-01', valid_to = '2025-01-01' WHERE id = '00000000-0000-4000-e000-000000000001'");
+    try {
+      r = await api(pixel, "POST", `${WEB}/api/runtime/model-applications`, { brandId: NOVA_COOL, category: "RAC", modelNumber: `AU-EXP-${runLabel}` }, key());
+      check(`${runLabel}.pixel.expired-auth`, r.status === 403 && r.body?.error === "brand_not_permitted", "expired authorisation");
+    } finally {
+      sql("UPDATE app.agency_authorisation SET valid_from = '2026-01-01', valid_to = NULL WHERE id = '00000000-0000-4000-e000-000000000001'");
+    }
+
+    r = await api(pixel, "POST", `${WEB}/api/runtime/model-applications`, { brandId: NOVA_COOL, category: "RAC", modelNumber: `AU-DRAFT-${runLabel}` }, key());
+    if (r.body?.id) createdIds.push(r.body.id);
+    check(`${runLabel}.pixel.create`, r.status === 201 && r.body?.principalOrganisation === "NOVA", `filing PIXEL principal ${r.body?.principalOrganisation}`);
+
+    const legacy = sql("SELECT brand_id IS NULL FROM app.model_application WHERE reference = 'LOCAL-MA-0002'");
+    check(`${runLabel}.legacy-rows-preserved`, legacy === "t", "fee_due row still without brand_id link");
+
+  } finally {
+    cleanupDisposable(createdIds);
+    const after = modelBaseline();
+    check(`${runLabel}.baseline-preserved`, before === after, before === after ? "model_application snapshot restored" : `before ${before.slice(0, 40)}… after ${after.slice(0, 40)}…`);
+  }
 }
 
 async function main() {
@@ -37,55 +124,8 @@ async function main() {
     const pixel = await openPage(chrome.cdp);
     if (!(await signIn(pixel, pixelTwin))) throw new Error("Pixel sign-in failed");
 
-    let r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/eligible-brands`, null, null);
-    check("drafts.nova.eligible-brands", r.status === 200 && r.body?.count >= 1 && r.body.items.some((b) => b.brandId === NOVA_COOL), `status ${r.status}, count ${r.body?.count}`);
-
-    r = await api(pixel, "GET", `${WEB}/api/runtime/model-applications/eligible-brands`, null, null);
-    check("drafts.pixel.eligible-brands", r.status === 200 && r.body.items.some((b) => b.principalOrganisation === "NOVA"), `principal NOVA for agency`);
-
-    const createBody = { brandId: NOVA_COOL, category: "RAC", modelNumber: "NC-DRAFT-NEW" };
-    const k1 = key();
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, createBody, k1);
-    const createdId = r.body?.id;
-    check("drafts.nova.create", r.status === 201 && r.body?.state === "draft" && r.body?.brandId === NOVA_COOL, `${r.status} ref ${r.body?.reference}`);
-
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, createBody, k1);
-    check("drafts.nova.create-replay", r.status === 201 && r.replay === "true" && r.body?.id === createdId, "Idempotency-Replayed, same id");
-
-    r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${DRAFT1}`, { version: 0, category: "RAC", modelNumber: "NC-RAC-12D-EDIT" }, key());
-    check("drafts.nova.edit-draft", r.status === 200 && r.body?.modelNumber === "NC-RAC-12D-EDIT" && r.body?.version === 1, `version ${r.body?.version}`);
-
-    r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${DRAFT1}`, { version: 0, category: "RAC", modelNumber: "NC-STALE" }, key());
-    check("drafts.nova.stale-version", r.status === 409 && r.body?.error === "version_conflict", r.body?.error);
-
-    r = await api(nova, "PATCH", `${WEB}/api/runtime/model-applications/${PIXEL_APP}`, { version: 0, category: "RAC", modelNumber: "X" }, key());
-    check("drafts.nova.cross-org-edit", r.status === 404 && r.body?.error === "not_found", "cross-org patch");
-
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications`, { brandId: "00000000-0000-4000-d000-000000009999", category: "RAC", modelNumber: "BAD" }, key());
-    check("drafts.nova.wrong-brand", r.status === 403 && r.body?.error === "brand_not_permitted", r.body?.error);
-
-    sql("UPDATE app.brand SET status = 'revoked' WHERE id = '" + NOVA_COOL + "'");
-    try {
-      r = await api(pixel, "POST", `${WEB}/api/runtime/model-applications`, { brandId: NOVA_COOL, category: "RAC", modelNumber: "AU-BAD" }, key());
-      check("drafts.pixel.revoked-brand", r.status === 403 && r.body?.error === "brand_not_permitted", "revoked brand");
-    } finally {
-      sql("UPDATE app.brand SET status = 'active' WHERE id = '" + NOVA_COOL + "'");
-    }
-
-    sql("UPDATE app.agency_authorisation SET valid_from = '2020-01-01', valid_to = '2025-01-01' WHERE id = '00000000-0000-4000-e000-000000000001'");
-    try {
-      r = await api(pixel, "POST", `${WEB}/api/runtime/model-applications`, { brandId: NOVA_COOL, category: "RAC", modelNumber: "AU-EXP" }, key());
-      check("drafts.pixel.expired-auth", r.status === 403 && r.body?.error === "brand_not_permitted", "expired authorisation");
-    } finally {
-      sql("UPDATE app.agency_authorisation SET valid_from = '2026-01-01', valid_to = NULL WHERE id = '00000000-0000-4000-e000-000000000001'");
-    }
-
-    r = await api(pixel, "POST", `${WEB}/api/runtime/model-applications`, { brandId: NOVA_COOL, category: "RAC", modelNumber: "AU-DRAFT-1" }, key());
-    check("drafts.pixel.create", r.status === 201 && r.body?.principalOrganisation === "NOVA", `filing PIXEL principal ${r.body?.principalOrganisation}`);
-
-    const legacy = sql("SELECT brand_id IS NULL FROM app.model_application WHERE reference = 'LOCAL-MA-0002'");
-    check("drafts.legacy-rows-preserved", legacy === "t", "fee_due row still without brand_id link");
-
+    await runDraftChecks("drafts.run1", nova, pixel);
+    await runDraftChecks("drafts.run2", nova, pixel);
   } finally {
     await chrome.close();
   }

@@ -13,11 +13,10 @@
 const fs = require("fs");
 const { execFileSync } = require("child_process");
 const { APPLICATIONS, app, usr } = require("../../local/generate-fixtures.cjs");
+const totp = require("./totp.cjs");
 
 const env = (k, d) => process.env[k] || d;
 const API = `http://127.0.0.1:${env("BEE_API_PORT", "8090")}`;
-const ISSUER = `http://127.0.0.1:${env("BEE_KC_PORT", "8180")}/realms/${env("BEE_REALM", "bee-local")}`;
-const PASSWORD = env("BEE_DEV_USER_PASSWORD", "bee-local-dev");
 
 let pass = 0, fail = 0;
 function check(id, ok, detail) {
@@ -39,10 +38,7 @@ const NOT_FOUND = JSON.stringify({ error: "not_found" });
 const tokens = {};
 async function token(username) {
   if (tokens[username]) return tokens[username];
-  const r = await fetch(`${ISSUER}/protocol/openid-connect/token`, { method: "POST", body: new URLSearchParams({ grant_type: "password", client_id: "bee-local-check", username, password: PASSWORD }) });
-  const j = await r.json();
-  if (!j.access_token) throw new Error(`no token for ${username}: ${JSON.stringify(j)}`);
-  return (tokens[username] = j.access_token);
+  return (tokens[username] = await totp.accessToken(username));
 }
 async function call(username, path, method = "GET") {
   const r = await fetch(`${API}${path}`, { method, headers: { Authorization: `Bearer ${await token(username)}`, "Content-Type": "application/json" }, body: method === "GET" ? undefined : "{}" });
@@ -193,6 +189,7 @@ const leaks = (body, refsList) => [...idsOf(refsList), ...refsList].filter((x) =
   const after = snapshot();
   const workflowTables = sql("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('transition', 'fee_confirmation', 'rating_result', 'approval_decision')");
   check("actions.no-state-change", before === after && workflowTables === "0", `model_application id:state:version unchanged (${after.split(",").length} rows); workflow tables present: ${workflowTables}`);
+  for (const u of Object.keys(tokens)) await totp.logoutUser(u);
 
   console.log(`access checks: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

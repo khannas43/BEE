@@ -1,8 +1,8 @@
-// Unit tests for lib/server/oidc.ts (WP02.1). Run: npm run web:test
+// Unit tests for lib/server/oidc.ts (WP02.1, WP02.3 MFA policy). Run: npm run web:test
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
-import { authorizeUrl, IdTokenError, pkceChallenge, safeReturnTo, verifyIdToken } from "../../lib/server/oidc.ts";
+import { authMethods, authorizeUrl, IdTokenError, meetsMfaPolicy, pkceChallenge, safeReturnTo, verifyIdToken } from "../../lib/server/oidc.ts";
 
 const ISSUER = "http://127.0.0.1:8180/realms/bee-local";
 const CLIENT = "bee-web";
@@ -54,4 +54,9 @@ test("authorize URL carries state, nonce and an S256 challenge, never the verifi
 test("returnTo accepts only same-origin paths", () => {
   assert.equal(safeReturnTo("/app/workflow"), "/app/workflow");
   for (const bad of ["https://evil.example", "//evil.example", "/\\evil.example", "javascript:alert(1)", "", null, "/app\n"]) assert.equal(safeReturnTo(bad), "/app");
+});
+test("MFA policy needs both pwd and otp in a verified token's amr", () => {
+  assert.equal(meetsMfaPolicy(verifyIdToken(token({ amr: ["pwd", "otp"] }), expect)), true);
+  for (const amr of [undefined, [], ["pwd"], ["otp"], "pwd otp", ["pwd", 1]]) assert.equal(meetsMfaPolicy(verifyIdToken(token({ amr }), expect)), false, JSON.stringify(amr));
+  assert.deepEqual(authMethods(verifyIdToken(token({ amr: ["pwd", 7, "otp"] }), expect)), ["pwd", "otp"]);
 });

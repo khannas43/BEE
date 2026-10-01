@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { AUTH } from "@/lib/server/authConfig";
 import { callBeeApi } from "@/lib/server/beeApi";
 import { endKeycloakSession, exchangeCode, signingKeys, type TokenSet } from "@/lib/server/keycloak";
-import { IdTokenError, safeEqual, verifyIdToken } from "@/lib/server/oidc";
+import { authMethods, IdTokenError, meetsMfaPolicy, safeEqual, verifyIdToken, type IdTokenClaims } from "@/lib/server/oidc";
 import { clearLoginCookie, createSession, destroySession, sessionCookieOf, setSessionCookie, takeLogin } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +23,10 @@ const kidOf = (jwt: string): string | undefined => {
 };
 
 /**
- * Completes sign-in. Keycloak proves who the user is; the server session is created
- * only if Spring, the access authority, accepts the user (active account and an
- * active role that the token also carries).
+ * Completes sign-in. Keycloak proves who the user is, with password and TOTP (the ID
+ * token's amr must show both); the server session is created only if Spring, the
+ * access authority, accepts the user (active account and an active role that the
+ * token also carries).
  */
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams;
@@ -46,17 +47,20 @@ export async function GET(request: NextRequest) {
     return fail("code_exchange_failed");
   }
 
-  let subject: string;
-  let username: string;
+  let claims: IdTokenClaims;
   try {
     if (!tokens.id_token) throw new IdTokenError("missing");
-    const claims = verifyIdToken(tokens.id_token, { issuer: AUTH.issuer, clientId: AUTH.clientId, nonce: tx.nonce, jwks: await signingKeys(kidOf(tokens.id_token)) });
-    subject = claims.sub;
-    username = claims.preferred_username ?? claims.sub;
+    claims = verifyIdToken(tokens.id_token, { issuer: AUTH.issuer, clientId: AUTH.clientId, nonce: tx.nonce, jwks: await signingKeys(kidOf(tokens.id_token)) });
   } catch {
     await endKeycloakSession(tokens.refresh_token);
     return fail("invalid_id_token");
   }
+  if (!meetsMfaPolicy(claims)) {
+    await endKeycloakSession(tokens.refresh_token);
+    return fail("mfa_required");
+  }
+  const subject = claims.sub;
+  const username = claims.preferred_username ?? claims.sub;
 
   const me = await callBeeApi("/api/me", { accessToken: tokens.access_token });
   const body = me.body as { subject?: string; error?: string } | null;
@@ -67,7 +71,7 @@ export async function GET(request: NextRequest) {
   }
 
   destroySession(sessionCookieOf(request));
-  const { cookie } = createSession(subject, username, tokens);
+  const { cookie } = createSession(subject, username, tokens, authMethods(claims));
   const res = NextResponse.redirect(new URL(tx.returnTo, AUTH.webOrigin), 303);
   clearLoginCookie(res);
   setSessionCookie(res, cookie);

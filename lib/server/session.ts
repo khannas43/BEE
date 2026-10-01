@@ -29,6 +29,8 @@ export interface ServerSession {
   createdAt: number;
   expiresAt: number;
   refreshCount: number;
+  /** Methods from the sign-in ID token's amr claim; the callback requires pwd and otp. */
+  authMethods: string[];
 }
 
 interface Stores {
@@ -90,11 +92,11 @@ function fromTokens(t: TokenSet, now: number) {
   };
 }
 
-export function createSession(subject: string, username: string, tokens: TokenSet): { cookie: string; session: ServerSession } {
+export function createSession(subject: string, username: string, tokens: TokenSet, authMethods: string[]): { cookie: string; session: ServerSession } {
   sweep();
   const now = Date.now();
   const cookie = randomToken();
-  const session: ServerSession = { subject, username, ...fromTokens(tokens, now), idToken: tokens.id_token, createdAt: now, expiresAt: now + AUTH.sessionMaxSeconds * 1000, refreshCount: 0 };
+  const session: ServerSession = { subject, username, ...fromTokens(tokens, now), idToken: tokens.id_token, createdAt: now, expiresAt: now + AUTH.sessionMaxSeconds * 1000, refreshCount: 0, authMethods };
   stores.sessions.set(sha256(cookie), session);
   return { cookie, session };
 }
@@ -180,4 +182,5 @@ export const publicView = (s: ServerSession) => ({
   accessExpiresAt: new Date(s.accessExpiresAt).toISOString(),
   sessionExpiresAt: new Date(endsAt(s)).toISOString(),
   refreshCount: s.refreshCount,
+  authMethods: s.authMethods,
 });

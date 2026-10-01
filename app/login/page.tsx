@@ -17,6 +17,7 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   invalid_state: "The sign-in response did not match this browser's request. Please start again.",
   invalid_issuer: "The sign-in response came from an unexpected identity provider.",
   invalid_id_token: "The identity token could not be verified.",
+  mfa_required: "Sign-in needs your password and an authenticator code. If you have just set up your authenticator, sign in again and enter a new code.",
   code_exchange_failed: "The sign-in could not be completed with the identity provider.",
   identity_unavailable: "The identity service is not reachable.",
   api_unreachable: "The BEE service is not reachable, so access could not be checked.",
@@ -60,10 +61,11 @@ export default function LoginPage() {
           <p className="font-body-lg text-body-lg text-forest-light/85 mt-space-md max-w-md">
             Local development build. What this sign-in does today:
           </p>
-          {/* Only controls implemented and checked now (WP02.1); add others when they are demonstrated. */}
+          {/* Only controls implemented and checked now (WP02.1, WP02.3 local TOTP); add others when they are demonstrated. */}
           <ul className="mt-space-md space-y-space-xs" data-testid="implemented-controls">
             {[
               { icon: "login", t: "Sign-in through the BEE identity service (Keycloak, authorization code with PKCE)" },
+              { icon: "pin", t: "Password plus an authenticator-app code (TOTP) on every sign-in; no SMS or email codes" },
               { icon: "cookie", t: "Session kept on the server; the browser holds only an opaque, httpOnly cookie" },
               { icon: "badge", t: "Roles and organisation read from BEE records, not from the sign-in token" },
             ].map((f) => (

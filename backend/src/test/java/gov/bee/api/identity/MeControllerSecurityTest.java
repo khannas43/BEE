@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class MeControllerSecurityTest {
 
     private static final UUID SUBJECT = UUID.fromString("00000000-0000-4000-a000-000000000001");
+    private static final List<String> MFA = List.of("pwd", "otp");
 
     @Autowired
     MockMvc mvc;
@@ -58,7 +59,7 @@ class MeControllerSecurityTest {
     void tokenWithoutDatabaseAccountIsForbidden() throws Exception {
         when(identity.activeAccount(any())).thenReturn(Optional.empty());
         mvc.perform(get("/api/me").with(jwt().jwt(j -> j.subject(SUBJECT.toString())
-                .claim("realm_access", Map.of("roles", List.of("manufacturer"))))))
+                .claim("amr", MFA).claim("realm_access", Map.of("roles", List.of("manufacturer"))))))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error").value("no_active_account"));
     }
@@ -68,7 +69,7 @@ class MeControllerSecurityTest {
         when(identity.activeAccount(SUBJECT)).thenReturn(Optional.of(new IdentityRepository.Account(SUBJECT, "role.mismatch", "Role Mismatch")));
         when(identity.activeRoles(SUBJECT)).thenReturn(List.of(new IdentityRepository.RoleGrant("auditor", "all")));
         mvc.perform(get("/api/me").with(jwt().jwt(j -> j.subject(SUBJECT.toString())
-                .claim("realm_access", Map.of("roles", List.of("finance"))))))
+                .claim("amr", MFA).claim("realm_access", Map.of("roles", List.of("finance"))))))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error").value("no_effective_role"));
     }
@@ -80,12 +81,27 @@ class MeControllerSecurityTest {
         when(identity.activeMemberships(SUBJECT)).thenReturn(List.of(new IdentityRepository.Membership("NOVA", "manufacturer", "Nova Cool")));
         mvc.perform(get("/api/me").with(jwt().jwt(j -> j.subject(SUBJECT.toString())
                 .claim("organisation", "PixelCert Agency (synthetic)")
-                .claim("realm_access", Map.of("roles", List.of("manufacturer"))))))
+                .claim("amr", MFA).claim("realm_access", Map.of("roles", List.of("manufacturer"))))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.authority").value("spring-database"))
             .andExpect(jsonPath("$.organisations[0].code").value("NOVA"))
             .andExpect(jsonPath("$.organisations.length()").value(1))
             .andExpect(jsonPath("$.effectiveRoles[0].scope").value("own-org"))
             .andExpect(jsonPath("$.ignoredTokenClaims.organisation").value("PixelCert Agency (synthetic)"));
+    }
+
+    @Test
+    void tokenWithoutOtpIsRefusedBeforeAnyDatabaseLookup() throws Exception {
+        for (Object amr : List.of(List.of("pwd"), List.of("otp"), List.of(), "pwd otp")) {
+            mvc.perform(get("/api/me").with(jwt().jwt(j -> j.subject(SUBJECT.toString()).claim("amr", amr)
+                    .claim("realm_access", Map.of("roles", List.of("manufacturer"))))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("mfa_required"));
+        }
+        mvc.perform(get("/api/me").with(jwt().jwt(j -> j.subject(SUBJECT.toString())
+                .claim("realm_access", Map.of("roles", List.of("manufacturer"))))))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error").value("mfa_required"));
+        org.mockito.Mockito.verifyNoInteractions(identity);
     }
 }

@@ -14,6 +14,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const totp = require("./totp.cjs");
 
 const env = (k, d) => process.env[k] || d;
 const WEB = `http://127.0.0.1:${env("BEE_WEB_PORT", "3100")}`;
@@ -133,6 +134,9 @@ async function signIn(page, username) {
   await page.goto(`${WEB}/api/auth/login?returnTo=/app`);
   if (!(await page.waitFor(`!!document.getElementById("kc-form-login")`))) throw new Error("Keycloak login form did not appear");
   await page.eval(`(() => { document.getElementById("username").value = ${JSON.stringify(username)}; document.getElementById("password").value = ${JSON.stringify(PASSWORD)}; document.getElementById("kc-form-login").submit(); return true; })()`);
+  if (!(await page.waitFor(`!!document.getElementById("kc-otp-login-form")`))) throw new Error("Keycloak OTP challenge did not appear");
+  const code = await totp.nextCode(username);
+  await page.eval(`(() => { document.getElementById("otp").value = ${JSON.stringify(code)}; document.getElementById("kc-otp-login-form").submit(); return true; })()`);
   return page.waitFor(`location.origin === ${JSON.stringify(WEB)} && location.pathname === "/app" && !!document.querySelector("[data-testid=session-badge]")`);
 }
 
@@ -146,9 +150,10 @@ const identityOk = (a, u) => [a.identity, a.badge].every((t) => t.includes(u.dis
   const chrome = await launchChrome();
   try {
     for (const u of USERS) {
+      await totp.ensureEnrolled(u.username);
       const page = await openPage(chrome.cdp);
       const signedIn = await signIn(page, u.username);
-      check(`browser.${u.username}.signed-in`, signedIn, signedIn ? `landed on /app with the signed-in badge (fresh profile, no preview role chosen)` : "sign-in did not reach /app");
+      check(`browser.${u.username}.signed-in`, signedIn, signedIn ? `password, then the Keycloak TOTP challenge, landed on /app with the signed-in badge (fresh profile, no preview role chosen)` : "sign-in did not reach /app");
       if (!signedIn) { await page.close(); continue; }
       const me = await page.eval(`fetch("/api/runtime/me").then((r) => r.json())`);
       u.displayName = me.displayName;
@@ -196,7 +201,7 @@ const identityOk = (a, u) => [a.identity, a.badge].every((t) => t.includes(u.dis
     await page.waitFor(`!!document.querySelector("[data-testid=implemented-controls]")`, 60000);
     const login = await page.eval(`document.body.textContent`);
     const claims = ["MFA enforced", "RBAC + object policy", "Every action audited"].filter((c) => login.includes(c));
-    check("browser.login-claims", claims.length === 0 && login.includes("PKCE"), `unproven claims shown: ${claims.length ? claims.join(", ") : "none"}; implemented controls listed`);
+    check("browser.login-claims", claims.length === 0 && login.includes("PKCE") && login.includes("authenticator-app code (TOTP)"), `unproven claims shown: ${claims.length ? claims.join(", ") : "none"}; implemented controls listed, including TOTP`);
     await page.close();
   } finally {
     await chrome.close();

@@ -117,3 +117,15 @@ export function verifyIdToken(idToken: string, e: IdTokenExpectations): IdTokenC
   if (typeof c.sub !== "string" || !c.sub) throw new IdTokenError("missing subject");
   return c;
 }
+
+/** Authentication methods from the verified ID token's `amr` claim (Keycloak AMR mapper). */
+export function authMethods(c: IdTokenClaims): string[] {
+  return Array.isArray(c.amr) ? c.amr.filter((m): m is string => typeof m === "string") : [];
+}
+
+/** The local MFA policy: the sign-in must have used both a password and a TOTP code. */
+export const MFA_METHODS = ["pwd", "otp"] as const;
+export function meetsMfaPolicy(c: IdTokenClaims): boolean {
+  const amr = authMethods(c);
+  return MFA_METHODS.every((m) => amr.includes(m));
+}

@@ -70,6 +70,35 @@ const audience = { name: "bee-api-audience", protocol: "openid-connect", protoco
 const misleadingOrg = (value) => ({ name: "misleading-organisation-claim", protocol: "openid-connect", protocolMapper: "oidc-hardcoded-claim-mapper", consentRequired: false, config: { "claim.name": "organisation", "claim.value": value, "jsonType.label": "String", "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false" } });
 const WEB_ACCESS_TOKEN_SECONDS = 60;
 
+/**
+ * WP02.3 MFA policy: TOTP is REQUIRED for every user in both the browser flow and the
+ * direct-grant flow used by local checks. No role or client is exempt. A user without
+ * an OTP credential must enroll (CONFIGURE_TOTP) before Keycloak issues a code; codes
+ * are single-use. The AMR mapper records "pwd" and "otp" so the portal can verify them.
+ */
+const amr = { name: "authentication-method-reference", protocol: "openid-connect", protocolMapper: "oidc-amr-mapper", consentRequired: false, config: { "id.token.claim": "true", "access.token.claim": "true", "introspection.token.claim": "true" } };
+const OTP_POLICY = { otpPolicyType: "totp", otpPolicyAlgorithm: "HmacSHA1", otpPolicyDigits: 6, otpPolicyPeriod: 30, otpPolicyLookAheadWindow: 1, otpPolicyCodeReusable: false };
+const step = (authenticator, priority, authenticatorConfig) => ({ authenticator, authenticatorFlow: false, requirement: "REQUIRED", priority, userSetupAllowed: false, ...(authenticatorConfig ? { authenticatorConfig } : {}) });
+const AUTH_FLOWS = [
+  {
+    alias: "bee browser with otp", description: "Cookie, or username/password then OTP (required). No conditional bypass.", providerId: "basic-flow", topLevel: true, builtIn: false,
+    authenticationExecutions: [
+      { authenticator: "auth-cookie", authenticatorFlow: false, requirement: "ALTERNATIVE", priority: 10, userSetupAllowed: false },
+      { authenticatorFlow: true, requirement: "ALTERNATIVE", priority: 20, flowAlias: "bee browser otp forms", userSetupAllowed: false },
+    ],
+  },
+  {
+    alias: "bee browser otp forms", description: "Password, then OTP; enrollment is forced when no OTP credential exists.", providerId: "basic-flow", topLevel: false, builtIn: false,
+    authenticationExecutions: [step("auth-username-password-form", 10, "bee-amr-pwd"), step("auth-otp-form", 20, "bee-amr-otp")],
+  },
+  {
+    alias: "bee direct grant with otp", description: "Local check client only: username, password and OTP all required.", providerId: "basic-flow", topLevel: true, builtIn: false,
+    authenticationExecutions: [step("direct-grant-validate-username", 10), step("direct-grant-validate-password", 20, "bee-amr-pwd-grant"), step("direct-grant-validate-otp", 30, "bee-amr-otp-grant")],
+  },
+];
+const amrRef = (alias, value) => ({ alias, config: { "default.reference.value": value, "default.reference.maxAge": "36000" } });
+const AUTH_CONFIG = [amrRef("bee-amr-pwd", "pwd"), amrRef("bee-amr-otp", "otp"), amrRef("bee-amr-pwd-grant", "pwd"), amrRef("bee-amr-otp-grant", "otp")];
+
 const realm = {
   realm: REALM,
   enabled: true,
@@ -78,6 +107,11 @@ const realm = {
   loginWithEmailAllowed: false,
   verifyEmail: false,
   accessTokenLifespan: 300,
+  ...OTP_POLICY,
+  browserFlow: "bee browser with otp",
+  directGrantFlow: "bee direct grant with otp",
+  authenticationFlows: AUTH_FLOWS,
+  authenticatorConfig: AUTH_CONFIG,
   roles: { realm: ROLES.map((r) => ({ name: r, description: `BEE persona: ${r}` })) },
   clients: [
     {
@@ -94,7 +128,7 @@ const realm = {
       redirectUris: [`http://127.0.0.1:${WEB_PORT}/api/auth/callback`],
       webOrigins: [],
       attributes: { "pkce.code.challenge.method": "S256", "access.token.lifespan": String(WEB_ACCESS_TOKEN_SECONDS), "post.logout.redirect.uris": `http://127.0.0.1:${WEB_PORT}/login` },
-      protocolMappers: [audience, misleadingOrg("Bureau of Energy Efficiency (local)")],
+      protocolMappers: [audience, amr, misleadingOrg("Bureau of Energy Efficiency (local)")],
     },
     {
       clientId: "bee-local-check",
@@ -104,7 +138,7 @@ const realm = {
       publicClient: true,
       standardFlowEnabled: false,
       directAccessGrantsEnabled: true,
-      protocolMappers: [audience, misleadingOrg("PixelCert Agency (synthetic)")],
+      protocolMappers: [audience, amr, misleadingOrg("PixelCert Agency (synthetic)")],
     },
   ],
   users: USERS.map((u) => ({
@@ -115,7 +149,7 @@ const realm = {
     firstName: u.first,
     lastName: u.last,
     enabled: true,
-    requiredActions: [],
+    requiredActions: ["CONFIGURE_TOTP"],
     credentials: [{ type: "password", value: DEV_PASSWORD, temporary: false }],
     realmRoles: [u.kc],
   })),

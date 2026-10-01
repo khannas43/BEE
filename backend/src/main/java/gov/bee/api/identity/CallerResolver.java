@@ -27,6 +27,9 @@ public class CallerResolver {
         } catch (IllegalArgumentException | NullPointerException e) {
             return Resolution.denied("no_active_account");
         }
+        if (!MfaPolicy.satisfied(jwt)) {
+            return Resolution.denied("mfa_required");
+        }
         var account = identity.activeAccount(subject);
         if (account.isEmpty()) {
             return Resolution.denied("no_active_account");

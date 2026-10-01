@@ -11,6 +11,7 @@
  */
 const fs = require("fs");
 const { execFileSync } = require("child_process");
+const totp = require("./totp.cjs");
 
 const env = (k, d) => process.env[k] || d;
 const WEB = `http://127.0.0.1:${env("BEE_WEB_PORT", "3100")}`;
@@ -83,10 +84,10 @@ async function startLogin(jar, returnTo = "/app") {
   const action = /<form[^>]*id="kc-form-login"[^>]*action="([^"]+)"/.exec(r2.body)?.[1];
   return { r1, loginCookie, authUrl, form: action ? decodeHtml(action) : null, ssoRedirect: r2.status === 302 ? r2.location : null };
 }
-/** Submits credentials; returns the callback URL Keycloak redirects to. */
+/** Submits credentials, then the TOTP code Keycloak asks for; returns the callback URL Keycloak redirects to. */
 async function submitCredentials(jar, form, username) {
   const r = await req(jar, form, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ username, password: PASSWORD, credentialId: "" }) });
-  return r.status === 302 ? r.location : null;
+  return (await totp.completeLogin((url, init) => req(jar, url, init), r, username)).location ?? null;
 }
 async function signIn(username, jar = new Jar()) {
   const s = await startLogin(jar);
@@ -116,6 +117,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(setCookie || "");
 
 (async () => {
+  for (const u of ["nova.applicant", "pixel.applicant", "no.account", "inactive.role", "role.mismatch"]) await totp.ensureEnrolled(u);
+
   /* ---------- no session ---------- */
   let r = await me(new Jar());
   check("auth.no-session-me", r.status === 401 && r.json?.error === "no_session", `GET /api/runtime/me without cookie: HTTP ${r.status} ${r.json?.error}`);
@@ -124,7 +127,7 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
   const forged = new Jar(); forged.set("bee_session", "Zm9yZ2VkLXNlc3Npb24taWQtdGhhdC13YXMtbmV2ZXItaXNzdWVk");
   r = await me(forged);
   check("auth.forged-cookie", r.status === 401 && r.json?.error === "no_session" && r.setCookie.some((c) => /^bee_session=;/.test(c)), `made-up session id: HTTP ${r.status} ${r.json?.error}, cookie cleared`);
-  const pw = await fetch(`${ISSUER}/protocol/openid-connect/token`, { method: "POST", body: new URLSearchParams({ grant_type: "password", client_id: "bee-local-check", username: "nova.applicant", password: PASSWORD }) }).then((x) => x.json());
+  const pw = (await totp.passwordGrant("nova.applicant")).json;
   r = await me(new Jar(), { headers: { Authorization: `Bearer ${pw.access_token}` } });
   check("auth.browser-bearer-ignored", r.status === 401 && r.json?.error === "no_session", `valid bearer token from the browser, no cookie: HTTP ${r.status} ${r.json?.error}`);
 

@@ -6,6 +6,126 @@
   "loginWithEmailAllowed": false,
   "verifyEmail": false,
   "accessTokenLifespan": 300,
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyCodeReusable": false,
+  "browserFlow": "bee browser with otp",
+  "directGrantFlow": "bee direct grant with otp",
+  "authenticationFlows": [
+    {
+      "alias": "bee browser with otp",
+      "description": "Cookie, or username/password then OTP (required). No conditional bypass.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "flowAlias": "bee browser otp forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "bee browser otp forms",
+      "description": "Password, then OTP; enrollment is forced when no OTP credential exists.",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "bee-amr-pwd"
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "bee-amr-otp"
+        }
+      ]
+    },
+    {
+      "alias": "bee direct grant with otp",
+      "description": "Local check client only: username, password and OTP all required.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "direct-grant-validate-username",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "direct-grant-validate-password",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "bee-amr-pwd-grant"
+        },
+        {
+          "authenticator": "direct-grant-validate-otp",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 30,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "bee-amr-otp-grant"
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "bee-amr-pwd",
+      "config": {
+        "default.reference.value": "pwd",
+        "default.reference.maxAge": "36000"
+      }
+    },
+    {
+      "alias": "bee-amr-otp",
+      "config": {
+        "default.reference.value": "otp",
+        "default.reference.maxAge": "36000"
+      }
+    },
+    {
+      "alias": "bee-amr-pwd-grant",
+      "config": {
+        "default.reference.value": "pwd",
+        "default.reference.maxAge": "36000"
+      }
+    },
+    {
+      "alias": "bee-amr-otp-grant",
+      "config": {
+        "default.reference.value": "otp",
+        "default.reference.maxAge": "36000"
+      }
+    }
+  ],
   "roles": {
     "realm": [
       {
@@ -96,6 +216,17 @@
           }
         },
         {
+          "name": "authentication-method-reference",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
           "name": "misleading-organisation-claim",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-hardcoded-claim-mapper",
@@ -132,6 +263,17 @@
           }
         },
         {
+          "name": "authentication-method-reference",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
           "name": "misleading-organisation-claim",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-hardcoded-claim-mapper",
@@ -157,7 +299,9 @@
       "firstName": "Nova",
       "lastName": "Applicant",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -177,7 +321,9 @@
       "firstName": "Pixel",
       "lastName": "Applicant",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -197,7 +343,9 @@
       "firstName": "BEE",
       "lastName": "Finance",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -217,7 +365,9 @@
       "firstName": "IAME",
       "lastName": "Officer",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -237,7 +387,9 @@
       "firstName": "BEE",
       "lastName": "Reviewer",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -257,7 +409,9 @@
       "firstName": "BEE",
       "lastName": "Programme",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -277,7 +431,9 @@
       "firstName": "BEE",
       "lastName": "Director",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -297,7 +453,9 @@
       "firstName": "BEE",
       "lastName": "Secretary",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -317,7 +475,9 @@
       "firstName": "BEE",
       "lastName": "Admin",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -337,7 +497,9 @@
       "firstName": "BEE",
       "lastName": "Helpdesk",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -357,7 +519,9 @@
       "firstName": "BEE",
       "lastName": "Auditor",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -377,7 +541,9 @@
       "firstName": "SDA",
       "lastName": "Officer",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -397,7 +563,9 @@
       "firstName": "Lab",
       "lastName": "Officer",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -417,7 +585,9 @@
       "firstName": "No",
       "lastName": "Account",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -437,7 +607,9 @@
       "firstName": "Inactive",
       "lastName": "Role",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -457,7 +629,9 @@
       "firstName": "Role",
       "lastName": "Mismatch",
       "enabled": true,
-      "requiredActions": [],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
       "credentials": [
         {
           "type": "password",

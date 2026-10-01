@@ -55,7 +55,7 @@ class ModelApplicationControllerSecurityTest {
     ModelApplicationRepository applications;
 
     RequestPostProcessor token(String... roles) {
-        return jwt().jwt(j -> j.subject(USER.toString()).claim("organisation", "PixelCert Agency (synthetic)")
+        return jwt().jwt(j -> j.subject(USER.toString()).claim("organisation", "PixelCert Agency (synthetic)").claim("amr", List.of("pwd", "otp"))
             .claim("realm_access", Map.of("roles", List.of(roles))));
     }
 
@@ -74,6 +74,16 @@ class ModelApplicationControllerSecurityTest {
         mvc.perform(get("/api/model-applications")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/model-applications/" + NOVA_APP)).andExpect(status().isUnauthorized());
         verifyNoInteractions(applications);
+    }
+
+    @Test
+    void passwordOnlyTokenIsRefusedBeforeAnyDatabaseLookup() throws Exception {
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
+        mvc.perform(get("/api/model-applications").with(pwdOnly))
+            .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("mfa_required"));
+        mvc.perform(get("/api/model-applications/" + NOVA_APP).with(pwdOnly))
+            .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("mfa_required"));
+        verifyNoInteractions(applications, identity);
     }
 
     @Test

@@ -35,6 +35,9 @@ public class MeController {
         } catch (IllegalArgumentException | NullPointerException e) {
             return deny("no_active_account");
         }
+        if (!MfaPolicy.satisfied(jwt)) {
+            return deny("mfa_required");
+        }
         var account = identity.activeAccount(subject);
         if (account.isEmpty()) {
             return deny("no_active_account");
@@ -55,6 +58,7 @@ public class MeController {
             .map(m -> Map.of("code", m.code(), "kind", m.kind(), "name", m.legalName())).toList());
         body.put("activeAssignments", identity.activeAssignments(account.get().id()));
         body.put("tokenRoles", tokenRoles.stream().sorted().toList());
+        body.put("authMethods", jwt.getClaims().get("amr"));
         Object orgClaim = jwt.getClaims().get("organisation");
         if (orgClaim != null) {
             body.put("ignoredTokenClaims", Map.of("organisation", orgClaim));

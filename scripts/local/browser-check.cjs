@@ -8,13 +8,15 @@
  *
  * Uses the Chrome DevTools Protocol directly; no npm dependency. Appends JSON
  * lines to $AUTH_RESULTS when set (used by local:check). Screenshots go to
- * .local/run/browser-<user>.png.
+ * .local/run/browser-<user>.png. Signs in disposable twins of the personas
+ * (scripts/local/test-identities.cjs); check ids keep the persona names.
  */
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 const totp = require("./totp.cjs");
+const ids = require("./test-identities.cjs");
 
 const env = (k, d) => process.env[k] || d;
 const WEB = `http://127.0.0.1:${env("BEE_WEB_PORT", "3100")}`;
@@ -142,17 +144,17 @@ async function signIn(page, username) {
 
 const identityOk = (a, u) => [a.identity, a.badge].every((t) => t.includes(u.displayName) && t.includes(u.roles) && t.includes(u.org)) && !/Administrator/.test(a.badge + a.identity);
 
-(async () => {
+async function main() {
   if (!fs.existsSync(CHROME)) {
     check("browser.chrome", false, `Chrome not found at ${CHROME} (set BEE_CHROME)`);
-    process.exit(1);
+    return;
   }
   const chrome = await launchChrome();
   try {
     for (const u of USERS) {
-      await totp.ensureEnrolled(u.username);
+      await totp.ensureEnrolled(ids.name(u.username));
       const page = await openPage(chrome.cdp);
-      const signedIn = await signIn(page, u.username);
+      const signedIn = await signIn(page, ids.name(u.username));
       check(`browser.${u.username}.signed-in`, signedIn, signedIn ? `password, then the Keycloak TOTP challenge, landed on /app with the signed-in badge (fresh profile, no preview role chosen)` : "sign-in did not reach /app");
       if (!signedIn) { await page.close(); continue; }
       const me = await page.eval(`fetch("/api/runtime/me").then((r) => r.json())`);
@@ -206,9 +208,11 @@ const identityOk = (a, u) => [a.identity, a.badge].every((t) => t.includes(u.dis
   } finally {
     await chrome.close();
   }
-  console.log(`browser checks: ${pass} passed, ${fail} failed`);
-  process.exit(fail ? 1 : 0);
-})().catch((e) => {
-  check("browser.run", false, `aborted: ${e.message}`);
-  process.exit(1);
-});
+}
+
+ids.withIdentities("test", main)
+  .catch((e) => check("browser.run", false, `aborted: ${e.message}`))
+  .then(() => {
+    console.log(`browser checks: ${pass} passed, ${fail} failed`);
+    process.exit(fail ? 1 : 0);
+  });

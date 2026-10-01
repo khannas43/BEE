@@ -7,11 +7,13 @@
  *   node scripts/local/auth-check.cjs [--with-expiry]
  *
  * --with-expiry waits for the 60 s access tokens to run out (about a minute).
- * Appends JSON lines to $AUTH_RESULTS when set (used by local:check).
+ * Signs in only disposable twins of the seeded personas (scripts/local/test-identities.cjs);
+ * check ids keep the persona names. Appends JSON lines to $AUTH_RESULTS when set.
  */
 const fs = require("fs");
 const { execFileSync } = require("child_process");
 const totp = require("./totp.cjs");
+const ids = require("./test-identities.cjs");
 
 const env = (k, d) => process.env[k] || d;
 const WEB = `http://127.0.0.1:${env("BEE_WEB_PORT", "3100")}`;
@@ -23,8 +25,8 @@ const PASSWORD = env("BEE_DEV_USER_PASSWORD", "bee-local-dev");
 const ADMIN_PASSWORD = env("BEE_KC_ADMIN_PASSWORD", "bee-local-admin");
 const WITH_EXPIRY = process.argv.includes("--with-expiry");
 const JWT = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/;
-const user = (n) => `00000000-0000-4000-a000-${String(n).padStart(12, "0")}`;
-const IDS = { "nova.applicant": user(1), "pixel.applicant": user(2), "no.account": user(14), "inactive.role": user(15), "role.mismatch": user(16) };
+/** The disposable twin that signs in for a seeded persona. */
+const T = (persona) => ids.name(persona);
 
 let pass = 0, fail = 0;
 function check(id, ok, detail) {
@@ -103,21 +105,19 @@ async function adminToken() {
   const r = await fetch(`${KC}/realms/master/protocol/openid-connect/token`, { method: "POST", body: new URLSearchParams({ grant_type: "password", client_id: "admin-cli", username: "admin", password: ADMIN_PASSWORD }) });
   return (await r.json()).access_token;
 }
-async function kcSessions(username) {
-  const r = await fetch(`${KC}/admin/realms/${REALM}/users/${IDS[username]}/sessions`, { headers: { Authorization: `Bearer ${await adminToken()}` } });
+async function kcSessions(persona) {
+  const r = await fetch(`${KC}/admin/realms/${REALM}/users/${await totp.userId(T(persona))}/sessions`, { headers: { Authorization: `Bearer ${await adminToken()}` } });
   return (await r.json()).length;
 }
-async function kcLogoutUser(username) {
-  await fetch(`${KC}/admin/realms/${REALM}/users/${IDS[username]}/logout`, { method: "POST", headers: { Authorization: `Bearer ${await adminToken()}` } });
-}
+const kcLogoutUser = (persona) => totp.logoutUser(T(persona));
 function sql(statement) {
   return execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${env("BEE_APP_DB_PASSWORD", "bee-local-app")}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", "bee_app", "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", statement]).toString().trim();
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(setCookie || "");
 
-(async () => {
-  for (const u of ["nova.applicant", "pixel.applicant", "no.account", "inactive.role", "role.mismatch"]) await totp.ensureEnrolled(u);
+async function main() {
+  for (const u of ["nova.applicant", "pixel.applicant", "no.account", "inactive.role", "role.mismatch"]) await totp.ensureEnrolled(T(u));
 
   /* ---------- no session ---------- */
   let r = await me(new Jar());
@@ -127,12 +127,12 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
   const forged = new Jar(); forged.set("bee_session", "Zm9yZ2VkLXNlc3Npb24taWQtdGhhdC13YXMtbmV2ZXItaXNzdWVk");
   r = await me(forged);
   check("auth.forged-cookie", r.status === 401 && r.json?.error === "no_session" && r.setCookie.some((c) => /^bee_session=;/.test(c)), `made-up session id: HTTP ${r.status} ${r.json?.error}, cookie cleared`);
-  const pw = (await totp.passwordGrant("nova.applicant")).json;
+  const pw = (await totp.passwordGrant(T("nova.applicant"))).json;
   r = await me(new Jar(), { headers: { Authorization: `Bearer ${pw.access_token}` } });
   check("auth.browser-bearer-ignored", r.status === 401 && r.json?.error === "no_session", `valid bearer token from the browser, no cookie: HTTP ${r.status} ${r.json?.error}`);
 
   /* ---------- successful sign-in: Nova ---------- */
-  const nova = await signIn("nova.applicant");
+  const nova = await signIn(T("nova.applicant"));
   const s1 = nova.start;
   const authQ = new URL(s1.authUrl).searchParams;
   check("auth.login-redirect", s1.r1.status === 303 && s1.authUrl.startsWith(`${ISSUER}/protocol/openid-connect/auth`) && authQ.get("code_challenge_method") === "S256" && authQ.get("state") && authQ.get("nonce") && !authQ.get("code_verifier"),
@@ -151,10 +151,10 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
   const claim = r.json?.ignoredTokenClaims?.organisation;
   check("auth.nova-org-claim-ignored", claim === "Bureau of Energy Efficiency (local)" && orgs === "NOVA", `token claims organisation '${claim}'; Spring returned NOVA from its database`);
   r = await session(nova.jar);
-  check("auth.session-view-no-tokens", r.json?.authenticated === true && r.json?.username === "nova.applicant" && !JWT.test(r.body) && !/token"\s*:/i.test(r.body), `GET /api/auth/session: ${r.body}`);
+  check("auth.session-view-no-tokens", r.json?.authenticated === true && r.json?.username === T("nova.applicant") && !JWT.test(r.body) && !/token"\s*:/i.test(r.body), `GET /api/auth/session: ${r.body}`);
 
   /* ---------- PixelCert ---------- */
-  const pixel = await signIn("pixel.applicant");
+  const pixel = await signIn(T("pixel.applicant"));
   r = await me(pixel.jar);
   const porgs = (r.json?.organisations || []).map((o) => o.code).join(",");
   check("auth.pixel-signed-in", (pixel.final || "").endsWith("/app") && r.status === 200 && porgs === "PIXEL" && (r.json?.effectiveRoles || []).map((x) => `${x.role}/${x.scope}`).join(",") === "agency/own-org",
@@ -163,7 +163,7 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
   /* ---------- Keycloak accepts, Spring refuses: no session is created ---------- */
   for (const [u, want] of [["no.account", "no_active_account"], ["inactive.role", "no_effective_role"], ["role.mismatch", "no_effective_role"]]) {
     const kcBefore = await kcSessions(u);
-    const x = await signIn(u);
+    const x = await signIn(T(u));
     const m = await me(x.jar);
     const kc = await kcSessions(u);
     check(`auth.denied.${u}`, errorOf(x.final) === want && !x.sessionSetCookie && m.status === 401 && kc === kcBefore,
@@ -174,7 +174,7 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
   {
     const jar = new Jar();
     const s = await startLogin(jar);
-    const cb = new URL(await submitCredentials(jar, s.form, "nova.applicant"));
+    const cb = new URL(await submitCredentials(jar, s.form, T("nova.applicant")));
     const good = cb.toString();
     cb.searchParams.set("state", "tampered-state");
     r = await req(jar, cb.toString());
@@ -185,7 +185,7 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
   {
     const jar = new Jar();
     const s = await startLogin(jar);
-    const cb = new URL(await submitCredentials(jar, s.form, "nova.applicant"));
+    const cb = new URL(await submitCredentials(jar, s.form, T("nova.applicant")));
     cb.searchParams.set("iss", "http://127.0.0.1:8180/realms/master");
     r = await req(jar, cb.toString());
     check("auth.callback-issuer", errorOf(r.location) === "invalid_issuer", `iss altered: -> error=${errorOf(r.location)}`);
@@ -194,7 +194,7 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
     const victim = new Jar(), attacker = new Jar();
     await startLogin(victim);
     const a = await startLogin(attacker);
-    const attackerCallback = await submitCredentials(attacker, a.form, "pixel.applicant");
+    const attackerCallback = await submitCredentials(attacker, a.form, T("pixel.applicant"));
     r = await req(victim, attackerCallback);
     check("auth.callback-login-csrf", errorOf(r.location) === "invalid_state" && !victim.get("bee_session"), `another browser's code+state replayed into this browser: -> error=${errorOf(r.location)}, no session`);
     r = await req(new Jar(), attackerCallback);
@@ -204,20 +204,20 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
   check("auth.callback-replay", errorOf(r.location) === "login_expired", `successful callback URL replayed: -> error=${errorOf(r.location)}`);
 
   /* ---------- Spring stays the authority during a session ---------- */
-  sql(`UPDATE app.role_assignment SET active = false WHERE user_id = '${IDS["nova.applicant"]}'`);
+  sql(`UPDATE app.role_assignment SET active = false WHERE user_id = '${ids.accountId("nova.applicant")}'`);
   try {
     r = await me(nova.jar);
     check("auth.midsession-role-revoked", r.status === 403 && r.json?.error === "no_effective_role", `role deactivated in Spring while signed in: HTTP ${r.status} ${r.json?.error}`);
   } finally {
-    sql(`UPDATE app.role_assignment SET active = true WHERE user_id = '${IDS["nova.applicant"]}'`);
+    sql(`UPDATE app.role_assignment SET active = true WHERE user_id = '${ids.accountId("nova.applicant")}'`);
   }
   r = await me(nova.jar);
   check("auth.midsession-role-restored", r.status === 200, `role reactivated: HTTP ${r.status}`);
 
   /* ---------- expiry and refresh ---------- */
   if (WITH_EXPIRY) {
-    const a = await signIn("nova.applicant");
-    const b = await signIn("pixel.applicant");
+    const a = await signIn(T("nova.applicant"));
+    const b = await signIn(T("pixel.applicant"));
     const before = (await session(a.jar)).json;
     await kcLogoutUser("pixel.applicant");
     const waitMs = Math.max(0, new Date(before.accessExpiresAt).getTime() - Date.now() - 10_000);
@@ -261,9 +261,11 @@ const attr = (setCookie, name) => new RegExp(`;\\s*${name}(=|;|$)`, "i").test(se
   const script = webExposure.flatMap((e) => e.setCookie).filter((c) => !attr(c, "HttpOnly"));
   check("auth.no-script-readable-cookie", script.length === 0, `portal Set-Cookie headers without HttpOnly: ${script.length}`);
 
-  console.log(`auth checks: ${pass} passed, ${fail} failed`);
-  process.exit(fail ? 1 : 0);
-})().catch((e) => {
-  check("auth.run", false, `aborted: ${e.message}`);
-  process.exit(1);
-});
+}
+
+ids.withIdentities("test", main)
+  .catch((e) => check("auth.run", false, `aborted: ${e.message}`))
+  .then(() => {
+    console.log(`auth checks: ${pass} passed, ${fail} failed`);
+    process.exit(fail ? 1 : 0);
+  });

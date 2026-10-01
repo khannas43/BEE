@@ -8,12 +8,17 @@
  *
  *   node scripts/local/access-check.cjs
  *
- * Appends JSON lines to $AUTH_RESULTS when set (used by local:check).
+ * Calls are made by disposable twins of the seeded personas (scripts/local/test-identities.cjs),
+ * whose bee_app rows copy the persona's; the row flips act on the twin. Check ids and
+ * details keep the persona names. Appends JSON lines to $AUTH_RESULTS when set.
  */
 const fs = require("fs");
 const { execFileSync } = require("child_process");
-const { APPLICATIONS, app, usr } = require("../../local/generate-fixtures.cjs");
+const { APPLICATIONS, USERS, app } = require("../../local/generate-fixtures.cjs");
 const totp = require("./totp.cjs");
+const ids = require("./test-identities.cjs");
+/** bee_app account id of the twin of seeded persona n. */
+const usr = (n) => ids.accountId(USERS.find((u) => u.n === n).username);
 
 const env = (k, d) => process.env[k] || d;
 const API = `http://127.0.0.1:${env("BEE_API_PORT", "8090")}`;
@@ -38,7 +43,7 @@ const NOT_FOUND = JSON.stringify({ error: "not_found" });
 const tokens = {};
 async function token(username) {
   if (tokens[username]) return tokens[username];
-  return (tokens[username] = await totp.accessToken(username));
+  return (tokens[username] = await totp.accessToken(ids.name(username)));
 }
 async function call(username, path, method = "GET") {
   const r = await fetch(`${API}${path}`, { method, headers: { Authorization: `Bearer ${await token(username)}`, "Content-Type": "application/json" }, body: method === "GET" ? undefined : "{}" });
@@ -51,7 +56,7 @@ const refs = (r) => (r.json?.items || []).map((i) => i.reference).sort();
 const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 const leaks = (body, refsList) => [...idsOf(refsList), ...refsList].filter((x) => body.includes(x));
 
-(async () => {
+async function main() {
   const snapshot = () => sql("SELECT string_agg(id || ':' || state || ':' || version, ',' ORDER BY id) FROM app.model_application");
   const before = snapshot();
 
@@ -189,12 +194,13 @@ const leaks = (body, refsList) => [...idsOf(refsList), ...refsList].filter((x) =
   const after = snapshot();
   const workflowTables = sql("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('transition', 'fee_confirmation', 'rating_result', 'approval_decision')");
   check("actions.no-state-change", before === after && workflowTables === "0", `model_application id:state:version unchanged (${after.split(",").length} rows); workflow tables present: ${workflowTables}`);
-  for (const u of Object.keys(tokens)) await totp.logoutUser(u);
+  for (const u of Object.keys(tokens)) await totp.logoutUser(ids.name(u));
 
-  console.log(`access checks: ${pass} passed, ${fail} failed`);
-  process.exit(fail ? 1 : 0);
-})().catch((e) => {
-  check("access.run", false, `aborted: ${e.message}`);
-  console.log(`access checks: ${pass} passed, ${fail} failed`);
-  process.exit(1);
-});
+}
+
+ids.withIdentities("test", main)
+  .catch((e) => check("access.run", false, `aborted: ${e.message}`))
+  .then(() => {
+    console.log(`access checks: ${pass} passed, ${fail} failed`);
+    process.exit(fail ? 1 : 0);
+  });

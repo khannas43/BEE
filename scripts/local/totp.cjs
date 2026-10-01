@@ -6,8 +6,14 @@
  * Keycloak rejects a reused code, so each user's 30-second steps are handed out once.
  *
  *   node scripts/local/totp.cjs token <username>    print an access token (bee-local-check, with OTP)
- *   node scripts/local/totp.cjs enroll <username>   (re-)enroll if the stored secret is missing or stale
+ *   node scripts/local/totp.cjs enroll <username>   enroll a user who has no OTP credential yet
  *   node scripts/local/totp.cjs logout <username>   end the user's Keycloak sessions (issued JWTs stay valid to expiry)
+ *
+ * Seeded users (local/generate-fixtures.cjs) are protected: routine checks use disposable
+ * twins (scripts/local/test-identities.cjs). An existing OTP credential is never replaced;
+ * when its secret is not in the local store, the helper reports that and stops. Removing
+ * a seeded user's credential or sessions, or enrolling one, needs { allowProtected: true },
+ * which only the explicit CLI commands pass. BEE_TOTP_DIR overrides the store directory.
  */
 const crypto = require("crypto");
 const fs = require("fs");
@@ -19,7 +25,11 @@ const REALM = env("BEE_REALM", "bee-local");
 const ISSUER = `${KC}/realms/${REALM}`;
 const PASSWORD = env("BEE_DEV_USER_PASSWORD", "bee-local-dev");
 const ADMIN_PASSWORD = env("BEE_KC_ADMIN_PASSWORD", "bee-local-admin");
-const DIR = path.join(__dirname, "../../.local/run/totp");
+const DIR = env("BEE_TOTP_DIR", path.join(__dirname, "../../.local/run/totp"));
+const PROTECTED = new Set(require("../../local/generate-fixtures.cjs").USERS.map((u) => u.username));
+function guard(u, opts, what) {
+  if (PROTECTED.has(u) && !opts?.allowProtected) throw new Error(`refusing to ${what} seeded user ${u}; routine checks use disposable test identities`);
+}
 const PERIOD = 30;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -126,13 +136,17 @@ async function admin(pathname, init = {}) {
 }
 const userId = async (u) => (await admin(`/users?username=${encodeURIComponent(u)}&exact=true`))[0]?.id;
 const otpCredentials = async (u) => (await admin(`/users/${await userId(u)}/credentials`)).filter((c) => c.type === "otp");
-async function removeOtp(u) {
+async function removeOtp(u, opts) {
+  guard(u, opts, "remove the OTP credential of");
   const id = await userId(u);
   for (const c of await otpCredentials(u)) await admin(`/users/${id}/credentials/${c.id}`, { method: "DELETE" });
   await admin(`/users/${id}/logout`, { method: "POST" });
   try { fs.unlinkSync(file(u)); } catch {}
 }
-const logoutUser = async (u) => admin(`/users/${await userId(u)}/logout`, { method: "POST" });
+async function logoutUser(u, opts) {
+  guard(u, opts, "end the Keycloak sessions of");
+  return admin(`/users/${await userId(u)}/logout`, { method: "POST" });
+}
 
 /* ---------- jar-backed request, for enrollment outside the portal ---------- */
 function cookieReq() {
@@ -146,16 +160,21 @@ function cookieReq() {
   };
 }
 
+/** An existing OTP credential whose secret this store does not hold. Never replaced. */
+class UnusableCredential extends Error {}
+
 /**
- * Makes sure the stored secret matches the user's single Keycloak OTP credential. If not
- * (fresh identity reset, lost file), removes any OTP credential and enrolls through
- * Keycloak's own account-console login, then ends that Keycloak session.
+ * Returns false when the stored secret matches the user's single Keycloak OTP credential.
+ * With no OTP credential, enrolls through Keycloak's own account-console login and ends
+ * that Keycloak session. With a credential this store cannot use (enrolled elsewhere, or
+ * the local file is missing or stale), throws UnusableCredential and changes nothing.
  */
-async function ensureEnrolled(u) {
+async function ensureEnrolled(u, opts) {
   const st = load(u);
   const creds = await otpCredentials(u);
   if (st && creds.length === 1 && st.credentialId === creds[0].id) return false;
-  if (creds.length) await removeOtp(u);
+  if (creds.length) throw new UnusableCredential(`${u} has ${creds.length} OTP credential(s) (${creds.map((c) => c.id).join(", ")}) but no matching secret in ${DIR}; not replaced. Use the user's own authenticator, or delete the credential explicitly in the Keycloak admin console first.`);
+  guard(u, opts, "enroll");
   const req = cookieReq();
   const verifier = crypto.randomBytes(32).toString("base64url");
   const q = new URLSearchParams({ client_id: "account-console", redirect_uri: `${ISSUER}/account/`, response_type: "code", scope: "openid", state: crypto.randomBytes(8).toString("hex"), nonce: crypto.randomBytes(8).toString("hex"), code_challenge: crypto.createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" });
@@ -163,7 +182,7 @@ async function ensureEnrolled(u) {
   if (!done.location?.startsWith(`${ISSUER}/account/`)) throw new Error(`enrollment for ${u} ended at ${done.location}`);
   const after = await otpCredentials(u);
   save(u, { ...load(u), credentialId: after[0]?.id });
-  await logoutUser(u);
+  await logoutUser(u, { allowProtected: true });
   return true;
 }
 /** After a portal enrollment, record which Keycloak credential the stored secret belongs to. */
@@ -179,21 +198,21 @@ async function passwordGrant(u, { otp, password = PASSWORD } = {}) {
   const r = await fetch(`${ISSUER}/protocol/openid-connect/token`, { method: "POST", body: new URLSearchParams(body) });
   return { status: r.status, json: await r.json() };
 }
-async function accessToken(u) {
-  await ensureEnrolled(u);
+async function accessToken(u, opts) {
+  await ensureEnrolled(u, opts);
   const r = await passwordGrant(u);
   if (!r.json.access_token) throw new Error(`no token for ${u}: ${JSON.stringify(r.json)}`);
   return r.json.access_token;
 }
 
-module.exports = { hotp, currentStep, save, nextCode, wrongCode, page, errorText, completeLogin, ensureEnrolled, recordCredential, removeOtp, logoutUser, otpCredentials, passwordGrant, accessToken, load, admin, userId };
+module.exports = { hotp, currentStep, save, nextCode, wrongCode, page, errorText, completeLogin, ensureEnrolled, recordCredential, removeOtp, logoutUser, otpCredentials, passwordGrant, accessToken, load, admin, adminToken, userId, UnusableCredential, PROTECTED, DIR };
 
 if (require.main === module) {
   const [cmd, u] = process.argv.slice(2);
   (async () => {
     if (cmd === "token") process.stdout.write(await accessToken(u));
-    else if (cmd === "enroll") console.log((await ensureEnrolled(u)) ? `enrolled ${u}` : `${u} already enrolled`);
-    else if (cmd === "logout") await logoutUser(u);
+    else if (cmd === "enroll") console.log((await ensureEnrolled(u, { allowProtected: true })) ? `enrolled ${u}` : `${u} already enrolled`);
+    else if (cmd === "logout") await logoutUser(u, { allowProtected: true });
     else { console.error("usage: totp.cjs token|enroll|logout <username>"); process.exit(2); }
   })().catch((e) => { console.error(e.message); process.exit(1); });
 }

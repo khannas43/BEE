@@ -18,6 +18,12 @@ ok() { if "$@"; then echo 1; else echo 0; fi; }
 API="http://127.0.0.1:${BEE_API_PORT}"
 WEB="http://127.0.0.1:${BEE_WEB_PORT}"
 
+# ---- WP02.3: the 16 seeded users and the realm flows must come out of this run unchanged.
+# Checks sign in only disposable twins (scripts/local/test-identities.cjs), removed at the end.
+PROTECTED_BEFORE="$RUN_DIR/protected-before.json"
+snap_out="$(node "$ROOT/scripts/local/protected-state.cjs" snapshot "$PROTECTED_BEFORE" 2>&1)" || { rm -f "$PROTECTED_BEFORE"; check "protected.snapshot" 0 "could not record the protected state: $(tail -1 <<<"$snap_out")"; }
+for tag in test mfa misbind; do node "$ROOT/scripts/local/test-identities.cjs" teardown "$tag" >/dev/null 2>&1; done
+
 # ---- ports: listening, bound to loopback, owned by this project
 for spec in "postgres:$BEE_PG_PORT" "keycloak:$BEE_KC_PORT" "api:$BEE_API_PORT" "web:$BEE_WEB_PORT"; do
   kind="${spec%%:*}"; port="${spec##*:}"
@@ -62,9 +68,13 @@ check "db.no-matrix-grants" "$(ok test "$grants" = 0)" "role rows outside the 13
 iso="$(docker exec -e PGPASSWORD="$BEE_APP_DB_PASSWORD" bee-local-postgres psql -h 127.0.0.1 -U bee_app -d keycloak -c 'SELECT 1' 2>&1 || true)"
 check "db.keycloak-isolated" "$(ok grep -q 'permission denied' <<<"$iso")" "bee_app login to keycloak db: $(grep -o 'permission denied[^"]*' <<<"$iso" | head -1 | cut -c1-60)"
 
-# ---- tokens: Keycloak identifies, Spring decides
-token() { # password grant with TOTP (scripts/local/totp.cjs enrolls first if needed)
-  node "$ROOT/scripts/local/totp.cjs" token "$1" 2>/dev/null || true
+# ---- tokens: Keycloak identifies, Spring decides (as disposable twins of the personas)
+id_out="$(node "$ROOT/scripts/local/test-identities.cjs" setup test 2>&1)"
+check "test-identities.created" "$(ok grep -q '^created 16' <<<"$id_out")" "$id_out (test.<persona>: same Keycloak role and bee_app rows as the seeded persona)"
+export BEE_TEST_IDENTITIES=test
+trap 'node "$ROOT/scripts/local/test-identities.cjs" teardown test >/dev/null 2>&1' EXIT
+token() { # password grant with TOTP for the persona's twin (scripts/local/totp.cjs enrolls the twin)
+  node "$ROOT/scripts/local/totp.cjs" token "test.$1" 2>/dev/null || true
 }
 me() { curl -s -o "$RUN_DIR/me.body" -w '%{http_code}' --max-time 5 -H "Authorization: Bearer $1" "$API/api/me"; }
 
@@ -108,7 +118,7 @@ wh="$(curl -s -w '\n%{http_code}' --max-time 15 "$WEB/api/runtime/health" || tru
 check "web.server-to-api-health" "$(ok test "$(tail -1 <<<"$wh")" = 200 -a "$(sed '$d' <<<"$wh" | jq -r .api 2>/dev/null)" = UP)" "GET /api/runtime/health HTTP $(tail -1 <<<"$wh") api=$(sed '$d' <<<"$wh" | jq -r .api 2>/dev/null)"
 code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Authorization: Bearer $t_nova" "$WEB/api/runtime/me")"
 check "web.browser-token-not-forwarded" "$(ok test "$code" = 401)" "GET /api/runtime/me with a browser Authorization header: HTTP $code"
-for u in nova.applicant pixel.applicant no.account inactive.role role.mismatch; do node "$ROOT/scripts/local/totp.cjs" logout "$u" >/dev/null 2>&1 || true; done
+for u in nova.applicant pixel.applicant no.account inactive.role role.mismatch; do node "$ROOT/scripts/local/totp.cjs" logout "test.$u" >/dev/null 2>&1 || true; done
 
 # ---- WP02.1 sign-in through Next.js server routes (scripts/local/auth-check.cjs)
 auth_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/auth-check.cjs" 2>&1)"
@@ -137,6 +147,17 @@ grep -E '^(PASS|FAIL) ' <<<"$mf_out"
 read -r m_pass m_fail <<<"$(sed -nE 's/^mfa checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$mf_out")"
 if [[ -z "${m_pass:-}" ]]; then check "mfa.run" 0 "mfa-check did not complete: $(tail -1 <<<"$mf_out")"
 else pass=$((pass + m_pass)); fail=$((fail + m_fail)); fi
+
+# ---- WP02.3: seeded users' OTP credentials and sessions, and the realm flows, unchanged
+node "$ROOT/scripts/local/test-identities.cjs" teardown test >/dev/null 2>&1
+trap - EXIT
+if [[ -f "$PROTECTED_BEFORE" ]]; then
+  pr_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/protected-state.cjs" compare "$PROTECTED_BEFORE" 2>&1)"
+  grep -E '^(PASS|FAIL) ' <<<"$pr_out"
+  read -r p_pass p_fail <<<"$(sed -nE 's/^protected checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$pr_out")"
+  if [[ -z "${p_pass:-}" ]]; then check "protected.run" 0 "protected-state compare did not complete: $(tail -1 <<<"$pr_out")"
+  else pass=$((pass + p_pass)); fail=$((fail + p_fail)); fi
+fi
 
 # ---- memory against ADR-001 D-RT8 (MB)
 mem_mb() { docker stats --no-stream --format '{{.MemUsage}}' "$1" 2>/dev/null | awk '{v=$1; u=v; gsub(/[0-9.]/,"",u); gsub(/[A-Za-z]/,"",v); if(u=="GiB")v*=1024; else if(u=="KiB")v/=1024; printf "%d", v}'; }

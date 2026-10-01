@@ -22,6 +22,7 @@
     "local:access": "bash -c 'source scripts/local/lib.sh && node scripts/local/access-check.cjs'",
     "local:browser": "bash -c 'source scripts/local/lib.sh && node scripts/local/browser-check.cjs'",
     "local:mfa": "bash -c 'source scripts/local/lib.sh && node scripts/local/mfa-check.cjs'",
+    "local:mfa:misbind": "bash -c 'source scripts/local/lib.sh && node scripts/local/mfa-misbind-check.cjs'",
     "web:test": "node --test scripts/local/oidc.test.mjs",
     "api:test": "JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -q -B -f backend/pom.xml test"
   },

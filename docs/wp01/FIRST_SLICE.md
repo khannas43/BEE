@@ -98,10 +98,10 @@ Only what the slice needs. Names are indicative; WP04 and WP05 own the final sch
 | `brand` | id, owner organisation id, name, status |
 | `agency_authorisation` | agency organisation id, principal organisation id, brand id, valid from/to |
 | `model_application` | id (server sequence), organisation id, brand id, category, model number, declared metric (ISEER), test lab, test report reference, state, returned-from state, current rating result id, version |
-| `fee_rule` | id, category, amount, effective from/to |
+| `fee_rule` | id, category, amount, effective from/to (now `master_fee_rule`, versioned with source and verification status; see [WP04.1_MASTERS.md](../wp04/WP04.1_MASTERS.md)) |
 | `fee_confirmation` | application id, fee rule id, amount due, amount received, reference, confirmed by, confirmed at |
 | `assignment` | application id, stage, assignee user id (IAME and Reviewer) |
-| `rating_formula` | id, category, version, thresholds, effective from/to, source reference, verification status |
+| `rating_formula` | id, category, version, thresholds, effective from/to, source reference, verification status (now `master_rating_formula`, metadata only; see [WP04.1_MASTERS.md](../wp04/WP04.1_MASTERS.md)) |
 | `rating_result` | id, application id, formula id and version, inputs, star result, computed by, computed at, superseded by |
 | `approval_decision` | application id, stage (director, secretary), decision, rating result id, decided by, decided at, note |
 | `transition` | append-only history, as in §4 |
@@ -171,9 +171,9 @@ The local demo uses these defaults. Each is **provisional and pending a BEE deci
 | --- | --- | --- | --- |
 | D1 | Is Secretary approval always required, or can it be delegated to the Director for some categories? | Always required: Director recommends, Secretary gives final approval | RFP Vol 2 §1.3 lists both; DDD §5.3 says "per delegation" |
 | D2 | Who allocates applications to IAME and Reviewer users? | Seeded round-robin assignment; no allocator role in the slice | RFP Vol 2 §1.3 names a Data Analyst role, which the prototype lacks (G12) |
-| D3 | Which approved star-rating formula and version applies to each category? | Current `computeStars` thresholds, recorded as formula version "0-unverified" | RFP Vol 2 SoW (b); the corrigendum (row 70) refers to beestarlabel.com (G13) |
+| D3 | Which approved star-rating formula and version applies to each category? | Current `computeStars` thresholds, recorded as formula version "0-unverified". WP04.1 stores only the label, with an empty definition and computation disallowed (decision M5) | RFP Vol 2 SoW (b); the corrigendum (row 70) refers to beestarlabel.com (G13) |
 | D4 | Does `/app/registrations/record` become the applicant's model record? | Yes, scoped to the applicant's organisation | Today the manufacturer cannot open it (G02) |
 | D5 | Is the IAME verifier (note-sheet) a separate step from IAME scrutiny? | Single IAME step in the slice | RFP Vol 2 §1.3; DDD §4.3 (G11) |
-| D6 | Which fee rule applies per category and application type? | One seeded rule: ₹24,000 for room air conditioners | DDD §5.3 (G08) |
+| D6 | Which fee rule applies per category and application type? | One seeded rule: ₹24,000 for room air conditioners. The earlier local seed held ₹1,000. WP04.1 keeps both as labelled versions, neither BEE-approved: ₹1,000 synthetic before 2026-10-01 and ₹24,000 provisional from 2026-10-01 (synthetic split date; decision M4; [WP04.1_MASTERS.md](../wp04/WP04.1_MASTERS.md) §5) | DDD §5.3 (G08) |
 
 Because D3 is unverified, any rating computed in the local demo carries formula version "0-unverified" and must not be presented as an official star rating.

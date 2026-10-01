@@ -156,6 +156,65 @@ const realm = {
 };
 
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
+
+/*
+ * WP04.1 effective-dated masters (docs/wp04/WP04.1_MASTERS.md). Synthetic RAC examples for the
+ * local slice: none is BEE-approved ("verified"). Periods are half-open [from, to); to = null
+ * is open-ended. Seeded versions are immutable: to change a value, add a new version.
+ */
+const SHARED = ["rule_key", "version", "effective_from", "effective_to", "source_reference", "verification_status", "note", "legacy_id"];
+const MASTERS = [
+  { table: "master_category", columns: { name: "text" }, rows: [
+    { rule_key: "RAC", version: 1, effective_from: "2026-01-01", effective_to: null, verification_status: "provisional", legacy_id: null,
+      source_reference: "FIRST_SLICE.md §1 (slice category); BEE category list not yet consulted", note: "Local slice category only", name: "Room air conditioner" },
+  ] },
+  { table: "master_standard", columns: { category_code: "text", purpose: "text", standard_code: "text", title: "text", edition: "text" }, rows: [
+    { rule_key: "RAC:performance_test", version: 1, effective_from: "2026-01-01", effective_to: "2026-07-01", verification_status: "synthetic", legacy_id: null,
+      source_reference: "Synthetic local example; the applicable standard is BEE decision M2", note: "Stand-in code, not a real standard",
+      category_code: "RAC", purpose: "performance_test", standard_code: "SYN-RAC-PERF", title: "Synthetic RAC performance test standard", edition: "synthetic-2025" },
+    { rule_key: "RAC:performance_test", version: 2, effective_from: "2026-07-01", effective_to: null, verification_status: "synthetic", legacy_id: null,
+      source_reference: "Synthetic local example; the applicable standard is BEE decision M2", note: "Stand-in code, not a real standard",
+      category_code: "RAC", purpose: "performance_test", standard_code: "SYN-RAC-PERF", title: "Synthetic RAC performance test standard", edition: "synthetic-2026" },
+  ] },
+  { table: "master_lab_accreditation", columns: { laboratory_code: "text", category_code: "text", accreditation_body: "text", certificate_ref: "text", accreditation_status: "text" }, rows: [
+    ...[[1, "2026-01-01", "2026-06-01", "active"], [2, "2026-06-01", "2026-07-01", "suspended"], [3, "2026-08-01", null, "active"]].map(([version, from, to, status]) => ({
+      rule_key: "LAB:RAC", version, effective_from: from, effective_to: to, verification_status: "synthetic", legacy_id: null,
+      source_reference: "Synthetic local example; no accreditation body was consulted", note: version === 3 ? "Re-accredited after a synthetic gap (2026-07-01 to 2026-08-01)" : "Synthetic accreditation history",
+      laboratory_code: "LAB", category_code: "RAC", accreditation_body: "SYN-ACCREDITATION-BODY", certificate_ref: `SYN-LAB-RAC-000${version}`, accreditation_status: status })),
+  ] },
+  { table: "master_fee_rule", columns: { category_code: "text", application_type: "text", amount_inr: "numeric" }, rows: [
+    { rule_key: "RAC:new_model", version: 1, effective_from: "2026-01-01", effective_to: "2026-10-01", verification_status: "synthetic", legacy_id: "RAC-DEMO",
+      source_reference: "V2 local seed fee_rule RAC-DEMO (local placeholder; no source)", note: "Synthetic local amount only; BEE fee decision pending",
+      category_code: "RAC", application_type: "new_model", amount_inr: "1000.00" },
+    { rule_key: "RAC:new_model", version: 2, effective_from: "2026-10-01", effective_to: null, verification_status: "provisional", legacy_id: null,
+      source_reference: "FIRST_SLICE.md provisional decision D6, citing DDD §5.3 (gap G08); not confirmed by BEE",
+      note: "Provisional local amount from D6; supersedes the ₹1,000 placeholder for dates from 2026-10-01; BEE decision D6 pending",
+      category_code: "RAC", application_type: "new_model", amount_inr: "24000.00" },
+  ] },
+  { table: "master_rating_formula", columns: { category_code: "text", formula_label: "text", inputs: "jsonb", definition: "jsonb", computation_allowed: "boolean" }, rows: [
+    { rule_key: "RAC:star_rating", version: 1, effective_from: "2026-01-01", effective_to: null, verification_status: "synthetic", legacy_id: "RAC-STAR-DEMO",
+      source_reference: "V2 local seed rating_formula RAC-STAR-DEMO (FIRST_SLICE.md D3 placeholder)", note: "Placeholder only; no official rating may be computed",
+      category_code: "RAC", formula_label: "0-unverified", inputs: "[]", definition: "{}", computation_allowed: false },
+  ] },
+];
+const SHARED_TYPES = { rule_key: "text", version: "integer", effective_from: "date", effective_to: "date", source_reference: "text", verification_status: "text", note: "text", legacy_id: "text" };
+const lit = (v, type) => (v === null || v === undefined ? `NULL::${type}` : type === "integer" || type === "boolean" ? `${v}::${type}` : `${q(v)}::${type}`);
+function masterSql(m) {
+  const types = { ...SHARED_TYPES, ...m.columns };
+  const cols = Object.keys(types);
+  const values = m.rows.map((r) => `  (${cols.map((c) => lit(r[c], types[c])).join(", ")})`).join(",\n");
+  const compared = cols.filter((c) => c !== "rule_key" && c !== "version");
+  return [
+    `INSERT INTO ${m.table} (${cols.join(", ")}) VALUES`,
+    values,
+    "ON CONFLICT (rule_key, version) DO NOTHING;",
+    `DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES`,
+    values,
+    `) AS f (${cols.join(", ")}) JOIN ${m.table} m ON m.rule_key = f.rule_key AND m.version = f.version`,
+    `  WHERE (${compared.map((c) => `m.${c}`).join(", ")}) IS DISTINCT FROM (${compared.map((c) => `f.${c}`).join(", ")})) THEN`,
+    `  RAISE EXCEPTION '${m.table}: a stored version differs from the fixture; versions are immutable, add a new version instead'; END IF; END $$;`,
+  ].join("\n");
+}
 const S = [];
 S.push("-- Generated by local/generate-fixtures.cjs. Synthetic local data only. Idempotent.");
 S.push("BEGIN;");
@@ -172,10 +231,9 @@ S.push("ON CONFLICT (user_id, organisation_id) DO UPDATE SET active = true;");
 S.push("INSERT INTO role_assignment (user_id, role, scope, active) VALUES");
 S.push(dbUsers.map((u) => `  (${q(usr(u.n))}, ${q(u.db.role)}, ${q(u.db.scope)}, ${u.db.active})`).join(",\n"));
 S.push("ON CONFLICT (user_id, role) DO UPDATE SET scope = EXCLUDED.scope, active = EXCLUDED.active;");
-S.push("-- Synthetic local-only fee; this is not a BEE-approved amount.");
-S.push("INSERT INTO fee_rule (id, category, version, amount_inr, status, note) VALUES ('RAC-DEMO', 'RAC', '0-unverified', 1000.00, 'unverified', 'Synthetic local amount only; BEE fee decision pending') ON CONFLICT (id) DO UPDATE SET amount_inr = EXCLUDED.amount_inr, status = EXCLUDED.status, note = EXCLUDED.note;");
-S.push("-- Metadata only: no approved star-rating expression or computation is claimed.");
-S.push("INSERT INTO rating_formula (id, category, version, status, definition, note) VALUES ('RAC-STAR-DEMO', 'RAC', '0-unverified', 'unverified', '{}'::jsonb, 'Placeholder only; no official rating may be computed') ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, definition = EXCLUDED.definition, note = EXCLUDED.note;");
+S.push("-- WP04.1 effective-dated masters: synthetic or provisional, none BEE-approved; no official fee or star rating.");
+S.push("-- Inserted once per (rule_key, version); a stored version that differs from the fixture fails the seed.");
+for (const m of MASTERS) S.push(masterSql(m));
 S.push("-- WP02.2 scope fixtures: seeded states only; version reset to 0 on every seed.");
 S.push("INSERT INTO model_application (id, reference, organisation_id, brand_name, category, model_number, state, version) VALUES");
 S.push(APPLICATIONS.map((a) => `  (${q(app(a.n))}, ${q(a.reference)}, ${q(ORGS.find((o) => o.code === a.org).id)}, ${q(a.brand)}, 'RAC', ${q(a.model)}, ${q(a.state)}, 0)`).join(",\n"));
@@ -183,7 +241,7 @@ S.push("ON CONFLICT (id) DO UPDATE SET reference = EXCLUDED.reference, organisat
 S.push("INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES");
 S.push(ASSIGNMENTS.map((a) => `  (${q(usr(a.user))}, 'model_application', ${q(app(a.app))}, ${q(a.stage)}, ${a.active})`).join(",\n"));
 S.push("ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = EXCLUDED.active;");
-S.push("INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1') ON CONFLICT (seed_version) DO NOTHING;");
+S.push("INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1'), ('wp04.1-masters-v1') ON CONFLICT (seed_version) DO NOTHING;");
 S.push("COMMIT;");
 S.push("");
 
@@ -193,7 +251,7 @@ if (require.main === module) {
     [path.join(__dirname, "seed/seed.sql"), S.join("\n")],
   ];
   if (process.argv.includes("--counts")) {
-    console.log(JSON.stringify({ organisations: ORGS.length, keycloakUsers: USERS.length, userAccounts: dbUsers.length, memberships: dbUsers.length, roleAssignments: dbUsers.length, activeRoleAssignments: dbUsers.filter((u) => u.db.active).length, feeRules: 1, ratingFormulas: 1, modelApplications: APPLICATIONS.length, assignments: ASSIGNMENTS.length, activeAssignments: ASSIGNMENTS.filter((a) => a.active).length }));
+    console.log(JSON.stringify({ organisations: ORGS.length, keycloakUsers: USERS.length, userAccounts: dbUsers.length, memberships: dbUsers.length, roleAssignments: dbUsers.length, activeRoleAssignments: dbUsers.filter((u) => u.db.active).length, masters: Object.fromEntries(MASTERS.map((m) => [m.table, m.rows.length])), modelApplications: APPLICATIONS.length, assignments: ASSIGNMENTS.length, activeAssignments: ASSIGNMENTS.filter((a) => a.active).length }));
     process.exit(0);
   }
   const CHECK = process.argv.includes("--check");
@@ -210,4 +268,4 @@ if (require.main === module) {
   if (!CHECK) console.log(`wrote ${OUT.length} fixture files (${ORGS.length} organisations, ${USERS.length} Keycloak users, ${dbUsers.length} Spring accounts)`);
 }
 
-module.exports = { ORGS, USERS, APPLICATIONS, ASSIGNMENTS, usr, org, app, REALM, DEV_PASSWORD };
+module.exports = { ORGS, USERS, APPLICATIONS, ASSIGNMENTS, MASTERS, usr, org, app, REALM, DEV_PASSWORD };

@@ -19,6 +19,8 @@
 
   <properties>
     <java.version>17</java.version>
+    <!-- WP04.1: database tests (real local PostgreSQL) run only via npm run api:test:masters -->
+    <bee.test.excludedGroups>db</bee.test.excludedGroups>
   </properties>
 
   <dependencies>
@@ -74,6 +76,13 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <excludedGroups>${bee.test.excludedGroups}</excludedGroups>
+        </configuration>
       </plugin>
     </plugins>
   </build>

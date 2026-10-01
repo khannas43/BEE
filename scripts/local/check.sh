@@ -57,8 +57,18 @@ got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.organisation), (SELE
 read -r g_org g_usr g_mem g_role g_act g_asg <<<"$got"
 w="$(jq -r '"\(.organisations) \(.userAccounts) \(.memberships) \(.roleAssignments) \(.activeRoleAssignments)"' <<<"$want")"
 check "db.seed-counts" "$(ok test "$g_org $g_usr $g_mem $g_role $g_act" = "$w")" "org/user/membership/role/active = $g_org/$g_usr/$g_mem/$g_role/$g_act (expected ${w// //})"
-rule_counts="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.fee_rule WHERE id='RAC-DEMO' AND category='RAC' AND version='0-unverified' AND amount_inr=1000 AND status='unverified'), (SELECT count(*) FROM app.rating_formula WHERE id='RAC-STAR-DEMO' AND category='RAC' AND version='0-unverified' AND status='unverified' AND definition='{}'::jsonb), (SELECT count(*) FROM app.seed_run WHERE seed_version='rt1-local-v2')" 2>/dev/null || true)"
-check "db.provisional-rules" "$(ok test "$rule_counts" = '1 1 1')" "synthetic fee/formula/seed marker = $rule_counts (expected 1 1 1; neither rule approved)"
+# ---- WP04.1 effective-dated masters: fixture counts, the ₹1,000 / ₹24,000 versions, nothing BEE-verified, V2 tables retired
+m_want="$(jq -r '.masters | "\(.master_category) \(.master_standard) \(.master_lab_accreditation) \(.master_fee_rule) \(.master_rating_formula)"' <<<"$want")"
+m_got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.master_category), (SELECT count(*) FROM app.master_standard), (SELECT count(*) FROM app.master_lab_accreditation), (SELECT count(*) FROM app.master_fee_rule), (SELECT count(*) FROM app.master_rating_formula)" 2>/dev/null || true)"
+check "db.masters-seeded" "$(ok test "$m_got" = "$m_want")" "category/standard/accreditation/fee/formula versions = ${m_got// //} (expected ${m_want// //})"
+rule_state="$(psql_app -F ' ' -c "SELECT
+  (SELECT string_agg(version || ':' || amount_inr || ':' || verification_status || ':' || coalesce(legacy_id, '-') || ':' || effective_from || '..' || coalesce(effective_to::text, 'open'), ',' ORDER BY version) FROM app.master_fee_rule WHERE rule_key = 'RAC:new_model'),
+  (SELECT count(*) FROM app.master_rating_formula WHERE rule_key = 'RAC:star_rating' AND formula_label = '0-unverified' AND NOT computation_allowed AND definition = '{}'::jsonb AND legacy_id = 'RAC-STAR-DEMO'),
+  (SELECT count(*) FROM (SELECT verification_status FROM app.master_category UNION ALL SELECT verification_status FROM app.master_standard UNION ALL SELECT verification_status FROM app.master_lab_accreditation
+     UNION ALL SELECT verification_status FROM app.master_fee_rule UNION ALL SELECT verification_status FROM app.master_rating_formula) v WHERE verification_status = 'verified'),
+  (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('fee_rule', 'rating_formula')),
+  (SELECT count(*) FROM app.seed_run WHERE seed_version IN ('rt1-local-v2', 'wp04.1-masters-v1'))" 2>/dev/null || true)"
+check "db.provisional-rules" "$(ok test "$rule_state" = "1:1000.00:synthetic:RAC-DEMO:2026-01-01..2026-10-01,2:24000.00:provisional:-:2026-10-01..open 1 0 0 2")" "RAC fee versions ${rule_state%% *}; placeholder formula not computable; BEE-verified rows, V2 tables, seed markers: $(cut -d' ' -f2- <<<"$rule_state") (expected 1 0 0 2)"
 scope_want="$(jq -r '"\(.modelApplications) \(.assignments) \(.activeAssignments)"' <<<"$want")"
 scope_got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.model_application), (SELECT count(*) FROM app.assignment), (SELECT count(*) FROM app.assignment WHERE active)" 2>/dev/null || true)"
 wf_tables="$(psql_app -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('transition','fee_confirmation','rating_result','approval_decision')" 2>/dev/null || echo x)"
@@ -172,6 +182,14 @@ grep -E '^(PASS|FAIL) ' <<<"$cv_out"
 read -r v_pass v_fail <<<"$(sed -nE 's/^coverage checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$cv_out")"
 if [[ -z "${v_pass:-}" ]]; then check "coverage.run" 0 "contract-coverage did not complete: $(tail -1 <<<"$cv_out")"
 else pass=$((pass + v_pass)); fail=$((fail + v_fail)); fi
+
+# ---- WP04.1 master resolution, overlap, gap, immutability, seeding and reset tests (real PostgreSQL, throwaway schemas)
+JAVA_HOME="$(/usr/libexec/java_home -v 17)" mvn -q -B -f "$ROOT/backend/pom.xml" test -Dgroups=db -Dbee.test.excludedGroups=none -Dsurefire.failIfNoSpecifiedTests=false > "$RUN_DIR/masters-test.log" 2>&1
+mt_rc=$?
+mt_xml="$ROOT/backend/target/surefire-reports/TEST-gov.bee.api.masters.MastersDatabaseTest.xml"
+mt="$(grep -oE 'tests="[0-9]+" errors="[0-9]+" skipped="[0-9]+" failures="[0-9]+"' "$mt_xml" 2>/dev/null | head -1)"
+left="$(psql_app -c "SELECT count(*) FROM pg_namespace WHERE nspname LIKE 'wp041_test_%'" 2>/dev/null || echo x)"
+check "masters.db-tests" "$(ok test "$mt_rc" = 0 -a -n "$mt" -a "$left" = 0 -a "$(grep -c 'errors="0" skipped="0" failures="0"' <<<"$mt")" = 1)" "MastersDatabaseTest: ${mt:-no report} (exit $mt_rc); throwaway schemas left: $left"
 
 # ---- WP02.3: seeded users' OTP credentials and sessions, and the realm flows, unchanged
 node "$ROOT/scripts/local/test-identities.cjs" teardown test >/dev/null 2>&1

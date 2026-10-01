@@ -59,10 +59,56 @@ INSERT INTO role_assignment (user_id, role, scope, active) VALUES
   ('00000000-0000-4000-a000-000000000015', 'reviewer', 'assigned', false),
   ('00000000-0000-4000-a000-000000000016', 'auditor', 'all', true)
 ON CONFLICT (user_id, role) DO UPDATE SET scope = EXCLUDED.scope, active = EXCLUDED.active;
--- Synthetic local-only fee; this is not a BEE-approved amount.
-INSERT INTO fee_rule (id, category, version, amount_inr, status, note) VALUES ('RAC-DEMO', 'RAC', '0-unverified', 1000.00, 'unverified', 'Synthetic local amount only; BEE fee decision pending') ON CONFLICT (id) DO UPDATE SET amount_inr = EXCLUDED.amount_inr, status = EXCLUDED.status, note = EXCLUDED.note;
--- Metadata only: no approved star-rating expression or computation is claimed.
-INSERT INTO rating_formula (id, category, version, status, definition, note) VALUES ('RAC-STAR-DEMO', 'RAC', '0-unverified', 'unverified', '{}'::jsonb, 'Placeholder only; no official rating may be computed') ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, definition = EXCLUDED.definition, note = EXCLUDED.note;
+-- WP04.1 effective-dated masters: synthetic or provisional, none BEE-approved; no official fee or star rating.
+-- Inserted once per (rule_key, version); a stored version that differs from the fixture fails the seed.
+INSERT INTO master_category (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, name) VALUES
+  ('RAC'::text, 1::integer, '2026-01-01'::date, NULL::date, 'FIRST_SLICE.md §1 (slice category); BEE category list not yet consulted'::text, 'provisional'::text, 'Local slice category only'::text, NULL::text, 'Room air conditioner'::text)
+ON CONFLICT (rule_key, version) DO NOTHING;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES
+  ('RAC'::text, 1::integer, '2026-01-01'::date, NULL::date, 'FIRST_SLICE.md §1 (slice category); BEE category list not yet consulted'::text, 'provisional'::text, 'Local slice category only'::text, NULL::text, 'Room air conditioner'::text)
+) AS f (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, name) JOIN master_category m ON m.rule_key = f.rule_key AND m.version = f.version
+  WHERE (m.effective_from, m.effective_to, m.source_reference, m.verification_status, m.note, m.legacy_id, m.name) IS DISTINCT FROM (f.effective_from, f.effective_to, f.source_reference, f.verification_status, f.note, f.legacy_id, f.name)) THEN
+  RAISE EXCEPTION 'master_category: a stored version differs from the fixture; versions are immutable, add a new version instead'; END IF; END $$;
+INSERT INTO master_standard (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, category_code, purpose, standard_code, title, edition) VALUES
+  ('RAC:performance_test'::text, 1::integer, '2026-01-01'::date, '2026-07-01'::date, 'Synthetic local example; the applicable standard is BEE decision M2'::text, 'synthetic'::text, 'Stand-in code, not a real standard'::text, NULL::text, 'RAC'::text, 'performance_test'::text, 'SYN-RAC-PERF'::text, 'Synthetic RAC performance test standard'::text, 'synthetic-2025'::text),
+  ('RAC:performance_test'::text, 2::integer, '2026-07-01'::date, NULL::date, 'Synthetic local example; the applicable standard is BEE decision M2'::text, 'synthetic'::text, 'Stand-in code, not a real standard'::text, NULL::text, 'RAC'::text, 'performance_test'::text, 'SYN-RAC-PERF'::text, 'Synthetic RAC performance test standard'::text, 'synthetic-2026'::text)
+ON CONFLICT (rule_key, version) DO NOTHING;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES
+  ('RAC:performance_test'::text, 1::integer, '2026-01-01'::date, '2026-07-01'::date, 'Synthetic local example; the applicable standard is BEE decision M2'::text, 'synthetic'::text, 'Stand-in code, not a real standard'::text, NULL::text, 'RAC'::text, 'performance_test'::text, 'SYN-RAC-PERF'::text, 'Synthetic RAC performance test standard'::text, 'synthetic-2025'::text),
+  ('RAC:performance_test'::text, 2::integer, '2026-07-01'::date, NULL::date, 'Synthetic local example; the applicable standard is BEE decision M2'::text, 'synthetic'::text, 'Stand-in code, not a real standard'::text, NULL::text, 'RAC'::text, 'performance_test'::text, 'SYN-RAC-PERF'::text, 'Synthetic RAC performance test standard'::text, 'synthetic-2026'::text)
+) AS f (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, category_code, purpose, standard_code, title, edition) JOIN master_standard m ON m.rule_key = f.rule_key AND m.version = f.version
+  WHERE (m.effective_from, m.effective_to, m.source_reference, m.verification_status, m.note, m.legacy_id, m.category_code, m.purpose, m.standard_code, m.title, m.edition) IS DISTINCT FROM (f.effective_from, f.effective_to, f.source_reference, f.verification_status, f.note, f.legacy_id, f.category_code, f.purpose, f.standard_code, f.title, f.edition)) THEN
+  RAISE EXCEPTION 'master_standard: a stored version differs from the fixture; versions are immutable, add a new version instead'; END IF; END $$;
+INSERT INTO master_lab_accreditation (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, laboratory_code, category_code, accreditation_body, certificate_ref, accreditation_status) VALUES
+  ('LAB:RAC'::text, 1::integer, '2026-01-01'::date, '2026-06-01'::date, 'Synthetic local example; no accreditation body was consulted'::text, 'synthetic'::text, 'Synthetic accreditation history'::text, NULL::text, 'LAB'::text, 'RAC'::text, 'SYN-ACCREDITATION-BODY'::text, 'SYN-LAB-RAC-0001'::text, 'active'::text),
+  ('LAB:RAC'::text, 2::integer, '2026-06-01'::date, '2026-07-01'::date, 'Synthetic local example; no accreditation body was consulted'::text, 'synthetic'::text, 'Synthetic accreditation history'::text, NULL::text, 'LAB'::text, 'RAC'::text, 'SYN-ACCREDITATION-BODY'::text, 'SYN-LAB-RAC-0002'::text, 'suspended'::text),
+  ('LAB:RAC'::text, 3::integer, '2026-08-01'::date, NULL::date, 'Synthetic local example; no accreditation body was consulted'::text, 'synthetic'::text, 'Re-accredited after a synthetic gap (2026-07-01 to 2026-08-01)'::text, NULL::text, 'LAB'::text, 'RAC'::text, 'SYN-ACCREDITATION-BODY'::text, 'SYN-LAB-RAC-0003'::text, 'active'::text)
+ON CONFLICT (rule_key, version) DO NOTHING;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES
+  ('LAB:RAC'::text, 1::integer, '2026-01-01'::date, '2026-06-01'::date, 'Synthetic local example; no accreditation body was consulted'::text, 'synthetic'::text, 'Synthetic accreditation history'::text, NULL::text, 'LAB'::text, 'RAC'::text, 'SYN-ACCREDITATION-BODY'::text, 'SYN-LAB-RAC-0001'::text, 'active'::text),
+  ('LAB:RAC'::text, 2::integer, '2026-06-01'::date, '2026-07-01'::date, 'Synthetic local example; no accreditation body was consulted'::text, 'synthetic'::text, 'Synthetic accreditation history'::text, NULL::text, 'LAB'::text, 'RAC'::text, 'SYN-ACCREDITATION-BODY'::text, 'SYN-LAB-RAC-0002'::text, 'suspended'::text),
+  ('LAB:RAC'::text, 3::integer, '2026-08-01'::date, NULL::date, 'Synthetic local example; no accreditation body was consulted'::text, 'synthetic'::text, 'Re-accredited after a synthetic gap (2026-07-01 to 2026-08-01)'::text, NULL::text, 'LAB'::text, 'RAC'::text, 'SYN-ACCREDITATION-BODY'::text, 'SYN-LAB-RAC-0003'::text, 'active'::text)
+) AS f (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, laboratory_code, category_code, accreditation_body, certificate_ref, accreditation_status) JOIN master_lab_accreditation m ON m.rule_key = f.rule_key AND m.version = f.version
+  WHERE (m.effective_from, m.effective_to, m.source_reference, m.verification_status, m.note, m.legacy_id, m.laboratory_code, m.category_code, m.accreditation_body, m.certificate_ref, m.accreditation_status) IS DISTINCT FROM (f.effective_from, f.effective_to, f.source_reference, f.verification_status, f.note, f.legacy_id, f.laboratory_code, f.category_code, f.accreditation_body, f.certificate_ref, f.accreditation_status)) THEN
+  RAISE EXCEPTION 'master_lab_accreditation: a stored version differs from the fixture; versions are immutable, add a new version instead'; END IF; END $$;
+INSERT INTO master_fee_rule (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, category_code, application_type, amount_inr) VALUES
+  ('RAC:new_model'::text, 1::integer, '2026-01-01'::date, '2026-10-01'::date, 'V2 local seed fee_rule RAC-DEMO (local placeholder; no source)'::text, 'synthetic'::text, 'Synthetic local amount only; BEE fee decision pending'::text, 'RAC-DEMO'::text, 'RAC'::text, 'new_model'::text, '1000.00'::numeric),
+  ('RAC:new_model'::text, 2::integer, '2026-10-01'::date, NULL::date, 'FIRST_SLICE.md provisional decision D6, citing DDD §5.3 (gap G08); not confirmed by BEE'::text, 'provisional'::text, 'Provisional local amount from D6; supersedes the ₹1,000 placeholder for dates from 2026-10-01; BEE decision D6 pending'::text, NULL::text, 'RAC'::text, 'new_model'::text, '24000.00'::numeric)
+ON CONFLICT (rule_key, version) DO NOTHING;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES
+  ('RAC:new_model'::text, 1::integer, '2026-01-01'::date, '2026-10-01'::date, 'V2 local seed fee_rule RAC-DEMO (local placeholder; no source)'::text, 'synthetic'::text, 'Synthetic local amount only; BEE fee decision pending'::text, 'RAC-DEMO'::text, 'RAC'::text, 'new_model'::text, '1000.00'::numeric),
+  ('RAC:new_model'::text, 2::integer, '2026-10-01'::date, NULL::date, 'FIRST_SLICE.md provisional decision D6, citing DDD §5.3 (gap G08); not confirmed by BEE'::text, 'provisional'::text, 'Provisional local amount from D6; supersedes the ₹1,000 placeholder for dates from 2026-10-01; BEE decision D6 pending'::text, NULL::text, 'RAC'::text, 'new_model'::text, '24000.00'::numeric)
+) AS f (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, category_code, application_type, amount_inr) JOIN master_fee_rule m ON m.rule_key = f.rule_key AND m.version = f.version
+  WHERE (m.effective_from, m.effective_to, m.source_reference, m.verification_status, m.note, m.legacy_id, m.category_code, m.application_type, m.amount_inr) IS DISTINCT FROM (f.effective_from, f.effective_to, f.source_reference, f.verification_status, f.note, f.legacy_id, f.category_code, f.application_type, f.amount_inr)) THEN
+  RAISE EXCEPTION 'master_fee_rule: a stored version differs from the fixture; versions are immutable, add a new version instead'; END IF; END $$;
+INSERT INTO master_rating_formula (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, category_code, formula_label, inputs, definition, computation_allowed) VALUES
+  ('RAC:star_rating'::text, 1::integer, '2026-01-01'::date, NULL::date, 'V2 local seed rating_formula RAC-STAR-DEMO (FIRST_SLICE.md D3 placeholder)'::text, 'synthetic'::text, 'Placeholder only; no official rating may be computed'::text, 'RAC-STAR-DEMO'::text, 'RAC'::text, '0-unverified'::text, '[]'::jsonb, '{}'::jsonb, false::boolean)
+ON CONFLICT (rule_key, version) DO NOTHING;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM (VALUES
+  ('RAC:star_rating'::text, 1::integer, '2026-01-01'::date, NULL::date, 'V2 local seed rating_formula RAC-STAR-DEMO (FIRST_SLICE.md D3 placeholder)'::text, 'synthetic'::text, 'Placeholder only; no official rating may be computed'::text, 'RAC-STAR-DEMO'::text, 'RAC'::text, '0-unverified'::text, '[]'::jsonb, '{}'::jsonb, false::boolean)
+) AS f (rule_key, version, effective_from, effective_to, source_reference, verification_status, note, legacy_id, category_code, formula_label, inputs, definition, computation_allowed) JOIN master_rating_formula m ON m.rule_key = f.rule_key AND m.version = f.version
+  WHERE (m.effective_from, m.effective_to, m.source_reference, m.verification_status, m.note, m.legacy_id, m.category_code, m.formula_label, m.inputs, m.definition, m.computation_allowed) IS DISTINCT FROM (f.effective_from, f.effective_to, f.source_reference, f.verification_status, f.note, f.legacy_id, f.category_code, f.formula_label, f.inputs, f.definition, f.computation_allowed)) THEN
+  RAISE EXCEPTION 'master_rating_formula: a stored version differs from the fixture; versions are immutable, add a new version instead'; END IF; END $$;
 -- WP02.2 scope fixtures: seeded states only; version reset to 0 on every seed.
 INSERT INTO model_application (id, reference, organisation_id, brand_name, category, model_number, state, version) VALUES
   ('00000000-0000-4000-c000-000000000001', 'LOCAL-MA-0001', '00000000-0000-4000-b000-000000000001', 'Nova Cool', 'RAC', 'NC-RAC-12D', 'draft', 0),
@@ -74,5 +120,5 @@ INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES
   ('00000000-0000-4000-a000-000000000004', 'model_application', '00000000-0000-4000-c000-000000000003', 'iame_scrutiny', true),
   ('00000000-0000-4000-a000-000000000005', 'model_application', '00000000-0000-4000-c000-000000000004', 'bee_scrutiny', false)
 ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = EXCLUDED.active;
-INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1') ON CONFLICT (seed_version) DO NOTHING;
+INSERT INTO seed_run (seed_version) VALUES ('rt1-local-v2'), ('wp02.2-local-v1'), ('wp04.1-masters-v1') ON CONFLICT (seed_version) DO NOTHING;
 COMMIT;

@@ -14,7 +14,7 @@ require_docker
 agents_before="$(shasum -a 256 "$ROOT/AGENTS.md" | cut -c1-16)"
 T0=$(now_ms)
 
-counts() { psql_app -F / -c "SELECT (SELECT count(*) FROM app.organisation), (SELECT count(*) FROM app.user_account), (SELECT count(*) FROM app.organisation_membership), (SELECT count(*) FROM app.role_assignment), (SELECT count(*) FROM app.fee_rule), (SELECT count(*) FROM app.rating_formula), (SELECT count(*) FROM app.seed_run)"; }
+counts() { psql_app -F / -c "SELECT (SELECT count(*) FROM app.organisation), (SELECT count(*) FROM app.user_account), (SELECT count(*) FROM app.organisation_membership), (SELECT count(*) FROM app.role_assignment), (SELECT count(*) FROM app.master_fee_rule), (SELECT count(*) FROM app.master_rating_formula), (SELECT count(*) FROM app.seed_run)"; }
 step() { log "RT1: $*"; }
 
 for run in 1 2; do

@@ -47,9 +47,13 @@ class ModelApplicationSubmitDatabaseTest {
     }
 
     static DriverManagerDataSource source(String schema) {
+        return sourceAs(schema, env("BEE_APP_DB_USER", "bee_app"), env("BEE_APP_DB_PASSWORD", "bee-local-app"));
+    }
+
+    static DriverManagerDataSource sourceAs(String schema, String user, String password) {
         String url = "jdbc:postgresql://127.0.0.1:" + env("BEE_PG_PORT", "5434") + "/" + env("BEE_APP_DB", "bee_app")
             + (schema == null ? "" : "?currentSchema=" + schema);
-        return new DriverManagerDataSource(url, env("BEE_APP_DB_USER", "bee_app"), env("BEE_APP_DB_PASSWORD", "bee-local-app"));
+        return new DriverManagerDataSource(url, user, password);
     }
 
     static Flyway flyway(String schema) {
@@ -82,7 +86,11 @@ class ModelApplicationSubmitDatabaseTest {
         seed = Files.readString(SEED);
         createSchema(MAIN);
         flyway(MAIN).migrate();
+        var superuser = new JdbcTemplate(sourceAs(MAIN, "bee_super", env("BEE_PG_SUPER_PASSWORD", "bee-local-super")));
+        String maint = env("BEE_MAINT_DB_USER", "bee_local_maint");
+        superuser.execute("GRANT USAGE ON SCHEMA " + MAIN + " TO " + maint);
         db = new JdbcTemplate(source(MAIN));
+        db.execute("GRANT ALL ON ALL TABLES IN SCHEMA " + MAIN + " TO " + maint);
         db.execute(seed);
         applications = new ModelApplicationRepository(db);
         submissions = new ModelApplicationSubmitRepository(db, applications);
@@ -177,16 +185,24 @@ class ModelApplicationSubmitDatabaseTest {
         UUID id = insertDraft("NC-SUB-CLEAN");
         assertTrue(submissions.submit(id, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("24000.00"), "RAC:new_model", 2,
             "provisional", null, null).isPresent());
-        db.execute("""
-            DO $$
-            BEGIN
-              PERFORM set_config('bee.test_cleanup', 'allow', true);
-              DELETE FROM model_application_fee_snapshot WHERE application_id = '%s';
-              DELETE FROM model_application_submission_event WHERE application_id = '%s';
-              DELETE FROM model_application WHERE id = '%s';
-            END $$""".formatted(id, id, id));
+        var maint = new JdbcTemplate(sourceAs(MAIN, env("BEE_MAINT_DB_USER", "bee_local_maint"), env("BEE_MAINT_DB_PASSWORD", "bee-local-maint")));
+        maint.execute(
+            "SELECT set_config('bee.cleanup_schema', '" + MAIN + "', true); "
+                + "INSERT INTO " + MAIN + ".local_disposable_application (application_id) VALUES ('" + id + "'); "
+                + "SELECT " + MAIN + ".app_disposable_model_cleanup(ARRAY['" + id + "']::uuid[])");
         assertEquals(0, submissions.countSubmissionEvents(id));
         assertEquals(0, submissions.countFeeSnapshots(id));
         assertTrue(applications.findOwned(id, NOVA).isEmpty());
+    }
+
+    @Test
+    void runtimeRoleCannotImitateMaintenanceCleanup() {
+        UUID id = insertDraft("NC-SUB-DENY");
+        assertTrue(submissions.submit(id, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("24000.00"), "RAC:new_model", 2,
+            "provisional", null, null).isPresent());
+        db.execute("SELECT set_config('bee.test_cleanup', 'allow', true)");
+        assertThrows(Exception.class, () -> db.update("DELETE FROM model_application_fee_snapshot WHERE application_id = ?", id));
+        assertThrows(Exception.class, () -> db.execute("SELECT " + MAIN + ".app_disposable_model_cleanup(ARRAY['" + id + "']::uuid[])"));
+        assertEquals(1, submissions.countFeeSnapshots(id));
     }
 }

@@ -86,6 +86,9 @@ function springEvidence(p) {
     "/api/runtime/model-applications/eligible-brands": "/api/model-applications/eligible-brands",
   };
   if (draftRoutes.has(p.route) || (runtimeDraftMirror[p.route] && draftRoutes.has(runtimeDraftMirror[p.route]))) return mockMvc("draftOperationsDocumentedPairs");
+  if (p.route === "/api/model-applications/{id}/submit" || p.route === "/api/runtime/model-applications/{id}/submit") {
+    return mockMvc("submitOperationsDocumentedPairs");
+  }
   if (p.audience !== "internal") return null;
   if (p.route === "default-deny") return mockMvc(p.code === "unauthenticated" ? "missingOrInvalidTokenIsUnauthenticated" : "everythingElseIsDeniedByDefault");
   if (p.route.startsWith("/actuator/health")) return mockMvc("healthUpAndDownMatchSpringHealth");

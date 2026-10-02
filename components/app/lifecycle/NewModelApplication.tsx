@@ -131,6 +131,14 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     persistedDraft != null &&
     (modelNumber.trim() !== persistedDraft.modelNumber || brandId !== persistedDraft.brandId);
 
+  useEffect(() => {
+    if (draftDirty && submitOpen) {
+      setSubmitOpen(false);
+      setSubmitPreview(null);
+      setSubmitError("Save your changes before reviewing submit.");
+    }
+  }, [draftDirty, submitOpen]);
+
   async function openSubmitConfirm(appId: string) {
     if (draftDirty) {
       setSubmitError("Save your changes before reviewing submit.");
@@ -150,6 +158,12 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
 
   async function confirmSubmit(appId: string) {
     if (!submitPreview) return;
+    if (draftDirty) {
+      setSubmitOpen(false);
+      setSubmitPreview(null);
+      setSubmitError("Save your changes before reviewing submit.");
+      return;
+    }
     setLoading(true);
     setSubmitError(null);
     if (!submitIdem.current) submitIdem.current = crypto.randomUUID().replace(/-/g, "").slice(0, 24);

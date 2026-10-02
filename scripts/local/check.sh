@@ -177,6 +177,13 @@ read -r f_pass f_fail <<<"$(sed -nE 's/^bff checks: ([0-9]+) passed, ([0-9]+) fa
 if [[ -z "${f_pass:-}" ]]; then check "bff.run" 0 "bff-check did not complete: $(tail -1 <<<"$bf_out")"
 else pass=$((pass + f_pass)); fail=$((fail + f_fail)); fi
 
+# ---- WP05.1c submit through BFF (records runtime submit pairs for contract coverage)
+ms_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-submit-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$ms_out"
+read -r s_pass s_fail <<<"$(sed -nE 's/^model-submit checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$ms_out")"
+if [[ -z "${s_pass:-}" ]]; then check "submit.run" 0 "model-submit did not complete: $(tail -1 <<<"$ms_out")"
+else pass=$((pass + s_pass)); fail=$((fail + s_fail)); fi
+
 # ---- WP03.3 coverage: every documented (operation, status, code) has live, stand-in, MockMvc or unit evidence
 cv_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/contract-coverage.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$cv_out"

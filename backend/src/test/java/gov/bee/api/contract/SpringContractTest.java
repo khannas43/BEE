@@ -448,7 +448,11 @@ class SpringContractTest {
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
         conforms("/api/model-applications/{id}", patch("/api/model-applications/" + NOVA_APP).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 409, "idempotency_in_progress");
+    }
 
+    @Test
+    void submitOperationsDocumentedPairs() throws Exception {
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
         String submitBody = "{\"version\":0,\"expectedFee\":{\"amountInr\":\"24000.00\",\"feeRuleKey\":\"RAC:new_model\",\"feeRuleVersion\":2}}";
         String submitBodyWrongFee = "{\"version\":0,\"expectedFee\":{\"amountInr\":\"99999.00\",\"feeRuleKey\":\"RAC:new_model\",\"feeRuleVersion\":2}}";
         String submitPath = "/api/model-applications/" + NOVA_APP + "/submit";

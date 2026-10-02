@@ -6,6 +6,9 @@ const totp = require("./totp.cjs");
 const ids = require("./test-identities.cjs");
 const { USERS } = require("../../local/generate-fixtures.cjs");
 const { WEB, launchChrome, openPage, signIn } = require("./browser-check.cjs");
+const contract = require("./contract-lib.cjs");
+
+const RUNTIME_SUBMIT = "/api/runtime/model-applications/{id}/submit";
 
 const NOVA_COOL = "00000000-0000-4000-d000-000000000001";
 const PIXEL_APP = "00000000-0000-4000-c000-000000000003";
@@ -16,13 +19,30 @@ const key = () => crypto.randomUUID().replace(/-/g, "").slice(0, 24);
 let pass = 0, fail = 0;
 function check(id, ok, detail) { const r = ok ? "PASS" : "FAIL"; ok ? pass++ : fail++; console.log(`${r.padEnd(4)} ${id.padEnd(44)} ${detail}`); }
 
-function sql(q, allowFail = false) {
+const env = (k, d) => process.env[k] || d;
+
+function sqlApp(q, allowFail = false) {
   try {
-    return execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${process.env.BEE_APP_DB_PASSWORD || "bee-local-app"}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", "bee_app", "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", q]).toString().trim();
+    return execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${env("BEE_APP_DB_PASSWORD", "bee-local-app")}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", "bee_app", "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", q]).toString().trim();
   } catch (e) {
     if (allowFail) return (e.stderr?.toString() || e.message || "").trim();
     throw e;
   }
+}
+
+function sqlMaint(q, allowFail = false) {
+  try {
+    return execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${env("BEE_MAINT_DB_PASSWORD", "bee-local-maint")}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", env("BEE_MAINT_DB_USER", "bee_local_maint"), "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", q]).toString().trim();
+  } catch (e) {
+    if (allowFail) return (e.stderr?.toString() || e.message || "").trim();
+    throw e;
+  }
+}
+
+const sql = sqlApp;
+
+function recordSubmit(method, status, code, ok) {
+  contract.record({ route: RUNTIME_SUBMIT, method, status, code: code ?? "-", ok: !!ok });
 }
 
 function modelBaseline() {
@@ -33,12 +53,23 @@ function twinAccountIds() {
   return USERS.map((u) => `'${ids.accountId(u.username)}'`).join(",");
 }
 
+function registerDisposable(createdIds) {
+  for (const id of createdIds) {
+    sqlMaint(
+      `SELECT set_config('bee.cleanup_schema', 'app', true); INSERT INTO app.local_disposable_application (application_id) VALUES ('${id}') ON CONFLICT DO NOTHING`,
+    );
+  }
+}
+
 function cleanupDisposable(createdIds) {
   if (createdIds.length) {
+    registerDisposable(createdIds);
     const arr = createdIds.map((id) => `'${id}'`).join(",");
-    sql(`SELECT app.app_disposable_model_cleanup(ARRAY[${arr}]::uuid[])`);
+    sqlMaint(
+      `SELECT set_config('bee.cleanup_schema', 'app', true); SELECT app.app_disposable_model_cleanup(ARRAY[${arr}]::uuid[])`,
+    );
   }
-  sql(`DELETE FROM app.idempotency_record WHERE account_id IN (${twinAccountIds()})`);
+  sqlApp(`DELETE FROM app.idempotency_record WHERE account_id IN (${twinAccountIds()})`);
 }
 
 const DEMO_FEE = { amountInr: "24000.00", feeRuleKey: "RAC:new_model", feeRuleVersion: 2 };
@@ -55,6 +86,36 @@ async function api(page, method, path, body, idem) {
   const headers = { "Content-Type": "application/json", ...(idem ? { "Idempotency-Key": idem } : {}) };
   const bodySnippet = body == null ? "undefined" : `JSON.stringify(${JSON.stringify(body)})`;
   return page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store", headers: ${JSON.stringify(headers)}, body: ${bodySnippet} }).then(async (r) => ({ status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null) }))`);
+}
+
+async function apiSubmit(page, method, id, body, idem) {
+  const r = await api(page, method, `${WEB}/api/runtime/model-applications/${id}/submit`, body, idem);
+  const code = r.status >= 400 ? r.body?.error : "-";
+  recordSubmit(method, r.status, code, true);
+  return r;
+}
+
+async function dirtyAfterPreviewClosed(runLabel, nova, draftId) {
+  await nova.goto(`${WEB}/app/model-label/new-model-application?edit=${encodeURIComponent(draftId)}`);
+  if (!(await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-submit]')`))) {
+    check(`${runLabel}.dirty-after-preview`, false, "edit form did not load");
+    return;
+  }
+  await nova.eval(`document.querySelector('[data-testid=model-draft-submit]').click(); true`);
+  if (!(await nova.waitFor(`!!document.querySelector('[data-testid=model-submit-confirm]')`, 12000))) {
+    check(`${runLabel}.dirty-after-preview`, false, "confirm did not open");
+    return;
+  }
+  await nova.eval(`(() => {
+    const el = document.querySelector('[data-testid=model-draft-model-number]');
+    const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    s.call(el, 'DIRTY-AFTER-${runLabel}');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`);
+  const confirmOpen = await nova.eval(`!!document.querySelector('[data-testid=model-submit-confirm]')`);
+  const hint = await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-dirty-hint]')`, 8000);
+  check(`${runLabel}.dirty-after-preview`, hint && !confirmOpen, hint ? "confirm closed after edit" : "no dirty hint after preview");
 }
 
 async function dirtyFormBlocked(runLabel, nova, draftId) {
@@ -94,16 +155,18 @@ async function runSubmitChecks(runLabel, nova, pixel) {
 
     await dirtyFormBlocked(runLabel, nova, novaDraft);
 
-    r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${novaDraft}/submit`, null, null);
+    r = await apiSubmit(nova, "GET", novaDraft, null, null);
     check(`${runLabel}.nova.preview`, r.status === 200 && r.body?.ready === true && r.body?.submissionFee?.localDemoFee === true && r.body?.draftSummary?.modelNumber, r.body?.submissionFee?.label);
 
+    await dirtyAfterPreviewClosed(runLabel, nova, novaDraft);
+
     const preview = r.body;
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${novaDraft}/submit`, { version: preview.version, expectedFee: { amountInr: "99999.00", feeRuleKey: DEMO_FEE.feeRuleKey, feeRuleVersion: DEMO_FEE.feeRuleVersion } }, key());
+    r = await apiSubmit(nova, "POST", novaDraft, { version: preview.version, expectedFee: { amountInr: "99999.00", feeRuleKey: DEMO_FEE.feeRuleKey, feeRuleVersion: DEMO_FEE.feeRuleVersion } }, key());
     check(`${runLabel}.nova.fee-preview-conflict`, r.status === 409 && r.body?.error === "fee_preview_conflict", r.body?.error);
     check(`${runLabel}.nova.fee-conflict-still-draft`, sql(`SELECT state FROM app.model_application WHERE id = '${novaDraft}'`) === "draft", "no transition");
 
     const sk = key();
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${novaDraft}/submit`, submitPayload(preview), sk);
+    r = await apiSubmit(nova, "POST", novaDraft, submitPayload(preview), sk);
     check(`${runLabel}.nova.submit`, r.status === 200 && r.body?.state === "fee_due" && r.body?.submissionFee?.amountInr === "24000.00", `${r.status} v${r.body?.version}`);
 
     r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${novaDraft}`, null, null);
@@ -116,13 +179,16 @@ async function runSubmitChecks(runLabel, nova, pixel) {
     const immutErr = sql(`DELETE FROM app.model_application_fee_snapshot WHERE application_id = '${novaDraft}'`, true);
     check(`${runLabel}.nova.immutable-fee`, /append-only|55000/i.test(immutErr), immutErr.slice(0, 80) || "runtime DELETE refused");
 
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${novaDraft}/submit`, submitPayload(preview), sk);
+    r = await apiSubmit(nova, "POST", novaDraft, submitPayload(preview), sk);
     check(`${runLabel}.nova.submit-replay`, r.status === 200 && r.replay === "true" && ev === "1" && fee === "1", "idempotent replay");
+
+    const appCleanupDeny = sqlApp(`SELECT app.app_disposable_model_cleanup(ARRAY['${NOVA_FEE_DUE}']::uuid[])`, true);
+    check(`${runLabel}.nova.runtime-cleanup-denied`, /maintenance role|permission denied|42501/i.test(appCleanupDeny), appCleanupDeny.slice(0, 72));
 
     const memBefore = sql(`SELECT organisation_id FROM app.organisation_membership WHERE user_id = '${novaAcct}'`);
     sql(`UPDATE app.organisation_membership SET organisation_id = '${PIXEL_ORG}' WHERE user_id = '${novaAcct}'`);
     try {
-      r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${novaDraft}/submit`, submitPayload(preview), sk);
+      r = await apiSubmit(nova, "POST", novaDraft, submitPayload(preview), sk);
       check(`${runLabel}.nova.replay-after-org-move`, r.status === 404 && r.body?.error === "not_found", r.body?.error);
     } finally {
       sql(`UPDATE app.organisation_membership SET organisation_id = '${memBefore}' WHERE user_id = '${novaAcct}'`);
@@ -131,33 +197,33 @@ async function runSubmitChecks(runLabel, nova, pixel) {
     r = await mkDraft(pixel, `AU-SUB-${runLabel}-${Date.now()}`);
     const pixelDraft = r.body?.id;
     check(`${runLabel}.pixel.agency-draft`, r.status === 201, "agency filing");
-    const pxPrev = await api(pixel, "GET", `${WEB}/api/runtime/model-applications/${pixelDraft}/submit`, null, null);
-    r = await api(pixel, "POST", `${WEB}/api/runtime/model-applications/${pixelDraft}/submit`, submitPayload(pxPrev.body), key());
+    const pxPrev = await apiSubmit(pixel, "GET", pixelDraft, null, null);
+    r = await apiSubmit(pixel, "POST", pixelDraft, submitPayload(pxPrev.body), key());
     check(`${runLabel}.pixel.submit`, r.status === 200 && r.body?.state === "fee_due", r.body?.state);
 
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${PIXEL_APP}/submit`, { version: 0, expectedFee: { amountInr: "24000.00", feeRuleKey: "RAC:new_model", feeRuleVersion: 2 } }, key());
+    r = await apiSubmit(nova, "POST", PIXEL_APP, { version: 0, expectedFee: { amountInr: "24000.00", feeRuleKey: "RAC:new_model", feeRuleVersion: 2 } }, key());
     check(`${runLabel}.nova.cross-org-submit`, r.status === 404 && r.body?.error === "not_found", r.body?.error);
 
     const other = await mkDraft(nova, `NC-OTHER-${runLabel}`);
-    const op = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${other.body.id}/submit`, null, null);
-    r = await api(pixel, "POST", `${WEB}/api/runtime/model-applications/${other.body.id}/submit`, submitPayload(op.body), key());
+    const op = await apiSubmit(nova, "GET", other.body.id, null, null);
+    r = await apiSubmit(pixel, "POST", other.body.id, submitPayload(op.body), key());
     check(`${runLabel}.pixel.cross-org-submit`, r.status === 404 && r.body?.error === "not_found", "agency on nova draft");
 
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${NOVA_FEE_DUE}/submit`, { version: 1, expectedFee: { amountInr: "24000.00", feeRuleKey: "RAC:new_model", feeRuleVersion: 2 } }, key());
+    r = await apiSubmit(nova, "POST", NOVA_FEE_DUE, { version: 1, expectedFee: { amountInr: "24000.00", feeRuleKey: "RAC:new_model", feeRuleVersion: 2 } }, key());
     check(`${runLabel}.nova.wrong-state`, r.status === 403 && r.body?.error === "not_submittable", "fee_due not submittable");
 
     const staleDraft = await mkDraft(nova, `NC-STALE-${runLabel}`);
-    const sp = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${staleDraft.body.id}/submit`, null, null);
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${staleDraft.body.id}/submit`, { ...submitPayload(sp.body), version: 9 }, key());
+    const sp = await apiSubmit(nova, "GET", staleDraft.body.id, null, null);
+    r = await apiSubmit(nova, "POST", staleDraft.body.id, { ...submitPayload(sp.body), version: 9 }, key());
     check(`${runLabel}.nova.stale-version`, r.status === 409 && r.body?.error === "version_conflict", r.body?.error);
 
-    r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${novaDraft}/submit`, null, null);
+    r = await apiSubmit(nova, "POST", novaDraft, null, null);
     check(`${runLabel}.nova.missing-key`, r.status === 422 && r.body?.error === "idempotency_key_required", r.body?.error);
 
     const revDraft = await mkDraft(nova, `NC-REV-${runLabel}`);
     sql("UPDATE app.brand SET status = 'revoked' WHERE id = '" + NOVA_COOL + "'");
     try {
-      r = await api(nova, "POST", `${WEB}/api/runtime/model-applications/${revDraft.body.id}/submit`, { version: 0, expectedFee: DEMO_FEE }, key());
+      r = await apiSubmit(nova, "POST", revDraft.body.id, { version: 0, expectedFee: DEMO_FEE }, key());
       check(`${runLabel}.nova.revoked-brand`, r.status === 403 && r.body?.error === "brand_not_permitted", r.body?.error);
     } finally {
       sql("UPDATE app.brand SET status = 'active' WHERE id = '" + NOVA_COOL + "'");

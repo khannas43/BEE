@@ -320,6 +320,13 @@ async function nextChecks(jar, novaToken) {
   e = [...contract.conforms(doc, "/api/runtime/me", "GET", anon), ...contract.conforms(doc, "/api/runtime/me", "GET", bearer), ...contract.conforms(doc, "/api/auth/session", "GET", anonSession)];
   check("next.no-session", anon.status === 401 && anon.json?.error === "no_session" && bearer.status === 401 && bearer.json?.error === "no_session" && anonSession.json?.authenticated === false && e.length === 0 && sameCorr(anon) && sameCorr(bearer),
     `no cookie: ${anon.status} ${anon.json?.error}; valid Nova bearer token from the browser: ${bearer.status} ${bearer.json?.error} (not forwarded); /api/auth/session {authenticated:false}${show(e)}`);
+  const submitAnonGet = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/submit`, { correlationId: cid("next-submit-anon-get") });
+  const submitAnonPost = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/submit`, {
+    method: "POST", correlationId: cid("next-submit-anon-post"), headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123457" }, body: "{}",
+  });
+  e = [...contract.conforms(doc, "/api/runtime/model-applications/{id}/submit", "GET", submitAnonGet), ...contract.conforms(doc, "/api/runtime/model-applications/{id}/submit", "POST", submitAnonPost)];
+  check("next.submit-no-session", submitAnonGet.status === 401 && submitAnonGet.json?.error === "no_session" && submitAnonPost.status === 401 && submitAnonPost.json?.error === "no_session" && e.length === 0,
+    `GET/POST runtime submit without cookie: ${submitAnonGet.status} ${submitAnonGet.json?.error}, ${submitAnonPost.status} ${submitAnonPost.json?.error}${show(e)}`);
   r = await call(`${WEB}/api/runtime/health`, { correlationId: cid("next-health") });
   e = contract.conforms(doc, "/api/runtime/health", "GET", r);
   check("next.health", r.status === 200 && r.json?.api === "UP" && e.length === 0 && sameCorr(r), `HTTP ${r.status} api=${r.json?.api}; matches RuntimeHealth${show(e)}`);

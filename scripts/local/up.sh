@@ -25,6 +25,8 @@ t=$(now_ms)
 start_api
 API_MS=$(( $(now_ms) - t ))
 
+bash "$(dirname "$0")/ensure-maint-role.sh" >"$LOG_DIR/ensure-maint-role.log" 2>&1 || { cat "$LOG_DIR/ensure-maint-role.log" >&2; die "maintenance DB role setup failed"; }
+
 t=$(now_ms)
 if pid_alive "$WEB_PID"; then
   log "web already running (pid $(cat "$WEB_PID"))"

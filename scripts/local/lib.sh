@@ -126,7 +126,7 @@ tree_rss_kb() {
 }
 
 psql_app() { docker exec -i -e PGPASSWORD="$BEE_APP_DB_PASSWORD" bee-local-postgres psql -h 127.0.0.1 -U "$BEE_APP_DB_USER" -d "$BEE_APP_DB" -v ON_ERROR_STOP=1 -qtA "$@"; }
-psql_super() { docker exec -i bee-local-postgres psql -U bee_super -v ON_ERROR_STOP=1 -qtA "$@"; }
+psql_super() { docker exec -i -e PGPASSWORD="$BEE_PG_SUPER_PASSWORD" bee-local-postgres psql -h 127.0.0.1 -U bee_super -v ON_ERROR_STOP=1 -qtA "$@"; }
 
 # ---- AGENTS.md guard: next dev may rewrite it (see node_modules/next/dist/server/lib/generate-agent-files.js)
 agents_snapshot() {

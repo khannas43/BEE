@@ -52,6 +52,11 @@ read -r fv fok <<<"$fly"
 expected_v="$(find "$ROOT/backend/src/main/resources/db/migration" -name 'V*__*.sql' | sed -E 's#.*/V([0-9]+)__.*#\1#' | sort -n | tail -1)"
 check "db.migration-version" "$(ok test "${fv:-x}" = "$expected_v" -a "${fok:-f}" = t)" "flyway V${fv:-none} (expected V$expected_v), success=${fok:-?}"
 
+append_own="$(psql_app -c "SELECT count(*) FROM pg_tables WHERE schemaname='app' AND tablename IN ('model_application_submission_event','model_application_fee_snapshot') AND tableowner='bee_app'" 2>/dev/null || echo 0)"
+check "db.append-only-owner" "$(ok test "$append_own" = 2)" "submission event/fee tables owned by bee_app (migrate login), not Spring runtime"
+runtime_ddl="$(docker exec -e PGPASSWORD="$BEE_RUNTIME_DB_PASSWORD" bee-local-postgres psql -h 127.0.0.1 -U "$BEE_RUNTIME_DB_USER" -d bee_app -c 'ALTER TABLE app.model_application_submission_event DISABLE TRIGGER reject_row_change' 2>&1 || true)"
+check "db.runtime-no-trigger-ddl" "$(ok grep -qiE 'must be owner|permission denied' <<<"$runtime_ddl")" "bee_runtime cannot disable append-only triggers ($(grep -oE 'must be owner|permission denied' <<<"$runtime_ddl" | head -1 | cut -c1-40))"
+
 want="$(node "$ROOT/local/generate-fixtures.cjs" --counts)"
 got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.organisation), (SELECT count(*) FROM app.user_account), (SELECT count(*) FROM app.organisation_membership), (SELECT count(*) FROM app.role_assignment), (SELECT count(*) FROM app.role_assignment WHERE active), (SELECT count(*) FROM app.assignment)" 2>/dev/null || true)"
 read -r g_org g_usr g_mem g_role g_act g_asg <<<"$got"
@@ -176,6 +181,13 @@ grep -E '^(PASS|FAIL) ' <<<"$bf_out"
 read -r f_pass f_fail <<<"$(sed -nE 's/^bff checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$bf_out")"
 if [[ -z "${f_pass:-}" ]]; then check "bff.run" 0 "bff-check did not complete: $(tail -1 <<<"$bf_out")"
 else pass=$((pass + f_pass)); fail=$((fail + f_fail)); fi
+
+# ---- WP05.1b draft create/edit (records runtime draft pairs for contract coverage)
+md_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-drafts-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$md_out"
+read -r d_pass d_fail <<<"$(sed -nE 's/^model-drafts checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$md_out")"
+if [[ -z "${d_pass:-}" ]]; then check "drafts.run" 0 "model-drafts-browser-check did not complete: $(tail -1 <<<"$md_out")"
+else pass=$((pass + d_pass)); fail=$((fail + d_fail)); fi
 
 # ---- WP05.1c submit through BFF (records runtime submit pairs for contract coverage)
 ms_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-submit-browser-check.cjs" 2>&1)"

@@ -103,4 +103,13 @@ function record(o) {
   fs.appendFileSync(process.env.CONTRACT_OBSERVED, JSON.stringify({ ...o, source, suite: path.basename(require.main.filename) }) + "\n");
 }
 
-module.exports = { FILE, load, validate, conforms, record, setSource };
+/** Minimal response shape for conforms() on browser fetch results (coverage evidence). */
+function observationResponse(status, json, correlationId = "712d8175-458a-40a8-bd86-29ebf2e79990") {
+  const headers = new Headers();
+  headers.set("Cache-Control", "no-store");
+  headers.set("Content-Type", "application/json");
+  headers.set("X-Correlation-Id", correlationId);
+  return { status, json, text: JSON.stringify(json ?? {}), headers };
+}
+
+module.exports = { FILE, load, validate, conforms, record, setSource, observationResponse };

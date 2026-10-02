@@ -7,6 +7,7 @@ const ids = require("./test-identities.cjs");
 const { USERS } = require("../../local/generate-fixtures.cjs");
 const { WEB, launchChrome, openPage, signIn } = require("./browser-check.cjs");
 const contract = require("./contract-lib.cjs");
+const doc = contract.load();
 
 const RUNTIME_SUBMIT = "/api/runtime/model-applications/{id}/submit";
 
@@ -41,8 +42,12 @@ function sqlMaint(q, allowFail = false) {
 
 const sql = sqlApp;
 
-function recordSubmit(method, status, code, ok) {
-  contract.record({ route: RUNTIME_SUBMIT, method, status, code: code ?? "-", ok: !!ok });
+function recordSubmit(method, status, code, r) {
+  const faux = contract.observationResponse(status, r?.body ?? null);
+  contract.record({
+    route: RUNTIME_SUBMIT, method, status, code: code ?? "-",
+    ok: contract.conforms(doc, RUNTIME_SUBMIT, method, faux).length === 0,
+  });
 }
 
 function modelBaseline() {
@@ -91,7 +96,7 @@ async function api(page, method, path, body, idem) {
 async function apiSubmit(page, method, id, body, idem) {
   const r = await api(page, method, `${WEB}/api/runtime/model-applications/${id}/submit`, body, idem);
   const code = r.status >= 400 ? r.body?.error : "-";
-  recordSubmit(method, r.status, code, true);
+  recordSubmit(method, r.status, code, r);
   return r;
 }
 

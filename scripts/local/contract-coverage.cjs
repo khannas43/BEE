@@ -79,17 +79,10 @@ const javaSrc = fs.existsSync(TEST_SRC) ? fs.readFileSync(TEST_SRC, "utf8") : ""
 const everyPair = /@AfterAll\s+static void everyDocumentedPairWasExercised\(/.test(javaSrc);
 const mockMvc = (name) => (everyPair && javaSrc.includes(`void ${name}(`) && springTests[name] ? `SpringContractTest.${name}` : null);
 function springEvidence(p) {
-  const draftRoutes = new Set(["/api/model-applications", "/api/model-applications/{id}", "/api/model-applications/eligible-brands"]);
-  const runtimeDraftMirror = {
-    "/api/runtime/model-applications": "/api/model-applications",
-    "/api/runtime/model-applications/{id}": "/api/model-applications/{id}",
-    "/api/runtime/model-applications/eligible-brands": "/api/model-applications/eligible-brands",
-  };
-  if (draftRoutes.has(p.route) || (runtimeDraftMirror[p.route] && draftRoutes.has(runtimeDraftMirror[p.route]))) return mockMvc("draftOperationsDocumentedPairs");
-  if (p.route === "/api/model-applications/{id}/submit" || p.route === "/api/runtime/model-applications/{id}/submit") {
-    return mockMvc("submitOperationsDocumentedPairs");
-  }
   if (p.audience !== "internal") return null;
+  const draftRoutes = new Set(["/api/model-applications", "/api/model-applications/{id}", "/api/model-applications/eligible-brands"]);
+  if (draftRoutes.has(p.route)) return mockMvc("draftOperationsDocumentedPairs");
+  if (p.route === "/api/model-applications/{id}/submit") return mockMvc("submitOperationsDocumentedPairs");
   if (p.route === "default-deny") return mockMvc(p.code === "unauthenticated" ? "missingOrInvalidTokenIsUnauthenticated" : "everythingElseIsDeniedByDefault");
   if (p.route.startsWith("/actuator/health")) return mockMvc("healthUpAndDownMatchSpringHealth");
   const byCode = {
@@ -132,18 +125,24 @@ const rows = pairs.map((p) => {
   const l = obs.filter((o) => o.source === "live" && o.ok).length + browser405ViaWrongMethod(p);
   const s = obs.filter((o) => o.source === "live-stand-in" && o.ok).length;
   const mm = springEvidence(p), un = unitEvidence(p);
-  return { ...p, live: l, standIn: s, mockMvc: mm, unit: un, suites: [...new Set(obs.map((o) => o.suite))], covered: l + s > 0 || !!mm || !!un };
+  const browserOnly = p.audience === "browser";
+  const covered = browserOnly ? (l + s > 0 || !!un) : (l + s > 0 || !!mm || !!un);
+  return { ...p, live: l, standIn: s, mockMvc: mm, unit: un, suites: [...new Set(obs.map((o) => o.suite))], covered };
 });
 const uncovered = rows.filter((r) => !r.covered);
 const browserRows = rows.filter((r) => r.audience === "browser"), internalRows = rows.filter((r) => r.audience === "internal");
+const browserUncovered = browserRows.filter((r) => !r.covered);
+const internalUncovered = internalRows.filter((r) => !r.covered);
 const count = (rs, f) => rs.filter(f).length;
 
 check("coverage.inputs", observed.length > 0 && unitFailed.length === 0 && unitOk.size >= 7 && reportNote.includes("all passed") && !reportNote.includes("STALE"),
   `${observed.length} live observations from ${OBSERVED.replace(ROOT + "/", "")}; request-log.test.mjs ${unitOk.size} passed, ${unitFailed.length} failed; SpringContractTest report: ${reportNote}`);
 check("coverage.live-observations-conform", failedObs.length === 0 && undocumented.length === 0,
   `${observed.length - failedObs.length}/${observed.length} live observations conform to the artifact${failedObs.length ? `; failing: ${failedObs.slice(0, 4).map((o) => `${o.method} ${o.route} ${o.status} ${o.code} (${o.suite})`).join(", ")}` : ""}${undocumented.length ? `; undocumented: ${undocumented.slice(0, 4).join(", ")}` : ""}`);
-check("coverage.every-documented-pair", uncovered.length === 0,
-  `${rows.length - uncovered.length}/${rows.length} documented (operation, status, code) pairs have evidence: browser ${browserRows.length} (live ${count(browserRows, (r) => r.live)}, stand-in only ${count(browserRows, (r) => !r.live && r.standIn)}, unit only ${count(browserRows, (r) => !r.live && !r.standIn && r.unit)}); internal ${internalRows.length} (live ${count(internalRows, (r) => r.live)}, MockMvc ${count(internalRows, (r) => r.mockMvc)}, MockMvc only ${count(internalRows, (r) => !r.live && r.mockMvc)})${uncovered.length ? `; UNCOVERED: ${uncovered.map((r) => key(r.route, r.method, r.status, r.code)).join(", ")}` : ""}`);
+check("coverage.every-documented-pair-internal", internalUncovered.length === 0,
+  `${internalRows.length - internalUncovered.length}/${internalRows.length} internal pairs evidenced (live ${count(internalRows, (r) => r.live)}, MockMvc ${count(internalRows, (r) => r.mockMvc)}, MockMvc-only ${count(internalRows, (r) => !r.live && r.mockMvc)})${internalUncovered.length ? `; UNCOVERED: ${internalUncovered.map((r) => key(r.route, r.method, r.status, r.code)).join(", ")}` : ""}`);
+check("coverage.browser-documented-pair", browserUncovered.length === 0,
+  `${browserRows.length - browserUncovered.length}/${browserRows.length} browser pairs evidenced at the Next.js boundary (live ${count(browserRows, (r) => r.live)}, stand-in ${count(browserRows, (r) => r.standIn)}, unit ${count(browserRows, (r) => r.unit)}); overall ${rows.length - uncovered.length}/${rows.length} including internal Spring MockMvc${browserUncovered.length ? `; UNCOVERED browser: ${browserUncovered.map((r) => key(r.route, r.method, r.status, r.code)).join(", ")}` : ""}`);
 
 const md = [
   `# WP03.3 contract coverage (${new Date().toISOString()})`,

@@ -6,6 +6,12 @@ const totp = require("./totp.cjs");
 const ids = require("./test-identities.cjs");
 const { USERS } = require("../../local/generate-fixtures.cjs");
 const { WEB, launchChrome, openPage, signIn } = require("./browser-check.cjs");
+const contract = require("./contract-lib.cjs");
+
+const doc = contract.load();
+const RUNTIME_LIST = "/api/runtime/model-applications";
+const RUNTIME_DETAIL = "/api/runtime/model-applications/{id}";
+const RUNTIME_BRANDS = "/api/runtime/model-applications/eligible-brands";
 
 const NOVA_COOL = "00000000-0000-4000-d000-000000000001";
 const PIXEL_APP = "00000000-0000-4000-c000-000000000003";
@@ -34,10 +40,28 @@ function cleanupDisposable(createdIds) {
   sql(`DELETE FROM app.idempotency_record WHERE account_id IN (${twinAccountIds()})`);
 }
 
+function runtimeRoute(method, path) {
+  if (path.includes("/eligible-brands")) return RUNTIME_BRANDS;
+  if (method === "PATCH") return RUNTIME_DETAIL;
+  if (method === "POST" && path.replace(/\/$/, "").endsWith("/model-applications")) return RUNTIME_LIST;
+  if (method === "GET" && path.includes("/model-applications/") && !path.includes("eligible-brands")) return RUNTIME_DETAIL;
+  if (method === "GET" && path.endsWith("/model-applications")) return RUNTIME_LIST;
+  return RUNTIME_LIST;
+}
+
+function recordRuntime(method, path, r) {
+  const route = runtimeRoute(method, path);
+  const code = r.status >= 400 ? (r.body?.error ?? "-") : "-";
+  const faux = contract.observationResponse(r.status, r.body);
+  contract.record({ route, method, status: r.status, code, ok: contract.conforms(doc, route, method, faux).length === 0 });
+}
+
 async function api(page, method, path, body, idem) {
   const headers = { "Content-Type": "application/json", ...(idem ? { "Idempotency-Key": idem } : {}) };
   const bodySnippet = body == null ? "undefined" : `JSON.stringify(${JSON.stringify(body)})`;
-  return page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store", headers: ${JSON.stringify(headers)}, body: ${bodySnippet} }).then(async (r) => ({ status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null) }))`);
+  const r = await page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store", headers: ${JSON.stringify(headers)}, body: ${bodySnippet} }).then(async (r) => ({ status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null) }))`);
+  recordRuntime(method, path, r);
+  return r;
 }
 
 async function runDraftChecks(runLabel, nova, pixel) {

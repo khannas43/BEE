@@ -46,8 +46,12 @@ class ModelApplicationSubmitDatabaseTest {
         return v == null || v.isBlank() ? d : v;
     }
 
-    static DriverManagerDataSource source(String schema) {
-        return sourceAs(schema, env("BEE_APP_DB_USER", "bee_app"), env("BEE_APP_DB_PASSWORD", "bee-local-app"));
+    static DriverManagerDataSource migrateSource(String schema) {
+        return sourceAs(schema, env("BEE_FLYWAY_DB_USER", "bee_app"), env("BEE_FLYWAY_DB_PASSWORD", env("BEE_APP_DB_PASSWORD", "bee-local-app")));
+    }
+
+    static DriverManagerDataSource runtimeSource(String schema) {
+        return sourceAs(schema, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime"));
     }
 
     static DriverManagerDataSource sourceAs(String schema, String user, String password) {
@@ -57,7 +61,7 @@ class ModelApplicationSubmitDatabaseTest {
     }
 
     static Flyway flyway(String schema) {
-        return Flyway.configure().dataSource(source(schema)).schemas(schema).defaultSchema(schema).createSchemas(false)
+        return Flyway.configure().dataSource(migrateSource(schema)).schemas(schema).defaultSchema(schema).createSchemas(false)
             .locations("classpath:db/migration").load();
     }
 
@@ -80,7 +84,7 @@ class ModelApplicationSubmitDatabaseTest {
 
     @BeforeAll
     static void migrateAndSeed() throws Exception {
-        admin = new JdbcTemplate(source(null));
+        admin = new JdbcTemplate(migrateSource(null));
         appModelCountBefore = admin.queryForObject("SELECT count(*) FROM app.model_application", Integer.class);
         appVersionBefore = admin.queryForObject("SELECT max(version::int) FROM app.flyway_schema_history WHERE success", Integer.class);
         seed = Files.readString(SEED);
@@ -89,9 +93,10 @@ class ModelApplicationSubmitDatabaseTest {
         var superuser = new JdbcTemplate(sourceAs(MAIN, "bee_super", env("BEE_PG_SUPER_PASSWORD", "bee-local-super")));
         String maint = env("BEE_MAINT_DB_USER", "bee_local_maint");
         superuser.execute("GRANT USAGE ON SCHEMA " + MAIN + " TO " + maint);
-        db = new JdbcTemplate(source(MAIN));
-        db.execute("GRANT ALL ON ALL TABLES IN SCHEMA " + MAIN + " TO " + maint);
-        db.execute(seed);
+        var migrate = new JdbcTemplate(migrateSource(MAIN));
+        migrate.execute("GRANT ALL ON ALL TABLES IN SCHEMA " + MAIN + " TO " + maint);
+        db = new JdbcTemplate(runtimeSource(MAIN));
+        migrate.execute(seed);
         applications = new ModelApplicationRepository(db);
         submissions = new ModelApplicationSubmitRepository(db, applications);
     }
@@ -193,6 +198,20 @@ class ModelApplicationSubmitDatabaseTest {
         assertEquals(0, submissions.countSubmissionEvents(id));
         assertEquals(0, submissions.countFeeSnapshots(id));
         assertTrue(applications.findOwned(id, NOVA).isEmpty());
+    }
+
+    @Test
+    void runtimeLoginCannotDisableAppendOnlyTriggersOrMutateSubmissionRows() {
+        UUID id = insertDraft("NC-SUB-DDL");
+        assertTrue(submissions.submit(id, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("24000.00"), "RAC:new_model", 2,
+            "provisional", null, null).isPresent());
+        assertThrows(Exception.class, () -> db.execute("ALTER TABLE model_application_submission_event DISABLE TRIGGER reject_row_change"));
+        assertThrows(Exception.class, () -> db.execute("ALTER TABLE model_application_submission_event DISABLE TRIGGER ALL"));
+        assertThrows(Exception.class, () -> db.execute("DROP TRIGGER reject_row_change ON model_application_submission_event"));
+        assertThrows(Exception.class, () -> db.execute("TRUNCATE model_application_submission_event"));
+        assertThrows(Exception.class, () -> db.update("UPDATE model_application_fee_snapshot SET amount_inr = 1 WHERE application_id = ?", id));
+        assertThrows(Exception.class, () -> db.update("DELETE FROM model_application_submission_event WHERE application_id = ?", id));
+        assertEquals(1, submissions.countFeeSnapshots(id));
     }
 
     @Test

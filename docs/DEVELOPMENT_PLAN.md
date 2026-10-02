@@ -180,6 +180,8 @@ WP05.1a and WP05.1b are accepted as narrow local activities. WP05.1 and WP05 rem
 
 **WP05.1c review of `0bc2cea` (2 October 2026): corrections landed locally after `6815048`; still not accepted.** Follow-up work gives Spring a **`bee_runtime`** datasource (Flyway stays **`bee_app`**, **V21** grants, live `db.runtime-no-trigger-ddl` probe, DB test on the runtime login) and removes MockMvc→browser coverage mirroring. Honest contract matrix: **224/224** pairs (**136/136** browser at the Next.js boundary via live, stand-in or unit; **88/88** internal). Reported gate: `local:check` **307/307**, `api:test:submit` ×2 through **V21**. See [WP05.1c_SUBMIT.md](wp05/WP05.1c_SUBMIT.md). WP05.1c remains unaccepted until review; count 1/11.
 
+**WP05.1c independent re-review of `f751589` (3 October 2026): still open.** The restricted Spring login and removal of MockMvc credit from browser rows close the two structural issues from `6815048`. Two narrower gaps remain: the V21 role setup re-grants cleanup-function EXECUTE through `GRANT EXECUTE ON ALL FUNCTIONS`, and the browser draft/submit checks validate fabricated headers while the unit coverage mapping applies a GET-only refresh test to other routes and methods. Tighten the grants in a new migration, use actual response headers, and bind unit evidence to tested operation/method; prove negative coverage cases. Evidence and exact checks are in [WP05.1c_SUBMIT.md](wp05/WP05.1c_SUBMIT.md). WP05.1c remains unaccepted; count 1/11.
+
 **Excluded work packages:** WP12 external adapters, WP13 migration and WP14 quality/release. Feature-level local checks remain part of WP01–WP11; they do not imply a CI/CD pipeline, audit, load campaign, formal UAT or production release.
 
 ## 6. Screen consolidation and role navigation

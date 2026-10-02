@@ -29,10 +29,13 @@ public class ModelApplicationController {
 
     private final CallerResolver callers;
     private final ModelApplicationRepository applications;
+    private final ModelApplicationSubmitRepository submissions;
 
-    public ModelApplicationController(CallerResolver callers, ModelApplicationRepository applications) {
+    public ModelApplicationController(CallerResolver callers, ModelApplicationRepository applications,
+                                      ModelApplicationSubmitRepository submissions) {
         this.callers = callers;
         this.applications = applications;
+        this.submissions = submissions;
     }
 
     @GetMapping("/api/model-applications")
@@ -48,7 +51,7 @@ public class ModelApplicationController {
         }
         List<Map<String, Object>> items = applications.list(scope, caller.accountId()).stream()
             .filter(r -> SlicePolicy.canRead(scope, facts(r)))
-            .map(r -> view(r, scope))
+            .map(r -> view(r, scope, submissions.findFeeSnapshot(r.id())))
             .toList();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("items", items);
@@ -76,7 +79,7 @@ public class ModelApplicationController {
         }
         return applications.find(appId, scope, caller.accountId())
             .filter(r -> SlicePolicy.canRead(scope, facts(r)))
-            .map(r -> ResponseEntity.ok(view(r, scope)))
+            .map(r -> ResponseEntity.ok(view(r, scope, submissions.findFeeSnapshot(r.id()))))
             .orElseGet(() -> error(HttpStatus.NOT_FOUND, "not_found"));
     }
 
@@ -84,8 +87,9 @@ public class ModelApplicationController {
         return new ApplicationFacts(r.id(), r.organisationId(), r.state(), r.assignedStagesForCaller(), Set.of(), false);
     }
 
-    private static Map<String, Object> view(ModelApplicationRepository.Row r, ReadScope scope) {
-        return ModelApplicationDraftService.view(r, scope);
+    private static Map<String, Object> view(ModelApplicationRepository.Row r, ReadScope scope,
+                                            java.util.Optional<ModelApplicationSubmitRepository.FeeSnapshotRow> fee) {
+        return ModelApplicationViewSupport.readView(r, scope, fee);
     }
 
     private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String code) {

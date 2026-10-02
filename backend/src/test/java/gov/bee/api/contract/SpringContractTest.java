@@ -449,7 +449,8 @@ class SpringContractTest {
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
         conforms("/api/model-applications/{id}", patch("/api/model-applications/" + NOVA_APP).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 409, "idempotency_in_progress");
 
-        String submitBody = "{\"version\":0}";
+        String submitBody = "{\"version\":0,\"expectedFee\":{\"amountInr\":\"24000.00\",\"feeRuleKey\":\"RAC:new_model\",\"feeRuleVersion\":2}}";
+        String submitBodyWrongFee = "{\"version\":0,\"expectedFee\":{\"amountInr\":\"99999.00\",\"feeRuleKey\":\"RAC:new_model\",\"feeRuleVersion\":2}}";
         String submitPath = "/api/model-applications/" + NOVA_APP + "/submit";
         conforms("/api/model-applications/{id}/submit", get(submitPath), 401, "unauthenticated");
         conforms("/api/model-applications/{id}/submit", post(submitPath).contentType("application/json").content(submitBody), 401, "unauthenticated");
@@ -475,6 +476,9 @@ class SpringContractTest {
         when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
         when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
         conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).contentType("application/json").content(submitBody), 422, "idempotency_key_required");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBodyWrongFee), 409, "fee_preview_conflict");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
         var feeSnap = new ModelApplicationSubmitRepository.FeeSnapshotRow(UUID.randomUUID(), new BigDecimal("24000.00"), "INR", "RAC:new_model", 2,

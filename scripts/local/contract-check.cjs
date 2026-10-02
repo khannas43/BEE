@@ -336,7 +336,7 @@ async function nextChecks(jar, novaToken) {
   check("next.denied-write", m405.every((x) => x.x.status === 405 && x.x.json?.error === "method_not_allowed" && x.x.headers.get("allow") && sameCorr(x.x)) && cross.status === 403 && cross.json?.error === "cross_origin" && still.status === 200 && e.length === 0,
     `${m405.length} unsupported methods -> 405 method_not_allowed with Allow; cross-origin logout -> ${cross.status} ${cross.json?.error}; session still valid (${still.status})${show(e)}`);
   const um = [];
-  for (const [m, p] of [["GET", `/api/runtime/model-applications/${NOVA_APP}/history`], ["POST", `/api/runtime/model-applications/${NOVA_APP}/submit`], ["GET", "/api/runtime/model-applications/a/b"], ["GET", "/api/nothing-here"]]) {
+  for (const [m, p] of [["GET", `/api/runtime/model-applications/${NOVA_APP}/history`], ["POST", `/api/runtime/model-applications/${NOVA_APP}/history`], ["GET", "/api/runtime/model-applications/a/b"], ["GET", "/api/nothing-here"]]) {
     const x = await call(`${WEB}${p}`, { method: m, jar, correlationId: cid("next-404"), body: m === "GET" ? undefined : "{}", headers: { "Content-Type": "application/json" } });
     um.push({ m, p, x, e: contract.validate(doc.components.schemas.Error, x.json, doc) });
   }

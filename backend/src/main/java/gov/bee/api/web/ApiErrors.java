@@ -30,6 +30,7 @@ public final class ApiErrors {
         Map.entry("rule_not_available", "Required category, standard or fee rules are not available."),
         Map.entry("validation_failed", "The request could not be accepted."),
         Map.entry("version_conflict", "The record has changed since it was loaded."),
+        Map.entry("fee_preview_conflict", "The provisional fee changed since it was reviewed."),
         Map.entry("idempotency_key_required", "An Idempotency-Key header is required for this request."),
         Map.entry("idempotency_key_conflict", "This Idempotency-Key was already used with a different request body."),
         Map.entry("idempotency_in_progress", "A request with this Idempotency-Key is still in progress."),

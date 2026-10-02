@@ -35,6 +35,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const [saved, setSaved] = useState<{ reference: string; id: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [legacyUnlinked, setLegacyUnlinked] = useState(false);
+  const [persistedDraft, setPersistedDraft] = useState<{ modelNumber: string; brandId: string } | null>(null);
   const [submitPreview, setSubmitPreview] = useState<SubmitPreview | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -81,6 +82,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
         setLegacyUnlinked(true);
         setBrandId("");
       }
+      setPersistedDraft({ modelNumber: r.application.modelNumber, brandId: bid ?? "" });
     });
     return () => {
       live = false;
@@ -119,9 +121,21 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     const nextVersion = res.application.version as number;
     setVersion(nextVersion);
     setSaved({ reference: String(res.application.reference), id: String(res.application.id) });
+    if (isEdit) {
+      setPersistedDraft({ modelNumber: modelNumber.trim(), brandId });
+    }
   }
 
+  const draftDirty =
+    isEdit &&
+    persistedDraft != null &&
+    (modelNumber.trim() !== persistedDraft.modelNumber || brandId !== persistedDraft.brandId);
+
   async function openSubmitConfirm(appId: string) {
+    if (draftDirty) {
+      setSubmitError("Save your changes before reviewing submit.");
+      return;
+    }
     setSubmitError(null);
     setLoading(true);
     const prev = await previewModelApplicationSubmit(appId);
@@ -139,7 +153,20 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     setLoading(true);
     setSubmitError(null);
     if (!submitIdem.current) submitIdem.current = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
-    const res = await submitModelApplicationDraft(appId, submitPreview.version, submitIdem.current);
+    if (!submitPreview.submissionFee) {
+      setLoading(false);
+      return;
+    }
+    const res = await submitModelApplicationDraft(
+      appId,
+      submitPreview.version,
+      {
+        amountInr: submitPreview.submissionFee.amountInr,
+        feeRuleKey: submitPreview.submissionFee.feeRuleKey,
+        feeRuleVersion: submitPreview.submissionFee.feeRuleVersion,
+      },
+      submitIdem.current,
+    );
     setLoading(false);
     if (!res.ok) {
       setSubmitError(res.failure.message);
@@ -284,12 +311,17 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             </button>
             {isEdit && activeId ? (
               <>
+                {draftDirty ? (
+                  <p className="text-error font-body-sm" data-testid="model-draft-dirty-hint">
+                    Save your changes before reviewing submit.
+                  </p>
+                ) : null}
                 {submitError && !submitOpen ? (
                   <p className="text-error font-body-sm" data-testid="model-submit-error">{submitError}</p>
                 ) : null}
                 <button
                   type="button"
-                  disabled={loading}
+                  disabled={loading || draftDirty}
                   onClick={() => openSubmitConfirm(activeId)}
                   className="w-full border border-primary text-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
                   data-testid="model-draft-submit"
@@ -337,6 +369,13 @@ function SubmitConfirmCard({
         <p className="text-error font-body-sm mt-space-sm">This draft is not ready to submit. Check brand authorisation and master rules.</p>
       ) : (
         <div className="mt-space-md space-y-1 font-body-sm">
+          {preview.draftSummary ? (
+            <p data-testid="model-submit-draft-summary">
+              Submitting persisted draft: <span className="font-semibold">{preview.draftSummary.brandName}</span>
+              {" · "}
+              {preview.draftSummary.category} · model {preview.draftSummary.modelNumber}
+            </p>
+          ) : null}
           <p>
             <span className="font-semibold">{preview.submissionFee.label}</span>
             {" · "}

@@ -37,6 +37,17 @@ public class ModelApplicationSubmitRepository {
         return n == null ? 0 : n;
     }
 
+    public Optional<FeeSnapshotRow> findFeeSnapshot(UUID applicationId) {
+        var rows = jdbc.query(
+            "SELECT id, amount_inr, currency, fee_rule_key, fee_rule_version, verification_status, source_reference, note, captured_at "
+                + "FROM model_application_fee_snapshot WHERE application_id = ?",
+            (rs, i) -> new FeeSnapshotRow(rs.getObject("id", UUID.class), rs.getBigDecimal("amount_inr"), rs.getString("currency"),
+                rs.getString("fee_rule_key"), rs.getInt("fee_rule_version"), rs.getString("verification_status"),
+                rs.getString("source_reference"), rs.getString("note"), rs.getTimestamp("captured_at").toInstant()),
+            applicationId);
+        return rows.stream().findFirst();
+    }
+
     @Transactional
     public Optional<SubmissionResult> submit(UUID applicationId, UUID filingOrganisationId, int expectedVersion,
                                              UUID actorAccountId, String actorRole, BigDecimal amountInr, String feeRuleKey,

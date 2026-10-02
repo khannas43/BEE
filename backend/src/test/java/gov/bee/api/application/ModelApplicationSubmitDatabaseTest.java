@@ -1,6 +1,7 @@
 package gov.bee.api.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
@@ -160,5 +161,32 @@ class ModelApplicationSubmitDatabaseTest {
         assertEquals(1, ok.get());
         assertEquals(1, submissions.countSubmissionEvents(id));
         assertEquals(1, submissions.countFeeSnapshots(id));
+    }
+
+    @Test
+    void submissionFeeAndEventRowsAreAppendOnly() {
+        UUID id = insertDraft("NC-SUB-IMM");
+        assertTrue(submissions.submit(id, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("24000.00"), "RAC:new_model", 2,
+            "provisional", "FIRST_SLICE", "local demo").isPresent());
+        assertThrows(Exception.class, () -> db.update("UPDATE model_application_fee_snapshot SET amount_inr = 1 WHERE application_id = ?", id));
+        assertThrows(Exception.class, () -> db.update("DELETE FROM model_application_submission_event WHERE application_id = ?", id));
+    }
+
+    @Test
+    void disposableCleanupRemovesSubmissionRows() {
+        UUID id = insertDraft("NC-SUB-CLEAN");
+        assertTrue(submissions.submit(id, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("24000.00"), "RAC:new_model", 2,
+            "provisional", null, null).isPresent());
+        db.execute("""
+            DO $$
+            BEGIN
+              PERFORM set_config('bee.test_cleanup', 'allow', true);
+              DELETE FROM model_application_fee_snapshot WHERE application_id = '%s';
+              DELETE FROM model_application_submission_event WHERE application_id = '%s';
+              DELETE FROM model_application WHERE id = '%s';
+            END $$""".formatted(id, id, id));
+        assertEquals(0, submissions.countSubmissionEvents(id));
+        assertEquals(0, submissions.countFeeSnapshots(id));
+        assertTrue(applications.findOwned(id, NOVA).isEmpty());
     }
 }

@@ -189,8 +189,13 @@ public class ModelApplicationDraftService {
         if (priorHash.isEmpty() || !MessageDigestEquals.equals(priorHash.get(), hash)) {
             return Optional.of(error(HttpStatus.CONFLICT, "idempotency_key_conflict"));
         }
-        if (!ModelDraftPolicy.canWrite(caller)) {
-            return Optional.of(error(HttpStatus.FORBIDDEN, "no_write_scope"));
+        Optional<String> scopeDeny = IdempotencyReplayGuard.denialBeforeReplay(caller, applications, identity, json, target, s.responseBody());
+        if (scopeDeny.isPresent()) {
+            HttpStatus status = "not_found".equals(scopeDeny.get()) ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN;
+            if ("internal_error".equals(scopeDeny.get())) {
+                status = HttpStatus.INTERNAL_SERVER_ERROR;
+            }
+            return Optional.of(error(status, scopeDeny.get()));
         }
         try {
             @SuppressWarnings("unchecked")

@@ -55,6 +55,9 @@ class ModelApplicationControllerSecurityTest {
     @MockitoBean
     ModelApplicationRepository applications;
 
+    @MockitoBean
+    ModelApplicationSubmitRepository submissions;
+
     RequestPostProcessor token(String... roles) {
         return jwt().jwt(j -> j.subject(USER.toString()).claim("organisation", "PixelCert Agency (synthetic)").claim("amr", List.of("pwd", "otp"))
             .claim("realm_access", Map.of("roles", List.of(roles))));
@@ -125,6 +128,7 @@ class ModelApplicationControllerSecurityTest {
     @Test
     void listIsFilteredByDatabaseMembershipNotTokenClaim() throws Exception {
         account("manufacturer", "own-org", NOVA);
+        when(submissions.findFeeSnapshot(any())).thenReturn(Optional.empty());
         when(applications.list(any(), eq(USER))).thenReturn(List.of(row(NOVA_APP, NOVA, "NOVA", "fee_due")));
         mvc.perform(get("/api/model-applications").with(token("manufacturer")))
             .andExpect(status().isOk())

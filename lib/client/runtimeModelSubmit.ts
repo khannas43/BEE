@@ -15,11 +15,24 @@ export type SubmissionFee = {
   sourceReference?: string;
 };
 
+export type DraftSummary = {
+  brandName: string;
+  category: string;
+  modelNumber: string;
+};
+
 export type SubmitPreview = {
   ready: boolean;
   version: number;
   intakeNote: string;
   submissionFee?: SubmissionFee;
+  draftSummary?: DraftSummary;
+};
+
+export type ExpectedFeeSubmit = {
+  amountInr: string;
+  feeRuleKey: string;
+  feeRuleVersion: number;
 };
 import { newIdempotencyKey } from "@/lib/client/runtimeModelDrafts";
 
@@ -51,7 +64,12 @@ function classifyFailure(status: number, parsed: unknown): SubmitFailure {
   const code = parsed && typeof parsed === "object" && "error" in parsed ? String((parsed as { error: unknown }).error) : "";
   if (status === 401) return { kind: "session", message: messageFrom(parsed, READ_UI_MESSAGES.no_session) };
   if (status === 403) return { kind: "denied", message: messageFrom(parsed, "This request is not permitted.") };
-  if (status === 409) return { kind: "conflict", message: messageFrom(parsed, "The record has changed since it was loaded.") };
+  if (status === 409) {
+    const fallback = code === "fee_preview_conflict"
+      ? "The provisional fee changed since it was reviewed."
+      : "The record has changed since it was loaded.";
+    return { kind: "conflict", message: messageFrom(parsed, fallback) };
+  }
   if (status === 422) return { kind: "validation", message: messageFrom(parsed, "The request could not be accepted.") };
   if (code === "api_unreachable") return { kind: "unavailable", message: READ_UI_MESSAGES.api_unreachable };
   return { kind: "unavailable", message: messageFrom(parsed, READ_UI_MESSAGES.api_error) };
@@ -71,7 +89,12 @@ export async function previewModelApplicationSubmit(id: string): Promise<SubmitP
   return { ok: false, failure: classifyFailure(res.status, parsed) };
 }
 
-export async function submitModelApplicationDraft(id: string, version: number, idempotencyKey = newIdempotencyKey()): Promise<SubmitResult> {
+export async function submitModelApplicationDraft(
+  id: string,
+  version: number,
+  expectedFee: ExpectedFeeSubmit,
+  idempotencyKey = newIdempotencyKey(),
+): Promise<SubmitResult> {
   if (!idemPattern.test(idempotencyKey)) {
     return { ok: false, failure: { kind: "validation", message: "An Idempotency-Key header is required for this request." } };
   }
@@ -82,7 +105,7 @@ export async function submitModelApplicationDraft(id: string, version: number, i
       credentials: "include",
       cache: "no-store",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ version }),
+      body: JSON.stringify({ version, expectedFee }),
     });
   } catch {
     return { ok: false, failure: { kind: "unavailable", message: READ_UI_MESSAGES.api_unreachable } };

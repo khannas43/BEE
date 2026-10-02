@@ -76,7 +76,8 @@ public class ModelApplicationSubmitService {
             return error(HttpStatus.FORBIDDEN, "no_write_scope");
         }
         Optional<Integer> version = parseVersion(body);
-        if (version.isEmpty()) {
+        Optional<ExpectedFee> expectedFee = parseExpectedFee(body);
+        if (version.isEmpty() || expectedFee.isEmpty()) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
@@ -113,6 +114,10 @@ public class ModelApplicationSubmitService {
         }
         FeeRule fee = intake.get().fee();
         MasterVersion fv = fee.version();
+        if (!feeMatchesExpected(fee, expectedFee.get())) {
+            idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
+            return error(HttpStatus.CONFLICT, "fee_preview_conflict");
+        }
         String actorRole = actorRole(caller);
         Optional<ModelApplicationSubmitRepository.SubmissionResult> done = submissions.submit(appId, filing, version.get(),
             caller.accountId(), actorRole, fee.amountInr(), fv.ruleKey(), fv.version(), fv.verification().name().toLowerCase(),
@@ -125,7 +130,7 @@ public class ModelApplicationSubmitService {
             }
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
-        Map<String, Object> view = submitView(done.get(), readScope(caller));
+        Map<String, Object> view = ModelApplicationViewSupport.readView(done.get().application(), readScope(caller), Optional.of(done.get().fee()));
         idempotency.complete(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey, 200, writeJson(view), done.get().application().version());
         return ResponseEntity.ok(view);
     }
@@ -140,6 +145,11 @@ public class ModelApplicationSubmitService {
         m.put("ready", brandDeny.isEmpty() && intake.isPresent());
         m.put("version", row.version());
         m.put("intakeNote", INTAKE_NOTE);
+        Map<String, Object> draftSummary = new LinkedHashMap<>();
+        draftSummary.put("brandName", row.brandName());
+        draftSummary.put("category", row.category());
+        draftSummary.put("modelNumber", row.modelNumber());
+        m.put("draftSummary", draftSummary);
         intake.ifPresent(i -> m.put("submissionFee", feeView(i.fee())));
         return ResponseEntity.ok(m);
     }
@@ -194,8 +204,13 @@ public class ModelApplicationSubmitService {
         if (priorHash.isEmpty() || !ModelApplicationDraftService.MessageDigestEquals.equals(priorHash.get(), hash)) {
             return Optional.of(error(HttpStatus.CONFLICT, "idempotency_key_conflict"));
         }
-        if (!ModelDraftPolicy.canWrite(caller)) {
-            return Optional.of(error(HttpStatus.FORBIDDEN, "no_write_scope"));
+        Optional<String> scopeDeny = IdempotencyReplayGuard.denialBeforeReplay(caller, applications, identity, json, appId, s.responseBody());
+        if (scopeDeny.isPresent()) {
+            HttpStatus status = "not_found".equals(scopeDeny.get()) ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN;
+            if ("internal_error".equals(scopeDeny.get())) {
+                status = HttpStatus.INTERNAL_SERVER_ERROR;
+            }
+            return Optional.of(error(status, scopeDeny.get()));
         }
         try {
             @SuppressWarnings("unchecked")
@@ -204,6 +219,32 @@ public class ModelApplicationSubmitService {
         } catch (Exception e) {
             return Optional.of(error(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error"));
         }
+    }
+
+    private record ExpectedFee(String amountInr, String feeRuleKey, int feeRuleVersion) {
+    }
+
+    private static boolean feeMatchesExpected(FeeRule fee, ExpectedFee expected) {
+        MasterVersion v = fee.version();
+        return fee.amountInr().toPlainString().equals(expected.amountInr())
+            && v.ruleKey().equals(expected.feeRuleKey())
+            && v.version() == expected.feeRuleVersion();
+    }
+
+    private static Optional<ExpectedFee> parseExpectedFee(JsonNode body) {
+        if (body == null || !body.isObject() || !body.has("expectedFee") || !body.get("expectedFee").isObject()) {
+            return Optional.empty();
+        }
+        JsonNode f = body.get("expectedFee");
+        if (!f.hasNonNull("amountInr") || !f.hasNonNull("feeRuleKey") || !f.has("feeRuleVersion") || !f.get("feeRuleVersion").isInt()) {
+            return Optional.empty();
+        }
+        String amount = f.get("amountInr").asText().trim();
+        String key = f.get("feeRuleKey").asText().trim();
+        if (amount.isEmpty() || key.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new ExpectedFee(amount, key, f.get("feeRuleVersion").asInt()));
     }
 
     private static Optional<Integer> parseVersion(JsonNode body) {
@@ -236,12 +277,6 @@ public class ModelApplicationSubmitService {
         if (v.sourceReference() != null) {
             m.put("sourceReference", v.sourceReference());
         }
-        return m;
-    }
-
-    static Map<String, Object> submitView(ModelApplicationSubmitRepository.SubmissionResult result, ReadScope scope) {
-        Map<String, Object> m = ModelApplicationDraftService.view(result.application(), scope);
-        m.put("submissionFee", feeViewFromSnapshot(result.fee()));
         return m;
     }
 

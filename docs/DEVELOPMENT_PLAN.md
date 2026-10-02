@@ -174,6 +174,8 @@ WP04.1 is accepted as an internal local master-data activity. WP04 remains open 
 
 WP05.1a and WP05.1b are accepted as narrow local activities. WP05.1 and WP05 remain open; the work-package count stays 1/11.
 
+**WP05.1c submit review (2 October 2026): corrections required.** Commit `45db566` implements draft → `fee_due`, provisional fee snapshot, submission event, BFF contract 0.4.2 and UI. The implementation reports `local:model-submit` 28/28 twice, throwaway-schema submit tests, API tests, typecheck and build; independent web tests (62/62), matrix (24/24) and access audit (9/9) passed. The review found that V9 does not enforce append-only submission records; idempotency replay can disclose an old response after the account changes organisation (also affecting WP05.1b replay); a fee rule can change between preview and confirmation; unsaved form edits can be bypassed by Submit; and the fee snapshot is absent from ordinary detail after refresh. Correct and test these before accepting WP05.1c. Evidence: [WP05.1c_SUBMIT.md](wp05/WP05.1c_SUBMIT.md). WP05.1c, WP05.1 and WP05 remain open; the count stays 1/11.
+
 **Excluded work packages:** WP12 external adapters, WP13 migration and WP14 quality/release. Feature-level local checks remain part of WP01–WP11; they do not imply a CI/CD pipeline, audit, load campaign, formal UAT or production release.
 
 ## 6. Screen consolidation and role navigation

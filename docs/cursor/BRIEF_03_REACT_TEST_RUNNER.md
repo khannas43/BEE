@@ -1,6 +1,6 @@
 # Brief 03 — A React test runner for the kit hooks (BL-027, BL-076)
 
-Branch `cursor/react-test-runner`. Tooling and tests only. Do not push.
+Branch `cursor/react-test-runner` (created and checked out for you by Claude). Tooling and tests only. Hand back with /bee-handback (it releases the folder and prints the report; you never push).
 
 ## Objective
 

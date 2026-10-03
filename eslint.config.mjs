@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The iCloud-safe layout (scripts/local/nosync.sh) keeps generated folders in *.nosync siblings.
+    "**/*.nosync/**",
   ]),
 ]);
 

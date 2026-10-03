@@ -48,7 +48,7 @@ Last updated: 3 October 2026 (command panel and feature template added).
 | BL-031 | A crashed run leaves `.local/run/run.lock` behind, and the next run fails until it is removed by hand | Cost time twice this session | next tooling change | open |
 | BL-032 | `local:check` memory budgets are noisy: `memory.web` measured 398 to 1541 MB against a 1500 MB budget across runs | One run failed only on this budget; a flaky gate trains people to ignore it | decide: raise the budget or measure after a settle period | open |
 | BL-033 | The full gate takes about 3 to 5 minutes plus a runtime restart, and was re-run after every review round | The main source of slow turnaround | adopt tiered gates (plan section 4, item 3) | open |
-| BL-034 | One `api:test` run stalled for 10 minutes in a file read while the repository was under `~/Documents` | Probably cloud-sync materialisation; the work moved to `~/Code` | keep working only under `~/Code/BEE/worktrees` | accepted limit |
+| BL-034 | One `api:test` run stalled for 10 minutes in a file read while the repository was under `~/Documents` (iCloud "Desktop & Documents" sync is on and the disk is about 90% full) | Cloud-sync eviction and materialisation; the project is back under `~/Documents/Projects/BEE`, so the heavy folders are kept in `*.nosync` siblings (`npm run setup:nosync`, BL-094) | mitigated by the nosync layout; revisit if stalls recur | accepted limit |
 | BL-035 | Whole-repository lint baseline: 53 problems (32 errors) at the last measurement, including two `react-hooks/set-state-in-effect` errors in `NewModelApplication.tsx` from WP05.1c and a warning in `runtimeModelDrafts.ts` | Hides any new finding in a noisy baseline | a dedicated lint clean-up activity | open |
 | BL-036 | `DEVELOPMENT_PLAN.md` and the early slice documents keep historical status sentences that conflict with the dated review entries | A reader can take an old sentence as current status | next plan update | open |
 | BL-077 | The code-review agent checks out the end commit of its range in the shared worktree, which leaves HEAD detached; a commit made afterwards lands on no branch (it happened once, after the WP05.1d review, and was recovered by fast-forwarding the branch) | Work committed on a detached HEAD can be lost on the next checkout | After every review run `git branch --show-current` before committing; prefer running reviews in an isolated worktree | open |
@@ -77,7 +77,7 @@ Last updated: 3 October 2026 (command panel and feature template added).
 
 | ID | Item | Why it matters | Owner / revisit at | Status |
 | --- | --- | --- | --- | --- |
-| BL-060 | The stale clone at `~/Documents/Documents/BEE/worktrees/wp05.1-read-ui` (at `aa7432a`, with uncommitted files identical to a commit) was left as is by owner decision | Committing or running checks there would diverge from the real branch; the handover says not to use it | owner; revisit if folder clean-up is wanted | accepted limit |
+| BL-060 | The old project folders are obsolete since the move to `~/Documents/Projects/BEE`: `~/Documents/Documents/BEE/Code` and `~/Documents/Documents/BEE/worktrees`, and all of `~/Code/BEE`. Nothing was deleted. The RFP, SRS, Design and Solution folders under `~/Documents/Documents/BEE` are source documents and must stay | The old clones hold branches that were never pushed (`wp04.1-masters`, `wp04.2-brand-auth`, `wp06.1a-wip-snapshot`); their history is contained in the pushed integration branch, but check before deleting | owner, once satisfied with the new project | open |
 | BL-061 | `wp06.1a-document-intake` is pushed (54 commits ahead of `main`) but there is no pull request, and the earlier local branches (`wp04.1-masters`, `wp04.2-brand-auth`) are not on the remote | Merge strategy and history layout are undecided | owner | open |
 | BL-062 | `AGENTS.md` and `CLAUDE.md` are rewritten by `next dev`; the check compares them to the committed copy | A diff there is a tool artefact, not a change | keep the committed copy unchanged | accepted limit |
 
@@ -130,4 +130,11 @@ Last updated: 3 October 2026 (command panel and feature template added).
 | BL-091 | The Finance queue shows the whole fee_due list with no paging, sorting or filter | Fine for a handful of applications, not for a real queue | with BL-020 | open |
 | BL-092 | The segregation rule for "someone who acted at another stage" and the payer-organisation rule are proven by the contract test and the policy only; no live check, because it would need a Finance account that also took part in an application | A regression in those two refusals would not be seen live | when a second Finance twin or a multi-role twin exists | open |
 | BL-093 | `model_application_transition_event` is general but only fee confirmation writes it; submit keeps its own `model_application_submission_event`: two histories | Later steps will use the general one; a unified read is needed for the timeline | WP05.2 (history) | scheduled |
+
+## K. Project layout
+
+| ID | Item | Why it matters | Owner / revisit at | Status |
+| --- | --- | --- | --- | --- |
+| BL-094 | The project lives in the iCloud-synced `~/Documents` (chosen by the owner) and the disk is about 90% full. Generated folders are protected by `*.nosync` symlinks, but source files are still synced and could in principle be evicted | A stall or a missing file in the source tree would look like a build failure; a non-synced location (for example `~/projects/BEE`) avoids the whole class | owner; revisit if a stall recurs | accepted limit |
+| BL-095 | A fresh clone needs `npm ci`, then `npm run setup:nosync`; `next-env.d.ts` is generated by the first build or dev start, so a type-check before that may differ | New contributors and a Cursor clone hit this first; document it in one setup command | next tooling change (Cursor brief 04 is the natural owner) | open |
 

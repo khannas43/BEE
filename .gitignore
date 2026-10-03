@@ -47,3 +47,13 @@ next-env.d.ts
 # local tooling
 .claude/
 .claude-flow/
+
+# iCloud-safe layout (scripts/local/nosync.sh): the heavy folders live in *.nosync siblings and are symlinked back.
+# A symlink is not matched by a pattern with a trailing slash, so the plain names are ignored too.
+*.nosync
+/.next
+/.local
+/backend/target
+
+# Who holds the folder: claude or cursor (docs/kit/AGENT_HANDOFF.md). Local and advisory, never committed.
+/.baton

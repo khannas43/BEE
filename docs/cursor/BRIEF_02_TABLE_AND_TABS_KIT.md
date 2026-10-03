@@ -1,6 +1,6 @@
 # Brief 02 — Table and tabs for the kit (BL-020, BL-021)
 
-Branch `cursor/table-and-tabs-kit`. Frontend only. Do not push.
+Branch `cursor/table-and-tabs-kit` (created and checked out for you by Claude). Frontend only. Hand back with /bee-handback (it releases the folder and prints the report; you never push).
 
 ## Objective
 

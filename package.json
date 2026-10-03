@@ -9,6 +9,7 @@
     "lint": "eslint",
     "audit:access": "bash scripts/access-audit.sh",
     "matrix": "bash scripts/screen-matrix.sh",
+    "setup:nosync": "bash scripts/local/nosync.sh",
     "local:up": "bash scripts/local/up.sh",
     "local:health": "bash scripts/local/health.sh",
     "local:seed": "bash scripts/local/seed.sh",

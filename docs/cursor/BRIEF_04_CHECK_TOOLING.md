@@ -1,6 +1,6 @@
 # Brief 04 — `local:check` preflight, stale lock, steadier memory gate (BL-030, BL-031, BL-032)
 
-Branch `cursor/check-tooling`. Tooling only. Do not push. For this task you own `scripts/local/check.sh`, `scripts/local/lib.sh` and `scripts/local/health.sh`; Claude will not edit them meanwhile.
+Branch `cursor/check-tooling` (created and checked out for you by Claude). Tooling only. Hand back with /bee-handback (it releases the folder and prints the report; you never push). For this task you own `scripts/local/check.sh`, `scripts/local/lib.sh` and `scripts/local/health.sh`; Claude will not edit them meanwhile.
 
 ## Objective
 
@@ -24,7 +24,7 @@ Three things have cost real time in this project:
 
 ## Evidence (this one needs the runtime)
 
-Check the main worktree's `.local/run/run.lock` and `docker ps` first; run these only if nothing else is using the runtime, and say so if you could not.
+Start the runtime yourself (`npm run local:up`) and run `npm run local:down` when you finish.
 - With the runtime **stopped**, `bash scripts/local/check.sh` produces one clear failure and exits early, in seconds.
 - Create a lock whose owner pid is dead and show the next run removes it with the message; show a lock with a live pid is still refused.
 - With the runtime up, a full `local:check` gives the same pass and fail counts as before your change (it was 422 passed, 0 failed at the time of writing) and prints the memory samples.

@@ -1,6 +1,6 @@
 # Brief 01 — Draft form on the command kit (BL-082)
 
-Branch `cursor/draft-form-on-kit` from the tip named in your worktree setup. Frontend only. Do not push.
+Branch `cursor/draft-form-on-kit` (created and checked out for you by Claude) from the integration tip (see docs/kit/AGENT_HANDOFF.md). Frontend only. Hand back with /bee-handback (it releases the folder and prints the report; you never push).
 
 ## Objective
 

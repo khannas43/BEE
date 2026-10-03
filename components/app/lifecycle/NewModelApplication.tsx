@@ -19,6 +19,33 @@ import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
 type Brand = { brandId: string; brandName: string; principalOrganisation: string };
+type Laboratory = { code: string; name: string };
+
+/** Labels for the evidence checks, in the order the API reports them (provisional local defaults, not BEE rules). */
+const GATE_LABELS: Record<string, string> = {
+  test_report_required: "Test report uploaded",
+  declared_efficiency_required: "Declared efficiency entered",
+  test_date_invalid: "Test date entered and not in the future",
+  laboratory_not_accredited: "Laboratory accredited for this category on the test date",
+  standard_not_available: "Applicable standard in force on the test date",
+  duplicate_model: "Brand and model number not already in use",
+};
+
+type Evidence = { laboratoryCode: string; testedOn: string; declaredIseer: string };
+const NO_EVIDENCE: Evidence = { laboratoryCode: "", testedOn: "", declaredIseer: "" };
+
+/** The write body for the evidence fields: an edit sends every field (an empty one clears it); a create sends only what is set. */
+function evidenceBody(e: Evidence, isEdit: boolean) {
+  const lab = e.laboratoryCode || null;
+  const date = e.testedOn || null;
+  const iseer = e.declaredIseer.trim() === "" ? null : Number(e.declaredIseer);
+  if (isEdit) return { laboratoryCode: lab, testedOn: date, declaredIseer: iseer };
+  return {
+    ...(lab ? { laboratoryCode: lab } : {}),
+    ...(date ? { testedOn: date } : {}),
+    ...(iseer !== null ? { declaredIseer: iseer } : {}),
+  };
+}
 
 /** WP05.1b–c: create, edit and submit a draft through the BFF (provisional local-demo fee only). */
 export function NewModelApplication({ module, screen }: { module: Module; screen: Screen }) {
@@ -36,7 +63,9 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const [saved, setSaved] = useState<{ reference: string; id: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [legacyUnlinked, setLegacyUnlinked] = useState(false);
-  const [persistedDraft, setPersistedDraft] = useState<{ modelNumber: string; brandId: string } | null>(null);
+  const [persistedDraft, setPersistedDraft] = useState<{ modelNumber: string; brandId: string; evidence: Evidence } | null>(null);
+  const [laboratories, setLaboratories] = useState<Laboratory[]>([]);
+  const [evidence, setEvidence] = useState<Evidence>(NO_EVIDENCE);
   const [submitPreview, setSubmitPreview] = useState<SubmitPreview | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -54,6 +83,9 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       .then((b) => {
         if (Array.isArray(b.items)) {
           setBrands(b.items);
+        }
+        if (Array.isArray(b.laboratories)) {
+          setLaboratories(b.laboratories);
         }
       })
       .catch(() => setError("Could not load eligible brands."));
@@ -83,7 +115,13 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
         setLegacyUnlinked(true);
         setBrandId("");
       }
-      setPersistedDraft({ modelNumber: r.application.modelNumber, brandId: bid ?? "" });
+      const loaded: Evidence = {
+        laboratoryCode: r.application.laboratoryCode ?? "",
+        testedOn: r.application.testedOn ?? "",
+        declaredIseer: r.application.declaredIseer === undefined ? "" : String(r.application.declaredIseer),
+      };
+      setEvidence(loaded);
+      setPersistedDraft({ modelNumber: r.application.modelNumber, brandId: bid ?? "", evidence: loaded });
     });
     return () => {
       live = false;
@@ -96,8 +134,8 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   }, [brands, brandId, isEdit]);
 
   const createPayload = useMemo(
-    () => ({ brandId, category: "RAC" as const, modelNumber: modelNumber.trim() }),
-    [brandId, modelNumber],
+    () => ({ brandId, category: "RAC" as const, modelNumber: modelNumber.trim(), ...evidenceBody(evidence, false) }),
+    [brandId, modelNumber, evidence],
   );
 
   async function saveDraft() {
@@ -108,6 +146,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       category: "RAC" as const,
       modelNumber: modelNumber.trim(),
       ...(brandId ? { brandId } : {}),
+      ...evidenceBody(evidence, true),
     };
     const key = idemGate.current.keyFor(isEdit ? { ...patchBody, editId } : createPayload);
     const res = isEdit && editId
@@ -123,14 +162,18 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     setVersion(nextVersion);
     setSaved({ reference: String(res.application.reference), id: String(res.application.id) });
     if (isEdit) {
-      setPersistedDraft({ modelNumber: modelNumber.trim(), brandId });
+      setPersistedDraft({ modelNumber: modelNumber.trim(), brandId, evidence });
     }
   }
 
   const draftDirty =
     isEdit &&
     persistedDraft != null &&
-    (modelNumber.trim() !== persistedDraft.modelNumber || brandId !== persistedDraft.brandId);
+    (modelNumber.trim() !== persistedDraft.modelNumber ||
+      brandId !== persistedDraft.brandId ||
+      evidence.laboratoryCode !== persistedDraft.evidence.laboratoryCode ||
+      evidence.testedOn !== persistedDraft.evidence.testedOn ||
+      evidence.declaredIseer.trim() !== persistedDraft.evidence.declaredIseer.trim());
 
   useEffect(() => {
     if (draftDirty && submitOpen) {
@@ -206,7 +249,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             {submitDone.fee.localDemoFee ? " This amount is for local demo only and is not a BEE-approved fee." : ""}
           </p>
           <p className="font-label-sm text-on-surface-variant mt-space-sm">
-            Test evidence, accreditation and full RFP intake checks are not part of this step (deferred to WP05.1 / WP06.1).
+            The evidence checks passed at submit. They are provisional local defaults, not BEE rules.
           </p>
           <Link href={modelDashboardHref(submitDone.id)} className="inline-flex mt-space-md text-primary font-label-md">
             Refresh dashboard
@@ -310,6 +353,49 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                 </label>
               </div>
             </Card>
+            <Card title="Test evidence">
+              <p className="font-label-sm text-label-sm text-on-surface-variant mb-space-sm">
+                Required before submit. These checks are provisional local defaults, not BEE rules.
+              </p>
+              <div className="space-y-space-md">
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Laboratory
+                  <select
+                    value={evidence.laboratoryCode}
+                    onChange={(e) => setEvidence({ ...evidence, laboratoryCode: e.target.value })}
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+                    data-testid="model-draft-laboratory"
+                  >
+                    <option value="">Select a laboratory</option>
+                    {laboratories.map((l) => (
+                      <option key={l.code} value={l.code}>
+                        {l.name} ({l.code})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Test date
+                  <input
+                    type="date"
+                    value={evidence.testedOn}
+                    onChange={(e) => setEvidence({ ...evidence, testedOn: e.target.value })}
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+                    data-testid="model-draft-tested-on"
+                  />
+                </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Declared efficiency (ISEER)
+                  <input
+                    inputMode="decimal"
+                    value={evidence.declaredIseer}
+                    onChange={(e) => setEvidence({ ...evidence, declaredIseer: e.target.value })}
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+                    data-testid="model-draft-iseer"
+                  />
+                </label>
+              </div>
+            </Card>
             {error && (
               <p className="text-error font-body-sm" data-testid="model-draft-error">
                 {error}
@@ -381,8 +467,16 @@ function SubmitConfirmCard({
   return (
     <Card title="Confirm submit" data-testid="model-submit-confirm">
       <p className="font-body-sm text-on-surface-variant">{preview.intakeNote}</p>
+      <ul className="mt-space-sm space-y-1 font-body-sm" data-testid="model-submit-gates">
+        {preview.evidenceGates.map((g) => (
+          <li key={g.code} data-testid={`model-submit-gate-${g.code}`} data-met={g.met ? "true" : "false"} className="flex items-center gap-1">
+            <Icon name={g.met ? "check_circle" : "cancel"} size={16} className={g.met ? "text-primary" : "text-error"} />
+            <span className={g.met ? "" : "text-error"}>{GATE_LABELS[g.code] ?? g.code}</span>
+          </li>
+        ))}
+      </ul>
       {!preview.ready || !preview.submissionFee ? (
-        <p className="text-error font-body-sm mt-space-sm">This draft is not ready to submit. Check brand authorisation and master rules.</p>
+        <p className="text-error font-body-sm mt-space-sm">This draft is not ready to submit. Complete the unmet checks above, and check brand authorisation and master rules.</p>
       ) : (
         <div className="mt-space-md space-y-1 font-body-sm">
           {preview.draftSummary ? (

@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.5.0";
+export const CONTRACT_VERSION = "0.6.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -32,6 +32,12 @@ export const ERROR_MESSAGES = {
   not_submittable: "Only draft applications can be submitted.",
   rule_not_available: "Required category, standard or fee rules are not available.",
   validation_failed: "The request could not be accepted.",
+  test_report_required: "A test report must be uploaded before the application can be submitted.",
+  declared_efficiency_required: "The declared efficiency figure is required before the application can be submitted.",
+  test_date_invalid: "A test date that is not in the future is required before the application can be submitted.",
+  laboratory_not_accredited: "The laboratory must hold an active accreditation for this category on the test date.",
+  standard_not_available: "No applicable standard is in force on the test date.",
+  duplicate_model: "Another application already holds this brand and model number.",
   version_conflict: "The record has changed since it was loaded.",
   fee_preview_conflict: "The provisional fee changed since it was reviewed.",
   idempotency_key_required: "An Idempotency-Key header is required for this request.",
@@ -172,6 +178,9 @@ export interface ModelApplication {
   readBasis: string[];
   brandId?: string;
   principalOrganisation?: string;
+  laboratoryCode?: string;
+  testedOn?: string;
+  declaredIseer?: number;
   submissionFee?: SubmissionFee;
 }
 
@@ -207,9 +216,10 @@ export const validateSubmissionFee: Validator<SubmissionFee> = (body) => {
 };
 
 export const MODEL_APPLICATION_KEYS = ["id", "reference", "organisation", "brandName", "category", "modelNumber", "state", "version", "readBasis"] as const;
-export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "submissionFee"] as const;
+export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee"] as const;
 export const MODEL_APPLICATION_LIST_KEYS = ["items", "count", "authority"] as const;
 const READ_BASIS = /^(own-org|assigned|stage:[a-z_]+)$/;
+const LABORATORY_CODE = /^[A-Z0-9_-]{1,32}$/;
 
 export const validateModelApplication: Validator<ModelApplication> = (body) => {
   if (!exactKeys(body, MODEL_APPLICATION_KEYS, MODEL_APPLICATION_OPTIONAL)) return null;
@@ -222,6 +232,9 @@ export const validateModelApplication: Validator<ModelApplication> = (body) => {
     arrayOf(b.readBasis, (x) => isString(x) && READ_BASIS.test(x), 1) &&
     (b.brandId === undefined || (isString(b.brandId) && UUID.test(b.brandId))) &&
     (b.principalOrganisation === undefined || isString(b.principalOrganisation)) &&
+    (b.laboratoryCode === undefined || (isString(b.laboratoryCode) && LABORATORY_CODE.test(b.laboratoryCode))) &&
+    (b.testedOn === undefined || (isString(b.testedOn) && ISO_DATE.test(b.testedOn))) &&
+    (b.declaredIseer === undefined || (typeof b.declaredIseer === "number" && b.declaredIseer > 0 && b.declaredIseer <= 99.99)) &&
     (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null);
   return ok ? (b as unknown as ModelApplication) : null;
 };
@@ -233,16 +246,28 @@ export interface EligibleBrand {
   principalOrganisationId: string;
 }
 
+export interface EligibleLaboratory {
+  code: string;
+  name: string;
+}
+
 export interface EligibleBrandList {
   items: EligibleBrand[];
   count: number;
   authority: "spring-database";
+  laboratories: EligibleLaboratory[];
 }
 
 export const validateEligibleBrandList: Validator<EligibleBrandList> = (body) => {
-  if (!exactKeys(body, ["items", "count", "authority"])) return null;
+  if (!exactKeys(body, ["items", "count", "authority", "laboratories"])) return null;
   const b = body;
   if (b.authority !== "spring-database" || !Array.isArray(b.items) || b.count !== b.items.length) return null;
+  const labOk = (x: unknown) => {
+    if (!exactKeys(x, ["code", "name"])) return false;
+    const row = x as Record<string, unknown>;
+    return isString(row.code) && LABORATORY_CODE.test(row.code) && isString(row.name);
+  };
+  if (!Array.isArray(b.laboratories) || !b.laboratories.every(labOk)) return null;
   const itemOk = (x: unknown) => {
     if (!exactKeys(x, ["brandId", "brandName", "principalOrganisation", "principalOrganisationId"])) return false;
     const row = x as Record<string, unknown>;
@@ -285,10 +310,19 @@ export interface DraftSummary {
   modelNumber: string;
 }
 
+export const EVIDENCE_GATE_CODES = ["test_report_required", "declared_efficiency_required", "test_date_invalid", "laboratory_not_accredited", "standard_not_available", "duplicate_model"] as const;
+export type EvidenceGateCode = (typeof EVIDENCE_GATE_CODES)[number];
+
+export interface EvidenceGate {
+  code: EvidenceGateCode;
+  met: boolean;
+}
+
 export interface SubmitPreview {
   ready: boolean;
   version: number;
   intakeNote: string;
+  evidenceGates: EvidenceGate[];
   submissionFee?: SubmissionFee;
   draftSummary?: DraftSummary;
 }
@@ -311,11 +345,14 @@ const validateDraftSummary: Validator<DraftSummary> = (body) => {
 };
 
 export const validateSubmitPreview: Validator<SubmitPreview> = (body) => {
-  if (!exactKeys(body, ["ready", "version", "intakeNote"], ["submissionFee", "draftSummary"])) return null;
+  if (!exactKeys(body, ["ready", "version", "intakeNote", "evidenceGates"], ["submissionFee", "draftSummary"])) return null;
   const b = body;
+  const gatesOk =
+    Array.isArray(b.evidenceGates) && b.evidenceGates.length === EVIDENCE_GATE_CODES.length &&
+    b.evidenceGates.every((g, i) => exactKeys(g, ["code", "met"]) && (g as Record<string, unknown>).code === EVIDENCE_GATE_CODES[i] && typeof (g as Record<string, unknown>).met === "boolean");
   const ok =
     typeof b.ready === "boolean" && Number.isInteger(b.version) && (b.version as number) >= 0 &&
-    isString(b.intakeNote) &&
+    isString(b.intakeNote) && gatesOk &&
     (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null) &&
     (b.draftSummary === undefined || validateDraftSummary(b.draftSummary) !== null);
   return ok ? (b as unknown as SubmitPreview) : null;
@@ -342,8 +379,8 @@ export const SPRING_SUBMIT_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
   403: [...RESOLVER_DENIALS, "no_write_scope", "brand_not_permitted", "not_submittable"],
   404: ["not_found"],
-  409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "fee_preview_conflict"],
-  422: ["validation_failed", "idempotency_key_required", "rule_not_available"],
+  409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "fee_preview_conflict", "duplicate_model"],
+  422: ["validation_failed", "idempotency_key_required", "rule_not_available", "test_report_required", "declared_efficiency_required", "test_date_invalid", "laboratory_not_accredited", "standard_not_available"],
   503: ["service_unavailable"],
 };
 

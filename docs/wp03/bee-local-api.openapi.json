@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
     "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. Draft create and edit (POST/PATCH on runtime model applications) are operational; submit, fee, transitions and history remain deferred.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
@@ -4030,6 +4030,12 @@
                       "error": "fee_preview_conflict",
                       "message": "The provisional fee changed since it was reviewed."
                     }
+                  },
+                  "duplicate_model": {
+                    "value": {
+                      "error": "duplicate_model",
+                      "message": "Another application already holds this brand and model number."
+                    }
                   }
                 }
               }
@@ -4038,7 +4044,8 @@
               "version_conflict",
               "idempotency_key_conflict",
               "idempotency_in_progress",
-              "fee_preview_conflict"
+              "fee_preview_conflict",
+              "duplicate_model"
             ]
           },
           "422": {
@@ -4074,6 +4081,36 @@
                       "error": "rule_not_available",
                       "message": "Required category, standard or fee rules are not available."
                     }
+                  },
+                  "test_report_required": {
+                    "value": {
+                      "error": "test_report_required",
+                      "message": "A test report must be uploaded before the application can be submitted."
+                    }
+                  },
+                  "declared_efficiency_required": {
+                    "value": {
+                      "error": "declared_efficiency_required",
+                      "message": "The declared efficiency figure is required before the application can be submitted."
+                    }
+                  },
+                  "test_date_invalid": {
+                    "value": {
+                      "error": "test_date_invalid",
+                      "message": "A test date that is not in the future is required before the application can be submitted."
+                    }
+                  },
+                  "laboratory_not_accredited": {
+                    "value": {
+                      "error": "laboratory_not_accredited",
+                      "message": "The laboratory must hold an active accreditation for this category on the test date."
+                    }
+                  },
+                  "standard_not_available": {
+                    "value": {
+                      "error": "standard_not_available",
+                      "message": "No applicable standard is in force on the test date."
+                    }
                   }
                 }
               }
@@ -4081,7 +4118,12 @@
             "x-error-codes": [
               "validation_failed",
               "idempotency_key_required",
-              "rule_not_available"
+              "rule_not_available",
+              "test_report_required",
+              "declared_efficiency_required",
+              "test_date_invalid",
+              "laboratory_not_accredited",
+              "standard_not_available"
             ]
           },
           "503": {
@@ -4600,6 +4642,12 @@
                       "error": "fee_preview_conflict",
                       "message": "The provisional fee changed since it was reviewed."
                     }
+                  },
+                  "duplicate_model": {
+                    "value": {
+                      "error": "duplicate_model",
+                      "message": "Another application already holds this brand and model number."
+                    }
                   }
                 }
               }
@@ -4608,7 +4656,8 @@
               "version_conflict",
               "idempotency_key_conflict",
               "idempotency_in_progress",
-              "fee_preview_conflict"
+              "fee_preview_conflict",
+              "duplicate_model"
             ]
           },
           "422": {
@@ -4644,6 +4693,36 @@
                       "error": "rule_not_available",
                       "message": "Required category, standard or fee rules are not available."
                     }
+                  },
+                  "test_report_required": {
+                    "value": {
+                      "error": "test_report_required",
+                      "message": "A test report must be uploaded before the application can be submitted."
+                    }
+                  },
+                  "declared_efficiency_required": {
+                    "value": {
+                      "error": "declared_efficiency_required",
+                      "message": "The declared efficiency figure is required before the application can be submitted."
+                    }
+                  },
+                  "test_date_invalid": {
+                    "value": {
+                      "error": "test_date_invalid",
+                      "message": "A test date that is not in the future is required before the application can be submitted."
+                    }
+                  },
+                  "laboratory_not_accredited": {
+                    "value": {
+                      "error": "laboratory_not_accredited",
+                      "message": "The laboratory must hold an active accreditation for this category on the test date."
+                    }
+                  },
+                  "standard_not_available": {
+                    "value": {
+                      "error": "standard_not_available",
+                      "message": "No applicable standard is in force on the test date."
+                    }
                   }
                 }
               }
@@ -4651,7 +4730,12 @@
             "x-error-codes": [
               "validation_failed",
               "idempotency_key_required",
-              "rule_not_available"
+              "rule_not_available",
+              "test_report_required",
+              "declared_efficiency_required",
+              "test_date_invalid",
+              "laboratory_not_accredited",
+              "standard_not_available"
             ]
           },
           "502": {
@@ -6357,7 +6441,13 @@
               "unauthenticated",
               "validation_failed",
               "version_conflict",
-              "fee_preview_conflict"
+              "fee_preview_conflict",
+              "test_report_required",
+              "declared_efficiency_required",
+              "test_date_invalid",
+              "laboratory_not_accredited",
+              "standard_not_available",
+              "duplicate_model"
             ]
           },
           "message": {
@@ -6541,6 +6631,21 @@
           },
           "submissionFee": {
             "$ref": "#/components/schemas/SubmissionFee"
+          },
+          "laboratoryCode": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_-]{1,32}$",
+            "description": "Laboratory that tested the model (WP05.1d). Chosen from the accreditation master's laboratories; whether it holds an active accreditation on the test date is checked at submit."
+          },
+          "testedOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Date of the test report (WP05.1d), YYYY-MM-DD; not after today (India date)."
+          },
+          "declaredIseer": {
+            "type": "number",
+            "minimum": 0.01,
+            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring and the BFF). The rating step recomputes and records its own."
           }
         }
       },
@@ -6714,7 +6819,8 @@
         "required": [
           "items",
           "count",
-          "authority"
+          "authority",
+          "laboratories"
         ],
         "properties": {
           "items": {
@@ -6729,6 +6835,13 @@
           },
           "authority": {
             "const": "spring-database"
+          },
+          "laboratories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EligibleLaboratory"
+            },
+            "description": "Form choices beside the brands (WP05.1d)."
           }
         }
       },
@@ -6778,6 +6891,30 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "laboratoryCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Z0-9_-]{1,32}$",
+            "description": "Laboratory that tested the model (WP05.1d). Chosen from the accreditation master's laboratories; whether it holds an active accreditation on the test date is checked at submit."
+          },
+          "testedOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Date of the test report (WP05.1d), YYYY-MM-DD; not after today (India date)."
+          },
+          "declaredIseer": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.01,
+            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring and the BFF). The rating step recomputes and records its own."
           }
         }
       },
@@ -6805,6 +6942,30 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "laboratoryCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Z0-9_-]{1,32}$",
+            "description": "Laboratory that tested the model (WP05.1d). Chosen from the accreditation master's laboratories; whether it holds an active accreditation on the test date is checked at submit."
+          },
+          "testedOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Date of the test report (WP05.1d), YYYY-MM-DD; not after today (India date)."
+          },
+          "declaredIseer": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.01,
+            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring and the BFF). The rating step recomputes and records its own."
           }
         }
       },
@@ -6871,7 +7032,8 @@
         "required": [
           "ready",
           "version",
-          "intakeNote"
+          "intakeNote",
+          "evidenceGates"
         ],
         "properties": {
           "ready": {
@@ -6889,6 +7051,35 @@
           },
           "draftSummary": {
             "$ref": "#/components/schemas/DraftSummary"
+          },
+          "evidenceGates": {
+            "type": "array",
+            "minItems": 6,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "code",
+                "met"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "test_report_required",
+                    "declared_efficiency_required",
+                    "test_date_invalid",
+                    "laboratory_not_accredited",
+                    "standard_not_available",
+                    "duplicate_model"
+                  ]
+                },
+                "met": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "description": "Submit-time evidence gates in the order submit reports them (WP05.1d). Provisional local defaults, not BEE rules."
           }
         }
       },
@@ -6963,6 +7154,21 @@
           },
           "submissionFee": {
             "$ref": "#/components/schemas/SubmissionFee"
+          },
+          "laboratoryCode": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_-]{1,32}$",
+            "description": "Laboratory that tested the model (WP05.1d). Chosen from the accreditation master's laboratories; whether it holds an active accreditation on the test date is checked at submit."
+          },
+          "testedOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Date of the test report (WP05.1d), YYYY-MM-DD; not after today (India date)."
+          },
+          "declaredIseer": {
+            "type": "number",
+            "minimum": 0.01,
+            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring and the BFF). The rating step recomputes and records its own."
           }
         }
       },
@@ -7164,6 +7370,24 @@
             "type": "string"
           }
         }
+      },
+      "EligibleLaboratory": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "name"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_-]{1,32}$"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A laboratory with at least one accreditation record for the category. Whether one covers the test date is decided at submit."
       }
     }
   },
@@ -7335,6 +7559,42 @@
       "layer": "spring",
       "message": "The provisional fee changed since it was reviewed.",
       "when": "POST submit when resolved fee differs from expectedFee in the request body."
+    },
+    "test_report_required": {
+      "status": 422,
+      "layer": "spring",
+      "message": "A test report must be uploaded before the application can be submitted.",
+      "when": "POST submit when the application has no test report version."
+    },
+    "declared_efficiency_required": {
+      "status": 422,
+      "layer": "spring",
+      "message": "The declared efficiency figure is required before the application can be submitted.",
+      "when": "POST submit when the declared efficiency figure is missing."
+    },
+    "test_date_invalid": {
+      "status": 422,
+      "layer": "spring",
+      "message": "A test date that is not in the future is required before the application can be submitted.",
+      "when": "POST submit when the test date is missing or in the future."
+    },
+    "laboratory_not_accredited": {
+      "status": 422,
+      "layer": "spring",
+      "message": "The laboratory must hold an active accreditation for this category on the test date.",
+      "when": "POST submit when the laboratory is missing or holds no active accreditation for the category on the test date."
+    },
+    "standard_not_available": {
+      "status": 422,
+      "layer": "spring",
+      "message": "No applicable standard is in force on the test date.",
+      "when": "POST submit when no standard is in force for the category on the test date."
+    },
+    "duplicate_model": {
+      "status": 409,
+      "layer": "spring",
+      "message": "Another application already holds this brand and model number.",
+      "when": "POST submit when another non-draft, non-rejected application holds the same brand and normalised model number."
     }
   },
   "x-bee-status-semantics": {

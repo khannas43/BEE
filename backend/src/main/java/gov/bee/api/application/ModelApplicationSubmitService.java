@@ -14,6 +14,7 @@ import gov.bee.api.policy.SlicePolicy;
 import gov.bee.api.policy.SlicePolicy.ReadScope;
 import gov.bee.api.web.ApiErrors;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,19 +38,21 @@ public class ModelApplicationSubmitService {
     private final BrandAuthRepository brands;
     private final BrandAuthService brandService;
     private final MasterDataRepository masters;
+    private final ModelApplicationEvidence evidence;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
 
     public ModelApplicationSubmitService(IdentityRepository identity, ModelApplicationRepository applications,
                                          ModelApplicationSubmitRepository submissions, BrandAuthRepository brands,
                                          BrandAuthService brandService, MasterDataRepository masters,
-                                         IdempotencyRepository idempotency, ObjectMapper json) {
+                                         ModelApplicationEvidence evidence, IdempotencyRepository idempotency, ObjectMapper json) {
         this.identity = identity;
         this.applications = applications;
         this.submissions = submissions;
         this.brands = brands;
         this.brandService = brandService;
         this.masters = masters;
+        this.evidence = evidence;
         this.idempotency = idempotency;
         this.json = json;
     }
@@ -108,6 +111,16 @@ public class ModelApplicationSubmitService {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "rule_not_available");
         }
+        // WP05.1d evidence gates. Same-model submits queue here, so the uniqueness check sees the committed winner.
+        if (row.brandId() != null) {
+            applications.lockModelKey(row.brandId(), row.modelNumber());
+        }
+        ModelApplicationEvidence.Result gates = evidence.evaluate(row, LocalDate.now(ModelDraftPolicy.IST));
+        Optional<ModelApplicationEvidence.Gate> unmet = gates.firstUnmet();
+        if (unmet.isPresent()) {
+            idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
+            return error(unmet.get().status(), unmet.get().code());
+        }
         byte[] hash = DraftRequestSupport.bodyHash(body);
         if (!idempotency.begin(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey, hash)) {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
@@ -130,6 +143,8 @@ public class ModelApplicationSubmitService {
             }
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
+        gates.resolved().ifPresent(r -> submissions.recordEvidenceSnapshot(appId, filing, r.accreditationRuleKey(),
+            r.accreditationVersion(), r.standardRuleKey(), r.standardVersion()));
         Map<String, Object> view = ModelApplicationViewSupport.readView(done.get().application(), readScope(caller), Optional.of(done.get().fee()));
         idempotency.complete(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey, 200, writeJson(view), done.get().application().version());
         return ResponseEntity.ok(view);
@@ -142,7 +157,8 @@ public class ModelApplicationSubmitService {
         Optional<String> brandDeny = brandDenial(caller, row);
         Optional<IntakeResolution> intake = brandDeny.isEmpty() ? resolveFeeRules(row) : Optional.empty();
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("ready", brandDeny.isEmpty() && intake.isPresent());
+        ModelApplicationEvidence.Result gates = evidence.evaluate(row, LocalDate.now(ModelDraftPolicy.IST));
+        m.put("ready", brandDeny.isEmpty() && intake.isPresent() && gates.allMet());
         m.put("version", row.version());
         m.put("intakeNote", INTAKE_NOTE);
         Map<String, Object> draftSummary = new LinkedHashMap<>();
@@ -150,6 +166,14 @@ public class ModelApplicationSubmitService {
         draftSummary.put("category", row.category());
         draftSummary.put("modelNumber", row.modelNumber());
         m.put("draftSummary", draftSummary);
+        List<Map<String, Object>> gateViews = new ArrayList<>();
+        for (var g : gates.gates()) {
+            Map<String, Object> gv = new LinkedHashMap<>();
+            gv.put("code", g.gate().code());
+            gv.put("met", g.met());
+            gateViews.add(gv);
+        }
+        m.put("evidenceGates", gateViews);
         intake.ifPresent(i -> m.put("submissionFee", feeView(i.fee())));
         return ResponseEntity.ok(m);
     }

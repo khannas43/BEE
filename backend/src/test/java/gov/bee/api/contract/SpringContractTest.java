@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doThrow;
@@ -340,6 +341,9 @@ class SpringContractTest {
         when(masters.category(any(), any())).thenReturn(Optional.of(new Masters.Category(feeVersion(), "RAC", "Room AC")));
         when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
         when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
+        when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
+        when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
         ids[2] = conforms("/api/model-applications/{id}/submit", get(path(DETAIL) + "/submit").with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
         ids[3] = conforms(ME, get(ME).with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
         String log = Files.readString(file);
@@ -364,9 +368,35 @@ class SpringContractTest {
             new BrandAuth.Provenance("seed", BrandAuth.Verification.SYNTHETIC, "seed"));
     }
 
+    static final LocalDate TESTED_ON = LocalDate.of(2026, 9, 1);
+
+    /** A draft with every WP05.1d evidence field set (a laboratory, a test date and the declared efficiency). */
     static ModelApplicationRepository.Row draftRow(UUID id, String model, int version) {
+        return evidenceRow(id, model, version, "LAB", TESTED_ON, new BigDecimal("4.50"));
+    }
+
+    static ModelApplicationRepository.Row evidenceRow(UUID id, String model, int version, String lab, LocalDate testedOn, BigDecimal iseer) {
         return new ModelApplicationRepository.Row(id, "LOCAL-MA-9999", NOVA, "NOVA", "Nova Cool", "RAC", model, "draft", version,
-            Set.of(), NOVA, NOVA_COOL, "NOVA");
+            Set.of(), NOVA, NOVA_COOL, "NOVA", lab, testedOn, iseer);
+    }
+
+    static Masters.LabAccreditation activeLab() {
+        return new Masters.LabAccreditation(
+            new MasterVersion(UUID.randomUUID(), "LAB:RAC", 3, LocalDate.of(2026, 8, 1), null, "ref", MasterVersion.Verification.SYNTHETIC, "note", null, null),
+            "LAB", "RAC", "SYN-ACCREDITATION-BODY", "SYN-LAB-RAC-0003", "active");
+    }
+
+    static Masters.Standard standardV2() {
+        return new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1");
+    }
+
+    static DocumentRepository.DocumentRow reportDoc() {
+        return new DocumentRepository.DocumentRow(DOC_ID, NOVA_APP, "test_report", Instant.parse("2026-10-03T00:00:00Z"));
+    }
+
+    static DocumentRepository.VersionRow reportVersion() {
+        return new DocumentRepository.VersionRow(VER_ID, DOC_ID, 1, "a".repeat(64), MIN_PDF.length, "application/pdf",
+            "report.pdf", "Lab A", null, null, USER, Instant.parse("2026-10-03T00:00:00Z"));
     }
 
     static MasterVersion feeVersion() {
@@ -511,6 +541,9 @@ class SpringContractTest {
         when(masters.category(any(), any())).thenReturn(Optional.of(new Masters.Category(feeVersion(), "RAC", "Room AC")));
         when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
         when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
+        when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
+        when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
         conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).contentType("application/json").content(submitBody), 422, "idempotency_key_required");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
@@ -541,6 +574,9 @@ class SpringContractTest {
         when(masters.category(any(), any())).thenReturn(Optional.of(new Masters.Category(feeVersion(), "RAC", "Room AC")));
         when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
         when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
+        when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
+        when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
         conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "brand_not_permitted");
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(
             new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "fee_due", 1, Set.of(), NOVA, NOVA_COOL, "NOVA")));
@@ -557,6 +593,38 @@ class SpringContractTest {
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
         conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        // WP05.1d evidence gates, each unmet in turn against an otherwise complete application.
+        var ok = draftRow(NOVA_APP, "NC-RAC-18F", 0);
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(ok));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        String gatePost = "/api/model-applications/{id}/submit";
+        when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.empty());
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "test_report_required");
+        // The preview lists every gate, and with one unmet the application is not ready.
+        conforms(gatePost, get(submitPath).with(token("manufacturer")), 200, null);
+        when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(evidenceRow(NOVA_APP, "NC-RAC-18F", 0, "LAB", TESTED_ON, null)));
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "declared_efficiency_required");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(evidenceRow(NOVA_APP, "NC-RAC-18F", 0, "LAB", null, new BigDecimal("4.50"))));
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "test_date_invalid");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(evidenceRow(NOVA_APP, "NC-RAC-18F", 0, "LAB", LocalDate.now().plusDays(1), new BigDecimal("4.50"))));
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "test_date_invalid");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(ok));
+        when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.empty());
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "laboratory_not_accredited");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(evidenceRow(NOVA_APP, "NC-RAC-18F", 0, null, TESTED_ON, new BigDecimal("4.50"))));
+        when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "laboratory_not_accredited");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(ok));
+        // In force today (so the fee rules resolve) but not on the test date.
+        when(masters.standard(any(), any(), eq(TESTED_ON))).thenReturn(Optional.empty());
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "standard_not_available");
+        when(masters.standard(any(), any(), any())).thenReturn(Optional.of(standardV2()));
+        when(applications.modelNumberTaken(any(), any(), any())).thenReturn(true);
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 409, "duplicate_model");
+        when(applications.modelNumberTaken(any(), any(), any())).thenReturn(false);
         doThrow(new DataAccessResourceFailureException("down")).when(submissions).submit(any(), any(), anyInt(), any(), any(), any(), any(), anyInt(), any(), any(), any());
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
         when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));

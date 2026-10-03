@@ -70,6 +70,16 @@ public class ModelApplicationDraftService {
         body.put("items", items);
         body.put("count", items.size());
         body.put("authority", "spring-database");
+        // Form choices beside the brands (WP05.1d): laboratories with an accreditation record for the category. Whether one
+        // covers the test date is decided at submit.
+        List<Map<String, Object>> labs = new ArrayList<>();
+        for (var lab : applications.laboratoriesFor("RAC")) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("code", lab.code());
+            m.put("name", lab.name());
+            labs.add(m);
+        }
+        body.put("laboratories", labs);
         return ResponseEntity.ok(body);
     }
 
@@ -87,12 +97,13 @@ public class ModelApplicationDraftService {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
         Optional<CreateInput> input = parseCreate(body);
-        if (input.isEmpty()) {
+        LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
+        Optional<ModelApplicationRepository.EvidenceUpdate> evidence = input.isEmpty() ? Optional.empty() : evidenceFor(body, today);
+        if (input.isEmpty() || evidence.isEmpty()) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_CREATE, NIL, idempotencyKey);
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
         var memberships = identity.activeMemberships(caller.accountId());
-        LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
         var brandDecision = ModelDraftPolicy.brandForFiling(caller, memberships, input.get().brandId(), brands, brandService, today);
         if (!brandDecision.allowed()) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_CREATE, NIL, idempotencyKey);
@@ -104,6 +115,10 @@ public class ModelApplicationDraftService {
         String reference = applications.nextReference();
         ModelApplicationRepository.Row row = applications.insertDraft(id, reference, filing, choice.principalOrganisationId(),
             choice.brandId(), choice.brandName(), input.get().category(), input.get().modelNumber());
+        if (!evidence.get().isEmpty()) {
+            applications.setEvidence(id, filing, evidence.get());
+            row = applications.findOwned(id, filing).orElseThrow();
+        }
         Map<String, Object> view = view(row, readScope(caller));
         int status = 201;
         idempotency.complete(caller.accountId(), "POST", ROUTE_CREATE, NIL, idempotencyKey, status, writeJson(view), row.version());
@@ -125,7 +140,9 @@ public class ModelApplicationDraftService {
         }
         UUID filing = ModelDraftPolicy.filingOrganisation(caller).orElseThrow();
         Optional<PatchInput> input = parsePatch(body);
-        if (input.isEmpty()) {
+        LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
+        Optional<ModelApplicationRepository.EvidenceUpdate> evidence = input.isEmpty() ? Optional.empty() : evidenceFor(body, today);
+        if (input.isEmpty() || evidence.isEmpty()) {
             idempotency.abandon(caller.accountId(), "PATCH", ROUTE_PATCH, appId, idempotencyKey);
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
@@ -144,7 +161,6 @@ public class ModelApplicationDraftService {
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
         var memberships = identity.activeMemberships(caller.accountId());
-        LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
         UUID brandId = input.get().brandId().orElse(row.brandId());
         if (brandId == null) {
             brandId = legacyBrandId(filing, memberships, row.brandName(), today).orElse(null);
@@ -165,8 +181,13 @@ public class ModelApplicationDraftService {
             idempotency.abandon(caller.accountId(), "PATCH", ROUTE_PATCH, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
-        Map<String, Object> view = view(updated.get(), readScope(caller));
-        idempotency.complete(caller.accountId(), "PATCH", ROUTE_PATCH, appId, idempotencyKey, 200, writeJson(view), updated.get().version());
+        ModelApplicationRepository.Row saved = updated.get();
+        if (!evidence.get().isEmpty()) {
+            applications.setEvidence(appId, filing, evidence.get());
+            saved = applications.findOwned(appId, filing).orElseThrow();
+        }
+        Map<String, Object> view = view(saved, readScope(caller));
+        idempotency.complete(caller.accountId(), "PATCH", ROUTE_PATCH, appId, idempotencyKey, 200, writeJson(view), saved.version());
         return ResponseEntity.ok(view);
     }
 
@@ -204,6 +225,16 @@ public class ModelApplicationDraftService {
         } catch (Exception e) {
             return Optional.of(error(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error"));
         }
+    }
+
+    /** Well-formed evidence fields whose laboratory (if set) is an active laboratory organisation; empty otherwise. */
+    private Optional<ModelApplicationRepository.EvidenceUpdate> evidenceFor(JsonNode body, LocalDate today) {
+        Optional<ModelApplicationRepository.EvidenceUpdate> parsed = DraftRequestSupport.evidence(body, today);
+        if (parsed.isPresent() && parsed.get().setLaboratory() && parsed.get().laboratoryCode() != null
+            && !applications.laboratoryExists(parsed.get().laboratoryCode())) {
+            return Optional.empty();
+        }
+        return parsed;
     }
 
     private record CreateInput(UUID brandId, String category, String modelNumber) {
@@ -298,6 +329,15 @@ public class ModelApplicationDraftService {
         }
         if (r.principalOrganisationId() != null) {
             m.put("principalOrganisation", applicationsCode(r));
+        }
+        if (r.laboratoryCode() != null) {
+            m.put("laboratoryCode", r.laboratoryCode());
+        }
+        if (r.testedOn() != null) {
+            m.put("testedOn", r.testedOn().toString());
+        }
+        if (r.declaredIseer() != null) {
+            m.put("declaredIseer", r.declaredIseer());
         }
         return m;
     }

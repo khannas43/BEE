@@ -31,6 +31,10 @@ export interface ModelApplication {
   readBasis: string[];
   brandId?: string;
   principalOrganisation?: string;
+  /** WP05.1d evidence fields; present once the applicant has entered them. */
+  laboratoryCode?: string;
+  testedOn?: string;
+  declaredIseer?: number;
 }
 
 export interface ModelApplicationList {

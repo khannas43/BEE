@@ -48,6 +48,15 @@ public class ModelApplicationSubmitRepository {
         return rows.stream().findFirst();
     }
 
+    /** Keeps the master versions the evidence check resolved. Runs in the submit transaction, after the state change. */
+    public void recordEvidenceSnapshot(UUID applicationId, UUID filingOrganisationId, String accreditationRuleKey,
+                                       int accreditationVersion, String standardRuleKey, int standardVersion) {
+        jdbc.update(
+            "UPDATE model_application SET accreditation_rule_key = ?, accreditation_version = ?, standard_rule_key = ?, standard_version = ? "
+                + "WHERE id = ? AND organisation_id = ?",
+            accreditationRuleKey, accreditationVersion, standardRuleKey, standardVersion, applicationId, filingOrganisationId);
+    }
+
     @Transactional
     public Optional<SubmissionResult> submit(UUID applicationId, UUID filingOrganisationId, int expectedVersion,
                                              UUID actorAccountId, String actorRole, BigDecimal amountInr, String feeRuleKey,

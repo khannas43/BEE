@@ -21,10 +21,17 @@ export type DraftSummary = {
   modelNumber: string;
 };
 
+/** One WP05.1d evidence gate, in the order submit reports them. Provisional local defaults, not BEE rules. */
+export type EvidenceGate = {
+  code: "test_report_required" | "declared_efficiency_required" | "test_date_invalid" | "laboratory_not_accredited" | "standard_not_available" | "duplicate_model";
+  met: boolean;
+};
+
 export type SubmitPreview = {
   ready: boolean;
   version: number;
   intakeNote: string;
+  evidenceGates: EvidenceGate[];
   submissionFee?: SubmissionFee;
   draftSummary?: DraftSummary;
 };

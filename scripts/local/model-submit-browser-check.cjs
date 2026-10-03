@@ -1,6 +1,8 @@
 /* eslint-disable */
-/** WP05.1c: draft submit → fee_due via BFF; baseline-preserving, run twice. */
+/** WP05.1c–d: draft submit → fee_due via BFF behind the evidence gates; baseline-preserving, run twice. */
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const { execFileSync } = require("child_process");
 const totp = require("./totp.cjs");
 const ids = require("./test-identities.cjs");
@@ -21,6 +23,13 @@ let pass = 0, fail = 0;
 function check(id, ok, detail) { const r = ok ? "PASS" : "FAIL"; ok ? pass++ : fail++; console.log(`${r.padEnd(4)} ${id.padEnd(44)} ${detail}`); }
 
 const env = (k, d) => process.env[k] || d;
+
+const STORE = env("BEE_DOCUMENTS_STORE", path.join(__dirname, "../../.local/documents"));
+const blobsNow = () => new Set(fs.existsSync(STORE) ? fs.readdirSync(STORE).filter((f) => /^[0-9a-f]{64}$/.test(f)) : []);
+// Seeded accreditation history for LAB:RAC: active to 2026-06-01, suspended in June, a gap in July, active again from 2026-08-01.
+const TESTED_OK = "2026-09-01";
+const TESTED_SUSPENDED = "2026-06-15";
+const minPdf = (label) => Buffer.from(`%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<< /Info << /Title (${label}) >> >>\n%%EOF\n`);
 
 function sqlApp(q, allowFail = false) {
   try {
@@ -100,6 +109,62 @@ async function apiSubmit(page, method, id, body, idem) {
   return r;
 }
 
+/** A draft the check is building: PATCH needs the model number and the current version. */
+async function patchDraft(page, draft, fields) {
+  const r = await api(page, "PATCH", `${WEB}/api/runtime/model-applications/${draft.id}`, { version: draft.version, category: "RAC", modelNumber: draft.model, ...fields }, key());
+  if (r.status === 200) draft.version = r.body.version;
+  return r;
+}
+
+async function uploadReport(page, draftId, label) {
+  const b64 = minPdf(label).toString("base64");
+  return page.eval(`(async () => {
+    const bin = Uint8Array.from(atob(${JSON.stringify(b64)}), (c) => c.charCodeAt(0));
+    const form = new FormData();
+    form.append("file", new File([bin], "report.pdf", { type: "application/pdf" }));
+    form.append("documentKind", "test_report");
+    form.append("reportLabel", ${JSON.stringify(label)});
+    const r = await fetch(${JSON.stringify(`${WEB}/api/runtime/model-applications/`)} + ${JSON.stringify(draftId)} + "/documents", { method: "POST", credentials: "include", cache: "no-store", headers: { "Idempotency-Key": ${JSON.stringify(key())} }, body: form });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  })()`);
+}
+
+/** Everything the evidence gates need: efficiency, an accredited laboratory on a covered date, and a test report. */
+async function completeEvidence(page, draft, label) {
+  const p = await patchDraft(page, draft, { laboratoryCode: "LAB", testedOn: TESTED_OK, declaredIseer: 4.5 });
+  const u = await uploadReport(page, draft.id, label);
+  return p.status === 200 && u.status === 201;
+}
+
+async function evidenceFormChecks(runLabel, nova, draftId) {
+  await nova.goto(`${WEB}/app/model-label/new-model-application?edit=${encodeURIComponent(draftId)}`);
+  const loaded = await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-laboratory]') && document.querySelector('[data-testid=model-draft-iseer]').value !== ''`, 15000);
+  const shown = loaded ? await nova.eval(`({ lab: document.querySelector('[data-testid=model-draft-laboratory]').value, date: document.querySelector('[data-testid=model-draft-tested-on]').value, iseer: document.querySelector('[data-testid=model-draft-iseer]').value, options: [...document.querySelector('[data-testid=model-draft-laboratory]').options].map((o) => o.value) })`) : null;
+  check(`${runLabel}.ui.evidence-fields`, !!shown && shown.lab === "LAB" && shown.date === TESTED_OK && shown.iseer === "4.5" && shown.options.includes("LAB"), shown ? `${shown.lab} ${shown.date} ${shown.iseer}` : "form did not load");
+  if (!loaded) return;
+  await nova.eval(`(() => {
+    const el = document.querySelector('[data-testid=model-draft-iseer]');
+    const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    s.call(el, '3.2');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`);
+  const dirty = await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-dirty-hint]')`, 8000);
+  check(`${runLabel}.ui.evidence-dirty`, dirty, dirty ? "changing an evidence field needs a save before submit" : "no dirty hint");
+  await nova.eval(`(() => {
+    const el = document.querySelector('[data-testid=model-draft-iseer]');
+    const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    s.call(el, '4.5');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`);
+  await nova.waitFor(`!document.querySelector('[data-testid=model-draft-dirty-hint]')`, 8000);
+  await nova.eval(`document.querySelector('[data-testid=model-draft-submit]').click(); true`);
+  const open = await nova.waitFor(`!!document.querySelector('[data-testid=model-submit-gates]')`, 12000);
+  const gates = open ? await nova.eval(`[...document.querySelectorAll('[data-testid=model-submit-gates] li')].map((li) => li.getAttribute('data-testid').replace('model-submit-gate-', '') + ':' + li.getAttribute('data-met'))`) : [];
+  check(`${runLabel}.ui.gate-checklist`, gates.length === 6 && gates.every((g) => g.endsWith(":true")), gates.join(" ") || "no checklist");
+}
+
 async function dirtyAfterPreviewClosed(runLabel, nova, draftId) {
   await nova.goto(`${WEB}/app/model-label/new-model-application?edit=${encodeURIComponent(draftId)}`);
   if (!(await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-submit]')`))) {
@@ -125,7 +190,8 @@ async function dirtyAfterPreviewClosed(runLabel, nova, draftId) {
 
 async function dirtyFormBlocked(runLabel, nova, draftId) {
   await nova.goto(`${WEB}/app/model-label/new-model-application?edit=${encodeURIComponent(draftId)}`);
-  const loaded = await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-model-number]')`);
+  // The draft loads after the form renders; editing before it arrives would be overwritten by the load, not seen as a change.
+  const loaded = await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-model-number]') && document.querySelector('[data-testid=model-draft-model-number]').value !== ''`, 15000);
   if (!loaded) {
     check(`${runLabel}.dirty-form`, false, "edit form did not load");
     return;
@@ -147,6 +213,7 @@ async function runSubmitChecks(runLabel, nova, pixel) {
   const createdIds = [];
   const novaAcct = ids.accountId("nova.applicant");
   const before = modelBaseline();
+  const blobsBefore = blobsNow();
   try {
     const mkDraft = async (page, model) => {
       const r = await api(page, "POST", `${WEB}/api/runtime/model-applications`, { brandId: NOVA_COOL, category: "RAC", modelNumber: model }, key());
@@ -159,6 +226,41 @@ async function runSubmitChecks(runLabel, nova, pixel) {
     check(`${runLabel}.nova.create-draft`, r.status === 201 && r.body?.state === "draft", r.body?.reference);
 
     await dirtyFormBlocked(runLabel, nova, novaDraft);
+
+    // WP05.1d evidence gates, one at a time, against the real seeded masters.
+    const D = { id: novaDraft, version: r.body.version, model: r.body.modelNumber };
+    r = await apiSubmit(nova, "GET", D.id, null, null);
+    const g0 = r.body?.evidenceGates ?? [];
+    check(`${runLabel}.nova.gates-preview-incomplete`, r.status === 200 && r.body?.ready === false && g0.length === 6 && g0[0]?.code === "test_report_required" && g0.filter((g) => g.met).map((g) => g.code).join() === "duplicate_model", g0.filter((g) => !g.met).map((g) => g.code).join(","));
+    const gateStep = async (code, status, why) => {
+      const pv = await apiSubmit(nova, "GET", D.id, null, null);
+      const sr = await apiSubmit(nova, "POST", D.id, submitPayload(pv.body), key());
+      check(`${runLabel}.nova.gate-${why}`, sr.status === status && sr.body?.error === code, `${sr.status} ${sr.body?.error ?? ""}`);
+    };
+    await gateStep("test_report_required", 422, "test-report");
+    await uploadReport(nova, D.id, `gate-${runLabel}`);
+    await gateStep("declared_efficiency_required", 422, "efficiency");
+    await patchDraft(nova, D, { declaredIseer: 4.5 });
+    await gateStep("test_date_invalid", 422, "test-date");
+    await patchDraft(nova, D, { testedOn: TESTED_SUSPENDED });
+    await gateStep("laboratory_not_accredited", 422, "no-laboratory");
+    await patchDraft(nova, D, { laboratoryCode: "LAB" });
+    await gateStep("laboratory_not_accredited", 422, "laboratory-suspended");
+    await patchDraft(nova, D, { testedOn: TESTED_OK });
+    r = await apiSubmit(nova, "GET", D.id, null, null);
+    check(`${runLabel}.nova.gates-preview-complete`, r.status === 200 && r.body?.ready === true && (r.body?.evidenceGates ?? []).every((g) => g.met), "all six met");
+
+    // Malformed evidence writes are refused and change nothing.
+    const versionBefore = D.version;
+    const farFuture = new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10);
+    for (const [name, fields] of [["future-date", { testedOn: farFuture }], ["unknown-laboratory", { laboratoryCode: "NOPE" }], ["zero-efficiency", { declaredIseer: 0 }], ["text-efficiency", { declaredIseer: "4.5" }], ["three-decimals", { declaredIseer: 4.555 }]]) {
+      const bad = await patchDraft(nova, D, fields);
+      check(`${runLabel}.nova.evidence-${name}`, bad.status === 422 && bad.body?.error === "validation_failed", `${bad.status} ${bad.body?.error ?? ""}`);
+    }
+    r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${D.id}`, null, null);
+    check(`${runLabel}.nova.evidence-unchanged`, r.body?.version === versionBefore && r.body?.laboratoryCode === "LAB" && r.body?.testedOn === TESTED_OK && r.body?.declaredIseer === 4.5, `v${r.body?.version} ${r.body?.laboratoryCode} ${r.body?.testedOn} ${r.body?.declaredIseer}`);
+    // The form shows what was saved and treats an unsaved evidence change as dirty.
+    await evidenceFormChecks(runLabel, nova, D.id);
 
     r = await apiSubmit(nova, "GET", novaDraft, null, null);
     check(`${runLabel}.nova.preview`, r.status === 200 && r.body?.ready === true && r.body?.submissionFee?.localDemoFee === true && r.body?.draftSummary?.modelNumber, r.body?.submissionFee?.label);
@@ -173,6 +275,24 @@ async function runSubmitChecks(runLabel, nova, pixel) {
     const sk = key();
     r = await apiSubmit(nova, "POST", novaDraft, submitPayload(preview), sk);
     check(`${runLabel}.nova.submit`, r.status === 200 && r.body?.state === "fee_due" && r.body?.submissionFee?.amountInr === "24000.00", `${r.status} v${r.body?.version}`);
+
+    const snap = sql(`SELECT accreditation_rule_key || ':' || accreditation_version || '|' || standard_rule_key || ':' || standard_version FROM app.model_application WHERE id = '${novaDraft}'`);
+    check(`${runLabel}.nova.evidence-snapshot`, snap === "LAB:RAC:3|RAC:performance_test:2", snap);
+    r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${novaDraft}`, null, null);
+    check(`${runLabel}.nova.evidence-in-read`, r.body?.laboratoryCode === "LAB" && r.body?.testedOn === TESTED_OK && r.body?.declaredIseer === 4.5, `${r.body?.laboratoryCode} ${r.body?.testedOn}`);
+    const frozen = await patchDraft(nova, { id: novaDraft, version: r.body.version, model: r.body.modelNumber }, { declaredIseer: 1 });
+    check(`${runLabel}.nova.evidence-frozen-after-submit`, frozen.status === 403 && frozen.body?.error === "not_editable", `${frozen.status} ${frozen.body?.error ?? ""}`);
+
+    // A second draft with the same brand and model number (different case and spacing) may exist as a draft but not be submitted.
+    const dupRes = await mkDraft(nova, ` ${D.model.toLowerCase()} `);
+    check(`${runLabel}.nova.duplicate-draft-allowed`, dupRes.status === 201, "drafts do not claim the number");
+    const dup = { id: dupRes.body.id, version: dupRes.body.version, model: dupRes.body.modelNumber };
+    check(`${runLabel}.nova.duplicate-evidence`, await completeEvidence(nova, dup, `dup-${runLabel}`), "evidence complete on the duplicate");
+    const dp = await apiSubmit(nova, "GET", dup.id, null, null);
+    check(`${runLabel}.nova.duplicate-preview`, dp.status === 200 && dp.body?.ready === false && dp.body?.evidenceGates?.find((g) => g.code === "duplicate_model")?.met === false, "only the uniqueness check is unmet");
+    r = await apiSubmit(nova, "POST", dup.id, submitPayload(dp.body), key());
+    check(`${runLabel}.nova.duplicate-model`, r.status === 409 && r.body?.error === "duplicate_model", `${r.status} ${r.body?.error ?? ""}`);
+    check(`${runLabel}.nova.duplicate-still-draft`, sql(`SELECT state FROM app.model_application WHERE id = '${dup.id}'`) === "draft", "no transition");
 
     r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${novaDraft}`, null, null);
     check(`${runLabel}.nova.fee-after-reload`, r.status === 200 && r.body?.submissionFee?.amountInr === "24000.00", r.body?.submissionFee?.label);
@@ -202,6 +322,7 @@ async function runSubmitChecks(runLabel, nova, pixel) {
     r = await mkDraft(pixel, `AU-SUB-${runLabel}-${Date.now()}`);
     const pixelDraft = r.body?.id;
     check(`${runLabel}.pixel.agency-draft`, r.status === 201, "agency filing");
+    check(`${runLabel}.pixel.evidence`, await completeEvidence(pixel, { id: pixelDraft, version: r.body.version, model: r.body.modelNumber }, `px-${runLabel}`), "agency completes the evidence");
     const pxPrev = await apiSubmit(pixel, "GET", pixelDraft, null, null);
     r = await apiSubmit(pixel, "POST", pixelDraft, submitPayload(pxPrev.body), key());
     check(`${runLabel}.pixel.submit`, r.status === 200 && r.body?.state === "fee_due", r.body?.state);
@@ -236,6 +357,11 @@ async function runSubmitChecks(runLabel, nova, pixel) {
 
   } finally {
     cleanupDisposable(createdIds);
+    for (const f of blobsNow()) {
+      if (!blobsBefore.has(f)) {
+        try { fs.unlinkSync(path.join(STORE, f)); } catch { /* ignore */ }
+      }
+    }
     const after = modelBaseline();
     check(`${runLabel}.baseline-preserved`, before === after, before === after ? "seed rows unchanged" : `drift ${before.slice(0, 30)} vs ${after.slice(0, 30)}`);
   }

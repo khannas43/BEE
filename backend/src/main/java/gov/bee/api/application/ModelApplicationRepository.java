@@ -1,8 +1,10 @@
 package gov.bee.api.application;
 
 import gov.bee.api.policy.SlicePolicy.ReadScope;
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -22,12 +24,35 @@ public class ModelApplicationRepository {
 
     public record Row(UUID id, String reference, UUID organisationId, String organisationCode, String brandName,
                       String category, String modelNumber, String state, int version, Set<String> assignedStagesForCaller,
-                      UUID principalOrganisationId, UUID brandId, String principalOrganisationCode) {
+                      UUID principalOrganisationId, UUID brandId, String principalOrganisationCode,
+                      String laboratoryCode, LocalDate testedOn, BigDecimal declaredIseer) {
+        /** A row without the WP05.1d evidence fields (legacy rows and tests that predate them). */
+        public Row(UUID id, String reference, UUID organisationId, String organisationCode, String brandName, String category,
+                   String modelNumber, String state, int version, Set<String> assignedStagesForCaller, UUID principalOrganisationId,
+                   UUID brandId, String principalOrganisationCode) {
+            this(id, reference, organisationId, organisationCode, brandName, category, modelNumber, state, version,
+                assignedStagesForCaller, principalOrganisationId, brandId, principalOrganisationCode, null, null, null);
+        }
+    }
+
+    /** Which evidence fields a draft write sets; a field that is not present keeps its stored value. */
+    public record EvidenceUpdate(boolean setLaboratory, String laboratoryCode, boolean setTestedOn, LocalDate testedOn,
+                                 boolean setIseer, BigDecimal declaredIseer) {
+        public static final EvidenceUpdate NONE = new EvidenceUpdate(false, null, false, null, false, null);
+
+        public boolean isEmpty() {
+            return !setLaboratory && !setTestedOn && !setIseer;
+        }
+    }
+
+    /** A laboratory that has at least one accreditation record for a category (the form's choice list). */
+    public record LaboratoryChoice(String code, String name) {
     }
 
     private static final String SELECT = """
         SELECT a.id, a.reference, a.organisation_id, o.code, a.brand_name, a.category, a.model_number, a.state, a.version,
                a.principal_organisation_id, a.brand_id, po.code AS principal_code,
+               a.laboratory_code, a.tested_on, a.declared_iseer,
                COALESCE((SELECT string_agg(s.stage, ',') FROM assignment s
                           WHERE s.subject_type = 'model_application' AND s.subject_id = a.id AND s.user_id = ? AND s.active AND s.stage = a.state), '') AS stages
         FROM model_application a JOIN organisation o ON o.id = a.organisation_id
@@ -123,6 +148,57 @@ public class ModelApplicationRepository {
             rs.getString("code"), rs.getString("brand_name"), rs.getString("category"), rs.getString("model_number"),
             rs.getString("state"), rs.getInt("version"),
             stages.isEmpty() ? Set.of() : Set.copyOf(Arrays.asList(stages.split(","))),
-            rs.getObject("principal_organisation_id", UUID.class), rs.getObject("brand_id", UUID.class), rs.getString("principal_code"));
+            rs.getObject("principal_organisation_id", UUID.class), rs.getObject("brand_id", UUID.class), rs.getString("principal_code"),
+            rs.getString("laboratory_code"), rs.getObject("tested_on", LocalDate.class), rs.getBigDecimal("declared_iseer"));
+    }
+
+    /** Sets only the evidence fields the write carried; never touches state or version. */
+    public void setEvidence(UUID id, UUID filingOrganisationId, EvidenceUpdate update) {
+        if (update.isEmpty()) {
+            return;
+        }
+        jdbc.update(
+            "UPDATE model_application SET "
+                + "laboratory_code = CASE WHEN ? THEN ? ELSE laboratory_code END, "
+                + "tested_on = CASE WHEN ? THEN ? ELSE tested_on END, "
+                + "declared_iseer = CASE WHEN ? THEN ? ELSE declared_iseer END "
+                + "WHERE id = ? AND organisation_id = ? AND state = 'draft'",
+            update.setLaboratory(), update.laboratoryCode(), update.setTestedOn(),
+            update.testedOn() == null ? null : java.sql.Date.valueOf(update.testedOn()),
+            update.setIseer(), update.declaredIseer(), id, filingOrganisationId);
+    }
+
+    /** True if an active laboratory-kind organisation has this code. */
+    public boolean laboratoryExists(String code) {
+        Integer n = jdbc.queryForObject(
+            "SELECT count(*)::int FROM organisation WHERE code = ? AND kind = 'laboratory' AND status = 'active'", Integer.class, code);
+        return n != null && n > 0;
+    }
+
+    /** Laboratories with any accreditation record for the category; whether one covers a date is decided at submit. */
+    public List<LaboratoryChoice> laboratoriesFor(String category) {
+        return jdbc.query(
+            "SELECT DISTINCT o.code, o.legal_name FROM master_lab_accreditation m JOIN organisation o ON o.code = m.laboratory_code "
+                + "WHERE m.category_code = ? AND o.kind = 'laboratory' AND o.status = 'active' ORDER BY o.code",
+            (rs, i) -> new LaboratoryChoice(rs.getString("code"), rs.getString("legal_name")), category);
+    }
+
+    /** Serialises concurrent submits of the same brand and model number until the transaction ends. */
+    public void lockModelKey(UUID brandId, String modelNumber) {
+        jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))::text", String.class,
+            "model:" + brandId + ":" + normalisedModelNumber(modelNumber));
+    }
+
+    /** Another application that already holds this brand and model number (not a draft, not rejected). */
+    public boolean modelNumberTaken(UUID brandId, String modelNumber, UUID exceptId) {
+        Integer n = jdbc.queryForObject(
+            "SELECT count(*)::int FROM model_application WHERE brand_id = ? AND upper(btrim(model_number)) = ? AND id <> ? "
+                + "AND state NOT IN ('draft', 'rejected')",
+            Integer.class, brandId, normalisedModelNumber(modelNumber), exceptId);
+        return n != null && n > 0;
+    }
+
+    static String normalisedModelNumber(String modelNumber) {
+        return modelNumber == null ? "" : modelNumber.trim().toUpperCase(java.util.Locale.ROOT);
     }
 }

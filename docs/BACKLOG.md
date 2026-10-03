@@ -8,7 +8,7 @@
 3. **Revisit at the start of each wave** and at the end of each activity: scan the rows whose "Revisit at" matches, and close or re-date them.
 4. **Statuses:** `open`, `scheduled` (owned by a named package), `accepted limit` (a known limit the owner accepted; keep the row), `done` (kept for history, with the commit).
 
-Last updated: 3 October 2026 (after commit `2eda95a`).
+Last updated: 3 October 2026 (WP05.1d added).
 
 ## A. Deferred from the WP06.1a reviews (four rounds, no high-severity findings)
 
@@ -35,7 +35,7 @@ Last updated: 3 October 2026 (after commit `2eda95a`).
 | BL-021 | Tabs for a record's contextual panels (documents, history, approvals) | 55 of the matrix rows are contextual tabs | Wave 1 (inbox and approval views), Wave 2 | open |
 | BL-022 | Command panel component (button, busy state, conflict banner) around `runtimeCommand` | Finance confirmation and every scrutiny and approval action need the same behaviour | Wave 1, first command screen | open |
 | BL-023 | Generic document card (`DraftTestReports` is the model) | Needed when a second document kind exists | WP06.2, WP05.1d follow-up | open |
-| BL-024 | Backend feature template or generator: Spring command and read, BFF route and validator, client helper, contract entry, test skeletons | A new feature touches about 40 files today; the plan's biggest speed-up | Wave 1 | open |
+| BL-024 | Backend feature template or generator: Spring command and read, BFF route and validator, client helper, contract entry, test skeletons | A new feature touches about 40 files (WP06.1a: 42); WP05.1d, with no new route, still touched 24 files and needed the contract artifact, two validators, a hard-coded stand-in table and three live scripts updated by hand; the plan's biggest speed-up | Wave 1 | open |
 | BL-025 | Split `bee-local-api.openapi.json`, `contract-pin.json` and the coverage inputs per module, merged by a script | These files change on every feature and block parallel work | with BL-024 | open |
 | BL-026 | Migrate `runtimeModelDocuments.ts`, `runtimeModelSubmit.ts` and the write half of `runtimeModelDrafts.ts` onto `runtimeRead` and `runtimeCommand` | They keep their own copies of the failure mapping and fetch code | next time each is changed | open |
 | BL-027 | Unit tests for the hooks (`useRuntimeRead`, `useRevalidation`); the repo has no React test runner | Today the hooks are proven only by `local:read-ui` (26/26 live) | when a React test runner is added | open |
@@ -58,7 +58,7 @@ Last updated: 3 October 2026 (after commit `2eda95a`).
 | --- | --- | --- | --- | --- |
 | BL-040 | The fee amount and its source (local ₹24,000 is provisional, not BEE-approved) and the approved rating formula | Shown as provisional everywhere; cannot be marked verified | BEE; before WP07.1 and WP05.2 | open |
 | BL-041 | M6: who may close or supersede a master version; master administration policy | No UI grant exists; blocks the admin master screens | BEE; before Wave 2 admin screens | open |
-| BL-042 | WP05.1d answers 6 (other required documents) and 8 (who verifies a report, and the outcomes) | Applied as local defaults, not decided | BEE; WP05.2 and WP06.2 | open |
+| BL-042 | WP05.1d answers still undecided by BEE: all of 1–6 are provisional local defaults; 6 (other required documents) and 8 (who verifies a report, and the outcomes) are not built | Shown as provisional; none is a BEE rule | BEE; WP05.2 and WP06.2 | open |
 | BL-043 | The six decisions in [SCREEN_COMPLETION_PLAN.md](SCREEN_COMPLETION_PLAN.md) section 7 (tiers, review policy, parallel agents, the WP05.1d answers, M6, the re-estimate point) | The plan runs on stated defaults until answered | owner; Wave 1 start and end | scheduled |
 | BL-044 | Re-estimate the plan's person-days after the first vertical slice | The carried-over figures are not re-estimated | end of Wave 1 | scheduled |
 
@@ -79,3 +79,18 @@ Last updated: 3 October 2026 (after commit `2eda95a`).
 | BL-060 | The stale clone at `~/Documents/Documents/BEE/worktrees/wp05.1-read-ui` (at `aa7432a`, with uncommitted files identical to a commit) was left as is by owner decision | Committing or running checks there would diverge from the real branch; the handover says not to use it | owner; revisit if folder clean-up is wanted | accepted limit |
 | BL-061 | `wp06.1a-document-intake` is pushed (54 commits ahead of `main`) but there is no pull request, and the earlier local branches (`wp04.1-masters`, `wp04.2-brand-auth`) are not on the remote | Merge strategy and history layout are undecided | owner | open |
 | BL-062 | `AGENTS.md` and `CLAUDE.md` are rewritten by `next dev`; the check compares them to the committed copy | A diff there is a tool artefact, not a change | keep the committed copy unchanged | accepted limit |
+
+## G. WP05.1d (submit-time evidence gates)
+
+| ID | Item | Why it matters | Owner / revisit at | Status |
+| --- | --- | --- | --- | --- |
+| BL-063 | The laboratory choice list rides on the `eligible-brands` response, a misnomer; it avoided a new route and about 14 touch points | The endpoint is really "draft form options"; rename it with the OpenAPI split | with BL-024 and BL-025 | open |
+| BL-064 | The declared-efficiency bound (positive, at most 99.99, two decimals) is a placeholder | BEE has not stated the range or precision (decision 5) | BEE | open |
+| BL-065 | No maximum age for the test date; only a future date is refused | BEE may require the test to be recent (decision 3); it should be a master rule, not code | BEE | open |
+| BL-066 | `standard_not_available` cannot be unmet with the seed (standard and accreditation both start 2026-01-01), so it has no live check | Covered only by the contract test and the BFF stand-in; add a seeded gap or test master if a live check is wanted | next seed change | accepted limit |
+| BL-067 | The standard purpose `performance_test` and category `RAC` are fixed in code | Which standard applies is BEE decision M2; more categories need a mapping | BEE; when a second category exists | open |
+| BL-068 | Uniqueness folds case and trims spaces only, and uses the database's `upper()` | Whether `NC-1` and `NC1` are one model, and Unicode folding, are BEE questions; families are not modelled (decision 4) | BEE; WP05 broader | open |
+| BL-069 | A draft that duplicates a live model can be created and saved; the clash shows only in the submit preview | Earlier warning would save the applicant effort | WP05 broader | open |
+| BL-070 | The master versions the submit check resolved are stored but not exposed by any read | WP05.2 and the audit history (WP04.3) should show which accreditation and standard applied | WP05.2, WP04.3 | scheduled |
+| BL-071 | The laboratory list is not filtered by date and is limited to RAC; the unique index backs the advisory lock and a violation would surface as 503 | A lab with a record but no cover on the test date is offered and refused at submit; the 503 path needs the lock bypassed to occur | next category or if observed | accepted limit |
+| BL-072 | The gate labels are English only and the form does not link an unmet check to the field that fixes it | Hindi copy and accessibility are RFP expectations for these screens (see BL-052) | WP05 broader | open |

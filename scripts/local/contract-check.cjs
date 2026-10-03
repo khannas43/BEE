@@ -43,7 +43,7 @@ const DOC_UPLOAD_UPSTREAM = {
 /** Mirrors lib/server/apiContract.ts SPRING_SUBMIT_* (stand-in hits Spring, not the portal session layer). */
 const SUBMIT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "not_submittable"], 404: ["not_found"], 503: ["service_unavailable"] },
-  POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_submittable"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "fee_preview_conflict"], 422: ["validation_failed", "idempotency_key_required", "rule_not_available"], 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_submittable"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "fee_preview_conflict", "duplicate_model"], 422: ["validation_failed", "idempotency_key_required", "rule_not_available", "test_report_required", "declared_efficiency_required", "test_date_invalid", "laboratory_not_accredited", "standard_not_available"], 503: ["service_unavailable"] },
 };
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {

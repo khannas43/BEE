@@ -62,7 +62,7 @@ The order follows the plan's dependency stages and puts the first end-to-end sli
 - Return, resubmit, rejection and history are included.
 - The inbox routes (`personal-inbox`, `my-approvals`) are the task source for every step, so they are built with Wave 1, not later.
 
-WP05.1d (submit-time evidence, laboratory accreditation, test date, model and family uniqueness) is ahead of this and needs the BEE decisions in section 7.
+WP05.1d (submit-time evidence, laboratory accreditation, test date, model uniqueness) is implemented locally on the owner's accepted defaults, awaiting independent review ([wp05/WP05.1d_EVIDENCE_GATES.md](wp05/WP05.1d_EVIDENCE_GATES.md)); BEE has not decided any of its rules.
 
 ### Tiers, for when time is short
 

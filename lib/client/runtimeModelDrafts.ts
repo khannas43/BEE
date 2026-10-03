@@ -64,13 +64,23 @@ async function draftWrite(
   return { ok: false, failure: { kind: "unavailable", message: messageFrom(parsed, READ_UI_MESSAGES.api_error) } };
 }
 
-export function createModelApplicationDraft(body: { brandId: string; category: string; modelNumber: string }, idempotencyKey: string) {
+/** WP05.1d evidence fields. On an edit, an explicit null clears the stored value and an absent field leaves it. */
+export type DraftEvidenceFields = {
+  laboratoryCode?: string | null;
+  testedOn?: string | null;
+  declaredIseer?: number | null;
+};
+
+export function createModelApplicationDraft(
+  body: { brandId: string; category: string; modelNumber: string } & DraftEvidenceFields,
+  idempotencyKey: string,
+) {
   return draftWrite("/api/runtime/model-applications", "POST", body, idempotencyKey);
 }
 
 export function patchModelApplicationDraft(
   id: string,
-  body: { version: number; category: string; modelNumber: string; brandId?: string },
+  body: { version: number; category: string; modelNumber: string; brandId?: string } & DraftEvidenceFields,
   idempotencyKey: string,
 ) {
   return draftWrite(`/api/runtime/model-applications/${encodeURIComponent(id)}`, "PATCH", body, idempotencyKey);

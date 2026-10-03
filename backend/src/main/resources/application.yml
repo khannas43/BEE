@@ -7,6 +7,10 @@ spring:
     name: bee-api
   main:
     banner-mode: "off"
+  jackson:
+    deserialization:
+      # Request numbers keep their exact decimal value, so a figure with more than two decimals is refused, not rounded.
+      use-big-decimal-for-floats: true
   datasource:
     url: jdbc:postgresql://127.0.0.1:${BEE_PG_PORT:5434}/${BEE_APP_DB:bee_app}?currentSchema=app
     username: ${BEE_RUNTIME_DB_USER:bee_runtime}

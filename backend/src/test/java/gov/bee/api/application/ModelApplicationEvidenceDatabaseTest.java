@@ -162,6 +162,30 @@ class ModelApplicationEvidenceDatabaseTest {
         assertTrue(applications.laboratoryExists("LAB"));
         assertFalse(applications.laboratoryExists("NOVA"), "an organisation that is not a laboratory");
         assertFalse(applications.laboratoryExists("NOPE"));
+        // A laboratory whose organisation code the API contract cannot carry is never offered, so it cannot make the
+        // whole form response invalid. (Accreditation rows are immutable, so this is the last step of the test.)
+        owner.update("INSERT INTO organisation (id, code, kind, legal_name) VALUES (?, 'odd.code', 'laboratory', 'Odd Code Lab')", UUID.randomUUID());
+        owner.update(
+            "INSERT INTO master_lab_accreditation (rule_key, version, effective_from, source_reference, verification_status, note, "
+                + "laboratory_code, category_code, accreditation_body, certificate_ref, accreditation_status) "
+                + "VALUES ('odd.code:RAC', 1, '2026-01-01', 'test', 'synthetic', 'test', 'odd.code', 'RAC', 'SYN', 'SYN-ODD', 'active')");
+        assertEquals(List.of("LAB"), applications.laboratoriesFor("RAC").stream().map(ModelApplicationRepository.LaboratoryChoice::code).toList());
+    }
+
+    @Test
+    void aLaboratoryOrganisationThatIsNoLongerActiveFailsTheGateEvenWithAnActiveAccreditation() {
+        UUID id = draft("GATE-LAB-ORG");
+        uploadReport(id);
+        evidenceFields(id, "LAB", LocalDate.of(2026, 9, 1), "4.50");
+        assertTrue(evidence.evaluate(row(id), TODAY).allMet());
+        owner.update("UPDATE organisation SET status = 'suspended' WHERE code = 'LAB'");
+        try {
+            assertTrue(unmet(id).contains(Gate.LABORATORY_NOT_ACCREDITED), "the organisation is checked at submit, not only when the draft is saved");
+            assertTrue(evidence.evaluate(row(id), TODAY).resolved().isEmpty());
+        } finally {
+            owner.update("UPDATE organisation SET status = 'active' WHERE code = 'LAB'");
+        }
+        assertTrue(evidence.evaluate(row(id), TODAY).allMet());
     }
 
     @Test

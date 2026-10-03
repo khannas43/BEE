@@ -151,6 +151,19 @@ async function evidenceFormChecks(runLabel, nova, draftId) {
   })()`);
   const dirty = await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-dirty-hint]')`, 8000);
   check(`${runLabel}.ui.evidence-dirty`, dirty, dirty ? "changing an evidence field needs a save before submit" : "no dirty hint");
+  // A typo must be reported and must not clear or change the saved value.
+  await nova.eval(`(() => {
+    const el = document.querySelector('[data-testid=model-draft-iseer]');
+    const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    s.call(el, '4,5x');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`);
+  await nova.eval(`document.querySelector('[data-testid=model-draft-save]').click(); true`);
+  const errShown = await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-error]')`, 8000);
+  const errText = errShown ? await nova.eval(`document.querySelector('[data-testid=model-draft-error]').textContent`) : "";
+  const afterTypo = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${draftId}`, null, null);
+  check(`${runLabel}.ui.evidence-bad-efficiency`, errShown && /positive number up to 99\.99/.test(errText) && afterTypo.body?.declaredIseer === 4.5, errText.slice(0, 70) || "no error shown");
   await nova.eval(`(() => {
     const el = document.querySelector('[data-testid=model-draft-iseer]');
     const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -257,6 +270,9 @@ async function runSubmitChecks(runLabel, nova, pixel) {
       const bad = await patchDraft(nova, D, fields);
       check(`${runLabel}.nova.evidence-${name}`, bad.status === 422 && bad.body?.error === "validation_failed", `${bad.status} ${bad.body?.error ?? ""}`);
     }
+    const rawBody = `{"version":${D.version},"category":"RAC","modelNumber":${JSON.stringify(D.model)},"declaredIseer":9.9999999999999999}`;
+    const rawPatch = await nova.eval(`fetch(${JSON.stringify(`${WEB}/api/runtime/model-applications/${D.id}`)}, { method: "PATCH", credentials: "include", cache: "no-store", headers: { "Content-Type": "application/json", "Idempotency-Key": ${JSON.stringify(key())} }, body: ${JSON.stringify(rawBody)} }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))`);
+    check(`${runLabel}.nova.evidence-over-precise`, rawPatch.status === 422 && rawPatch.body?.error === "validation_failed", `${rawPatch.status} ${rawPatch.body?.error ?? ""}`);
     r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${D.id}`, null, null);
     check(`${runLabel}.nova.evidence-unchanged`, r.body?.version === versionBefore && r.body?.laboratoryCode === "LAB" && r.body?.testedOn === TESTED_OK && r.body?.declaredIseer === 4.5, `v${r.body?.version} ${r.body?.laboratoryCode} ${r.body?.testedOn} ${r.body?.declaredIseer}`);
     // The form shows what was saved and treats an unsaved evidence change as dirty.
@@ -293,6 +309,22 @@ async function runSubmitChecks(runLabel, nova, pixel) {
     r = await apiSubmit(nova, "POST", dup.id, submitPayload(dp.body), key());
     check(`${runLabel}.nova.duplicate-model`, r.status === 409 && r.body?.error === "duplicate_model", `${r.status} ${r.body?.error ?? ""}`);
     check(`${runLabel}.nova.duplicate-still-draft`, sql(`SELECT state FROM app.model_application WHERE id = '${dup.id}'`) === "draft", "no transition");
+
+    // Two applications for the same brand and model submitted at the same moment: exactly one wins, the other is a clean 409.
+    const raceModel = `NC-RACE-${runLabel}-${Date.now()}`;
+    const raceA = await mkDraft(nova, raceModel);
+    const raceB = await mkDraft(nova, raceModel);
+    const ra = { id: raceA.body.id, version: raceA.body.version, model: raceA.body.modelNumber };
+    const rb = { id: raceB.body.id, version: raceB.body.version, model: raceB.body.modelNumber };
+    const readyBoth = (await completeEvidence(nova, ra, `race-a-${runLabel}`)) && (await completeEvidence(nova, rb, `race-b-${runLabel}`));
+    const pa = await apiSubmit(nova, "GET", ra.id, null, null);
+    const pb = await apiSubmit(nova, "GET", rb.id, null, null);
+    check(`${runLabel}.nova.race-ready`, readyBoth && pa.body?.ready === true && pb.body?.ready === true, "both drafts complete");
+    const fire = ([d, p]) => `fetch(${JSON.stringify(`${WEB}/api/runtime/model-applications/${d.id}/submit`)}, { method: "POST", credentials: "include", cache: "no-store", headers: { "Content-Type": "application/json", "Idempotency-Key": ${JSON.stringify(key())} }, body: ${JSON.stringify(JSON.stringify(submitPayload(p.body)))} }).then(async (r) => ({ status: r.status, error: (await r.json().catch(() => null))?.error ?? null }))`;
+    const race = await nova.eval(`Promise.all([${[fire([ra, pa]), fire([rb, pb])].join(",")}])`);
+    check(`${runLabel}.nova.concurrent-same-model`, race.map((x) => x.status).sort().join() === "200,409" && race.some((x) => x.error === "duplicate_model"), JSON.stringify(race));
+    const winners = sql(`SELECT count(*) FROM app.model_application WHERE brand_id = '${NOVA_COOL}' AND upper(btrim(model_number)) = upper('${raceModel}') AND state = 'fee_due'`);
+    check(`${runLabel}.nova.concurrent-one-winner`, winners === "1", `fee_due rows=${winners}`);
 
     r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${novaDraft}`, null, null);
     check(`${runLabel}.nova.fee-after-reload`, r.status === 200 && r.body?.submissionFee?.amountInr === "24000.00", r.body?.submissionFee?.label);

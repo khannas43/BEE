@@ -6645,7 +6645,7 @@
           "declaredIseer": {
             "type": "number",
             "minimum": 0.01,
-            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring and the BFF). The rating step recomputes and records its own."
+            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring on write; the BFF forwards writes unchanged and validates only responses). The rating step recomputes and records its own."
           }
         }
       },
@@ -6914,7 +6914,7 @@
               "null"
             ],
             "minimum": 0.01,
-            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring and the BFF). The rating step recomputes and records its own."
+            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring on write; the BFF forwards writes unchanged and validates only responses). The rating step recomputes and records its own."
           }
         }
       },
@@ -6965,7 +6965,7 @@
               "null"
             ],
             "minimum": 0.01,
-            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring and the BFF). The rating step recomputes and records its own."
+            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring on write; the BFF forwards writes unchanged and validates only responses). The rating step recomputes and records its own."
           }
         }
       },
@@ -7168,7 +7168,7 @@
           "declaredIseer": {
             "type": "number",
             "minimum": 0.01,
-            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring and the BFF). The rating step recomputes and records its own."
+            "description": "Efficiency figure declared by the applicant (WP05.1d): positive, at most 99.99, at most two decimals (enforced by Spring on write; the BFF forwards writes unchanged and validates only responses). The rating step recomputes and records its own."
           }
         }
       },

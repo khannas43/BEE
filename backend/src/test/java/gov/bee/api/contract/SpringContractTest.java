@@ -342,6 +342,7 @@ class SpringContractTest {
         when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
         when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
         when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        when(applications.laboratoryExists("LAB")).thenReturn(true);
         when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
         when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
         ids[2] = conforms("/api/model-applications/{id}/submit", get(path(DETAIL) + "/submit").with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
@@ -447,6 +448,15 @@ class SpringContractTest {
         UUID created = UUID.fromString("00000000-0000-4000-c000-000000009999");
         when(applications.insertDraft(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(draftRow(created, "NC-NEW", 0));
         conforms("/api/model-applications", post("/api/model-applications").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 201, null);
+        // WP05.1d evidence fields on create: accepted when well formed, refused (not rounded) when over-precise.
+        when(applications.laboratoryExists("LAB")).thenReturn(true);
+        when(applications.findOwned(any(), eq(NOVA))).thenReturn(Optional.of(draftRow(created, "NC-NEW", 0)));
+        String withEvidence = "{\"brandId\":\"" + NOVA_COOL + "\",\"category\":\"RAC\",\"modelNumber\":\"NC-NEW\",\"laboratoryCode\":\"LAB\",\"testedOn\":\"2026-09-01\",\"declaredIseer\":4.5}";
+        conforms("/api/model-applications", post("/api/model-applications").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(withEvidence), 201, null);
+        String overPrecise = "{\"brandId\":\"" + NOVA_COOL + "\",\"category\":\"RAC\",\"modelNumber\":\"NC-NEW\",\"declaredIseer\":9.9999999999999999}";
+        conforms("/api/model-applications", post("/api/model-applications").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(overPrecise), 422, "validation_failed");
+        String unknownLab = "{\"brandId\":\"" + NOVA_COOL + "\",\"category\":\"RAC\",\"modelNumber\":\"NC-NEW\",\"laboratoryCode\":\"NOPE\"}";
+        conforms("/api/model-applications", post("/api/model-applications").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(unknownLab), 422, "validation_failed");
         account("manufacturer", "own-org");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
@@ -542,6 +552,7 @@ class SpringContractTest {
         when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
         when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
         when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        when(applications.laboratoryExists("LAB")).thenReturn(true);
         when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
         when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
         conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).contentType("application/json").content(submitBody), 422, "idempotency_key_required");
@@ -575,6 +586,7 @@ class SpringContractTest {
         when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
         when(masters.feeRule(any(), any(), any())).thenReturn(Optional.of(racFee()));
         when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        when(applications.laboratoryExists("LAB")).thenReturn(true);
         when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
         when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
         conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "brand_not_permitted");
@@ -614,6 +626,10 @@ class SpringContractTest {
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(ok));
         when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.empty());
         conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "laboratory_not_accredited");
+        when(applications.laboratoryExists("LAB")).thenReturn(false);
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(ok));
+        conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "laboratory_not_accredited");
+        when(applications.laboratoryExists("LAB")).thenReturn(true);
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(evidenceRow(NOVA_APP, "NC-RAC-18F", 0, null, TESTED_ON, new BigDecimal("4.50"))));
         when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
         conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "laboratory_not_accredited");

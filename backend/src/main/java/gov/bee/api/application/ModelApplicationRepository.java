@@ -175,16 +175,23 @@ public class ModelApplicationRepository {
         return n != null && n > 0;
     }
 
-    /** Laboratories with any accreditation record for the category; whether one covers a date is decided at submit. */
+    /**
+     * Laboratories with any accreditation record for the category; whether one covers a date is decided at submit. Only codes
+     * the API contract can carry are offered, so one odd organisation code cannot make the whole form response invalid.
+     */
     public List<LaboratoryChoice> laboratoriesFor(String category) {
         return jdbc.query(
             "SELECT DISTINCT o.code, o.legal_name FROM master_lab_accreditation m JOIN organisation o ON o.code = m.laboratory_code "
-                + "WHERE m.category_code = ? AND o.kind = 'laboratory' AND o.status = 'active' ORDER BY o.code",
+                + "WHERE m.category_code = ? AND o.kind = 'laboratory' AND o.status = 'active' "
+                + "AND o.code ~ '^[A-Z0-9_-]{1,32}$' ORDER BY o.code",
             (rs, i) -> new LaboratoryChoice(rs.getString("code"), rs.getString("legal_name")), category);
     }
 
     /** Serialises concurrent submits of the same brand and model number until the transaction ends. */
     public void lockModelKey(UUID brandId, String modelNumber) {
+        // A bounded wait: a stuck same-model submit fails the waiting request as unavailable (retryable) rather than pinning
+        // a connection and an open transaction indefinitely.
+        jdbc.execute("SET LOCAL lock_timeout = '10s'");
         jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))::text", String.class,
             "model:" + brandId + ":" + normalisedModelNumber(modelNumber));
     }

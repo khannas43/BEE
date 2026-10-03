@@ -71,6 +71,8 @@ public class ModelApplicationSubmitService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> submit(Caller caller, UUID appId, String idempotencyKey, JsonNode body) {
+        // One India date for the brand check, the fee rules and the evidence gates, taken before any wait on the model lock.
+        LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, appId, idempotencyKey, body);
         if (replay.isPresent()) {
             return replay.get();
@@ -99,14 +101,14 @@ public class ModelApplicationSubmitService {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
-        Optional<String> brandDeny = brandDenial(caller, row);
+        Optional<String> brandDeny = brandDenial(caller, row, today);
         if (brandDeny.isPresent()) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
             String reason = brandDeny.get();
             HttpStatus status = "validation_failed".equals(reason) ? HttpStatus.UNPROCESSABLE_ENTITY : HttpStatus.FORBIDDEN;
             return error(status, reason);
         }
-        Optional<IntakeResolution> intake = resolveFeeRules(row);
+        Optional<IntakeResolution> intake = resolveFeeRules(row, today);
         if (intake.isEmpty()) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "rule_not_available");
@@ -115,7 +117,7 @@ public class ModelApplicationSubmitService {
         if (row.brandId() != null) {
             applications.lockModelKey(row.brandId(), row.modelNumber());
         }
-        ModelApplicationEvidence.Result gates = evidence.evaluate(row, LocalDate.now(ModelDraftPolicy.IST));
+        ModelApplicationEvidence.Result gates = evidence.evaluate(row, today);
         Optional<ModelApplicationEvidence.Gate> unmet = gates.firstUnmet();
         if (unmet.isPresent()) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
@@ -154,10 +156,11 @@ public class ModelApplicationSubmitService {
         if (!"draft".equals(row.state())) {
             return error(HttpStatus.FORBIDDEN, "not_submittable");
         }
-        Optional<String> brandDeny = brandDenial(caller, row);
-        Optional<IntakeResolution> intake = brandDeny.isEmpty() ? resolveFeeRules(row) : Optional.empty();
+        LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
+        Optional<String> brandDeny = brandDenial(caller, row, today);
+        Optional<IntakeResolution> intake = brandDeny.isEmpty() ? resolveFeeRules(row, today) : Optional.empty();
         Map<String, Object> m = new LinkedHashMap<>();
-        ModelApplicationEvidence.Result gates = evidence.evaluate(row, LocalDate.now(ModelDraftPolicy.IST));
+        ModelApplicationEvidence.Result gates = evidence.evaluate(row, today);
         m.put("ready", brandDeny.isEmpty() && intake.isPresent() && gates.allMet());
         m.put("version", row.version());
         m.put("intakeNote", INTAKE_NOTE);
@@ -178,7 +181,7 @@ public class ModelApplicationSubmitService {
         return ResponseEntity.ok(m);
     }
 
-    private Optional<String> brandDenial(Caller caller, ModelApplicationRepository.Row row) {
+    private Optional<String> brandDenial(Caller caller, ModelApplicationRepository.Row row, LocalDate today) {
         if (row.brandId() == null) {
             return Optional.of("brand_not_permitted");
         }
@@ -186,7 +189,6 @@ public class ModelApplicationSubmitService {
             return Optional.of("validation_failed");
         }
         var memberships = identity.activeMemberships(caller.accountId());
-        LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
         var brandDecision = ModelDraftPolicy.brandForFiling(caller, memberships, row.brandId(), brands, brandService, today);
         if (!brandDecision.allowed()) {
             return Optional.of(brandDecision.denial());
@@ -194,11 +196,10 @@ public class ModelApplicationSubmitService {
         return Optional.empty();
     }
 
-    private Optional<IntakeResolution> resolveFeeRules(ModelApplicationRepository.Row row) {
+    private Optional<IntakeResolution> resolveFeeRules(ModelApplicationRepository.Row row, LocalDate today) {
         if (row.brandId() == null || !DraftRequestSupport.validCategory(row.category()) || !DraftRequestSupport.validModelNumber(row.modelNumber())) {
             return Optional.empty();
         }
-        LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
         Optional<gov.bee.api.masters.Masters.Category> cat = masters.category(row.category(), today);
         Optional<Standard> std = masters.standard(row.category(), "performance_test", today);
         Optional<FeeRule> fee = masters.feeRule(row.category(), "new_model", today);

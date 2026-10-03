@@ -34,11 +34,22 @@ const GATE_LABELS: Record<string, string> = {
 type Evidence = { laboratoryCode: string; testedOn: string; declaredIseer: string };
 const NO_EVIDENCE: Evidence = { laboratoryCode: "", testedOn: "", declaredIseer: "" };
 
+const ISEER_TEXT = /^\d{1,2}(\.\d{1,2})?$/;
+const ISEER_MESSAGE = "Declared efficiency must be a positive number up to 99.99 with at most two decimals.";
+
+/** Empty text means "not entered"; anything else must be a positive figure with at most two decimals, never silently dropped. */
+function parseIseer(text: string): { ok: true; value: number | null } | { ok: false } {
+  const t = text.trim();
+  if (t === "") return { ok: true, value: null };
+  if (!ISEER_TEXT.test(t)) return { ok: false };
+  const value = Number(t);
+  return value > 0 ? { ok: true, value } : { ok: false };
+}
+
 /** The write body for the evidence fields: an edit sends every field (an empty one clears it); a create sends only what is set. */
-function evidenceBody(e: Evidence, isEdit: boolean) {
+function evidenceBody(e: Evidence, iseer: number | null, isEdit: boolean) {
   const lab = e.laboratoryCode || null;
   const date = e.testedOn || null;
-  const iseer = e.declaredIseer.trim() === "" ? null : Number(e.declaredIseer);
   if (isEdit) return { laboratoryCode: lab, testedOn: date, declaredIseer: iseer };
   return {
     ...(lab ? { laboratoryCode: lab } : {}),
@@ -134,11 +145,19 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   }, [brands, brandId, isEdit]);
 
   const createPayload = useMemo(
-    () => ({ brandId, category: "RAC" as const, modelNumber: modelNumber.trim(), ...evidenceBody(evidence, false) }),
+    () => {
+      const iseer = parseIseer(evidence.declaredIseer);
+      return { brandId, category: "RAC" as const, modelNumber: modelNumber.trim(), ...evidenceBody(evidence, iseer.ok ? iseer.value : null, false) };
+    },
     [brandId, modelNumber, evidence],
   );
 
   async function saveDraft() {
+    const iseer = parseIseer(evidence.declaredIseer);
+    if (!iseer.ok) {
+      setError(ISEER_MESSAGE);
+      return;
+    }
     setLoading(true);
     setError(null);
     const patchBody = {
@@ -146,7 +165,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       category: "RAC" as const,
       modelNumber: modelNumber.trim(),
       ...(brandId ? { brandId } : {}),
-      ...evidenceBody(evidence, true),
+      ...evidenceBody(evidence, iseer.value, true),
     };
     const key = idemGate.current.keyFor(isEdit ? { ...patchBody, editId } : createPayload);
     const res = isEdit && editId

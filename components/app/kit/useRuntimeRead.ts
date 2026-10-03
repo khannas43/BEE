@@ -61,6 +61,13 @@ export function useRuntimeRead<R extends ReadLike>(
 ): R | null {
   const key = target === null ? null : `${revalidation.restores}:${target}`;
   const [state, setState] = useState<{ key: string; read: R } | null>(null);
+  // When the target goes away (a detail pane closes), forget its read: reopening the same target must show loading,
+  // not the old record. This is state derived from props, set during render rather than in an effect.
+  const [previousKey, setPreviousKey] = useState<string | null>(key);
+  if (previousKey !== key) {
+    setPreviousKey(key);
+    if (key === null) setState(null);
+  }
   useEffect(() => {
     if (key === null || target === null) return;
     let live = true;

@@ -83,7 +83,8 @@ public class ModelApplicationEvidence {
 
         var accreditation = date && row.laboratoryCode() != null
             ? masters.accreditation(row.laboratoryCode(), row.category(), row.testedOn()) : null;
-        boolean accredited = accreditation != null && accreditation.accredited();
+        // Active in the accreditation master on the test date AND still an active laboratory organisation now.
+        boolean accredited = accreditation != null && accreditation.accredited() && applications.laboratoryExists(row.laboratoryCode());
         var standard = date ? masters.applicableStandard(row.category(), STANDARD_PURPOSE, row.testedOn()) : Optional.<gov.bee.api.masters.Masters.Standard>empty();
         boolean standardOk = standard.isPresent();
         // A legacy row without a brand link is outside the uniqueness rule (it cannot be submitted anyway).

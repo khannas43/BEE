@@ -1,15 +1,11 @@
 # Current Cursor task
 
-**Holder:** cursor (handed over 3 October 2026)
+**Holder:** claude (no task handed over). Claude fills this file in when it hands the folder to Cursor, and resets it to this text when the task is merged.
 
-- **Brief:** `docs/cursor/BRIEF_03_REACT_TEST_RUNNER.md`
-- **Branch:** `cursor/react-test-runner` (already created and checked out by Claude)
-- **Additions or overrides:** none. Work only in this folder; no second clone or worktree. After `npm ci`, run `npm run setup:nosync`.
-- **Acceptance commands** (run in order, report totals):
-  1. `npm ci && npm run setup:nosync`
-  2. `npm run web:test:ui` (all new tests pass; any real kit defect goes in as `it.fails` and is reported)
-  3. `npm run web:test` (unchanged: 105 passing)
-  4. `npx tsc --noEmit`
-  5. `npm run build`
-- **Live checks:** none. Do not start the runtime; list any `local:*` check under "Not run".
-- **Finish with:** `/bee-handback`. Never push.
+When a task is handed over, this file contains:
+
+- **Brief:** the file in `docs/cursor/` to follow (for example `BRIEF_01_DRAFT_FORM_ON_KIT.md`).
+- **Branch:** `cursor/<task>`, already created and checked out by Claude.
+- **Additions or overrides:** anything that differs from the brief.
+- **Acceptance commands:** the exact commands to run and the results expected.
+- **Live checks:** which, if any, Cursor may run (it starts and stops the runtime itself); everything else goes under "Not run".

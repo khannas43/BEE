@@ -29,12 +29,20 @@ before(async () => {
     login: await import("../../app/api/auth/login/route.ts"),
     callback: await import("../../app/api/auth/callback/route.ts"),
     health: await import("../../app/api/runtime/health/route.ts"),
+    submit: await import("../../app/api/runtime/model-applications/[id]/submit/route.ts"),
+    brands: await import("../../app/api/runtime/model-applications/eligible-brands/route.ts"),
   };
 });
 
 const lines = () => readFileSync(join(LOG_DIR, "web-requests.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
 const byCorrelation = (id) => lines().filter((l) => l.correlationId === id);
-const req = (path, id, cookie) => new NextRequest(`http://127.0.0.1:3100${path}`, { headers: { "x-correlation-id": id, ...(cookie ? { cookie: `bee_session=${cookie}` } : {}) } });
+const discovery = { issuer: ISSUER, authorization_endpoint: `${ISSUER}/auth`, token_endpoint: `${ISSUER}/token`, end_session_endpoint: `${ISSUER}/logout`, jwks_uri: `${ISSUER}/certs` };
+const req = (path, id, cookie, init = {}) => new NextRequest(`http://127.0.0.1:3100${path}`, {
+  method: init.method || "GET",
+  headers: { "x-correlation-id": id, ...(cookie ? { cookie: `bee_session=${cookie}` } : {}), ...init.headers },
+  body: init.body,
+});
+const refreshRefusedStub = () => stubFetch(async (url) => (url.endsWith("openid-configuration") ? json(200, discovery) : json(400, { error: "invalid_grant", error_description: `Token is not active ${SECRET}` })));
 const seen = [];
 function stubFetch(handler) {
   globalThis.fetch = async (url, init) => {
@@ -52,7 +60,7 @@ const calls = [
 ];
 const path = (route) => route.replace("{id}", "00000000-0000-4000-c000-000000000002");
 
-test("Keycloak unreachable at sign-in start: 303 to identity_unavailable, logged under the request's correlation ID", async () => {
+test("unit-evidence: GET /api/auth/login 303 identity_unavailable | Keycloak unreachable at sign-in start", async () => {
   stubFetch(async () => { throw new TypeError("fetch failed"); });
   const res = await routes.login.GET(req("/api/auth/login?returnTo=/app", "unit-login-down"));
   assert.equal(res.status, 303);
@@ -62,46 +70,111 @@ test("Keycloak unreachable at sign-in start: 303 to identity_unavailable, logged
   assert.deepEqual(l.map((x) => [x.event, x.operation ?? x.route, x.status, x.outcome]), [["identity", "discovery", 0, "unreachable"], ["request", "/api/auth/login", 303, "identity_unavailable"]]);
 });
 
-test("Keycloak unreachable during refresh: 503 identity_unavailable on every session read, session kept, Spring not called", async () => {
+async function identityUnavailableOnSessionRead(route, call, id) {
   stubFetch(async () => { throw new TypeError("fetch failed"); });
   const cookie = nearExpiry();
-  for (const [route, call] of calls) {
-    seen.length = 0;
-    const id = `unit-idp-down-${route.length}`;
-    const res = await call(req(path(route), id, cookie));
-    const body = await res.json();
-    assert.equal(res.status, 503, route);
-    assert.deepEqual(body, { error: "identity_unavailable", message: contract["x-bee-error-codes"].identity_unavailable.message });
-    assert.deepEqual(lib.conforms(contract, route, "GET", { status: res.status, headers: res.headers, json: body }), [], route);
-    assert.equal(res.headers.get("set-cookie"), null, "the session cookie is not cleared");
-    assert.equal(seen.some((u) => u.includes(":8090")), false, "Spring is not called");
-    assert.deepEqual(byCorrelation(id).map((x) => [x.event, x.operation ?? x.route, x.outcome]), [["identity", "discovery", "unreachable"], ["request", route, "identity_unavailable"]]);
-  }
+  seen.length = 0;
+  const res = await call(req(path(route), id, cookie));
+  const body = await res.json();
+  assert.equal(res.status, 503, route);
+  assert.deepEqual(body, { error: "identity_unavailable", message: contract["x-bee-error-codes"].identity_unavailable.message });
+  assert.deepEqual(lib.conforms(contract, route, "GET", { status: res.status, headers: res.headers, json: body }), [], route);
+  assert.equal(res.headers.get("set-cookie"), null, "the session cookie is not cleared");
+  assert.equal(seen.some((u) => u.includes(":8090")), false, "Spring is not called");
+  assert.deepEqual(byCorrelation(id).map((x) => [x.event, x.operation ?? x.route, x.outcome]), [["identity", "discovery", "unreachable"], ["request", route, "identity_unavailable"]]);
   assert.ok(session.readSession(cookie), "session still present");
+}
+
+test("unit-evidence: GET /api/runtime/me 503 identity_unavailable | Keycloak unreachable during refresh", async () => {
+  await identityUnavailableOnSessionRead("/api/runtime/me", (r) => routes.me.GET(r), "unit-idp-down-me");
 });
 
-const discovery = { issuer: ISSUER, authorization_endpoint: `${ISSUER}/auth`, token_endpoint: `${ISSUER}/token`, end_session_endpoint: `${ISSUER}/logout`, jwks_uri: `${ISSUER}/certs` };
+test("unit-evidence: GET /api/runtime/model-applications 503 identity_unavailable | Keycloak unreachable during refresh", async () => {
+  await identityUnavailableOnSessionRead("/api/runtime/model-applications", (r) => routes.list.GET(r), "unit-idp-down-list");
+});
 
-test("Keycloak refusing the refresh with planted text: 401 session_expired or 503, only a fixed outcome logged", async () => {
-  stubFetch(async (url) => (url.endsWith("openid-configuration") ? json(200, discovery) : json(400, { error: "invalid_grant", error_description: `Token is not active ${SECRET}` })));
-  let cookie = nearExpiry();
-  let res = await routes.list.GET(req("/api/runtime/model-applications", "unit-refresh-refused", cookie));
+test("unit-evidence: GET /api/runtime/model-applications/{id} 503 identity_unavailable | Keycloak unreachable during refresh", async () => {
+  await identityUnavailableOnSessionRead("/api/runtime/model-applications/{id}", (r) => routes.detail.GET(r, { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) }), "unit-idp-down-detail");
+});
+
+test("unit-evidence: GET /api/runtime/model-applications 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.list.GET(req("/api/runtime/model-applications", "unit-refresh-refused", cookie));
   assert.equal(res.status, 401);
   assert.equal((await res.json()).error, "session_expired");
   assert.match(res.headers.get("set-cookie") ?? "", /^bee_session=;/);
   assert.deepEqual(byCorrelation("unit-refresh-refused").map((x) => [x.event, x.operation ?? x.route, x.status, x.outcome]),
     [["identity", "discovery", 200, "ok"], ["identity", "token.refresh", 400, "invalid_grant"], ["request", "/api/runtime/model-applications", 401, "session_expired"]]);
+});
 
+test("unit-evidence: GET /api/runtime/model-applications/{id}/submit 401 session_expired | Keycloak refusing refresh on submit preview", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.submit.GET(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/submit", "unit-submit-refresh-refused", cookie), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+  assert.match(res.headers.get("set-cookie") ?? "", /^bee_session=;/);
+  const submitLog = byCorrelation("unit-submit-refresh-refused").map((x) => [x.event, x.operation ?? x.route, x.status, x.outcome]);
+  assert.ok(submitLog.some((l) => l[0] === "identity" && l[1] === "token.refresh" && l[3] === "invalid_grant"));
+  assert.deepEqual(submitLog.filter((l) => l[0] === "request"), [["request", "/api/runtime/model-applications/{id}/submit", 401, "session_expired"]]);
+});
+
+test("unit-evidence: GET /api/runtime/model-applications/eligible-brands 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.brands.GET(req("/api/runtime/model-applications/eligible-brands", "unit-brands-refresh-refused", cookie));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.list.POST(req("/api/runtime/model-applications", "unit-create-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123456" },
+    body: "{}",
+  }));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: PATCH /api/runtime/model-applications/{id} 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.detail.PATCH(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002", "unit-patch-refresh-refused", cookie, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123457" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/submit 401 session_expired | Keycloak refusing refresh on submit", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.submit.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/submit", "unit-submit-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123458" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/me 503 identity_unavailable | Keycloak refresh error without grant detail", async () => {
   stubFetch(async () => json(500, { error: `${SECRET} SELECT password_hash`, error_description: SECRET }));
-  cookie = nearExpiry();
-  res = await routes.me.GET(req("/api/runtime/me", "unit-refresh-500", cookie));
+  const cookie = nearExpiry();
+  const res = await routes.me.GET(req("/api/runtime/me", "unit-refresh-500", cookie));
   assert.equal(res.status, 503);
   assert.equal((await res.json()).error, "identity_unavailable");
   assert.deepEqual(byCorrelation("unit-refresh-500").map((x) => [x.event, x.operation ?? x.route, x.status, x.outcome]),
     [["identity", "token.refresh", 500, "refused"], ["request", "/api/runtime/me", 503, "identity_unavailable"]]);
 });
 
-test("a callback with a planted code, state and session_state logs only the route, status and redirect code", async () => {
+test("unit-evidence: GET /api/auth/callback 303 login_expired | planted OAuth query values", async () => {
   stubFetch(async () => { throw new Error("no Keycloak or Spring call expected"); });
   seen.length = 0;
   const res = await routes.callback.GET(req(`/api/auth/callback?code=${SECRET}&state=${SECRET}&session_state=${SECRET}&iss=${SECRET}`, "unit-callback"));

@@ -215,6 +215,22 @@ class ModelApplicationSubmitDatabaseTest {
     }
 
     @Test
+    void runtimeRoleCannotExecutePrivilegedFunctions() {
+        assertEquals(false, db.queryForObject(
+            "SELECT has_function_privilege(current_user, '"
+                + MAIN + ".app_disposable_model_cleanup(uuid[])', 'EXECUTE')",
+            Boolean.class));
+        assertEquals(false, db.queryForObject(
+            "SELECT has_function_privilege(current_user, '"
+                + MAIN + ".master_supersede(text,text,integer,date,text,text,text,jsonb)', 'EXECUTE')",
+            Boolean.class));
+        assertThrows(Exception.class, () -> db.execute(
+            "SELECT " + MAIN + ".app_disposable_model_cleanup(ARRAY['00000000-0000-4000-0000-000000000001']::uuid[])"));
+        assertThrows(Exception.class, () -> db.execute(
+            "SELECT " + MAIN + ".master_supersede('master_category', 'RAC', 1, current_date, 'x', 'x', 'x', '{}'::jsonb)"));
+    }
+
+    @Test
     void runtimeRoleCannotImitateMaintenanceCleanup() {
         UUID id = insertDraft("NC-SUB-DENY");
         assertTrue(submissions.submit(id, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("24000.00"), "RAC:new_model", 2,

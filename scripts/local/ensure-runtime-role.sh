@@ -31,7 +31,9 @@ REVOKE INSERT, DELETE, UPDATE ON app.local_disposable_application FROM ${BEE_RUN
 GRANT SELECT ON app.local_disposable_application TO ${BEE_RUNTIME_DB_USER};
 REVOKE ALL ON FUNCTION app.app_disposable_model_cleanup(uuid[]) FROM ${BEE_RUNTIME_DB_USER};
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO ${BEE_RUNTIME_DB_USER};
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA app TO ${BEE_RUNTIME_DB_USER};
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app FROM ${BEE_RUNTIME_DB_USER};
 REVOKE CREATE ON SCHEMA app FROM ${BEE_RUNTIME_DB_USER};
+REVOKE EXECUTE ON FUNCTION app.master_supersede(text, text, integer, date, text, text, text, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.master_supersede(text, text, integer, date, text, text, text, jsonb) TO bee_app;
 SQL
 fi

@@ -43,7 +43,7 @@ function sqlMaint(q, allowFail = false) {
 const sql = sqlApp;
 
 function recordSubmit(method, status, code, r) {
-  const faux = contract.observationResponse(status, r?.body ?? null);
+  const faux = contract.observationFromBrowserFetch(r);
   contract.record({
     route: RUNTIME_SUBMIT, method, status, code: code ?? "-",
     ok: contract.conforms(doc, RUNTIME_SUBMIT, method, faux).length === 0,
@@ -90,7 +90,7 @@ function submitPayload(preview) {
 async function api(page, method, path, body, idem) {
   const headers = { "Content-Type": "application/json", ...(idem ? { "Idempotency-Key": idem } : {}) };
   const bodySnippet = body == null ? "undefined" : `JSON.stringify(${JSON.stringify(body)})`;
-  return page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store", headers: ${JSON.stringify(headers)}, body: ${bodySnippet} }).then(async (r) => ({ status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null) }))`);
+  return page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store", headers: ${JSON.stringify(headers)}, body: ${bodySnippet} }).then(async (r) => { const hs = {}; r.headers.forEach((v, k) => { hs[k] = v; }); return { status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null), headers: hs }; })`);
 }
 
 async function apiSubmit(page, method, id, body, idem) {

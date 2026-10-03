@@ -101,19 +101,20 @@ try {
 } catch (e) { tap = e.stdout?.toString() || ""; }
 const unitOk = new Set([...tap.matchAll(/^ok \d+ - (.+)$/gm)].map((m) => m[1].trim()));
 const unitFailed = [...tap.matchAll(/^not ok \d+ - (.+)$/gm)].map((m) => m[1].trim());
-const UNIT = {
-  identity_unavailable: "Keycloak unreachable during refresh: 503 identity_unavailable on every session read, session kept, Spring not called",
-  session_expired: "Keycloak refusing the refresh with planted text: 401 session_expired or 503, only a fixed outcome logged",
-  login: "Keycloak unreachable at sign-in start: 303 to identity_unavailable, logged under the request's correlation ID",
-  callback: "a callback with a planted code, state and session_state logs only the route, status and redirect code",
-};
+const UNIT_LINE = /^unit-evidence: (GET|POST|PATCH) (\S+) (\d+) (\S+)/;
+const unitByPair = new Map();
+for (const name of unitOk) {
+  const p = UNIT_LINE.exec(name);
+  if (p) unitByPair.set(key(p[2], p[1], Number(p[3]), p[4]), name);
+}
 function unitEvidence(p) {
   if (p.audience !== "browser" || p.route === "unmatched") return null;
-  const name = p.code === "identity_unavailable" || p.code === "session_expired" ? UNIT[p.code]
-    : p.route === "/api/auth/login" && p.status === 303 ? UNIT.login
-    : p.route === "/api/auth/callback" && p.status === 303 ? UNIT.callback : null;
-  return name && unitOk.has(name) ? `request-log.test.mjs: "${name.slice(0, 48)}..."` : null;
+  const label = unitByPair.get(key(p.route, p.method, p.status, p.code));
+  return label ? `request-log.test.mjs: ${label.split("|")[0].trim()}` : null;
 }
+const headerSentinelErrs = contract.conforms(doc, "/api/runtime/me", "GET", { status: 200, json: {}, text: "{}", headers: new Headers() });
+const unitSentinelSubmit = key("/api/runtime/model-applications/{id}/submit", "GET", 401, "session_expired");
+const unitSentinelFake = key("/api/runtime/contract-sentinel-untested", "GET", 200, "-");
 
 /* ---------- matrix ---------- */
 function browser405ViaWrongMethod(p) {
@@ -135,8 +136,14 @@ const browserUncovered = browserRows.filter((r) => !r.covered);
 const internalUncovered = internalRows.filter((r) => !r.covered);
 const count = (rs, f) => rs.filter(f).length;
 
-check("coverage.inputs", observed.length > 0 && unitFailed.length === 0 && unitOk.size >= 7 && reportNote.includes("all passed") && !reportNote.includes("STALE"),
-  `${observed.length} live observations from ${OBSERVED.replace(ROOT + "/", "")}; request-log.test.mjs ${unitOk.size} passed, ${unitFailed.length} failed; SpringContractTest report: ${reportNote}`);
+check("coverage.header-sentinel", headerSentinelErrs.some((e) => /header|content-type/i.test(e)),
+  `synthetic live response without contract headers is rejected (${headerSentinelErrs.slice(0, 2).join("; ") || "no errors"})`);
+check("coverage.unit-sentinel-unmapped", !unitByPair.has(unitSentinelFake),
+  `unit evidence is route-specific (${unitByPair.size} mapped pairs; fake route not credited)`);
+check("coverage.unit-sentinel-mapped", unitByPair.has(unitSentinelSubmit),
+  `submit GET 401 session_expired has a dedicated unit test (${unitSentinelSubmit})`);
+check("coverage.inputs", observed.length > 0 && unitFailed.length === 0 && unitByPair.size >= 11 && reportNote.includes("all passed") && !reportNote.includes("STALE"),
+  `${observed.length} live observations from ${OBSERVED.replace(ROOT + "/", "")}; request-log.test.mjs ${unitOk.size} passed (${unitByPair.size} unit-evidence pairs), ${unitFailed.length} failed; SpringContractTest report: ${reportNote}`);
 check("coverage.live-observations-conform", failedObs.length === 0 && undocumented.length === 0,
   `${observed.length - failedObs.length}/${observed.length} live observations conform to the artifact${failedObs.length ? `; failing: ${failedObs.slice(0, 4).map((o) => `${o.method} ${o.route} ${o.status} ${o.code} (${o.suite})`).join(", ")}` : ""}${undocumented.length ? `; undocumented: ${undocumented.slice(0, 4).join(", ")}` : ""}`);
 check("coverage.every-documented-pair-internal", internalUncovered.length === 0,

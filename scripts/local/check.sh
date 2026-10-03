@@ -56,6 +56,8 @@ append_own="$(psql_app -c "SELECT count(*) FROM pg_tables WHERE schemaname='app'
 check "db.append-only-owner" "$(ok test "$append_own" = 2)" "submission event/fee tables owned by bee_app (migrate login), not Spring runtime"
 runtime_ddl="$(docker exec -e PGPASSWORD="$BEE_RUNTIME_DB_PASSWORD" bee-local-postgres psql -h 127.0.0.1 -U "$BEE_RUNTIME_DB_USER" -d bee_app -c 'ALTER TABLE app.model_application_submission_event DISABLE TRIGGER reject_row_change' 2>&1 || true)"
 check "db.runtime-no-trigger-ddl" "$(ok grep -qiE 'must be owner|permission denied' <<<"$runtime_ddl")" "bee_runtime cannot disable append-only triggers ($(grep -oE 'must be owner|permission denied' <<<"$runtime_ddl" | head -1 | cut -c1-40))"
+runtime_fn="$(docker exec -e PGPASSWORD="$BEE_RUNTIME_DB_PASSWORD" bee-local-postgres psql -h 127.0.0.1 -U "$BEE_RUNTIME_DB_USER" -d bee_app -F ' ' -qtA -c "SELECT has_function_privilege('bee_runtime','app.app_disposable_model_cleanup(uuid[])','EXECUTE'), has_function_privilege('bee_runtime','app.master_supersede(text,text,integer,date,text,text,text,jsonb)','EXECUTE')" 2>/dev/null || echo "t t")"
+check "db.runtime-no-privileged-functions" "$(ok test "$runtime_fn" = "f f")" "bee_runtime EXECUTE on cleanup and master_supersede = ${runtime_fn:-unknown} (expected f f)"
 
 want="$(node "$ROOT/local/generate-fixtures.cjs" --counts)"
 got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.organisation), (SELECT count(*) FROM app.user_account), (SELECT count(*) FROM app.organisation_membership), (SELECT count(*) FROM app.role_assignment), (SELECT count(*) FROM app.role_assignment WHERE active), (SELECT count(*) FROM app.assignment)" 2>/dev/null || true)"

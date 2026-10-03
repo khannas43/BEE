@@ -52,14 +52,14 @@ function runtimeRoute(method, path) {
 function recordRuntime(method, path, r) {
   const route = runtimeRoute(method, path);
   const code = r.status >= 400 ? (r.body?.error ?? "-") : "-";
-  const faux = contract.observationResponse(r.status, r.body);
+  const faux = contract.observationFromBrowserFetch(r);
   contract.record({ route, method, status: r.status, code, ok: contract.conforms(doc, route, method, faux).length === 0 });
 }
 
 async function api(page, method, path, body, idem) {
   const headers = { "Content-Type": "application/json", ...(idem ? { "Idempotency-Key": idem } : {}) };
   const bodySnippet = body == null ? "undefined" : `JSON.stringify(${JSON.stringify(body)})`;
-  const r = await page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store", headers: ${JSON.stringify(headers)}, body: ${bodySnippet} }).then(async (r) => ({ status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null) }))`);
+  const r = await page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store", headers: ${JSON.stringify(headers)}, body: ${bodySnippet} }).then(async (r) => { const hs = {}; r.headers.forEach((v, k) => { hs[k] = v; }); return { status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null), headers: hs }; })`);
   recordRuntime(method, path, r);
   return r;
 }

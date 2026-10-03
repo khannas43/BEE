@@ -103,13 +103,19 @@ function record(o) {
   fs.appendFileSync(process.env.CONTRACT_OBSERVED, JSON.stringify({ ...o, source, suite: path.basename(require.main.filename) }) + "\n");
 }
 
-/** Minimal response shape for conforms() on browser fetch results (coverage evidence). */
-function observationResponse(status, json, correlationId = "712d8175-458a-40a8-bd86-29ebf2e79990") {
+/** Build a conforms() input from headers captured in the browser (page.eval fetch). */
+function observationFromBrowserFetch(r) {
   const headers = new Headers();
-  headers.set("Cache-Control", "no-store");
-  headers.set("Content-Type", "application/json");
-  headers.set("X-Correlation-Id", correlationId);
-  return { status, json, text: JSON.stringify(json ?? {}), headers };
+  if (r?.headers) {
+    if (typeof r.headers.forEach === "function") r.headers.forEach((v, k) => headers.set(k, v));
+    else for (const [k, v] of Object.entries(r.headers)) headers.set(k, v);
+  }
+  return {
+    status: r.status,
+    json: r.body ?? null,
+    text: JSON.stringify(r.body ?? {}),
+    headers,
+  };
 }
 
-module.exports = { FILE, load, validate, conforms, record, setSource, observationResponse };
+module.exports = { FILE, load, validate, conforms, record, setSource, observationFromBrowserFetch };

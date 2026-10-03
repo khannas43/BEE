@@ -222,3 +222,34 @@ export async function runtimeCommand<T>(
   }
   return { ok: false, replayed, failure: commandFailure(res.status, parsed) };
 }
+
+// ---- what to do after a command ----
+
+/**
+ * Whether the next send of the same payload must reuse the idempotency key.
+ * Reuse only when the outcome is unknown or still running: a network failure or 5xx may have committed on the server, and
+ * `idempotency_in_progress` means the first request has not finished, so a replay returns its stored result instead of
+ * repeating it. Success and every definite refusal start the next send as a new command.
+ */
+export function keepKeyAfter(result: CommandResult<unknown>): boolean {
+  if (result.ok) return false;
+  const f = result.failure;
+  return f.kind === "unavailable" || (f.kind === "conflict" && f.code === "idempotency_in_progress");
+}
+
+export interface FailureAdvice {
+  /** Offer "try again": the same payload can be sent again. */
+  retryable: boolean;
+  /** Offer "reload": the record changed since it was read, so re-read it before editing again. */
+  reload: boolean;
+  /** Offer the sign-in link. */
+  signIn: boolean;
+}
+
+export function commandAdvice(failure: CommandFailure): FailureAdvice {
+  return {
+    retryable: failure.kind === "unavailable" || (failure.kind === "conflict" && failure.code === "idempotency_in_progress"),
+    reload: failure.kind === "conflict" && failure.code === "version_conflict",
+    signIn: failure.kind === "session",
+  };
+}

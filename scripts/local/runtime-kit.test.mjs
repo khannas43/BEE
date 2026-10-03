@@ -142,3 +142,112 @@ test("runtimeCommand failure kinds", async () => {
   assert.equal(odd.failure.message, "The BEE service returned an unexpected response.");
   assert.equal(commandFailure(409, null).code, "");
 });
+
+// ---- what to do after a command ----
+import { commandAdvice, keepKeyAfter } from "../../lib/client/runtimeHttp.ts";
+import { createModelApplicationDraft, patchModelApplicationDraft } from "../../lib/client/runtimeModelDrafts.ts";
+import { previewModelApplicationSubmit, submitModelApplicationDraft } from "../../lib/client/runtimeModelSubmit.ts";
+import { listModelDocuments, uploadModelDocument } from "../../lib/client/runtimeModelDocuments.ts";
+
+test("the key is kept only when the outcome is unknown or still running", () => {
+  const fail = (failure) => ({ ok: false, replayed: false, failure });
+  assert.equal(keepKeyAfter({ ok: true, replayed: false, value: 1 }), false, "success: the next send is a new command");
+  assert.equal(keepKeyAfter(fail({ kind: "unavailable", message: "x" })), true, "a lost response may have committed");
+  assert.equal(keepKeyAfter(fail({ kind: "conflict", code: "idempotency_in_progress", message: "x" })), true, "the first request is still running");
+  for (const f of [
+    { kind: "validation", code: "validation_failed", message: "x" },
+    { kind: "denied", message: "x" },
+    { kind: "session", message: "x" },
+    { kind: "not_found", message: "x" },
+    { kind: "conflict", code: "version_conflict", message: "x" },
+    { kind: "conflict", code: "idempotency_key_conflict", message: "x" },
+    { kind: "conflict", code: "duplicate_model", message: "x" },
+  ]) {
+    assert.equal(keepKeyAfter(fail(f)), false, `${f.kind} ${f.code ?? ""}: a definite answer`);
+  }
+});
+
+test("failure advice: retry, reload or sign in, never more than one", () => {
+  assert.deepEqual(commandAdvice({ kind: "unavailable", message: "x" }), { retryable: true, reload: false, signIn: false });
+  assert.deepEqual(commandAdvice({ kind: "conflict", code: "version_conflict", message: "x" }), { retryable: false, reload: true, signIn: false });
+  assert.deepEqual(commandAdvice({ kind: "conflict", code: "idempotency_in_progress", message: "x" }), { retryable: true, reload: false, signIn: false });
+  assert.deepEqual(commandAdvice({ kind: "session", message: "x" }), { retryable: false, reload: false, signIn: true });
+  assert.deepEqual(commandAdvice({ kind: "validation", code: "validation_failed", message: "x" }), { retryable: false, reload: false, signIn: false });
+});
+
+// ---- the clients that now run on the kit ----
+const APP = { id: "3d6f0a8e-0000-4000-a000-000000000009", reference: "LOCAL-MA-0100", version: 1 };
+
+test("draft create and edit send JSON with the key and report replays and refusals", async () => {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init) => {
+    calls.push({ path, init });
+    return json(init.method === "POST" ? 201 : 200, APP, init.method === "PATCH" ? { "Idempotency-Replayed": "true" } : {});
+  };
+  try {
+    const created = await createModelApplicationDraft({ brandId: "b", category: "RAC", modelNumber: "M-1" }, KEY);
+    assert.deepEqual([created.ok, created.application.id, created.replayed], [true, APP.id, false]);
+    const patched = await patchModelApplicationDraft(APP.id, { version: 1, category: "RAC", modelNumber: "M-1", declaredIseer: null }, KEY);
+    assert.deepEqual([patched.ok, patched.replayed], [true, true]);
+    assert.equal(calls[0].path, "/api/runtime/model-applications");
+    assert.equal(calls[1].path, `/api/runtime/model-applications/${APP.id}`);
+    assert.equal(calls[1].init.method, "PATCH");
+    assert.match(calls[1].init.body, /"declaredIseer":null/, "an explicit null reaches the server");
+    globalThis.fetch = async () => json(409, { error: "version_conflict", message: "The record has changed since it was loaded." });
+    const stale = await patchModelApplicationDraft(APP.id, { version: 0, category: "RAC", modelNumber: "M-1" }, KEY);
+    assert.deepEqual([stale.ok, stale.failure.kind, stale.failure.code], [false, "conflict", "version_conflict"]);
+    const noKey = await createModelApplicationDraft({ brandId: "b", category: "RAC", modelNumber: "M-1" }, "short");
+    assert.equal(noKey.failure.kind, "validation");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("submit preview is a kit read and submit a kit command with the fee snapshot", async () => {
+  const realFetch = globalThis.fetch;
+  const fee = { amountInr: "24000.00", currency: "INR", feeRuleKey: "RAC:new_model", feeRuleVersion: 2, verificationStatus: "provisional", localDemoFee: true, label: "x" };
+  try {
+    globalThis.fetch = async () => json(200, { ready: false, version: 3, intakeNote: "n", evidenceGates: [] });
+    const preview = await previewModelApplicationSubmit(APP.id);
+    assert.deepEqual([preview.ok, preview.preview.version], [true, 3]);
+    globalThis.fetch = async () => json(404, { error: "not_found", message: "which" });
+    const missing = await previewModelApplicationSubmit(APP.id);
+    assert.deepEqual([missing.ok, missing.failure.kind], [false, "not_found"]);
+    let seen;
+    globalThis.fetch = async (path, init) => {
+      seen = { path, init };
+      return json(200, { ...APP, state: "fee_due", submissionFee: fee });
+    };
+    const done = await submitModelApplicationDraft(APP.id, 3, { amountInr: "24000.00", feeRuleKey: "RAC:new_model", feeRuleVersion: 2 }, KEY);
+    assert.deepEqual([done.ok, done.application.state, done.submissionFee.amountInr], [true, "fee_due", "24000.00"]);
+    assert.equal(seen.path, `/api/runtime/model-applications/${APP.id}/submit`);
+    assert.equal(JSON.parse(seen.init.body).version, 3);
+    globalThis.fetch = async () => json(409, { error: "duplicate_model", message: "Another application already holds this brand and model number." });
+    const dup = await submitModelApplicationDraft(APP.id, 3, { amountInr: "24000.00", feeRuleKey: "RAC:new_model", feeRuleVersion: 2 }, KEY);
+    assert.deepEqual([dup.ok, dup.failure.kind, dup.failure.code, dup.failure.message], [false, "conflict", "duplicate_model", "Another application already holds this brand and model number."]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("document list is a kit read and upload a multipart kit command that reports a replay", async () => {
+  const doc = { id: "d1", documentKind: "test_report", verificationStatus: "pending_local_verification", verificationNote: "n", versions: [] };
+  const list = await listModelDocuments(APP.id, async () => json(200, { items: [doc], count: 1, authority: "spring-database", verificationNote: "n", localStore: true }));
+  assert.deepEqual([list.ok, list.list.count], [true, 1]);
+  const odd = await listModelDocuments(APP.id, async () => json(200, { items: [{ nope: 1 }], count: 1, authority: "spring-database" }));
+  assert.equal(odd.failure.message, "The BEE service returned an unexpected response.");
+  let seen;
+  const file = new File([new Uint8Array([37, 80, 68, 70])], "report.pdf", { type: "application/pdf" });
+  const up = await uploadModelDocument(APP.id, { file, reportLabel: "Lab A" }, KEY, async (path, init) => {
+    seen = { path, init };
+    return json(201, doc, { "Idempotency-Replayed": "true" });
+  });
+  assert.deepEqual([up.ok, up.value.id, up.replayed], [true, "d1", true]);
+  assert.equal(seen.init.body.get("documentKind"), "test_report");
+  assert.equal(seen.init.body.get("reportLabel"), "Lab A");
+  assert.equal(seen.init.body.get("file").name, "report.pdf");
+  assert.equal("Content-Type" in seen.init.headers, false, "the browser sets the multipart boundary");
+  const refused = await uploadModelDocument(APP.id, { file, reportLabel: "Lab A" }, KEY, async () => json(403, { error: "not_editable", message: "Only draft applications can be edited." }));
+  assert.deepEqual([refused.ok, refused.failure.kind, refused.failure.message], [false, "denied", "Only draft applications can be edited."]);
+});

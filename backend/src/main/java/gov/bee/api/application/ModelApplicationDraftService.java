@@ -313,7 +313,8 @@ public class ModelApplicationDraftService {
         return m;
     }
 
-    static Map<String, Object> view(ModelApplicationRepository.Row r, ReadScope scope) {
+    /** The API view of an application; public so a command in another package can return the updated record. */
+    public static Map<String, Object> view(ModelApplicationRepository.Row r, ReadScope scope) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", r.id().toString());
         m.put("reference", r.reference());

@@ -2,13 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/app/ScreenScaffold";
+import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
 import {
   documentContentPath,
   listModelDocuments,
   uploadModelDocument,
   type ModelDocument,
 } from "@/lib/client/runtimeModelDocuments";
-import { PayloadKeyGate } from "@/lib/client/runtimeHttp";
+
+type UploadInput = { applicationId: string; file: File; label: string };
+
+// Stable for useCommand: one key per exact payload, so a lost-response retry replays and a different file or label is new.
+const runUpload = (p: UploadInput, key: string) => uploadModelDocument(p.applicationId, { file: p.file, reportLabel: p.label }, key);
+const uploadSignature = (p: UploadInput) => [p.applicationId, p.file.name, p.file.size, p.file.lastModified, p.label];
 
 /** Contextual test-report intake on the draft form (WP06.1a). Not a top-level menu. */
 export function DraftTestReports({ applicationId }: { applicationId: string }) {
@@ -16,10 +22,8 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
-  const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  // One key per exact payload (kit PayloadKeyGate): a different file or label gets a fresh key, a retry reuses it.
-  const keyGate = useRef(new PayloadKeyGate());
+  const upload = useCommand(runUpload, uploadSignature);
 
   const apply = useCallback((res: Awaited<ReturnType<typeof listModelDocuments>>) => {
     if (!res.ok) {
@@ -51,16 +55,9 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
       setError("Choose a PDF and enter a report label.");
       return;
     }
-    setBusy(true);
     setError(null);
-    const key = keyGate.current.keyFor([file.name, file.size, file.lastModified, label.trim()]);
-    const res = await uploadModelDocument(applicationId, { file, reportLabel: label.trim() }, key);
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.failure.message);
-      return;
-    }
-    keyGate.current.clear();
+    const result = await upload.execute({ applicationId, file, label: label.trim() });
+    if (!result?.ok) return;
     setLabel("");
     if (fileRef.current) fileRef.current.value = "";
     await refresh();
@@ -74,7 +71,16 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
       <p className="font-body-sm text-on-surface-variant" data-testid="model-doc-verification-note">
         {note ?? "Local store only — pending verification. Upload does not claim laboratory accreditation, malware clearance or BEE approval."}
       </p>
-      <div className="mt-space-md space-y-space-sm">
+      <CommandPanel
+        className="mt-space-md space-y-space-sm"
+        state={upload.state}
+        onRun={() => void onUpload()}
+        runLabel="Upload test report"
+        busyLabel="Uploading…"
+        runTestId="model-doc-upload"
+        errorTestId="model-doc-error"
+        signInReturnTo="/app/model-label/new-model-application"
+      >
         <label className="block font-label-sm text-on-surface-variant">
           Report label
           <input
@@ -94,18 +100,9 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
             data-testid="model-doc-file"
           />
         </label>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void onUpload()}
-          className="w-full border border-primary text-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
-          data-testid="model-doc-upload"
-        >
-          {busy ? "Uploading…" : "Upload test report"}
-        </button>
-      </div>
+      </CommandPanel>
       {error ? (
-        <p className="text-error font-body-sm mt-space-sm" data-testid="model-doc-error">
+        <p className="text-error font-body-sm mt-space-sm" data-testid="model-doc-input-error">
           {error}
         </p>
       ) : null}

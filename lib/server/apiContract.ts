@@ -72,7 +72,7 @@ export const errorBody = (code: ErrorCode): ErrorBody => ({ error: code, message
 /** Status and code pairs a Spring operation may return (its contract x-error-codes, minus 500). */
 export type UpstreamErrors = Readonly<Record<number, readonly ErrorCode[]>>;
 
-const RESOLVER_DENIALS = ["mfa_required", "no_active_account", "no_effective_role"] as const;
+export const RESOLVER_DENIALS = ["mfa_required", "no_active_account", "no_effective_role"] as const;
 
 export const SPRING_ME_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
@@ -97,11 +97,11 @@ export interface Me {
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const isString = (v: unknown): v is string => typeof v === "string";
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isString = (v: unknown): v is string => typeof v === "string";
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Exactly these keys: every required one present, nothing else. */
-function exactKeys(v: unknown, required: readonly string[], optional: readonly string[] = []): v is Record<string, unknown> {
+export function exactKeys(v: unknown, required: readonly string[], optional: readonly string[] = []): v is Record<string, unknown> {
   if (!isObject(v)) return false;
   const keys = Object.keys(v);
   return required.every((k) => keys.includes(k)) && keys.every((k) => required.includes(k) || optional.includes(k));

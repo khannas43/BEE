@@ -8,7 +8,7 @@
 3. **Revisit at the start of each wave** and at the end of each activity: scan the rows whose "Revisit at" matches, and close or re-date them.
 4. **Statuses:** `open`, `scheduled` (owned by a named package), `accepted limit` (a known limit the owner accepted; keep the row), `done` (kept for history, with the commit).
 
-Last updated: 3 October 2026 (WP05.1d added).
+Last updated: 3 October 2026 (command panel and feature template added).
 
 ## A. Deferred from the WP06.1a reviews (four rounds, no high-severity findings)
 
@@ -33,11 +33,11 @@ Last updated: 3 October 2026 (WP05.1d added).
 | --- | --- | --- | --- | --- |
 | BL-020 | Paged, filtered, sortable server-scoped table | The dashboard shows the whole scoped list; larger lists need paging, and paging is a contract change | first screen with a long list; WP05 broader | open |
 | BL-021 | Tabs for a record's contextual panels (documents, history, approvals) | 55 of the matrix rows are contextual tabs | Wave 1 (inbox and approval views), Wave 2 | open |
-| BL-022 | Command panel component (button, busy state, conflict banner) around `runtimeCommand` | Finance confirmation and every scrutiny and approval action need the same behaviour | Wave 1, first command screen | open |
+| BL-022 | Command panel component (button, busy state, conflict banner) around `runtimeCommand` | Finance confirmation and every scrutiny and approval action need the same behaviour | built: `useCommand` and `CommandPanel` in `components/app/kit/CommandPanel.tsx`, used by the test-report upload; the submit and draft-save flows still have their own buttons | done |
 | BL-023 | Generic document card (`DraftTestReports` is the model) | Needed when a second document kind exists | WP06.2, WP05.1d follow-up | open |
-| BL-024 | Backend feature template or generator: Spring command and read, BFF route and validator, client helper, contract entry, test skeletons | A new feature touches about 40 files (WP06.1a: 42); WP05.1d, with no new route, still touched 24 files and needed the contract artifact, two validators, a hard-coded stand-in table and three live scripts updated by hand; the plan's biggest speed-up | Wave 1 | open |
+| BL-024 | Backend feature template or generator (PARTLY DONE: `scripts/local/new-feature.cjs` scaffolds a POST command on `/api/model-applications/{id}/<segment>` and registers it, `wiring-check.cjs` verifies every documented route, both described in `docs/kit/FEATURE_TEMPLATE.md`; what remains is BL-078 to BL-082): Spring command and read, BFF route and validator, client helper, contract entry, test skeletons | A new feature touches about 40 files (WP06.1a: 42); WP05.1d, with no new route, still touched 24 files and needed the contract artifact, two validators, a hard-coded stand-in table and three live scripts updated by hand; the plan's biggest speed-up | Wave 1 | open |
 | BL-025 | Split `bee-local-api.openapi.json`, `contract-pin.json` and the coverage inputs per module, merged by a script | These files change on every feature and block parallel work | with BL-024 | open |
-| BL-026 | Migrate `runtimeModelDocuments.ts`, `runtimeModelSubmit.ts` and the write half of `runtimeModelDrafts.ts` onto `runtimeRead` and `runtimeCommand` | They keep their own copies of the failure mapping and fetch code; `runtimeCommand` has no production caller yet, so its unit tests prove a path the product does not run until the first Wave 1 command screen or this migration | next time each is changed | open |
+| BL-026 | Migrate `runtimeModelDocuments.ts`, `runtimeModelSubmit.ts` and the write half of `runtimeModelDrafts.ts` onto `runtimeRead` and `runtimeCommand` | They kept their own copies of the failure mapping and fetch code | done: all three now run on the kit transport (one unused-variable lint warning went with the rewrite); unit tests cover each client through a fake fetch | done |
 | BL-027 | Unit tests for the hooks (`useRuntimeRead`, `useRevalidation`); the repo has no React test runner | Today the hooks are proven only by `local:read-ui` (26/26 live) | when a React test runner is added | open |
 
 ## C. Tooling and process
@@ -99,3 +99,14 @@ Last updated: 3 October 2026 (WP05.1d added).
 | BL-074 | V24's unique index fails the migration on any database that already holds two live (non-draft, non-rejected) applications with the same brand and model number | It fails loudly with a unique violation and no data change; V24 is already applied here, so any change is a new migration (V25), not an edit | next environment that holds legacy data | accepted limit |
 | BL-075 | The advisory-lock wait is bounded (10 s `lock_timeout`, a retryable 503) but there is no test that waits that long | The bound is untested; a test would need a configurable timeout | next time the lock is touched | open |
 | BL-076 | `useRuntimeRead`'s reset when a target goes away (open, close, reopen) has no unit test because the repo has no React test runner | Proven only by reading the code; see BL-027 | when a React test runner is added | open |
+
+## H. Command panel and feature template
+
+| ID | Item | Why it matters | Owner / revisit at | Status |
+| --- | --- | --- | --- | --- |
+| BL-078 | The scaffolder covers only a POST command on `/api/model-applications/{id}/<segment>`; read routes, collection routes, other resources and PATCH are not generated | Wave 2 and later need reads and other resources; extend it when the first one appears | first non-command feature | open |
+| BL-079 | `contract-coverage.cjs` `springEvidence()` hard-codes which MockMvc test covers which route | Every new route needs a hand edit there; an annotation or a convention in the test name would make it data-driven | with BL-025 | open |
+| BL-080 | The stand-in tables in `contract-check.cjs` (`SUBMIT_UPSTREAM` and the like) are hard-coded per route and must equal the artifact's `x-error-codes` | They drifted once already (WP05.1d); generating them from the artifact would remove the duplicate | with BL-025 | open |
+| BL-081 | No skeletons for the database test or the `SpringContractTest` section (the `@MockitoBean`, the documented-pairs test) | Both are the longest hand-written parts of a feature; the output names them but does not generate them | when the first generated command is implemented | open |
+| BL-082 | `CommandPanel` is used by the test-report upload only; the draft save and the submit confirm still use their own buttons and state | Two places show command failures differently until they move onto `useCommand` | next change to the draft form | open |
+

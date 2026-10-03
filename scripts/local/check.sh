@@ -205,6 +205,10 @@ read -r doc_pass doc_fail <<<"$(sed -nE 's/^model-documents checks: ([0-9]+) pas
 if [[ -z "${doc_pass:-}" ]]; then check "documents.run" 0 "model-documents-browser-check did not complete: $(tail -1 <<<"$mdoc_out")"
 else pass=$((pass + doc_pass)); fail=$((fail + doc_fail)); fi
 
+# ---- route wiring: every documented route is registered everywhere a route must be (static; names the missing file)
+if wiring_out="$(node "$ROOT/scripts/local/wiring-check.cjs" 2>&1)"; then check "wiring.routes" 1 "$(tail -1 <<<"$wiring_out")"
+else check "wiring.routes" 0 "$(grep -E '^FAIL' <<<"$wiring_out" | head -3 | tr '\n' ';') $(tail -1 <<<"$wiring_out")"; fi
+
 # ---- WP03.3 coverage: every documented (operation, status, code) has live, stand-in, MockMvc or unit evidence
 cv_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/contract-coverage.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$cv_out"

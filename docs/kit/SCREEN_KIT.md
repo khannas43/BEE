@@ -35,6 +35,8 @@ The model dashboard (`components/app/lifecycle/ModelDashboard.tsx`) is the worke
 
 ## Recipe for a command (write)
 
+For a new command start from the scaffolder ([FEATURE_TEMPLATE.md](FEATURE_TEMPLATE.md)), which generates this client and the backend. The screen side is:
+
 1. In the client module: `runtimeCommand(path, "POST" | "PATCH", payload, key, parse)`. Include the record `version` in the payload for edits and transitions.
 2. In the component: `const gate = useRef(new PayloadKeyGate())`; send with `gate.current.keyFor(payloadSignature)`; call `gate.current.clear()` only after a known outcome (success or a definite refusal).
 3. Show `failure.message` for `denied`, `validation` and `conflict`; for `conflict` with `version_conflict` re-read the record; for `session` show the sign-in link.
@@ -50,13 +52,13 @@ The model dashboard (`components/app/lifecycle/ModelDashboard.tsx`) is the worke
 
 - Paged, filtered, sortable server-scoped table (the dashboard shows the whole scoped list).
 - Tabs for a record's contextual panels (documents, history, approvals).
-- A command panel component (button, busy state, conflict banner) around `runtimeCommand`. Wave 1's Finance confirmation is the first user.
+- Wider use of the command panel: it exists (`useCommand` and `CommandPanel`) and the test-report upload uses it; the draft save and submit confirm do not yet (BL-082).
 - A generic document card: `DraftTestReports` is the model; generalise it when a second document kind exists.
-- The backend half: a feature template or generator for the Spring command, BFF route and validator, client helper, contract entry and test skeletons, and splitting the OpenAPI artifact per module.
+- The rest of the backend half: the feature template exists for POST commands (see [FEATURE_TEMPLATE.md](FEATURE_TEMPLATE.md)); reads, other resources, test skeletons and splitting the OpenAPI artifact per module are open (BL-024, BL-078 to BL-082).
 
-## Migration backlog (still on their own transport code)
+## Migration status
 
-`lib/client/runtimeModelDocuments.ts`, `runtimeModelSubmit.ts` and the write half of `runtimeModelDrafts.ts` keep their own copies of the failure mapping and fetch code. They work and are covered by live checks; move them onto `runtimeCommand` and `runtimeRead` the next time each is changed. `runtimeModelApplications.ts` and the model dashboard are already on the kit; the draft form and document card use `PayloadKeyGate`.
+Every client module is now on the kit transport: `runtimeModelApplications.ts`, `runtimeModelDrafts.ts`, `runtimeModelSubmit.ts` and `runtimeModelDocuments.ts` use `runtimeRead` and `runtimeCommand`, and the test-report upload uses `useCommand` and `CommandPanel`. The draft save and submit confirm in `NewModelApplication.tsx` still keep their own state and buttons (BL-082).
 
 ## Evidence
 

@@ -62,4 +62,4 @@ Every client module is now on the kit transport: `runtimeModelApplications.ts`, 
 
 ## Evidence
 
-`runtime-kit.test.mjs` (10 tests) covers failure mapping, `runtimeRead`, the signed-out gate, `PayloadKeyGate` and `runtimeCommand` (JSON, multipart, key validation, every failure kind). The hooks have no unit tests because the repository has no React test runner; they are proven by `local:read-ui` (26/26 against the real stack: sign-in with TOTP, cross-organisation and unknown ids, expiry, revocation, outage), which exercises the migrated dashboard.
+`runtime-kit.test.mjs` (10 tests) covers failure mapping, `runtimeRead`, the signed-out gate, `PayloadKeyGate` and `runtimeCommand` (JSON, multipart, key validation, every failure kind). The hooks and panels are covered by `npm run web:test:ui` (see [UI_TESTS.md](UI_TESTS.md)). The live `local:read-ui` check still exercises the migrated dashboard against the real stack (sign-in with TOTP, cross-organisation and unknown ids, expiry, revocation, outage).

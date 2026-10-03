@@ -188,6 +188,6 @@ Generated from the screen matrix. Status is as of 3 October 2026. "Not started" 
 | 1 | Accept the tiers: finish Tier A first, then Tier B, before breadth? | Before Wave 1 | Yes |
 | 2 | Accept the review policy in section 4 (one review per activity, backlog for low findings)? | Now | Yes |
 | 3 | Allow parallel agents on separate branches after the kit exists? | End of Wave 1 | Not until the kit and split contract are in |
-| 4 | Is a test report required before `fee_due` (WP05.1d)? Which laboratory accreditation and test-date rules apply? | Before WP05.1d | Not required; display only (current behaviour) |
+| 4 | The WP05.1d questions (test report required, laboratory accreditation, test date, uniqueness, standard, post-return uploads): see [WP05.1d_DECISIONS.md](wp05/WP05.1d_DECISIONS.md) | Before WP05.1d | Not required; display only (current behaviour); my recommendation is to require them |
 | 5 | Who may close or supersede a master version (M6), and the approved fee and rating formula? | Before Wave 2 admin screens | Provisional values shown as such |
 | 6 | Re-estimate point: confirm the end of Wave 1 as the checkpoint to replace the carried-over person-day figures | End of Wave 1 | Yes |

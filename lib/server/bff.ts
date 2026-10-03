@@ -6,6 +6,7 @@
 import "server-only";
 import { fromUpstream, isErrorCode, type UpstreamErrors, type Validator } from "@/lib/server/apiContract";
 import { callBeeApi, callBeeApiBinary } from "@/lib/server/beeApi";
+import { readBoundedBody } from "@/lib/server/boundedBody";
 import { correlationIdOf, errorResponse, jsonResponse, setOutcome, withContractHeaders } from "@/lib/server/http";
 import { activeSession, clearSessionCookie, sessionCookieOf } from "@/lib/server/session";
 import type { NextRequest } from "next/server";
@@ -96,13 +97,14 @@ export async function sessionWriteMultipart<T>(
   if (!MULTIPART.test(contentType) || declared > MAX_MULTIPART_BYTES) {
     return errorResponse("validation_failed", 422, correlationId);
   }
-  let bytes: ArrayBuffer;
+  // Content-Length can be absent or wrong, so the limit is enforced while reading, not only up front.
+  let bytes: ArrayBuffer | null;
   try {
-    bytes = await request.arrayBuffer();
+    bytes = await readBoundedBody(request, MAX_MULTIPART_BYTES);
   } catch {
     return errorResponse("validation_failed", 422, correlationId);
   }
-  if (bytes.byteLength === 0 || bytes.byteLength > MAX_MULTIPART_BYTES) {
+  if (!bytes || bytes.byteLength === 0) {
     return errorResponse("validation_failed", 422, correlationId);
   }
   const api = await callBeeApi(springPath, {

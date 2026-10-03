@@ -25,11 +25,11 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -44,12 +44,13 @@ public class DocumentService {
     static final String KIND_TEST_REPORT = "test_report";
     static final String VERIFICATION_NOTE =
         "Local store only — pending verification. Upload does not claim laboratory accreditation, malware clearance or BEE approval.";
-    private static final Pattern SAFE_FILENAME = Pattern.compile("^[A-Za-z0-9._ -]{1,180}\\.pdf$", Pattern.CASE_INSENSITIVE);
+    private static final int MAX_STEM = 176;
     private static final byte[] PDF_MAGIC = "%PDF-".getBytes(StandardCharsets.US_ASCII);
 
     private final IdentityRepository identity;
     private final ModelApplicationRepository applications;
     private final DocumentRepository documents;
+    private final DocumentRecorder recorder;
     private final LocalSha256FileStore store;
     private final BrandAuthRepository brands;
     private final BrandAuthService brandService;
@@ -57,11 +58,12 @@ public class DocumentService {
     private final ObjectMapper json;
 
     public DocumentService(IdentityRepository identity, ModelApplicationRepository applications,
-                           DocumentRepository documents, LocalSha256FileStore store, BrandAuthRepository brands,
+                           DocumentRepository documents, DocumentRecorder recorder, LocalSha256FileStore store, BrandAuthRepository brands,
                            BrandAuthService brandService, IdempotencyRepository idempotency, ObjectMapper json) {
         this.identity = identity;
         this.applications = applications;
         this.documents = documents;
+        this.recorder = recorder;
         this.store = store;
         this.brands = brands;
         this.brandService = brandService;
@@ -105,7 +107,7 @@ public class DocumentService {
             if (bytes.isEmpty() || bytes.get().length != version.get().sizeBytes()) {
                 return error(HttpStatus.SERVICE_UNAVAILABLE, "service_unavailable");
             }
-            String filename = version.get().originalFilename().replace("\"", "");
+            String filename = asciiHeaderFilename(version.get().originalFilename());
             return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
@@ -134,10 +136,10 @@ public class DocumentService {
         if (lab != null && lab.length() > 120) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
-        String filename = sanitizeFilename(file == null ? null : file.getOriginalFilename());
-        if (filename == null || file == null || file.isEmpty()) {
+        if (file == null || file.isEmpty()) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
+        String filename = sanitizeFilename(file.getOriginalFilename());
         final byte[] fileBytes;
         try {
             fileBytes = readLimited(file);
@@ -175,7 +177,8 @@ public class DocumentService {
         }
 
         /*
-         * Consistency: commit content-addressed blob, then insert metadata in a DB transaction.
+         * Consistency: commit the content-addressed blob, then write metadata and complete the idempotency
+         * record in one DB transaction (DocumentRecorder).
          * Orphan blobs after a DB failure are harmless (addressed by hash). Missing blobs after
          * a successful insert surface as 503 on read.
          */
@@ -199,19 +202,15 @@ public class DocumentService {
         }
 
         try {
-            DocumentRepository.DocumentRow doc = documents.recordVersion(
-                appId, KIND_TEST_REPORT, UUID.randomUUID(), sha, size, "application/pdf",
-                filename, label, testedOn.orElse(null), lab, caller.accountId());
-            Map<String, Object> view = documentView(doc, documents.listVersions(doc.id()));
-            if (!view.containsKey("latestVersion")) {
-                abandon(caller, appId, idempotencyKey);
-                return error(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error");
-            }
-            int recordVersion = ((Number) ((Map<?, ?>) view.get("latestVersion")).get("versionNumber")).intValue();
-            idempotency.complete(caller.accountId(), "POST", ROUTE_UPLOAD, appId, idempotencyKey, 201, writeJson(view),
-                recordVersion);
-            return ResponseEntity.status(HttpStatus.CREATED).body(view);
+            DocumentRecorder.Recorded recorded = recorder.record(caller.accountId(), appId, idempotencyKey,
+                new DocumentRecorder.NewVersion(sha, size, filename, label, testedOn.orElse(null), lab),
+                r -> writeJson(documentView(r.document(), r.versions())));
+            return ResponseEntity.status(HttpStatus.CREATED).body(documentView(recorded.document(), recorded.versions()));
+        } catch (DocumentRecorder.Denied denied) {
+            abandon(caller, appId, idempotencyKey);
+            return error(denied.status(), denied.code());
         } catch (Exception e) {
+            // Everything the recorder did (metadata and idempotency completion) rolled back together.
             abandon(caller, appId, idempotencyKey);
             return error(HttpStatus.SERVICE_UNAVAILABLE, "service_unavailable");
         }
@@ -377,20 +376,45 @@ public class DocumentService {
         }
     }
 
-    private static String sanitizeFilename(String raw) {
-        if (raw == null) {
-            return null;
+    /**
+     * The stored display name: path stripped, anything outside letters, digits and ._ ()[]+,- replaced, always
+     * ending in .pdf and at most 180 characters. Never rejects; the bytes are judged by the PDF check, not the name.
+     */
+    static String sanitizeFilename(String raw) {
+        String base = raw == null ? "" : raw.replace('\\', '/');
+        base = base.substring(base.lastIndexOf('/') + 1);
+        StringBuilder out = new StringBuilder();
+        base.codePoints().forEach(cp -> {
+            if (Character.isLetterOrDigit(cp) || isCombiningMark(cp) || "._ ()[]+,-".indexOf(cp) >= 0) {
+                out.appendCodePoint(cp);
+            } else {
+                out.append('_');
+            }
+        });
+        String name = out.toString().replaceAll("\\s+", " ").trim().replaceAll("^[.\\s]+", "");
+        String stem = name.toLowerCase(Locale.ROOT).endsWith(".pdf") ? name.substring(0, name.length() - 4) : name;
+        stem = stem.trim();
+        if (stem.isEmpty()) {
+            stem = "report";
         }
-        String base = raw.replace('\\', '/');
-        int slash = base.lastIndexOf('/');
-        if (slash >= 0) {
-            base = base.substring(slash + 1);
+        if (stem.length() > MAX_STEM) {
+            stem = stem.substring(0, MAX_STEM);
+            if (Character.isHighSurrogate(stem.charAt(stem.length() - 1))) {
+                stem = stem.substring(0, stem.length() - 1);
+            }
         }
-        base = base.trim();
-        if (!SAFE_FILENAME.matcher(base).matches()) {
-            return null;
-        }
-        return base;
+        return stem + ".pdf";
+    }
+
+    private static boolean isCombiningMark(int cp) {
+        int type = Character.getType(cp);
+        return type == Character.NON_SPACING_MARK || type == Character.COMBINING_SPACING_MARK;
+    }
+
+    /** Header-safe name: the BFF only forwards ASCII; the exact name stays in the version metadata. */
+    static String asciiHeaderFilename(String stored) {
+        String ascii = stored.replaceAll("[^A-Za-z0-9._ -]", "_");
+        return ascii.isBlank() || ascii.length() > 180 ? "document.pdf" : ascii;
     }
 
     private static Optional<LocalDate> parseOptionalDate(String raw) {

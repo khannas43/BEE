@@ -18,7 +18,8 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const idemRef = useRef<string | null>(null);
+  // The key is bound to the exact payload: a different file or label gets a fresh key, a retry of the same one reuses it.
+  const idemRef = useRef<{ key: string; signature: string } | null>(null);
 
   const apply = useCallback((res: Awaited<ReturnType<typeof listModelDocuments>>) => {
     if (!res.ok) {
@@ -52,8 +53,11 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
     }
     setBusy(true);
     setError(null);
-    if (!idemRef.current) idemRef.current = newIdempotencyKey();
-    const res = await uploadModelDocument(applicationId, { file, reportLabel: label.trim() }, idemRef.current);
+    const signature = JSON.stringify([file.name, file.size, file.lastModified, label.trim()]);
+    if (!idemRef.current || idemRef.current.signature !== signature) {
+      idemRef.current = { key: newIdempotencyKey(), signature };
+    }
+    const res = await uploadModelDocument(applicationId, { file, reportLabel: label.trim() }, idemRef.current.key);
     setBusy(false);
     if (!res.ok) {
       setError(res.failure.message);

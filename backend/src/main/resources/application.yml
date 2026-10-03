@@ -22,7 +22,8 @@ spring:
   servlet:
     multipart:
       max-file-size: ${BEE_DOCUMENTS_MAX_BYTES:5242880}
-      max-request-size: ${BEE_DOCUMENTS_MAX_BYTES:5242880}
+      # Larger than the file limit: form fields and boundaries add to the request. Keep <= the BFF's 6 MiB guard.
+      max-request-size: ${BEE_DOCUMENTS_MAX_REQUEST_BYTES:6291456}
 
 bee:
   security:

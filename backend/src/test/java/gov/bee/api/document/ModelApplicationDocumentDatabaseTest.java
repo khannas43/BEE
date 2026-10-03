@@ -7,7 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HexFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
@@ -15,7 +21,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
+import gov.bee.api.application.IdempotencyRepository;
 
 /** WP06.1a document metadata against throwaway PostgreSQL; shared app schema untouched. */
 @Tag("db")
@@ -31,6 +40,9 @@ class ModelApplicationDocumentDatabaseTest {
     static JdbcTemplate admin;
     static JdbcTemplate db;
     static DocumentRepository documents;
+    static DocumentRecorder recorder;
+    static IdempotencyRepository idempotency;
+    static TransactionTemplate tx;
     static String seed;
     static int appModelCountBefore;
     static int appVersionBefore;
@@ -92,7 +104,13 @@ class ModelApplicationDocumentDatabaseTest {
         migrate.execute("GRANT EXECUTE ON FUNCTION " + MAIN + ".app_disposable_model_cleanup(uuid[]) TO " + maint);
         db = new JdbcTemplate(runtimeSource(MAIN));
         migrate.execute(seed);
+        // One shared DataSource so JdbcTemplate calls join the TransactionTemplate's transaction.
+        var rt = runtimeSource(MAIN);
+        db = new JdbcTemplate(rt);
         documents = new DocumentRepository(db);
+        idempotency = new IdempotencyRepository(db);
+        recorder = new DocumentRecorder(documents, idempotency);
+        tx = new TransactionTemplate(new DataSourceTransactionManager(rt));
         Integer max = migrate.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class);
         assertEquals(23, max, "throwaway schema migrated V1 through V23");
     }
@@ -149,5 +167,85 @@ class ModelApplicationDocumentDatabaseTest {
             "SELECT has_function_privilege(current_user, '" + MAIN + ".app_disposable_model_cleanup(uuid[])', 'EXECUTE')",
             Boolean.class);
         assertEquals(Boolean.FALSE, can);
+    }
+
+    static DocumentRecorder.NewVersion version(String sha) {
+        return new DocumentRecorder.NewVersion(sha, 10, "r.pdf", "Lab", null, null);
+    }
+
+    static DocumentRecorder.Recorded upload(UUID appId, String key, String sha) {
+        byte[] hash = new byte[32];
+        hash[0] = (byte) key.hashCode();
+        if (!idempotency.begin(NOVA_USER, "POST", DocumentService.ROUTE_UPLOAD, appId, key, hash)) {
+            throw new IllegalStateException("begin refused");
+        }
+        return tx.execute(status -> recorder.record(NOVA_USER, appId, key, version(sha), r -> "{}"));
+    }
+
+    @Test
+    void recorderRefusesAnApplicationThatIsNoLongerDraftAndWritesNothing() {
+        UUID appId = insertDraft("NC-DOC-SUBMITTED");
+        new JdbcTemplate(migrateSource(MAIN)).update("UPDATE model_application SET state = 'fee_due' WHERE id = ?", appId);
+        var denied = assertThrows(DocumentRecorder.Denied.class, () -> upload(appId, "0123456789abcdef-nd1", "e".repeat(64)));
+        assertEquals("not_editable", denied.code());
+        assertTrue(documents.listDocuments(appId).isEmpty(), "rolled back: no header or version after a refused upload");
+    }
+
+    @Test
+    void recorderCompletesTheIdempotencyRecordInTheSameTransaction() {
+        UUID appId = insertDraft("NC-DOC-IDEM");
+        String key = "0123456789abcdef-id1";
+        upload(appId, key, "f".repeat(64));
+        var stored = idempotency.find(NOVA_USER, "POST", DocumentService.ROUTE_UPLOAD, appId, key).orElseThrow();
+        assertEquals(false, stored.inProgress());
+        assertEquals(201, stored.responseStatus());
+        assertEquals(1, documents.listVersions(documents.findByApplicationAndKind(appId, "test_report").orElseThrow().id()).size());
+    }
+
+    @Test
+    void aFailureAfterTheVersionInsertRollsBackTheVersionToo() {
+        UUID appId = insertDraft("NC-DOC-ROLLBACK");
+        // The body renderer throws after the header and version were inserted; everything must roll back.
+        assertThrows(Exception.class, () -> tx.execute(status ->
+            recorder.record(NOVA_USER, appId, "0123456789abcdef-rb1", version("1".repeat(64)), r -> { throw new IllegalStateException("render"); })));
+        assertTrue(documents.listDocuments(appId).isEmpty(), "no empty header and no version survive a failed upload");
+    }
+
+    @Test
+    void concurrentFirstUploadsSerialiseIntoNumberedVersions() throws Exception {
+        UUID appId = insertDraft("NC-DOC-RACE");
+        int n = 4;
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch go = new CountDownLatch(1);
+        List<Future<DocumentRecorder.Recorded>> results = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            String key = "0123456789abcdef-rc" + i;
+            String sha = Integer.toString(i).repeat(64);
+            results.add(pool.submit(() -> {
+                go.await();
+                return upload(appId, key, sha);
+            }));
+        }
+        go.countDown();
+        for (Future<DocumentRecorder.Recorded> f : results) {
+            f.get();
+        }
+        pool.shutdown();
+        assertEquals(1, documents.listDocuments(appId).size(), "exactly one header");
+        var versions = documents.listVersions(documents.listDocuments(appId).get(0).id());
+        assertEquals(n, versions.size());
+        for (int i = 0; i < n; i++) {
+            assertEquals(i + 1, versions.get(i).versionNumber());
+        }
+    }
+
+    @Test
+    void anUploadAfterSubmitIsRefusedEvenIfItReadTheDraftStateEarlier() throws Exception {
+        UUID appId = insertDraft("NC-DOC-SUBMIT-RACE");
+        var migrate = new JdbcTemplate(migrateSource(MAIN));
+        // Submit commits between the service's early draft check and the recorder's transaction.
+        migrate.update("UPDATE model_application SET state = 'fee_due', version = version + 1 WHERE id = ?", appId);
+        assertThrows(DocumentRecorder.Denied.class, () -> upload(appId, "0123456789abcdef-sr1", "2".repeat(64)));
+        assertTrue(documents.listDocuments(appId).isEmpty());
     }
 }

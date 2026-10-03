@@ -38,13 +38,14 @@ public class DocumentController {
         return documents.list(resolved.caller(), parseId(id));
     }
 
+    /** Parts are optional here so the caller is authorised first; the service answers 422 for a missing one. */
     @PostMapping(path = "/api/model-applications/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> upload(@AuthenticationPrincipal Jwt jwt,
                                                       @PathVariable("id") String id,
                                                       @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-                                                      @RequestParam("file") MultipartFile file,
-                                                      @RequestParam("documentKind") String documentKind,
-                                                      @RequestParam("reportLabel") String reportLabel,
+                                                      @RequestParam(value = "file", required = false) MultipartFile file,
+                                                      @RequestParam(value = "documentKind", required = false) String documentKind,
+                                                      @RequestParam(value = "reportLabel", required = false) String reportLabel,
                                                       @RequestParam(value = "testedOn", required = false) String testedOn,
                                                       @RequestParam(value = "laboratoryName", required = false) String laboratoryName) {
         var resolved = callers.resolve(jwt);

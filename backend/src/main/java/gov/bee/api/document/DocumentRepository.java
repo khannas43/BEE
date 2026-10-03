@@ -50,6 +50,16 @@ public class DocumentRepository {
         return findDocument(id, applicationId).orElseThrow();
     }
 
+    /**
+     * Takes the application row's NO KEY UPDATE lock and returns its current state. Concurrent uploads for
+     * one application queue behind each other, and a submit (which updates the row) cannot interleave with
+     * an upload that has already seen state 'draft'. Must run inside the caller's transaction.
+     */
+    public Optional<String> lockApplicationState(UUID applicationId) {
+        return jdbc.query("SELECT state FROM model_application WHERE id = ? FOR NO KEY UPDATE",
+            (rs, i) -> rs.getString(1), applicationId).stream().findFirst();
+    }
+
     /** Header find-or-create, version numbering and version insert commit together or not at all. */
     @Transactional
     public DocumentRow recordVersion(UUID applicationId, String kind, UUID versionId, String sha256, long sizeBytes,

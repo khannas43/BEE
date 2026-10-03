@@ -654,6 +654,7 @@ class SpringContractTest {
         Files.createDirectories(staged.getParent());
         Files.write(staged, MIN_PDF);
         when(documentStore.stage(any())).thenReturn(new StagedBlob(staged, "b".repeat(64), MIN_PDF.length));
+        when(documentRepo.lockApplicationState(NOVA_APP)).thenReturn(Optional.of("draft"));
         when(documentRepo.recordVersion(any(), any(), any(), any(), anyLong(), any(), any(), any(), nullable(LocalDate.class), nullable(String.class), any()))
             .thenReturn(new DocumentRepository.DocumentRow(DOC_ID, NOVA_APP, "test_report", Instant.parse("2026-10-03T00:00:00Z")));
         when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(
@@ -668,8 +669,12 @@ class SpringContractTest {
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
         when(documentStore.stage(any())).thenReturn(new StagedBlob(staged, "c".repeat(64), MIN_PDF.length));
+        when(documentRepo.lockApplicationState(NOVA_APP)).thenReturn(Optional.of("draft"));
         doThrow(new DataAccessResourceFailureException("down")).when(documentRepo).recordVersion(any(), any(), any(), any(), anyLong(), any(), any(), any(), nullable(LocalDate.class), nullable(String.class), any());
         conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345e"), 503, "service_unavailable");
+
+        // A required part missing is the contract's 422, not a 500, and the caller is authorised first.
+        conforms(DOC_PATH, multipart(listPath).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345f"), 422, "validation_failed");
     }
 
     @Test

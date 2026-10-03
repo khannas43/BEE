@@ -97,7 +97,7 @@ async function apiUpload(page, appId, pdfBytes, label, idem, extra = {}) {
     const bin = Uint8Array.from(atob(${JSON.stringify(b64)}), (c) => c.charCodeAt(0));
     const file = new File([bin], ${JSON.stringify(extra.filename || "report.pdf")}, { type: "application/pdf" });
     const form = new FormData();
-    form.append("file", file);
+    ${extra.omitFile ? "" : 'form.append("file", file);'}
     form.append("documentKind", ${JSON.stringify(extra.documentKind || "test_report")});
     form.append("reportLabel", ${JSON.stringify(label)});
     ${extra.testedOn ? `form.append("testedOn", ${JSON.stringify(extra.testedOn)});` : ""}
@@ -183,6 +183,30 @@ async function runDocumentChecks(runLabel, nova, pixel) {
     r = await apiUpload(nova, novaDraft, big, "Huge", key());
     recordDocs("POST", r.status, r.body?.error, r);
     check(`${runLabel}.nova.oversized`, r.status === 422 && r.body?.error === "validation_failed", r.body?.error);
+
+    // Review fixes: a file exactly at the limit must pass real Tomcat multipart parsing (request overhead included).
+    const maxBytes = Number(env("BEE_DOCUMENTS_MAX_BYTES", "5242880"));
+    const head = Buffer.from("%PDF-1.4\n");
+    const atLimit = Buffer.concat([head, Buffer.alloc(maxBytes - head.length, 0x42)]);
+    r = await apiUpload(nova, novaDraft, atLimit, "At the limit", key());
+    recordDocs("POST", r.status, r.status >= 400 ? r.body?.error : "-", r);
+    check(`${runLabel}.nova.exact-limit-accepted`, r.status === 201 && r.body?.latestVersion?.sizeBytes === maxBytes, `status=${r.status} ${r.body?.error ?? ""}`);
+
+    // A real-world filename is kept as the display name, not rejected; the download header stays ASCII.
+    const friendly = "Test Report (1) \u092a\u094d\u0930\u0924\u093f\u0935\u0947\u0926\u0928.pdf";
+    r = await apiUpload(nova, novaDraft, minPdf(`friendly-${runLabel}`), "Friendly name", key(), { filename: friendly });
+    recordDocs("POST", r.status, r.status >= 400 ? r.body?.error : "-", r);
+    check(`${runLabel}.nova.friendly-filename`, r.status === 201 && r.body?.latestVersion?.originalFilename === friendly, r.body?.latestVersion?.originalFilename ?? r.body?.error);
+    if (r.status === 201) {
+      c = await apiContent(nova, novaDraft, docId, r.body.latestVersion.id);
+      const disp = c.headers?.["content-disposition"] ?? "";
+      check(`${runLabel}.nova.friendly-filename-download`, c.status === 200 && /^attachment; filename="[A-Za-z0-9._ -]{1,180}"$/.test(disp), disp.slice(0, 60));
+    }
+
+    // A missing required part is the contract's 422, never a 500.
+    r = await apiUpload(nova, novaDraft, minPdf("nofile"), "No file", key(), { omitFile: true });
+    recordDocs("POST", r.status, r.body?.error, r);
+    check(`${runLabel}.nova.missing-file-part`, r.status === 422 && r.body?.error === "validation_failed", `status=${r.status} ${r.body?.error ?? ""}`);
 
     r = await apiList(pixel, novaDraft);
     recordDocs("GET", r.status, r.body?.error, r);

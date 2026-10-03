@@ -8,7 +8,7 @@
 3. **Revisit at the start of each wave** and at the end of each activity: scan the rows whose "Revisit at" matches, and close or re-date them.
 4. **Statuses:** `open`, `scheduled` (owned by a named package), `accepted limit` (a known limit the owner accepted; keep the row), `done` (kept for history, with the commit).
 
-Last updated: 3 October 2026 (command panel and feature template added).
+Last updated: 3 October 2026 (React test runner for the kit hooks and panels).
 
 ## A. Deferred from the WP06.1a reviews (four rounds, no high-severity findings)
 
@@ -38,7 +38,7 @@ Last updated: 3 October 2026 (command panel and feature template added).
 | BL-024 | Backend feature template or generator (PARTLY DONE: `scripts/local/new-feature.cjs` scaffolds a POST command on `/api/model-applications/{id}/<segment>` and registers it, `wiring-check.cjs` verifies every documented route, both described in `docs/kit/FEATURE_TEMPLATE.md`; what remains is BL-078 to BL-082): Spring command and read, BFF route and validator, client helper, contract entry, test skeletons | A new feature touches about 40 files (WP06.1a: 42); WP05.1d, with no new route, still touched 24 files and needed the contract artifact, two validators, a hard-coded stand-in table and three live scripts updated by hand; the plan's biggest speed-up | Wave 1 | open |
 | BL-025 | Split `bee-local-api.openapi.json`, `contract-pin.json` and the coverage inputs per module, merged by a script | These files change on every feature and block parallel work | with BL-024 | open |
 | BL-026 | Migrate `runtimeModelDocuments.ts`, `runtimeModelSubmit.ts` and the write half of `runtimeModelDrafts.ts` onto `runtimeRead` and `runtimeCommand` | They kept their own copies of the failure mapping and fetch code | done: all three now run on the kit transport (one unused-variable lint warning went with the rewrite); unit tests cover each client through a fake fetch | done |
-| BL-027 | Unit tests for the hooks (`useRuntimeRead`, `useRevalidation`); the repo has no React test runner | Today the hooks are proven only by `local:read-ui` (26/26 live) | when a React test runner is added | open |
+| BL-027 | Unit tests for the hooks (`useRuntimeRead`, `useRevalidation`); the repo has no React test runner | Today the hooks are proven only by `local:read-ui` (26/26 live) | done: `npm run web:test:ui` (Vitest, 19 tests, no skips) covers `useRuntimeRead`, `useRevalidation`, `useCommand`, `ReadPanel` and `CommandPanel`; see `docs/kit/UI_TESTS.md` | done |
 
 ## C. Tooling and process
 
@@ -98,7 +98,7 @@ Last updated: 3 October 2026 (command panel and feature template added).
 | BL-073 | A test report version carries its own free-text laboratory name and test date (API upload only; the form does not collect them), while the gates read the application's laboratory, date and efficiency; nothing reconciles the two | An applicant using the API could declare lab A on the application and upload a report saying lab B; the stored master versions would then rest on the application's facts only | BEE decision, then WP06.2 or WP05.2 (cross-check, or drop the free-text fields from the upload) | open |
 | BL-074 | V24's unique index fails the migration on any database that already holds two live (non-draft, non-rejected) applications with the same brand and model number | It fails loudly with a unique violation and no data change; V24 is already applied here, so any change is a new migration (V25), not an edit | next environment that holds legacy data | accepted limit |
 | BL-075 | The advisory-lock wait is bounded (10 s `lock_timeout`, a retryable 503) but there is no test that waits that long | The bound is untested; a test would need a configurable timeout | next time the lock is touched | open |
-| BL-076 | `useRuntimeRead`'s reset when a target goes away (open, close, reopen) has no unit test because the repo has no React test runner | Proven only by reading the code; see BL-027 | when a React test runner is added | open |
+| BL-076 | `useRuntimeRead`'s reset when a target goes away (open, close, reopen) has no unit test because the repo has no React test runner | Proven only by reading the code; see BL-027 | done: close, reopen and late-response cases in `components/app/kit/__tests__/useRuntimeRead.test.tsx` (`npm run web:test:ui`, no skips) | done |
 
 ## H. Command panel and feature template
 

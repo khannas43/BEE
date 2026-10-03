@@ -51,6 +51,7 @@ Last updated: 3 October 2026 (WP05.1d added).
 | BL-034 | One `api:test` run stalled for 10 minutes in a file read while the repository was under `~/Documents` | Probably cloud-sync materialisation; the work moved to `~/Code` | keep working only under `~/Code/BEE/worktrees` | accepted limit |
 | BL-035 | Whole-repository lint baseline: 53 problems (32 errors) at the last measurement, including two `react-hooks/set-state-in-effect` errors in `NewModelApplication.tsx` from WP05.1c and a warning in `runtimeModelDrafts.ts` | Hides any new finding in a noisy baseline | a dedicated lint clean-up activity | open |
 | BL-036 | `DEVELOPMENT_PLAN.md` and the early slice documents keep historical status sentences that conflict with the dated review entries | A reader can take an old sentence as current status | next plan update | open |
+| BL-077 | The code-review agent checks out the end commit of its range in the shared worktree, which leaves HEAD detached; a commit made afterwards lands on no branch (it happened once, after the WP05.1d review, and was recovered by fast-forwarding the branch) | Work committed on a detached HEAD can be lost on the next checkout | After every review run `git branch --show-current` before committing; prefer running reviews in an isolated worktree | open |
 
 ## D. Decisions and policy still needed from BEE or the owner
 

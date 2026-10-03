@@ -206,7 +206,7 @@ WP01 produces a local screen matrix with columns: workspace, route/view, task/ac
 
 Keep public verification accessible without a console login. Retained detail/action routes need not each be a left-nav entry: each must be reachable from a visible role workspace, task link or record action, with a documented path and automated navigation check. Catalogue and role switcher remain development-only.
 
-The route-by-route completion order, tiers and speed-up proposals are in [SCREEN_COMPLETION_PLAN.md](SCREEN_COMPLETION_PLAN.md) (proposed, not yet a BEE decision).
+The route-by-route completion order, tiers and speed-up proposals are in [SCREEN_COMPLETION_PLAN.md](SCREEN_COMPLETION_PLAN.md) (proposed, not yet a BEE decision). Deferred items and accepted limits are kept in [BACKLOG.md](BACKLOG.md).
 
 ## 7. AI delivery slices
 

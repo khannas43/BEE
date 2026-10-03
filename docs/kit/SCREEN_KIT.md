@@ -46,7 +46,7 @@ The model dashboard (`components/app/lifecycle/ModelDashboard.tsx`) is the worke
 - A screen is complete only when it meets the definition in `docs/SCREEN_COMPLETION_PLAN.md` section 2.
 - Preview roles never select records; they only choose what the menu displays.
 
-## Not in the kit yet (build when the first screen needs it)
+## Not in the kit yet (build when the first screen needs it; tracked as BL-020 to BL-027 in [../BACKLOG.md](../BACKLOG.md))
 
 - Paged, filtered, sortable server-scoped table (the dashboard shows the whole scoped list).
 - Tabs for a record's contextual panels (documents, history, approvals).

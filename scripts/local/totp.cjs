@@ -134,8 +134,18 @@ async function admin(pathname, init = {}) {
   const t = await r.text();
   try { return JSON.parse(t); } catch { return t; }
 }
-const userId = async (u) => (await admin(`/users?username=${encodeURIComponent(u)}&exact=true`))[0]?.id;
-const otpCredentials = async (u) => (await admin(`/users/${await userId(u)}/credentials`)).filter((c) => c.type === "otp");
+// Keycloak answers a missing user with {"error":"User not found"}; fail by name rather than as "x.filter is not a function".
+async function adminList(pathname) {
+  const r = await admin(pathname);
+  if (!Array.isArray(r)) throw new Error(`Keycloak admin GET ${pathname} returned ${JSON.stringify(r).slice(0, 120)}, not a list`);
+  return r;
+}
+async function userId(u) {
+  const id = (await adminList(`/users?username=${encodeURIComponent(u)}&exact=true`))[0]?.id;
+  if (!id) throw new Error(`Keycloak user ${u} not found (a concurrent local run may have torn down the test identities)`);
+  return id;
+}
+const otpCredentials = async (u) => (await adminList(`/users/${await userId(u)}/credentials`)).filter((c) => c.type === "otp");
 async function removeOtp(u, opts) {
   guard(u, opts, "remove the OTP credential of");
   const id = await userId(u);

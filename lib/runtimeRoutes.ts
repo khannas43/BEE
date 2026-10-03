@@ -30,7 +30,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "नया मॉडल आवेदन",
     icon: "note_add",
     navRoles: ["manufacturer", "agency"],
-    implemented: ["Create draft", "Edit draft", "Submit draft"],
+    implemented: ["Create draft", "Edit draft", "Upload test reports", "Submit draft"],
   },
 ];
 

@@ -37,3 +37,12 @@ REVOKE EXECUTE ON FUNCTION app.master_supersede(text, text, integer, date, text,
 GRANT EXECUTE ON FUNCTION app.master_supersede(text, text, integer, date, text, text, text, jsonb) TO bee_app;
 SQL
 fi
+
+if psql_super -d bee_app -c "SELECT to_regclass('app.model_application_document') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+REVOKE DELETE, UPDATE, TRUNCATE ON app.model_application_document FROM ${BEE_RUNTIME_DB_USER};
+REVOKE DELETE, UPDATE, TRUNCATE ON app.model_application_document_version FROM ${BEE_RUNTIME_DB_USER};
+GRANT INSERT, SELECT ON app.model_application_document TO ${BEE_RUNTIME_DB_USER};
+GRANT INSERT, SELECT ON app.model_application_document_version TO ${BEE_RUNTIME_DB_USER};
+SQL
+fi

@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.4.3";
+export const CONTRACT_VERSION = "0.5.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -363,6 +363,111 @@ export const validateModelApplicationList: Validator<ModelApplicationList> = (bo
 
 export const SPRING_LIST = { errors: SPRING_LIST_ERRORS, validate: validateModelApplicationList };
 export const SPRING_READ = { errors: SPRING_READ_ERRORS, validate: validateModelApplication };
+
+/* ---------- WP06.1a: local test-report document intake ---------- */
+
+export interface DocumentVersion {
+  id: string;
+  versionNumber: number;
+  contentSha256: string;
+  sizeBytes: number;
+  mediaType: "application/pdf";
+  originalFilename: string;
+  reportLabel: string;
+  testedOn?: string;
+  laboratoryName?: string;
+  uploadedByAccountId: string;
+  uploadedAt: string;
+  verificationStatus: "pending_local_verification";
+}
+
+export interface ModelDocument {
+  id: string;
+  documentKind: "test_report";
+  verificationStatus: "pending_local_verification";
+  verificationNote: string;
+  versions: DocumentVersion[];
+  latestVersion?: DocumentVersion;
+}
+
+export interface DocumentList {
+  items: ModelDocument[];
+  count: number;
+  authority: "spring-database";
+  verificationNote: string;
+  localStore: true;
+}
+
+const DOCUMENT_VERSION_KEYS = ["id", "versionNumber", "contentSha256", "sizeBytes", "mediaType", "originalFilename", "reportLabel", "uploadedByAccountId", "uploadedAt", "verificationStatus"] as const;
+const DOCUMENT_VERSION_OPTIONAL = ["testedOn", "laboratoryName"] as const;
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const PENDING = "pending_local_verification";
+
+export const validateDocumentVersion: Validator<DocumentVersion> = (body) => {
+  if (!exactKeys(body, DOCUMENT_VERSION_KEYS, DOCUMENT_VERSION_OPTIONAL)) return null;
+  const b = body;
+  const ok =
+    isString(b.id) && UUID.test(b.id) &&
+    Number.isInteger(b.versionNumber) && (b.versionNumber as number) >= 1 &&
+    isString(b.contentSha256) && SHA256_HEX.test(b.contentSha256) &&
+    Number.isInteger(b.sizeBytes) && (b.sizeBytes as number) >= 1 &&
+    b.mediaType === "application/pdf" &&
+    isString(b.originalFilename) && isString(b.reportLabel) &&
+    (b.testedOn === undefined || (isString(b.testedOn) && ISO_DATE.test(b.testedOn))) &&
+    (b.laboratoryName === undefined || isString(b.laboratoryName)) &&
+    isString(b.uploadedByAccountId) && UUID.test(b.uploadedByAccountId) &&
+    isString(b.uploadedAt) && !Number.isNaN(Date.parse(b.uploadedAt)) && b.uploadedAt.includes("T") &&
+    b.verificationStatus === PENDING;
+  return ok ? (b as unknown as DocumentVersion) : null;
+};
+
+export const validateDocument: Validator<ModelDocument> = (body) => {
+  if (!exactKeys(body, ["id", "documentKind", "verificationStatus", "verificationNote", "versions"], ["latestVersion"])) return null;
+  const b = body;
+  const ok =
+    isString(b.id) && UUID.test(b.id) &&
+    b.documentKind === "test_report" &&
+    b.verificationStatus === PENDING &&
+    isString(b.verificationNote) &&
+    Array.isArray(b.versions) && b.versions.every((v) => validateDocumentVersion(v) !== null) &&
+    (b.latestVersion === undefined || validateDocumentVersion(b.latestVersion) !== null);
+  if (!ok) return null;
+  /* a document with versions names its newest one */
+  const versions = b.versions as DocumentVersion[];
+  if (versions.length > 0 && (b.latestVersion as DocumentVersion | undefined)?.id !== versions[versions.length - 1].id) return null;
+  if (versions.length === 0 && b.latestVersion !== undefined) return null;
+  return b as unknown as ModelDocument;
+};
+
+export const validateDocumentList: Validator<DocumentList> = (body) => {
+  if (!exactKeys(body, ["items", "count", "authority", "verificationNote", "localStore"])) return null;
+  const b = body;
+  const ok =
+    b.authority === "spring-database" && b.localStore === true && isString(b.verificationNote) &&
+    Array.isArray(b.items) && b.items.every((i) => validateDocument(i) !== null) &&
+    b.count === b.items.length;
+  return ok ? (b as unknown as DocumentList) : null;
+};
+
+export const SPRING_DOC_LIST_ERRORS: UpstreamErrors = SPRING_READ_ERRORS;
+
+export const SPRING_DOC_UPLOAD_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: [...RESOLVER_DENIALS, "no_write_scope", "brand_not_permitted", "not_editable"],
+  404: ["not_found"],
+  409: ["idempotency_key_conflict", "idempotency_in_progress"],
+  422: ["validation_failed", "idempotency_key_required"],
+  503: ["service_unavailable"],
+};
+
+/** Same denials as the list; a 200 is binary and never goes through the JSON validator. */
+export const SPRING_DOC_CONTENT_ERRORS: UpstreamErrors = SPRING_READ_ERRORS;
+
+export const SPRING_DOC_LIST = { errors: SPRING_DOC_LIST_ERRORS, validate: validateDocumentList };
+export const SPRING_DOC_UPLOAD = { errors: SPRING_DOC_UPLOAD_ERRORS, validate: validateDocument, successStatuses: [201] as const };
+/** No JSON success: fromUpstream maps only the documented JSON errors; sessionReadBinary handles the 200 PDF. */
+export const SPRING_DOC_CONTENT = { errors: SPRING_DOC_CONTENT_ERRORS, validate: (() => null) as Validator<never>, successStatuses: [] as readonly number[] };
 
 /**
  * The detail ID as one Spring path segment. The ID is not checked for UUID shape here, so

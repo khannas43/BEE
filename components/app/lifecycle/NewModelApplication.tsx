@@ -14,6 +14,7 @@ import {
 } from "@/lib/client/runtimeModelDrafts";
 import { modelDashboardHref, readModelApplication, stateLabel } from "@/lib/client/runtimeModelApplications";
 import { previewModelApplicationSubmit, submitModelApplicationDraft, type SubmitPreview, type SubmissionFee } from "@/lib/client/runtimeModelSubmit";
+import { DraftTestReports } from "@/components/app/lifecycle/DraftTestReports";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
@@ -323,6 +324,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             >
               {loading ? "Saving…" : isEdit ? "Save changes" : "Save draft"}
             </button>
+            {isEdit && activeId ? <DraftTestReports applicationId={activeId} /> : null}
             {isEdit && activeId ? (
               <>
                 {draftDirty ? (

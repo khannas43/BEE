@@ -11,11 +11,37 @@ LOG_DIR="$ROOT/.local/logs"
 mkdir -p "$RUN_DIR" "$LOG_DIR"
 # Structured request logs (docs/wp03/request-log.schema.json): Spring api-requests.jsonl, Next.js web-requests.jsonl.
 export BEE_LOG_DIR="$LOG_DIR"
+# WP06.1a: git-ignored content-addressed document store (ADR-001 D-RT6)
+export BEE_DOCUMENTS_STORE="${BEE_DOCUMENTS_STORE:-$ROOT/.local/documents}"
+export BEE_DOCUMENTS_MAX_BYTES="${BEE_DOCUMENTS_MAX_BYTES:-5242880}"
+mkdir -p "$BEE_DOCUMENTS_STORE"
 
 API_JAR="$ROOT/backend/target/bee-api.jar"
 API_PID="$RUN_DIR/api.pid"
 WEB_PID="$RUN_DIR/web.pid"
 KC_ISSUER="http://127.0.0.1:${BEE_KC_PORT}/realms/${BEE_REALM}"
+
+# One local run at a time: check.sh tears down every disposable twin when it starts, so an overlapping
+# run deletes the identities the other is signed in as. The lock belongs to the outermost shell (pid plus
+# start time, so a reused pid is not mistaken for the owner); nested scripts inherit it, and a lock whose
+# owner has exited is taken over. Set BEE_RUN_LOCK=skip before sourcing for read-only commands.
+RUN_LOCK="$RUN_DIR/run.lock"
+pid_started() { ps -o lstart= -p "$1" 2>/dev/null | tr -s ' '; }
+acquire_run_lock() {
+  [[ "${BEE_RUN_LOCK:-}" == skip ]] && return 0
+  [[ -n "${BEE_RUN_LOCK_OWNER:-}" && "$(cat "$RUN_LOCK/owner" 2>/dev/null)" == "$BEE_RUN_LOCK_OWNER" ]] && return 0
+  local me; me="$$ $(pid_started $$)"
+  if ! mkdir "$RUN_LOCK" 2>/dev/null; then
+    local owner pid; owner="$(cat "$RUN_LOCK/owner" 2>/dev/null || true)"; pid="${owner%% *}"
+    if [[ -n "$pid" && "$owner" == "$pid $(pid_started "$pid")" ]]; then
+      printf 'ERROR: another local run holds %s (pid %s: %s)\n' "$RUN_LOCK" "$pid" "$(ps -o command= -p "$pid" | cut -c1-100)" >&2; exit 1
+    fi
+    rm -rf "$RUN_LOCK"; mkdir "$RUN_LOCK" || { echo "ERROR: could not take $RUN_LOCK" >&2; exit 1; }
+  fi
+  printf '%s\n' "$me" > "$RUN_LOCK/owner"
+  export BEE_RUN_LOCK_OWNER="$me"
+}
+acquire_run_lock
 
 java17_home() { /usr/libexec/java_home -v 17 2>/dev/null || { echo "Java 17 is required (ADR-001 D-RT1)" >&2; return 1; }; }
 

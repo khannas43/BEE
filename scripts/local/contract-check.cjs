@@ -31,6 +31,15 @@ const LOG_DIR = path.join(ROOT, ".local/logs");
 const NO_AMR_CLIENT = "bee-contract-no-amr";
 const NOVA_APP = app(2), PIXEL_APP = app(3);
 const SUBMIT_ROUTE = "/api/runtime/model-applications/{id}/submit";
+const DOC_LIST_ROUTE = "/api/runtime/model-applications/{id}/documents";
+const DOC_CONTENT_ROUTE = "/api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
+/** Mirrors lib/server/apiContract.ts SPRING_DOC_* (stand-in hits Spring, not the portal session layer). */
+const DOC_READ_UPSTREAM = {
+  GET: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_read_scope"], 404: ["not_found"], 503: ["service_unavailable"] },
+};
+const DOC_UPLOAD_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable"], 404: ["not_found"], 409: ["idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
 /** Mirrors lib/server/apiContract.ts SPRING_SUBMIT_* (stand-in hits Spring, not the portal session layer). */
 const SUBMIT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "not_submittable"], 404: ["not_found"], 503: ["service_unavailable"] },
@@ -47,10 +56,17 @@ const LIST_ROUTE = "/api/runtime/model-applications";
 const DETAIL_ROUTE = "/api/runtime/model-applications/{id}";
 const upstreamLogRoute = (route, method) => {
   if (route === "/api/runtime/me") return "/api/me";
-  if (route === SUBMIT_ROUTE) return "/api/model-applications/{id}";
+  if (route === SUBMIT_ROUTE) return "/api/model-applications/{id}/submit";
+  if (route === DOC_LIST_ROUTE) return "/api/model-applications/{id}/documents";
+  if (route === DOC_CONTENT_ROUTE) return "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
   if (route === BRANDS_ROUTE) return "/api/model-applications/eligible-brands";
   if (route === LIST_ROUTE && method === "POST") return "/api/model-applications";
   return route.replace("/api/runtime", "/api");
+};
+const contractUploadMultipart = () => {
+  const boundary = "bee-contract-check";
+  const body = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="contract.pdf"\r\nContent-Type: application/pdf\r\n\r\n%PDF-1.4 contract-check\r\n--${boundary}\r\nContent-Disposition: form-data; name="documentKind"\r\n\r\ntest_report\r\n--${boundary}\r\nContent-Disposition: form-data; name="reportLabel"\r\n\r\nContract check upload\r\n--${boundary}--\r\n`;
+  return { body, contentType: `multipart/form-data; boundary=${boundary}` };
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const doc = contract.load();
@@ -223,7 +239,7 @@ function inventory() {
   const internalPaths = internal.map(([r]) => r).sort();
   const springPaths = [...mappings, "/actuator/health"].sort();
   if (springPaths.join() !== internalPaths.join()) problems.push(`Spring GET mappings ${springPaths} vs contract ${internalPaths}`);
-  const expectAllowed = ["GET /actuator/health", "GET /actuator/health/**", "GET /api/me", "GET /api/model-applications/eligible-brands", "GET /api/model-applications", "GET /api/model-applications/*", "GET /api/model-applications/*/submit", "POST /api/model-applications", "PATCH /api/model-applications/*", "POST /api/model-applications/*/submit"];
+  const expectAllowed = ["GET /actuator/health", "GET /actuator/health/**", "GET /api/me", "GET /api/model-applications/eligible-brands", "GET /api/model-applications", "GET /api/model-applications/*", "GET /api/model-applications/*/submit", "POST /api/model-applications", "PATCH /api/model-applications/*", "POST /api/model-applications/*/submit", "GET /api/model-applications/*/documents", "POST /api/model-applications/*/documents", "GET /api/model-applications/*/documents/*/versions/*/content"];
   if (allowed.sort().join() !== expectAllowed.sort().join()) problems.push(`SecurityConfig matchers changed: ${allowed}`);
   check("contract.inventory", problems.length === 0,
     `${routes.length} Next route files vs ${browser.length} browser paths + catch-all; ${springPaths.length} Spring GET routes vs ${internalPaths.length} internal paths; SecurityConfig matchers unchanged (${allowed.length})${show(problems)}`);
@@ -281,7 +297,7 @@ async function springChecks(nova, inactive, noAmr) {
   check("spring.inactive-role", ina.every((m) => m.x.status === 403 && m.x.json?.error === "no_effective_role" && m.e.length === 0 && sameCorr(m.x)),
     `test.inactive.role: ${ina.map((m) => `${m.p.replace(NOVA_APP, "{id}")} ${m.x.status} ${m.x.json?.error}`).join(", ")}${show(ina.flatMap((m) => m.e))}`);
 
-  const draftMissingKey = [["POST", "/api/model-applications"], ["PATCH", `/api/model-applications/${NOVA_APP}`], ["POST", `/api/model-applications/${NOVA_APP}/submit`]];
+  const draftMissingKey = [["POST", "/api/model-applications"], ["PATCH", `/api/model-applications/${NOVA_APP}`], ["POST", `/api/model-applications/${NOVA_APP}/submit`], ["POST", `/api/model-applications/${NOVA_APP}/documents`]];
   const deniedWrites = [["PUT", `/api/model-applications/${NOVA_APP}`], ["DELETE", `/api/model-applications/${NOVA_APP}`],
     ["GET", `/api/model-applications/${NOVA_APP}/history`], ["POST", "/api/me"], ["GET", "/actuator/env"]];
   const want = JSON.stringify({ error: "denied_by_default", message: doc["x-bee-error-codes"].denied_by_default.message });
@@ -292,13 +308,18 @@ async function springChecks(nova, inactive, noAmr) {
   }
   const missingKey = [];
   for (const [m, p] of draftMissingKey) {
-    const x = await call(`${API}${p}`, { method: m, token: nova, correlationId: cid("spring-draft-key"), headers: { "Content-Type": "application/json" }, body: "{}" });
+    const mp = p.includes("/documents") ? contractUploadMultipart() : null;
+    const x = await call(`${API}${p}`, {
+      method: m, token: nova, correlationId: cid("spring-draft-key"),
+      headers: mp ? { "Content-Type": mp.contentType } : { "Content-Type": "application/json" },
+      body: mp ? mp.body : "{}",
+    });
     missingKey.push({ m, p, x, e: contract.validate(doc.components.schemas.Error, x.json, doc) });
   }
   const anon = await call(`${API}/api/model-applications`, { method: "POST", correlationId: cid("spring-write-anon"), body: "{}", headers: { "Content-Type": "application/json" } });
   for (const d of denied) contract.record({ route: "default-deny", method: d.m, status: d.x.status, code: d.x.json?.error ?? null, ok: d.x.status === 403 && d.x.text === want && d.e.length === 0 && sameCorr(d.x) && noStore(d.x) });
   for (const d of missingKey) {
-    const route = d.p.includes("/submit") ? "/api/model-applications/{id}/submit" : d.p.includes(NOVA_APP) ? "/api/model-applications/{id}" : d.p.replace(`${API}`, "");
+    const route = d.p.includes("/documents") ? "/api/model-applications/{id}/documents" : d.p.includes("/submit") ? "/api/model-applications/{id}/submit" : d.p.includes(NOVA_APP) ? "/api/model-applications/{id}" : d.p.replace(`${API}`, "");
     contract.record({ route, method: d.m, status: d.x.status, code: d.x.json?.error ?? null, ok: d.x.status === 422 && d.x.json?.error === "idempotency_key_required" && d.e.length === 0 && sameCorr(d.x) && noStore(d.x) });
   }
   contract.record({ route: "default-deny", method: "POST", status: anon.status, code: anon.json?.error ?? null, ok: anon.status === 401 && contract.validate(doc.components.schemas.Error, anon.json, doc).length === 0 && noStore(anon) });
@@ -352,6 +373,21 @@ async function nextChecks(jar, novaToken) {
   contract.record({ route: "/api/runtime/model-applications/{id}/submit", method: "POST", status: submitAnonPost.status, code: submitAnonPost.json?.error ?? "-", ok: submitNoSessOk && contract.conforms(doc, "/api/runtime/model-applications/{id}/submit", "POST", submitAnonPost).length === 0 });
   check("next.submit-no-session", submitNoSessOk && sameCorr(submitAnonGet) && sameCorr(submitAnonPost),
     `GET/POST runtime submit without cookie: ${submitAnonGet.status} ${submitAnonGet.json?.error}, ${submitAnonPost.status} ${submitAnonPost.json?.error}${show(e)}`);
+  const docListAnonGet = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, { correlationId: cid("next-doc-anon-get") });
+  const docUploadMp = contractUploadMultipart();
+  const docListAnonPost = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, {
+    method: "POST", correlationId: cid("next-doc-anon-post"), headers: { "Content-Type": docUploadMp.contentType, "Idempotency-Key": "0123456789abcdef0123456" }, body: docUploadMp.body,
+  });
+  const docContentAnonGet = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents/${crypto.randomUUID()}/versions/${crypto.randomUUID()}/content`, { correlationId: cid("next-doc-anon-content") });
+  e = [...e, ...contract.conforms(doc, DOC_LIST_ROUTE, "GET", docListAnonGet), ...contract.conforms(doc, DOC_LIST_ROUTE, "POST", docListAnonPost), ...contract.conforms(doc, DOC_CONTENT_ROUTE, "GET", docContentAnonGet)];
+  const docNoSessOk = docListAnonGet.status === 401 && docListAnonGet.json?.error === "no_session"
+    && docListAnonPost.status === 401 && docListAnonPost.json?.error === "no_session"
+    && docContentAnonGet.status === 401 && docContentAnonGet.json?.error === "no_session";
+  for (const [route, method, r] of [[DOC_LIST_ROUTE, "GET", docListAnonGet], [DOC_LIST_ROUTE, "POST", docListAnonPost], [DOC_CONTENT_ROUTE, "GET", docContentAnonGet]]) {
+    contract.record({ route, method, status: r.status, code: r.json?.error ?? "-", ok: docNoSessOk && contract.conforms(doc, route, method, r).length === 0 && sameCorr(r) });
+  }
+  check("next.documents-no-session", docNoSessOk && sameCorr(docListAnonGet) && sameCorr(docListAnonPost) && sameCorr(docContentAnonGet),
+    `GET/POST runtime documents and GET content without cookie: ${docListAnonGet.status} ${docListAnonGet.json?.error}, ${docListAnonPost.status} ${docListAnonPost.json?.error}, ${docContentAnonGet.status} ${docContentAnonGet.json?.error}${show(e)}`);
   const anonBrands = await call(`${WEB}/api/runtime/model-applications/eligible-brands`, { correlationId: cid("next-brands-anon") });
   const anonCreate = await call(`${WEB}/api/runtime/model-applications`, {
     method: "POST", correlationId: cid("next-create-anon"), headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123458" }, body: "{}",
@@ -407,20 +443,32 @@ async function plantedValues(sessionJar, m0) {
   const results = {};
   const documented = [];
   const SPRING_ERRORS = [[401, "unauthenticated"], [403, "mfa_required"], [403, "no_active_account"], [403, "no_effective_role"], [403, "no_read_scope"], [404, "not_found"], [503, "service_unavailable"]];
-  const READS = [["/api/runtime/me", "/api/runtime/me"], ["/api/runtime/model-applications", "/api/runtime/model-applications"], ["/api/runtime/model-applications/{id}", `/api/runtime/model-applications/${NOVA_APP}`]];
+  const READS = [["/api/runtime/me", "/api/runtime/me"], ["/api/runtime/model-applications", "/api/runtime/model-applications"], ["/api/runtime/model-applications/{id}", `/api/runtime/model-applications/${NOVA_APP}`], [DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`]];
+  const DOC_CONTENT_URL = `/api/runtime/model-applications/${NOVA_APP}/documents/${crypto.randomUUID()}/versions/${crypto.randomUUID()}/content`;
   const SUBMIT_URL = `/api/runtime/model-applications/${NOVA_APP}/submit`;
   async function exerciseStandInPairs(route, url, method, jar, upstreamTable = SUBMIT_UPSTREAM) {
     const op = doc.paths[route]?.[method.toLowerCase()];
     if (!op) return;
+    const uploadMultipart = route === DOC_LIST_ROUTE && method === "POST";
     for (const [status, spec] of Object.entries(op.responses)) {
       const st = Number(status);
       if (st === 200 || st === 201) continue;
       for (const code of spec["x-error-codes"] || []) {
         if (code === "no_session") continue;
         fake.set("documented", [st, { error: code, message: doc["x-bee-error-codes"][code]?.message || code }]);
-        const headers = { "Content-Type": "application/json" };
-        if (method === "POST" || method === "PATCH") headers["Idempotency-Key"] = "0123456789abcdef0123456";
-        const x = await call(`${WEB}${url}`, { jar, method, correlationId: cid("standin-doc"), headers, body: method === "POST" || method === "PATCH" ? "{}" : undefined });
+        const headers = {};
+        let body;
+        if (uploadMultipart) {
+          const mp = contractUploadMultipart();
+          headers["Content-Type"] = mp.contentType;
+          headers["Idempotency-Key"] = "0123456789abcdef0123456";
+          body = mp.body;
+        } else {
+          headers["Content-Type"] = "application/json";
+          if (method === "POST" || method === "PATCH") headers["Idempotency-Key"] = "0123456789abcdef0123456";
+          if (method === "POST" || method === "PATCH") body = "{}";
+        }
+        const x = await call(`${WEB}${url}`, { jar, method, correlationId: cid("standin-doc"), headers, body });
         const upstreamOk = st === 502
           ? (spec["x-error-codes"] || []).includes(code)
           : (upstreamTable[method]?.[st] || []).includes(code);
@@ -459,6 +507,9 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(DETAIL_ROUTE, `/api/runtime/model-applications/${NOVA_APP}`, "PATCH", sessionJar, DRAFT_UPSTREAM);
     await exerciseStandInPairs(SUBMIT_ROUTE, SUBMIT_URL, "GET", sessionJar);
     await exerciseStandInPairs(SUBMIT_ROUTE, SUBMIT_URL, "POST", sessionJar);
+    await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
+    await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);
+    await exerciseStandInPairs(DOC_CONTENT_ROUTE, DOC_CONTENT_URL, "GET", sessionJar, DOC_READ_UPSTREAM);
   } finally {
     contract.setSource("live");
     await fake.close();

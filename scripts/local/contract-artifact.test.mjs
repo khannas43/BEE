@@ -18,8 +18,8 @@ const { validate } = createRequire(import.meta.url)("./contract-lib.cjs");
 const operations = () => Object.entries(contract.paths).flatMap(([route, item]) =>
   Object.entries(item).filter(([, op]) => typeof op === "object" && op.responses).map(([method, op]) => ({ route, method, op, audience: item["x-bee-audience"] })));
 
-test("the artifact is pinned: version 0.4.3, content hash, and the code's version agree", () => {
-  assert.equal(pin.version, "0.4.3");
+test("the artifact is pinned: version 0.5.0, content hash, and the code's version agree", () => {
+  assert.equal(pin.version, "0.5.0");
   assert.equal(contract.info.version, pin.version, "artifact info.version differs from scripts/local/contract-pin.json");
   assert.equal(CONTRACT_VERSION, pin.version, "lib/server/apiContract.ts CONTRACT_VERSION differs from the pin");
   assert.equal(createHash("sha256").update(read(ARTIFACT)).digest("hex"), pin.sha256, "artifact content changed without a version bump and a new pin");
@@ -33,6 +33,7 @@ test("every documented response requires X-Correlation-Id and no-store; redirect
       assert.equal(res.headers?.["X-Correlation-Id"]?.$ref, "#/components/headers/CorrelationId", where);
       assert.equal(res.headers?.["Cache-Control"]?.$ref, "#/components/headers/NoStore", where);
       if (status.startsWith("3")) assert.ok(res.headers?.Location, `${where}: Location`);
+      else if (res.content?.["application/pdf"]) assert.ok(status === "200", `${where}: PDF only on 200`);
       else assert.ok(res.content?.["application/json"]?.schema, `${where}: JSON schema`);
       n++;
     }

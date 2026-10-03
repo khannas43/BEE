@@ -9,12 +9,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 /** Re-validates filing scope before returning a stored idempotent response (WP05.1c review). */
-final class IdempotencyReplayGuard {
+public final class IdempotencyReplayGuard {
 
     private IdempotencyReplayGuard() {
     }
 
-    static Optional<String> denialBeforeReplay(Caller caller, ModelApplicationRepository applications, IdentityRepository identity,
+    public static Optional<String> denialBeforeReplay(Caller caller, ModelApplicationRepository applications, IdentityRepository identity,
                                                ObjectMapper json, UUID targetId, String storedBody) {
         if (!ModelDraftPolicy.canWrite(caller)) {
             return Optional.of("no_write_scope");

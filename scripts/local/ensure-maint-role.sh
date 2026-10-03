@@ -30,3 +30,9 @@ REVOKE ALL ON FUNCTION app.app_disposable_model_cleanup(uuid[]) FROM bee_app;
 GRANT SELECT, REFERENCES ON app.local_disposable_application TO ${BEE_MAINT_DB_USER};
 SQL
 fi
+
+if psql_super -d bee_app -c "SELECT to_regclass('app.model_application_document') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT SELECT, DELETE ON app.model_application_document, app.model_application_document_version TO ${BEE_MAINT_DB_USER};
+SQL
+fi

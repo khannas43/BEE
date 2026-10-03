@@ -198,6 +198,13 @@ read -r s_pass s_fail <<<"$(sed -nE 's/^model-submit checks: ([0-9]+) passed, ([
 if [[ -z "${s_pass:-}" ]]; then check "submit.run" 0 "model-submit did not complete: $(tail -1 <<<"$ms_out")"
 else pass=$((pass + s_pass)); fail=$((fail + s_fail)); fi
 
+# ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
+mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"
+read -r doc_pass doc_fail <<<"$(sed -nE 's/^model-documents checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$mdoc_out")"
+if [[ -z "${doc_pass:-}" ]]; then check "documents.run" 0 "model-documents-browser-check did not complete: $(tail -1 <<<"$mdoc_out")"
+else pass=$((pass + doc_pass)); fail=$((fail + doc_fail)); fi
+
 # ---- WP03.3 coverage: every documented (operation, status, code) has live, stand-in, MockMvc or unit evidence
 cv_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/contract-coverage.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$cv_out"

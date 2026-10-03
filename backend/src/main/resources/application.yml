@@ -19,11 +19,19 @@ spring:
     create-schemas: false
     user: ${BEE_FLYWAY_DB_USER:bee_app}
     password: ${BEE_FLYWAY_DB_PASSWORD:${BEE_APP_DB_PASSWORD:bee-local-app}}
+  servlet:
+    multipart:
+      max-file-size: ${BEE_DOCUMENTS_MAX_BYTES:5242880}
+      max-request-size: ${BEE_DOCUMENTS_MAX_BYTES:5242880}
 
 bee:
   security:
     issuer: http://127.0.0.1:${BEE_KC_PORT:8180}/realms/${BEE_REALM:bee-local}
     audience: bee-api
+  documents:
+    # Git-ignored local content-addressed store (ADR-001 D-RT6). Override with an absolute path in local:check.
+    store-path: ${BEE_DOCUMENTS_STORE:.local/documents}
+    max-upload-bytes: ${BEE_DOCUMENTS_MAX_BYTES:5242880}
 
 management:
   endpoints:

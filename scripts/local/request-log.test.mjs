@@ -31,6 +31,8 @@ before(async () => {
     health: await import("../../app/api/runtime/health/route.ts"),
     submit: await import("../../app/api/runtime/model-applications/[id]/submit/route.ts"),
     brands: await import("../../app/api/runtime/model-applications/eligible-brands/route.ts"),
+    documents: await import("../../app/api/runtime/model-applications/[id]/documents/route.ts"),
+    documentContent: await import("../../app/api/runtime/model-applications/[id]/documents/[documentId]/versions/[versionId]/content/route.ts"),
   };
 });
 
@@ -160,6 +162,38 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/submit 401 sessio
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123458" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/model-applications/{id}/documents 401 session_expired | Keycloak refusing refresh on document list", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.documents.GET(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/documents", "unit-doc-list-refresh-refused", cookie), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/documents 401 session_expired | Keycloak refusing refresh on document upload", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const boundary = "----beeUnitDoc";
+  const body = `--${boundary}\r\nContent-Disposition: form-data; name="reportLabel"\r\n\r\nx\r\n--${boundary}--\r\n`;
+  const res = await routes.documents.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/documents", "unit-doc-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": `multipart/form-data; boundary=${boundary}`, "Content-Length": String(Buffer.byteLength(body)), "Idempotency-Key": "0123456789abcdef0123458" },
+    body,
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content 401 session_expired | Keycloak refusing refresh on document content", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.documentContent.GET(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/documents/00000000-0000-4000-e000-000000000001/versions/00000000-0000-4000-e000-000000000002/content", "unit-doc-content-refresh-refused", cookie), {
+    params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002", documentId: "00000000-0000-4000-e000-000000000001", versionId: "00000000-0000-4000-e000-000000000002" }),
+  });
   assert.equal(res.status, 401);
   assert.equal((await res.json()).error, "session_expired");
 });

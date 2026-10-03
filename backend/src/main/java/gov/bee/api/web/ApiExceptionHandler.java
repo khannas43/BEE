@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -24,6 +25,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     ResponseEntity<Map<String, Object>> noRoute(NoResourceFoundException e) {
         return ApiErrors.response(HttpStatus.NOT_FOUND, "not_found");
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<Map<String, Object>> uploadTooLarge(MaxUploadSizeExceededException e) {
+        log.warn("request failed: {}", e.getClass().getSimpleName());
+        return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
     }
 
     @ExceptionHandler(DataAccessException.class)

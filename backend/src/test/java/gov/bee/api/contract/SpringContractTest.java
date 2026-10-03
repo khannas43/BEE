@@ -6,14 +6,23 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import gov.bee.api.document.DocumentRepository;
+import gov.bee.api.document.LocalSha256FileStore;
+import gov.bee.api.document.LocalSha256FileStore.StagedBlob;
+import java.nio.file.Path;
+import java.time.Instant;
+import org.springframework.mock.web.MockMultipartFile;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import gov.bee.api.application.IdempotencyRepository;
@@ -68,7 +77,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  */
 @SpringBootTest(properties = {"spring.autoconfigure.exclude="
     + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-    + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration", "bee.log.dir=target/logs"})
+    + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration",
+    "bee.log.dir=target/logs", "bee.documents.store-path=target/contract-documents"})
 @AutoConfigureMockMvc
 class SpringContractTest {
 
@@ -114,6 +124,18 @@ class SpringContractTest {
 
     @MockitoBean
     ModelApplicationSubmitRepository submissions;
+
+    @MockitoBean
+    DocumentRepository documentRepo;
+
+    @MockitoBean
+    LocalSha256FileStore documentStore;
+
+    static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
+    static final UUID VER_ID = UUID.fromString("00000000-0000-4000-e000-000000000002");
+    static final String DOC_PATH = "/api/model-applications/{id}/documents";
+    static final String CONTENT_PATH = "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
+    static final byte[] MIN_PDF = "%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n".getBytes(StandardCharsets.US_ASCII);
 
     @BeforeAll
     static void load() throws Exception {
@@ -194,6 +216,14 @@ class SpringContractTest {
         }
         assertEquals(cid, res.getHeader("X-Correlation-Id"), where + ": correlation ID echoed");
         assertTrue(String.valueOf(res.getHeader("Cache-Control")).contains("no-store"), where + ": no-store");
+        boolean pdfOk = code == null && status == 200 && String.valueOf(res.getContentType()).startsWith("application/pdf")
+            && spec != null && spec.path("content").has("application/pdf");
+        if (pdfOk) {
+            assertTrue(res.getContentAsByteArray().length > 0, where + ": empty PDF");
+            String coveredMethod = request.buildRequest(null).getMethod();
+            COVERED.add(coveredMethod + " " + route + " " + status + " -");
+            return res;
+        }
         assertTrue(String.valueOf(res.getContentType()).startsWith("application/json") || String.valueOf(res.getContentType()).startsWith("application/vnd.spring-boot.actuator"), where + ": content type " + res.getContentType());
         JsonNode body = ContractSchema.parse(res.getContentAsString(StandardCharsets.UTF_8));
         JsonNode schema = spec == null ? doc.path("components").path("schemas").path("Error") : spec.path("content").path("application/json").path("schema");
@@ -539,6 +569,107 @@ class SpringContractTest {
         conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "no_active_account");
         account("manufacturer", "own-org");
         conforms("/api/model-applications/{id}/submit", post(submitPath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "no_effective_role");
+    }
+
+    @Test
+    void documentOperationsDocumentedPairs() throws Exception {
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
+        String listPath = "/api/model-applications/" + NOVA_APP + "/documents";
+        String contentPath = "/api/model-applications/" + NOVA_APP + "/documents/" + DOC_ID + "/versions/" + VER_ID + "/content";
+        MockMultipartFile pdf = new MockMultipartFile("file", "report.pdf", "application/pdf", MIN_PDF);
+        when(documentStore.maxUploadBytes()).thenReturn(5_242_880L);
+
+        conforms(DOC_PATH, get(listPath), 401, "unauthenticated");
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A"), 401, "unauthenticated");
+        conforms(CONTENT_PATH, get(contentPath), 401, "unauthenticated");
+        conforms(DOC_PATH, get(listPath).with(pwdOnly), 403, "mfa_required");
+        conforms(CONTENT_PATH, get(contentPath).with(pwdOnly), 403, "mfa_required");
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(pwdOnly).header("Idempotency-Key", IDEM), 403, "mfa_required");
+
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(DOC_PATH, get(listPath).with(token("manufacturer")), 403, "no_active_account");
+        conforms(CONTENT_PATH, get(contentPath).with(token("manufacturer")), 403, "no_active_account");
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", IDEM), 403, "no_active_account");
+
+        account("manufacturer", "own-org");
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.empty());
+        conforms(DOC_PATH, get(listPath).with(token("manufacturer")), 404, "not_found");
+        conforms(CONTENT_PATH, get(contentPath).with(token("manufacturer")), 404, "not_found");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.empty());
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", IDEM), 404, "not_found");
+
+        account("auditor", "all");
+        conforms(DOC_PATH, get(listPath).with(token("auditor")), 403, "no_read_scope");
+        conforms(CONTENT_PATH, get(contentPath).with(token("auditor")), 403, "no_read_scope");
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("auditor")).header("Idempotency-Key", IDEM), 403, "no_write_scope");
+
+        account("manufacturer", "own-org");
+        conforms(DOC_PATH, get(listPath).with(token("finance")), 403, "no_effective_role");
+        conforms(CONTENT_PATH, get(contentPath).with(token("finance")), 403, "no_effective_role");
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("finance")).header("Idempotency-Key", IDEM), 403, "no_effective_role");
+
+        account("manufacturer", "own-org");
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(documentRepo.listDocuments(NOVA_APP)).thenReturn(List.of());
+        conforms(DOC_PATH, get(listPath).with(token("manufacturer")), 200, null);
+
+        when(documentRepo.findDocument(DOC_ID, NOVA_APP)).thenReturn(Optional.of(
+            new DocumentRepository.DocumentRow(DOC_ID, NOVA_APP, "test_report", Instant.parse("2026-10-03T00:00:00Z"))));
+        when(documentRepo.findVersion(VER_ID, DOC_ID)).thenReturn(Optional.of(
+            new DocumentRepository.VersionRow(VER_ID, DOC_ID, 1, "a".repeat(64), MIN_PDF.length, "application/pdf",
+                "report.pdf", "Lab A", null, null, USER, Instant.parse("2026-10-03T00:00:00Z"))));
+        when(documentStore.read("a".repeat(64))).thenReturn(Optional.of(MIN_PDF));
+        conforms(CONTENT_PATH, get(contentPath).with(token("manufacturer")), 200, null);
+
+        when(documentStore.read("a".repeat(64))).thenReturn(Optional.empty());
+        conforms(CONTENT_PATH, get(contentPath).with(token("manufacturer")), 503, "service_unavailable");
+
+        doThrow(new DataAccessResourceFailureException("down")).when(documentRepo).listDocuments(any());
+        conforms(DOC_PATH, get(listPath).with(token("manufacturer")), 503, "service_unavailable");
+        reset(documentRepo);
+
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(
+            new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "fee_due", 1, Set.of(), NOVA, NOVA_COOL, "NOVA")));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", IDEM), 403, "not_editable");
+
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.empty());
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", IDEM), 403, "brand_not_permitted");
+
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")), 422, "idempotency_key_required");
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "").with(token("manufacturer")).header("Idempotency-Key", IDEM), 422, "validation_failed");
+
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", IDEM), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 201, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", IDEM), 409, "idempotency_key_conflict");
+
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        Path staged = Path.of("target/contract-documents/.tmp/staged-pdf");
+        Files.createDirectories(staged.getParent());
+        Files.write(staged, MIN_PDF);
+        when(documentStore.stage(any())).thenReturn(new StagedBlob(staged, "b".repeat(64), MIN_PDF.length));
+        when(documentRepo.recordVersion(any(), any(), any(), any(), anyLong(), any(), any(), any(), nullable(LocalDate.class), nullable(String.class), any()))
+            .thenReturn(new DocumentRepository.DocumentRow(DOC_ID, NOVA_APP, "test_report", Instant.parse("2026-10-03T00:00:00Z")));
+        when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(
+            new DocumentRepository.VersionRow(VER_ID, DOC_ID, 1, "b".repeat(64), MIN_PDF.length, "application/pdf",
+                "report.pdf", "Lab A", null, null, USER, Instant.parse("2026-10-03T00:00:00Z"))));
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345d"), 201, null);
+
+        reset(documentRepo, documentStore, idempotency);
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        when(documentStore.maxUploadBytes()).thenReturn(5_242_880L);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(documentStore.stage(any())).thenReturn(new StagedBlob(staged, "c".repeat(64), MIN_PDF.length));
+        doThrow(new DataAccessResourceFailureException("down")).when(documentRepo).recordVersion(any(), any(), any(), any(), anyLong(), any(), any(), any(), nullable(LocalDate.class), nullable(String.class), any());
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345e"), 503, "service_unavailable");
     }
 
     @Test

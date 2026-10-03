@@ -22,7 +22,9 @@
             "type": "string",
             "enum": [
               "/actuator/health", "/actuator/health/{group}", "/api/me", "/api/model-applications", "/api/model-applications/eligible-brands", "/api/model-applications/{id}", "/api/model-applications/{id}/history", "/api/model-applications/{id}/submit", "unmapped",
+              "/api/model-applications/{id}/documents", "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",
               "/api/runtime/health", "/api/runtime/me", "/api/runtime/model-applications", "/api/runtime/model-applications/eligible-brands",               "/api/runtime/model-applications/{id}", "/api/runtime/model-applications/{id}/submit",
+              "/api/runtime/model-applications/{id}/documents", "/api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",
               "/api/auth/session", "/api/auth/login", "/api/auth/callback", "/api/auth/logout", "/api/{unmatched}"
             ]
           },
@@ -42,7 +44,8 @@
           "event": { "const": "upstream" },
           "correlationId": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$" },
           "method": { "enum": ["GET", "POST", "PATCH"] },
-          "route": { "type": "string", "enum": ["/actuator/health", "/api/me", "/api/model-applications", "/api/model-applications/eligible-brands", "/api/model-applications/{id}", "/api/model-applications/{id}/submit"] },
+          "route": { "type": "string", "enum": ["/actuator/health", "/api/me", "/api/model-applications", "/api/model-applications/eligible-brands", "/api/model-applications/{id}", "/api/model-applications/{id}/submit",
+            "/api/model-applications/{id}/documents", "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content"] },
           "status": { "type": "integer", "minimum": 100 },
           "outcome": { "type": "string", "pattern": "^[a-z_]{2,40}$", "description": "ok, Spring's documented error code, api_unreachable, or unlisted" },
           "durationMs": { "type": "integer", "minimum": 0 }

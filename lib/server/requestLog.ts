@@ -16,6 +16,8 @@ export type WebRoute =
   | "/api/runtime/model-applications/eligible-brands"
   | "/api/runtime/model-applications/{id}"
   | "/api/runtime/model-applications/{id}/submit"
+  | "/api/runtime/model-applications/{id}/documents"
+  | "/api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content"
   | "/api/auth/session"
   | "/api/auth/login"
   | "/api/auth/callback"
@@ -28,7 +30,9 @@ export type SpringRoute =
   | "/api/model-applications"
   | "/api/model-applications/eligible-brands"
   | "/api/model-applications/{id}"
-  | "/api/model-applications/{id}/submit";
+  | "/api/model-applications/{id}/submit"
+  | "/api/model-applications/{id}/documents"
+  | "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
 
@@ -52,7 +56,12 @@ export const safeOutcome = (code: unknown): string => (typeof code === "string" 
 export function springRoute(path: string): SpringRoute {
   const p = path.split("?")[0];
   if (p === "/api/me" || p === "/api/model-applications" || p === "/api/model-applications/eligible-brands" || p === "/actuator/health") return p;
-  if (p.startsWith("/api/model-applications/")) return "/api/model-applications/{id}";
+  if (/^\/api\/model-applications\/[^/]+\/submit$/.test(p)) return "/api/model-applications/{id}/submit";
+  if (/^\/api\/model-applications\/[^/]+\/documents$/.test(p)) return "/api/model-applications/{id}/documents";
+  if (/^\/api\/model-applications\/[^/]+\/documents\/[^/]+\/versions\/[^/]+\/content$/.test(p)) {
+    return "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
+  }
+  if (/^\/api\/model-applications\/[^/]+$/.test(p)) return "/api/model-applications/{id}";
   return "/api/model-applications/{id}";
 }
 

@@ -18,6 +18,20 @@ ok() { if "$@"; then echo 1; else echo 0; fi; }
 API="http://127.0.0.1:${BEE_API_PORT}"
 WEB="http://127.0.0.1:${BEE_WEB_PORT}"
 
+# ---- Preflight: one failure when the runtime is not up (BL-030), not dozens of downstream probes.
+down_parts=()
+while IFS= read -r line; do [[ -n "$line" ]] && down_parts+=("$line"); done < <(runtime_health_down)
+if ((${#down_parts[@]})); then
+  down="$(printf '%s; ' "${down_parts[@]}")"
+  down="${down%; }"
+  check "runtime.preflight" 0 "down: ${down}. Start the runtime with: npm run local:up"
+  jq -s --argjson pass "$pass" --argjson fail "$fail" --arg at "$(date '+%Y-%m-%dT%H:%M:%S%z')" \
+    '{at:$at,passed:$pass,failed:$fail,checks:.}' "$RESULTS" > "$RUN_DIR/check.json"
+  echo "local:check $pass passed, $fail failed (report: .local/run/check.json)"
+  echo "ERROR: local runtime is not reachable ($down). Run: npm run local:up" >&2
+  exit 1
+fi
+
 # ---- WP02.3: the 16 seeded users and the realm flows must come out of this run unchanged.
 # Checks sign in only disposable twins (scripts/local/test-identities.cjs), removed at the end.
 PROTECTED_BEFORE="$RUN_DIR/protected-before.json"
@@ -242,18 +256,47 @@ if [[ -f "$PROTECTED_BEFORE" ]]; then
   else pass=$((pass + p_pass)); fail=$((fail + p_fail)); fi
 fi
 
-# ---- memory against ADR-001 D-RT8 (MB)
+# ---- memory against ADR-001 D-RT8 (MB); median of several samples after checks finish (BL-032)
 mem_mb() { docker stats --no-stream --format '{{.MemUsage}}' "$1" 2>/dev/null | awk '{v=$1; u=v; gsub(/[0-9.]/,"",u); gsub(/[A-Za-z]/,"",v); if(u=="GiB")v*=1024; else if(u=="KiB")v/=1024; printf "%d", v}'; }
-pg_mb="$(mem_mb bee-local-postgres)"; kc_mb="$(mem_mb bee-local-keycloak)"
-api_mb=0; pid_alive "$API_PID" && api_mb=$(( $(tree_rss_kb "$(cat "$API_PID")") / 1024 ))
-web_mb=0; pid_alive "$WEB_PID" && web_mb=$(( $(tree_rss_kb "$(cat "$WEB_PID")") / 1024 ))
-total_mb=$(( ${pg_mb:-0} + ${kc_mb:-0} + api_mb + web_mb ))
-for spec in "postgres:${pg_mb:-0}:300" "keycloak:${kc_mb:-0}:1000" "api:$api_mb:800" "web:$web_mb:1500" "total:$total_mb:3600"; do
-  IFS=: read -r n v b <<<"$spec"
-  check "memory.$n" "$(ok test "$v" -gt 0 -a "$v" -le "$b")" "${v} MB (budget ${b} MB)"
+sample_process_mb() { pid_alive "$1" && echo $(( $(tree_rss_kb "$(cat "$1")") / 1024 )) || echo 0; }
+MEMORY_SAMPLES="${BEE_CHECK_MEMORY_SAMPLES:-5}"
+MEMORY_INTERVAL="${BEE_CHECK_MEMORY_INTERVAL_SEC:-3}"
+BUDGET_PG="${BEE_CHECK_MEMORY_BUDGET_POSTGRES:-300}"
+BUDGET_KC="${BEE_CHECK_MEMORY_BUDGET_KEYCLOAK:-1000}"
+BUDGET_API="${BEE_CHECK_MEMORY_BUDGET_API:-800}"
+BUDGET_WEB="${BEE_CHECK_MEMORY_BUDGET_WEB:-1500}"
+BUDGET_TOTAL="${BEE_CHECK_MEMORY_BUDGET_TOTAL:-3600}"
+pg_samples=(); kc_samples=(); api_samples=(); web_samples=(); total_samples=()
+for ((i = 1; i <= MEMORY_SAMPLES; i++)); do
+  pg_s="$(mem_mb bee-local-postgres)"; kc_s="$(mem_mb bee-local-keycloak)"
+  api_s="$(sample_process_mb "$API_PID")"; web_s="$(sample_process_mb "$WEB_PID")"
+  pg_samples+=("${pg_s:-0}"); kc_samples+=("${kc_s:-0}"); api_samples+=("$api_s"); web_samples+=("$web_s")
+  total_samples+=($(( ${pg_s:-0} + ${kc_s:-0} + api_s + web_s )))
+  (( i < MEMORY_SAMPLES )) && sleep "$MEMORY_INTERVAL"
 done
-jq -nc --argjson pg "${pg_mb:-0}" --argjson kc "${kc_mb:-0}" --argjson api "$api_mb" --argjson web "$web_mb" --argjson total "$total_mb" \
-  '{postgres_mb:$pg,keycloak_mb:$kc,api_mb:$api,web_mb:$web,total_mb:$total}' > "$RUN_DIR/memory.json"
+pg_mb="$(memory_median_mb "${pg_samples[@]}")"
+kc_mb="$(memory_median_mb "${kc_samples[@]}")"
+api_mb="$(memory_median_mb "${api_samples[@]}")"
+web_mb="$(memory_median_mb "${web_samples[@]}")"
+total_mb="$(memory_median_mb "${total_samples[@]}")"
+pg_list="$(IFS=,; echo "${pg_samples[*]}")"
+kc_list="$(IFS=,; echo "${kc_samples[*]}")"
+api_list="$(IFS=,; echo "${api_samples[*]}")"
+web_list="$(IFS=,; echo "${web_samples[*]}")"
+total_list="$(IFS=,; echo "${total_samples[*]}")"
+for spec in "postgres:$pg_mb:$BUDGET_PG:$pg_list" "keycloak:$kc_mb:$BUDGET_KC:$kc_list" "api:$api_mb:$BUDGET_API:$api_list" "web:$web_mb:$BUDGET_WEB:$web_list" "total:$total_mb:$BUDGET_TOTAL:$total_list"; do
+  IFS=: read -r n v b samples <<<"$spec"
+  check "memory.$n" "$(ok test "$v" -gt 0 -a "$v" -le "$b")" "median ${v} MB from samples [${samples}] MB (budget ${b} MB; interval ${MEMORY_INTERVAL}s x ${MEMORY_SAMPLES})"
+done
+jq -nc \
+  --argjson pg "$pg_mb" --argjson kc "$kc_mb" --argjson api "$api_mb" --argjson web "$web_mb" --argjson total "$total_mb" \
+  --argjson pg_samples "$(printf '%s\n' "${pg_samples[@]}" | jq -R 'tonumber?' | jq -s 'map(select(. != null))')" \
+  --argjson kc_samples "$(printf '%s\n' "${kc_samples[@]}" | jq -R 'tonumber?' | jq -s 'map(select(. != null))')" \
+  --argjson api_samples "$(printf '%s\n' "${api_samples[@]}" | jq -R 'tonumber?' | jq -s 'map(select(. != null))')" \
+  --argjson web_samples "$(printf '%s\n' "${web_samples[@]}" | jq -R 'tonumber?' | jq -s 'map(select(. != null))')" \
+  --argjson total_samples "$(printf '%s\n' "${total_samples[@]}" | jq -R 'tonumber?' | jq -s 'map(select(. != null))')" \
+  '{postgres_mb:$pg,keycloak_mb:$kc,api_mb:$api,web_mb:$web,total_mb:$total,postgres_samples:$pg_samples,keycloak_samples:$kc_samples,api_samples:$api_samples,web_samples:$web_samples,total_samples:$total_samples}' \
+  > "$RUN_DIR/memory.json"
 
 # ---- AGENTS.md preserved
 agents_same=1

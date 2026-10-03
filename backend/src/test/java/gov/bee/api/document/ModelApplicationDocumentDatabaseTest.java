@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -102,7 +103,6 @@ class ModelApplicationDocumentDatabaseTest {
         var migrate = new JdbcTemplate(migrateSource(MAIN));
         migrate.execute("GRANT ALL ON ALL TABLES IN SCHEMA " + MAIN + " TO " + maint);
         migrate.execute("GRANT EXECUTE ON FUNCTION " + MAIN + ".app_disposable_model_cleanup(uuid[]) TO " + maint);
-        db = new JdbcTemplate(runtimeSource(MAIN));
         migrate.execute(seed);
         // One shared DataSource so JdbcTemplate calls join the TransactionTemplate's transaction.
         var rt = runtimeSource(MAIN);
@@ -240,12 +240,39 @@ class ModelApplicationDocumentDatabaseTest {
     }
 
     @Test
-    void anUploadAfterSubmitIsRefusedEvenIfItReadTheDraftStateEarlier() throws Exception {
-        UUID appId = insertDraft("NC-DOC-SUBMIT-RACE");
+    void aSubmitStyleUpdateWaitsForAnUploadThatHoldsTheApplicationLock() throws Exception {
+        UUID appId = insertDraft("NC-DOC-LOCK");
         var migrate = new JdbcTemplate(migrateSource(MAIN));
-        // Submit commits between the service's early draft check and the recorder's transaction.
-        migrate.update("UPDATE model_application SET state = 'fee_due', version = version + 1 WHERE id = ?", appId);
-        assertThrows(DocumentRecorder.Denied.class, () -> upload(appId, "0123456789abcdef-sr1", "2".repeat(64)));
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // An upload transaction has taken the lock after seeing state 'draft'.
+            Future<?> uploader = pool.submit(() -> tx.execute(status -> {
+                assertEquals("draft", documents.lockApplicationState(appId).orElseThrow());
+                locked.countDown();
+                try {
+                    release.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return null;
+            }));
+            assertTrue(locked.await(5, TimeUnit.SECONDS));
+            // The submit's UPDATE must queue behind it; without the lock it would finish immediately.
+            Future<Integer> submit = pool.submit(() -> migrate.update(
+                "UPDATE model_application SET state = 'fee_due', version = version + 1 WHERE id = ? AND state = 'draft'", appId));
+            Thread.sleep(700);
+            assertTrue(!submit.isDone(), "submit must wait while an upload holds the application lock");
+            release.countDown();
+            uploader.get(5, TimeUnit.SECONDS);
+            assertEquals(1, submit.get(5, TimeUnit.SECONDS));
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+        // After the submit commits, the next upload is refused and writes nothing.
+        assertThrows(DocumentRecorder.Denied.class, () -> upload(appId, "0123456789abcdef-lk1", "3".repeat(64)));
         assertTrue(documents.listDocuments(appId).isEmpty());
     }
 }

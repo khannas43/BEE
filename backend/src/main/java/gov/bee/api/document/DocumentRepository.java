@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
@@ -53,15 +54,19 @@ public class DocumentRepository {
     /**
      * Takes the application row's NO KEY UPDATE lock and returns its current state. Concurrent uploads for
      * one application queue behind each other, and a submit (which updates the row) cannot interleave with
-     * an upload that has already seen state 'draft'. Must run inside the caller's transaction.
+     * an upload that has already seen state 'draft'. Requires the caller's transaction (see DocumentRecorder).
      */
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<String> lockApplicationState(UUID applicationId) {
         return jdbc.query("SELECT state FROM model_application WHERE id = ? FOR NO KEY UPDATE",
             (rs, i) -> rs.getString(1), applicationId).stream().findFirst();
     }
 
-    /** Header find-or-create, version numbering and version insert commit together or not at all. */
-    @Transactional
+    /**
+     * Header find-or-create, version numbering and version insert. Only DocumentRecorder may call this: it holds
+     * the application lock and has re-checked the draft state, so MANDATORY refuses a call outside its transaction.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
     public DocumentRow recordVersion(UUID applicationId, String kind, UUID versionId, String sha256, long sizeBytes,
                                      String mediaType, String filename, String reportLabel, LocalDate testedOn,
                                      String laboratoryName, UUID uploader) {

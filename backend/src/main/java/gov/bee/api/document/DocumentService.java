@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -45,6 +46,8 @@ public class DocumentService {
     static final String VERIFICATION_NOTE =
         "Local store only — pending verification. Upload does not claim laboratory accreditation, malware clearance or BEE approval.";
     private static final int MAX_STEM = 176;
+    private static final int ZWNJ = 0x200C;
+    private static final int ZWJ = 0x200D;
     private static final byte[] PDF_MAGIC = "%PDF-".getBytes(StandardCharsets.US_ASCII);
 
     private final IdentityRepository identity;
@@ -121,6 +124,16 @@ public class DocumentService {
     public ResponseEntity<Map<String, Object>> upload(Caller caller, UUID appId, String idempotencyKey,
                                                       MultipartFile file, String documentKind, String reportLabel,
                                                       String testedOnRaw, String laboratoryName) {
+        // Authorisation before anything is parsed or read: a caller who cannot write to this application learns
+        // nothing about its payload rules and costs the server no file read or hash.
+        if (!ModelDraftPolicy.canWrite(caller)) {
+            return error(HttpStatus.FORBIDDEN, "no_write_scope");
+        }
+        UUID filing = ModelDraftPolicy.filingOrganisation(caller).orElseThrow();
+        Optional<ModelApplicationRepository.Row> existing = applications.findOwned(appId, filing);
+        if (existing.isEmpty()) {
+            return error(HttpStatus.NOT_FOUND, "not_found");
+        }
         if (!KIND_TEST_REPORT.equals(DraftRequestSupport.trim(documentKind))) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
@@ -155,14 +168,6 @@ public class DocumentService {
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, appId, idempotencyKey, bodyHash);
         if (replay.isPresent()) {
             return replay.get();
-        }
-        if (!ModelDraftPolicy.canWrite(caller)) {
-            return error(HttpStatus.FORBIDDEN, "no_write_scope");
-        }
-        UUID filing = ModelDraftPolicy.filingOrganisation(caller).orElseThrow();
-        Optional<ModelApplicationRepository.Row> existing = applications.findOwned(appId, filing);
-        if (existing.isEmpty()) {
-            return error(HttpStatus.NOT_FOUND, "not_found");
         }
         ModelApplicationRepository.Row row = existing.get();
         if (!"draft".equals(row.state())) {
@@ -202,10 +207,15 @@ public class DocumentService {
         }
 
         try {
-            DocumentRecorder.Recorded recorded = recorder.record(caller.accountId(), appId, idempotencyKey,
+            AtomicReference<Map<String, Object>> rendered = new AtomicReference<>();
+            recorder.record(caller.accountId(), appId, idempotencyKey,
                 new DocumentRecorder.NewVersion(sha, size, filename, label, testedOn.orElse(null), lab),
-                r -> writeJson(documentView(r.document(), r.versions())));
-            return ResponseEntity.status(HttpStatus.CREATED).body(documentView(recorded.document(), recorded.versions()));
+                r -> {
+                    Map<String, Object> view = documentView(r.document(), r.versions());
+                    rendered.set(view);
+                    return writeJson(view);
+                });
+            return ResponseEntity.status(HttpStatus.CREATED).body(rendered.get());
         } catch (DocumentRecorder.Denied denied) {
             abandon(caller, appId, idempotencyKey);
             return error(denied.status(), denied.code());
@@ -377,33 +387,42 @@ public class DocumentService {
     }
 
     /**
-     * The stored display name: path stripped, anything outside letters, digits and ._ ()[]+,- replaced, always
-     * ending in .pdf and at most 180 characters. Never rejects; the bytes are judged by the PDF check, not the name.
+     * The stored display name: path stripped, anything outside letters, digits, combining marks, the zero-width
+     * joiners Indic scripts need and ._ ()[]+,- replaced, always ending in .pdf and at most 180 characters.
+     * Never rejects; the bytes are judged by the PDF check, not the name.
      */
     static String sanitizeFilename(String raw) {
         String base = raw == null ? "" : raw.replace('\\', '/');
         base = base.substring(base.lastIndexOf('/') + 1);
         StringBuilder out = new StringBuilder();
         base.codePoints().forEach(cp -> {
-            if (Character.isLetterOrDigit(cp) || isCombiningMark(cp) || "._ ()[]+,-".indexOf(cp) >= 0) {
+            if (Character.isLetterOrDigit(cp) || isCombiningMark(cp) || cp == ZWNJ || cp == ZWJ
+                || "._ ()[]+,-".indexOf(cp) >= 0) {
                 out.appendCodePoint(cp);
             } else {
                 out.append('_');
             }
         });
-        String name = out.toString().replaceAll("\\s+", " ").trim().replaceAll("^[.\\s]+", "");
-        String stem = name.toLowerCase(Locale.ROOT).endsWith(".pdf") ? name.substring(0, name.length() - 4) : name;
-        stem = stem.trim();
-        if (stem.isEmpty()) {
-            stem = "report";
+        String name = out.toString().replaceAll("\\s+", " ").trim();
+        if (name.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+            name = name.substring(0, name.length() - 4);
         }
+        String stem = trimEdges(name);
         if (stem.length() > MAX_STEM) {
             stem = stem.substring(0, MAX_STEM);
             if (Character.isHighSurrogate(stem.charAt(stem.length() - 1))) {
                 stem = stem.substring(0, stem.length() - 1);
             }
+            stem = trimEdges(stem);
+        }
+        if (stem.codePoints().noneMatch(Character::isLetterOrDigit)) {
+            stem = "report";
         }
         return stem + ".pdf";
+    }
+
+    private static String trimEdges(String value) {
+        return value.replaceAll("^[. ]+|[. ]+$", "");
     }
 
     private static boolean isCombiningMark(int cp) {

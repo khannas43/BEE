@@ -35,9 +35,23 @@ class DocumentFilenameTest {
         assertEquals(180, longName.length());
         assertTrue(longName.endsWith(".pdf"));
         // Never splits a surrogate pair at the cut.
-        String astral = DocumentService.sanitizeFilename("𠀀".repeat(200));
+        String astral = DocumentService.sanitizeFilename("\uD840\uDC00".repeat(200));
         assertTrue(astral.length() <= 180 && astral.endsWith(".pdf"));
-        assertTrue(Character.isValidCodePoint(astral.codePointAt(astral.length() - 5)));
+        assertTrue(astral.codePoints().noneMatch(cp -> cp >= 0xD800 && cp <= 0xDFFF), "no lone surrogate");
+    }
+
+    @Test
+    void edgeCasesDoNotProduceOddNames() {
+        assertEquals("report.pdf", DocumentService.sanitizeFilename(".pdf"));
+        assertEquals("report.pdf", DocumentService.sanitizeFilename("   .PDF  "));
+        assertEquals("report.pdf", DocumentService.sanitizeFilename("()"));
+        // Cut at a space or dot: no trailing separator before the suffix.
+        String spaced = DocumentService.sanitizeFilename("abc ".repeat(100));
+        assertTrue(!spaced.endsWith(" .pdf") && spaced.endsWith("c.pdf"), spaced);
+        // Zero-width joiner/non-joiner are part of Indic words and are kept.
+        String joined = "\u0915\u094d\u200d\u0937.pdf";
+        assertEquals(joined, DocumentService.sanitizeFilename(joined));
+        assertEquals("x.pdf.pdf", DocumentService.sanitizeFilename("x.pdf.pdf"));
     }
 
     @Test

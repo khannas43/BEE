@@ -109,6 +109,18 @@ async function apiUpload(page, appId, pdfBytes, label, idem, extra = {}) {
   })()`);
 }
 
+async function apiRawMultipart(page, appId, idem, body) {
+  return page.eval(`(async () => {
+    const r = await fetch(${JSON.stringify(`${WEB}/api/runtime/model-applications/`)} + ${JSON.stringify(appId)} + "/documents", {
+      method: "POST", credentials: "include", cache: "no-store",
+      headers: { "Idempotency-Key": ${JSON.stringify(idem)}, "Content-Type": "multipart/form-data; boundary=zzzBoundary" },
+      body: ${JSON.stringify(body)},
+    });
+    const hs = {}; r.headers.forEach((v, k) => { hs[k] = v; });
+    return { status: r.status, replay: r.headers.get("Idempotency-Replayed"), body: await r.json().catch(() => null), headers: hs };
+  })()`);
+}
+
 async function apiList(page, appId) {
   return page.eval(`fetch(${JSON.stringify(`${WEB}/api/runtime/model-applications/${appId}/documents`)}, { credentials: "include", cache: "no-store" }).then(async (r) => { const hs = {}; r.headers.forEach((v, k) => { hs[k] = v; }); return { status: r.status, body: await r.json().catch(() => null), headers: hs }; })`);
 }
@@ -216,6 +228,15 @@ async function runDocumentChecks(runLabel, nova, pixel) {
     r = await apiUpload(pixel, novaDraft, pdf1, "X", key());
     recordDocs("POST", r.status, r.body?.error, r);
     check(`${runLabel}.pixel.cross-org-upload`, r.status === 404 && r.body?.error === "not_found", r.body?.error);
+    // Authorisation precedes payload validation: another organisation with a bad payload still sees 404.
+    r = await apiUpload(pixel, novaDraft, pdf1, "X", key(), { omitFile: true });
+    recordDocs("POST", r.status, r.body?.error, r);
+    check(`${runLabel}.pixel.cross-org-invalid-payload`, r.status === 404 && r.body?.error === "not_found", `status=${r.status} ${r.body?.error ?? ""}`);
+
+    // A malformed multipart body is the contract's 422, never a 500.
+    r = await apiRawMultipart(nova, novaDraft, key(), "this is not a multipart body");
+    recordDocs("POST", r.status, r.body?.error, r);
+    check(`${runLabel}.nova.malformed-multipart`, r.status === 422 && r.body?.error === "validation_failed", `status=${r.status} ${r.body?.error ?? ""}`);
 
     r = await apiList(nova, "00000000-0000-4000-c000-000000009999");
     recordDocs("GET", r.status, r.body?.error, r);

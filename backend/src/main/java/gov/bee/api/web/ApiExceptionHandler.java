@@ -6,10 +6,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -35,8 +35,8 @@ public class ApiExceptionHandler {
         return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
     }
 
-    /** A malformed multipart request (missing required part or parameter) is the caller's validation error. */
-    @ExceptionHandler({MissingServletRequestPartException.class, MissingServletRequestParameterException.class})
+    /** A malformed or truncated multipart body, or a missing required part, is the caller's validation error. */
+    @ExceptionHandler({MultipartException.class, MissingServletRequestPartException.class})
     ResponseEntity<Map<String, Object>> missingPart(Exception e) {
         log.warn("request failed: {}", e.getClass().getSimpleName());
         return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");

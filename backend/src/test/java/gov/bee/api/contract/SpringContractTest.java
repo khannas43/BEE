@@ -598,11 +598,15 @@ class SpringContractTest {
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.empty());
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", IDEM), 404, "not_found");
+        // Authorisation precedes payload validation: an unowned application is 404 even with no file part.
+        conforms(DOC_PATH, multipart(listPath).param("documentKind", "nope").with(token("manufacturer")), 404, "not_found");
 
         account("auditor", "all");
         conforms(DOC_PATH, get(listPath).with(token("auditor")), 403, "no_read_scope");
         conforms(CONTENT_PATH, get(contentPath).with(token("auditor")), 403, "no_read_scope");
         conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("auditor")).header("Idempotency-Key", IDEM), 403, "no_write_scope");
+        // A caller without write scope gets 403, not 422, however bad the payload is.
+        conforms(DOC_PATH, multipart(listPath).param("documentKind", "nope").with(token("auditor")), 403, "no_write_scope");
 
         account("manufacturer", "own-org");
         conforms(DOC_PATH, get(listPath).with(token("finance")), 403, "no_effective_role");

@@ -124,8 +124,10 @@ public class DocumentService {
     public ResponseEntity<Map<String, Object>> upload(Caller caller, UUID appId, String idempotencyKey,
                                                       MultipartFile file, String documentKind, String reportLabel,
                                                       String testedOnRaw, String laboratoryName) {
-        // Authorisation before anything is parsed or read: a caller who cannot write to this application learns
-        // nothing about its payload rules and costs the server no file read or hash.
+        // Scope and ownership are checked before this service validates, reads into memory, hashes or stores
+        // anything, so a caller who cannot write to this application learns nothing about its payload rules.
+        // Not covered: Spring/Tomcat parse the multipart body (up to the request limit) before any controller
+        // runs, so a malformed or oversized body is answered 422 ahead of 403/404.
         if (!ModelDraftPolicy.canWrite(caller)) {
             return error(HttpStatus.FORBIDDEN, "no_write_scope");
         }
@@ -210,6 +212,7 @@ public class DocumentService {
             AtomicReference<Map<String, Object>> rendered = new AtomicReference<>();
             recorder.record(caller.accountId(), appId, idempotencyKey,
                 new DocumentRecorder.NewVersion(sha, size, filename, label, testedOn.orElse(null), lab),
+                () -> recheckUnderLock(caller, appId, filing),
                 r -> {
                     Map<String, Object> view = documentView(r.document(), r.versions());
                     rendered.set(view);
@@ -224,6 +227,15 @@ public class DocumentService {
             abandon(caller, appId, idempotencyKey);
             return error(HttpStatus.SERVICE_UNAVAILABLE, "service_unavailable");
         }
+    }
+
+    /** Re-read the application and re-run the brand check inside the recorder's transaction, after the lock. */
+    private Optional<String> recheckUnderLock(Caller caller, UUID appId, UUID filing) {
+        Optional<ModelApplicationRepository.Row> fresh = applications.findOwned(appId, filing);
+        if (fresh.isEmpty()) {
+            return Optional.of("not_found");
+        }
+        return brandDenial(caller, fresh.get());
     }
 
     private byte[] readLimited(MultipartFile file) throws IOException {
@@ -422,7 +434,7 @@ public class DocumentService {
     }
 
     private static String trimEdges(String value) {
-        return value.replaceAll("^[. ]+|[. ]+$", "");
+        return value.replaceAll("^[. \\u200C\\u200D]+|[. \\u200C\\u200D]+$", "");
     }
 
     private static boolean isCombiningMark(int cp) {

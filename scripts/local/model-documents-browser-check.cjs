@@ -234,7 +234,9 @@ async function runDocumentChecks(runLabel, nova, pixel) {
     check(`${runLabel}.pixel.cross-org-invalid-payload`, r.status === 404 && r.body?.error === "not_found", `status=${r.status} ${r.body?.error ?? ""}`);
 
     // A malformed multipart body is the contract's 422, never a 500.
-    r = await apiRawMultipart(nova, novaDraft, key(), "this is not a multipart body");
+    // A real multipart opening whose body is cut off before the closing delimiter: the container's parser fails.
+    const truncated = "--zzzBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.pdf\"\r\nContent-Type: application/pdf\r\n\r\n%PDF-1.4 cut off before any closing delimiter";
+    r = await apiRawMultipart(nova, novaDraft, key(), truncated);
     recordDocs("POST", r.status, r.body?.error, r);
     check(`${runLabel}.nova.malformed-multipart`, r.status === 422 && r.body?.error === "validation_failed", `status=${r.status} ${r.body?.error ?? ""}`);
 

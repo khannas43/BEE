@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -24,6 +25,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import gov.bee.api.application.IdempotencyRepository;
 
@@ -44,6 +49,7 @@ class ModelApplicationDocumentDatabaseTest {
     static DocumentRecorder recorder;
     static IdempotencyRepository idempotency;
     static TransactionTemplate tx;
+    static DataSourceTransactionManager txManager;
     static String seed;
     static int appModelCountBefore;
     static int appVersionBefore;
@@ -110,7 +116,8 @@ class ModelApplicationDocumentDatabaseTest {
         documents = new DocumentRepository(db);
         idempotency = new IdempotencyRepository(db);
         recorder = new DocumentRecorder(documents, idempotency);
-        tx = new TransactionTemplate(new DataSourceTransactionManager(rt));
+        txManager = new DataSourceTransactionManager(rt);
+        tx = new TransactionTemplate(txManager);
         Integer max = migrate.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class);
         assertEquals(23, max, "throwaway schema migrated V1 through V23");
     }
@@ -179,7 +186,7 @@ class ModelApplicationDocumentDatabaseTest {
         if (!idempotency.begin(NOVA_USER, "POST", DocumentService.ROUTE_UPLOAD, appId, key, hash)) {
             throw new IllegalStateException("begin refused");
         }
-        return tx.execute(status -> recorder.record(NOVA_USER, appId, key, version(sha), r -> "{}"));
+        return tx.execute(status -> recorder.record(NOVA_USER, appId, key, version(sha), Optional::empty, r -> "{}"));
     }
 
     @Test
@@ -207,7 +214,7 @@ class ModelApplicationDocumentDatabaseTest {
         UUID appId = insertDraft("NC-DOC-ROLLBACK");
         // The body renderer throws after the header and version were inserted; everything must roll back.
         assertThrows(Exception.class, () -> tx.execute(status ->
-            recorder.record(NOVA_USER, appId, "0123456789abcdef-rb1", version("1".repeat(64)), r -> { throw new IllegalStateException("render"); })));
+            recorder.record(NOVA_USER, appId, "0123456789abcdef-rb1", version("1".repeat(64)), Optional::empty, r -> { throw new IllegalStateException("render"); })));
         assertTrue(documents.listDocuments(appId).isEmpty(), "no empty header and no version survive a failed upload");
     }
 
@@ -274,5 +281,51 @@ class ModelApplicationDocumentDatabaseTest {
         // After the submit commits, the next upload is refused and writes nothing.
         assertThrows(DocumentRecorder.Denied.class, () -> upload(appId, "0123456789abcdef-lk1", "3".repeat(64)));
         assertTrue(documents.listDocuments(appId).isEmpty());
+    }
+
+    /** The same transaction handling Spring applies to the real beans, around hand-built instances. */
+    @SuppressWarnings("unchecked")
+    static <T> T transactional(T target) {
+        ProxyFactory factory = new ProxyFactory(target);
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(new TransactionInterceptor(txManager, new AnnotationTransactionAttributeSource()));
+        return (T) factory.getProxy();
+    }
+
+    @Test
+    void repositoryRefusesTheLockAndTheWriteOutsideATransaction() {
+        UUID appId = insertDraft("NC-DOC-MANDATORY");
+        DocumentRepository guarded = transactional(new DocumentRepository(db));
+        assertThrows(IllegalTransactionStateException.class, () -> guarded.lockApplicationState(appId));
+        assertThrows(IllegalTransactionStateException.class, () -> guarded.recordVersion(
+            appId, "test_report", UUID.randomUUID(), "9".repeat(64), 10, "application/pdf", "r.pdf", "Lab", null, null, NOVA_USER));
+        assertTrue(documents.listDocuments(appId).isEmpty());
+        assertEquals("draft", tx.execute(status -> guarded.lockApplicationState(appId)).orElseThrow());
+    }
+
+    @Test
+    void recorderOpensTheTransactionTheGuardedRepositoryDemands() {
+        UUID appId = insertDraft("NC-DOC-PROXY");
+        DocumentRecorder guarded = transactional(new DocumentRecorder(transactional(new DocumentRepository(db)), idempotency));
+        String key = "0123456789abcdef-px1";
+        assertTrue(idempotency.begin(NOVA_USER, "POST", DocumentService.ROUTE_UPLOAD, appId, key, new byte[32]));
+        // No outer transaction: only the recorder's own @Transactional can satisfy the repository's MANDATORY.
+        var recorded = guarded.record(NOVA_USER, appId, key, version("4".repeat(64)), Optional::empty, r -> "{}");
+        assertEquals(1, recorded.versions().size());
+        String other = "0123456789abcdef-px2";
+        assertTrue(idempotency.begin(NOVA_USER, "POST", DocumentService.ROUTE_UPLOAD, appId, other, new byte[32]));
+        assertThrows(IllegalStateException.class, () -> guarded.record(NOVA_USER, appId, other, version("5".repeat(64)), Optional::empty,
+            r -> { throw new IllegalStateException("render"); }));
+        assertEquals(1, documents.listVersions(recorded.document().id()).size(), "the failed upload rolled back");
+    }
+
+    @Test
+    void aBrandThatLapsedDuringTheUploadIsRefusedUnderTheLock() {
+        UUID appId = insertDraft("NC-DOC-BRAND");
+        var denied = assertThrows(DocumentRecorder.Denied.class, () -> tx.execute(status ->
+            recorder.record(NOVA_USER, appId, "0123456789abcdef-br1", version("6".repeat(64)),
+                () -> Optional.of("brand_not_permitted"), r -> "{}")));
+        assertEquals("brand_not_permitted", denied.code());
+        assertTrue(documents.listDocuments(appId).isEmpty(), "nothing written when the post-lock check refuses");
     }
 }

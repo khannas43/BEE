@@ -52,6 +52,10 @@ class DocumentFilenameTest {
         String joined = "\u0915\u094d\u200d\u0937.pdf";
         assertEquals(joined, DocumentService.sanitizeFilename(joined));
         assertEquals("x.pdf.pdf", DocumentService.sanitizeFilename("x.pdf.pdf"));
+        // A cut that lands right after a joiner does not leave an invisible joiner before the suffix.
+        String cutAtJoiner = DocumentService.sanitizeFilename("a".repeat(175) + "\u200d" + "b".repeat(50));
+        assertEquals("a".repeat(175) + ".pdf", cutAtJoiner);
+        assertEquals("a.pdf", DocumentService.sanitizeFilename("\u200d a \u200c"));
     }
 
     @Test

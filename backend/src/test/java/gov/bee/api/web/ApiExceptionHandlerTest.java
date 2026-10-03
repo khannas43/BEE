@@ -21,6 +21,18 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void serverSideSpoolFailuresAreUnavailableNotACallerError() {
+        var noSpace = new MultipartException("Failed to parse multipart servlet request",
+            new java.io.IOException("spool", new java.nio.file.FileSystemException("/tmp/upload", null, "No space left on device")));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, handler.missingPart(noSpace).getStatusCode());
+        var noTemp = new MultipartException("Failed to parse multipart servlet request", new java.io.FileNotFoundException("/tmp/x"));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, handler.missingPart(noTemp).getStatusCode());
+        // A parse failure with a plain IOException cause (stream ended unexpectedly) stays the caller's.
+        var truncated = new MultipartException("Failed to parse multipart servlet request", new java.io.IOException("Stream ended unexpectedly"));
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, handler.missingPart(truncated).getStatusCode());
+    }
+
+    @Test
     void missingRequiredPartIsValidationFailed() {
         var res = handler.missingPart(new MissingServletRequestPartException("file"));
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, res.getStatusCode());

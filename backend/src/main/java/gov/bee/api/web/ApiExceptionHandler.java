@@ -1,5 +1,7 @@
 package gov.bee.api.web;
 
+import java.io.FileNotFoundException;
+import java.nio.file.FileSystemException;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,11 +37,29 @@ public class ApiExceptionHandler {
         return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
     }
 
-    /** A malformed or truncated multipart body, or a missing required part, is the caller's validation error. */
+    /**
+     * A malformed or truncated multipart body, or a missing required part, is the caller's validation error.
+     * The same exception also wraps server-side failures while spooling the body (full or unwritable temp
+     * directory), which are reported as unavailable so retries and monitoring treat them as such.
+     */
     @ExceptionHandler({MultipartException.class, MissingServletRequestPartException.class})
     ResponseEntity<Map<String, Object>> missingPart(Exception e) {
+        if (serverSide(e)) {
+            log.error("request failed: {} (server-side)", e.getClass().getSimpleName());
+            return ApiErrors.response(HttpStatus.SERVICE_UNAVAILABLE, "service_unavailable");
+        }
         log.warn("request failed: {}", e.getClass().getSimpleName());
         return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+    }
+
+    /** File-system causes (no space, access denied, missing temp directory) are never the caller's doing. */
+    static boolean serverSide(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof FileSystemException || t instanceof FileNotFoundException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @ExceptionHandler(DataAccessException.class)

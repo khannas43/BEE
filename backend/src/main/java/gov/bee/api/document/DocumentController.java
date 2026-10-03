@@ -38,7 +38,7 @@ public class DocumentController {
         return documents.list(resolved.caller(), parseId(id));
     }
 
-    /** Parts are optional here so the service can authorise the caller first, then answer 422 for a missing one. */
+    /** Parts are optional here so the service can check scope and ownership first, then answer 422 for a missing one. */
     @PostMapping(path = "/api/model-applications/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> upload(@AuthenticationPrincipal Jwt jwt,
                                                       @PathVariable("id") String id,

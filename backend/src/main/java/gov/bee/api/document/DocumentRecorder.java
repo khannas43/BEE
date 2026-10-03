@@ -3,8 +3,10 @@ package gov.bee.api.document;
 import gov.bee.api.application.IdempotencyRepository;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,13 +54,21 @@ public class DocumentRecorder {
         this.idempotency = idempotency;
     }
 
+    /**
+     * @param stillAllowed evaluated after the lock and the draft re-check, inside the transaction: a denial code
+     *                     (for example a brand authorisation that lapsed during a slow upload) refuses the write
+     */
     @Transactional
     public Recorded record(UUID accountId, UUID applicationId, String idempotencyKey, NewVersion version,
-                           Function<Recorded, String> responseBody) {
+                           Supplier<Optional<String>> stillAllowed, Function<Recorded, String> responseBody) {
         String state = documents.lockApplicationState(applicationId)
             .orElseThrow(() -> new Denied(HttpStatus.NOT_FOUND, "not_found"));
         if (!"draft".equals(state)) {
             throw new Denied(HttpStatus.FORBIDDEN, "not_editable");
+        }
+        Optional<String> denial = stillAllowed.get();
+        if (denial.isPresent()) {
+            throw new Denied(HttpStatus.FORBIDDEN, denial.get());
         }
         DocumentRepository.DocumentRow doc = documents.recordVersion(applicationId, DocumentService.KIND_TEST_REPORT,
             UUID.randomUUID(), version.sha256(), version.sizeBytes(), "application/pdf", version.filename(),

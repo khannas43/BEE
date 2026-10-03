@@ -8,7 +8,7 @@ import {
   uploadModelDocument,
   type ModelDocument,
 } from "@/lib/client/runtimeModelDocuments";
-import { newIdempotencyKey } from "@/lib/client/runtimeModelDrafts";
+import { PayloadKeyGate } from "@/lib/client/runtimeHttp";
 
 /** Contextual test-report intake on the draft form (WP06.1a). Not a top-level menu. */
 export function DraftTestReports({ applicationId }: { applicationId: string }) {
@@ -18,8 +18,8 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  // The key is bound to the exact payload: a different file or label gets a fresh key, a retry of the same one reuses it.
-  const idemRef = useRef<{ key: string; signature: string } | null>(null);
+  // One key per exact payload (kit PayloadKeyGate): a different file or label gets a fresh key, a retry reuses it.
+  const keyGate = useRef(new PayloadKeyGate());
 
   const apply = useCallback((res: Awaited<ReturnType<typeof listModelDocuments>>) => {
     if (!res.ok) {
@@ -53,17 +53,14 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
     }
     setBusy(true);
     setError(null);
-    const signature = JSON.stringify([file.name, file.size, file.lastModified, label.trim()]);
-    if (!idemRef.current || idemRef.current.signature !== signature) {
-      idemRef.current = { key: newIdempotencyKey(), signature };
-    }
-    const res = await uploadModelDocument(applicationId, { file, reportLabel: label.trim() }, idemRef.current.key);
+    const key = keyGate.current.keyFor([file.name, file.size, file.lastModified, label.trim()]);
+    const res = await uploadModelDocument(applicationId, { file, reportLabel: label.trim() }, key);
     setBusy(false);
     if (!res.ok) {
       setError(res.failure.message);
       return;
     }
-    idemRef.current = null;
+    keyGate.current.clear();
     setLabel("");
     if (fileRef.current) fileRef.current.value = "";
     await refresh();

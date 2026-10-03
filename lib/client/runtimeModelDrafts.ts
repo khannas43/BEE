@@ -2,6 +2,7 @@
  * Draft create/edit through the BFF (WP05.1b). Session cookie only; Idempotency-Key required.
  */
 
+import { IDEMPOTENCY_KEY } from "@/lib/client/runtimeHttp";
 import { READ_UI_MESSAGES } from "@/lib/client/runtimeModelApplications";
 
 export type DraftSaveFailure =
@@ -15,28 +16,8 @@ export type DraftSaveResult =
   | { ok: true; application: Record<string, unknown> & { id: string; reference: string; version: number }; replayed?: boolean }
   | { ok: false; failure: DraftSaveFailure; replayed?: boolean };
 
-const idemPattern = /^[A-Za-z0-9-]{16,64}$/;
-
-export function newIdempotencyKey(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 24);
-}
-
-/** Reuse one key per payload until the caller clears it after a known outcome (lost-response retry). */
-export class DraftIdempotencyGate {
-  private slot: { body: string; key: string } | null = null;
-
-  keyFor(body: unknown): string {
-    const serialized = JSON.stringify(body);
-    if (!this.slot || this.slot.body !== serialized) {
-      this.slot = { body: serialized, key: newIdempotencyKey() };
-    }
-    return this.slot.key;
-  }
-
-  clear() {
-    this.slot = null;
-  }
-}
+// The idempotency key helpers live in the screen kit; re-exported so existing imports keep working.
+export { newIdempotencyKey, PayloadKeyGate as DraftIdempotencyGate } from "@/lib/client/runtimeHttp";
 
 function messageFrom(body: unknown, fallback: string): string {
   if (body && typeof body === "object" && "message" in body && typeof (body as { message: unknown }).message === "string") {
@@ -51,7 +32,7 @@ async function draftWrite(
   body: unknown,
   idempotencyKey: string,
 ): Promise<DraftSaveResult> {
-  if (!idemPattern.test(idempotencyKey)) {
+  if (!IDEMPOTENCY_KEY.test(idempotencyKey)) {
     return { ok: false, failure: { kind: "validation", message: "An Idempotency-Key header is required for this request." } };
   }
   let res: Response;

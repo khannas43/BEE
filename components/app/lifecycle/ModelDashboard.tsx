@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Card, FakeTable, ScreenChrome } from "@/components/app/ScreenScaffold";
-import { orgsText, refreshIdentity, rolesText, useSpringIdentity } from "@/components/app/SessionBadge";
+import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
+import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
+import { orgsText, rolesText, useSpringIdentity } from "@/components/app/SessionBadge";
+import { gateRead } from "@/lib/client/runtimeHttp";
 import { modelDraftFormHref } from "@/lib/client/runtimeModelDrafts";
 import {
   type DetailRead,
-  type ListRead,
   type ModelApplication,
   modelDashboardHref,
   READ_UI_MESSAGES,
@@ -21,75 +22,31 @@ import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
 /**
- * WP05.1a read-only list/detail on the existing model-dashboard route.
- * Rows come only from the authenticated BFF; lifecycle localStorage is not used here.
- * Create/edit/submit/fee/rating/approval controls are not offered as operational actions.
+ * WP05.1a read-only list/detail on the existing model-dashboard route, built on the screen kit
+ * (components/app/kit, lib/client/runtimeHttp). Rows come only from the authenticated BFF; lifecycle
+ * localStorage is not used here. Create/edit/submit/fee/rating/approval controls are not offered as
+ * operational actions.
  *
- * Records are shown only while the Spring identity is signed in. The identity, list and
- * selected detail are read again when the tab regains focus or becomes visible, when the
- * page is restored from the back-forward cache, and every 30 s; a failed read (sign-out,
- * expiry, revoked role, outage) replaces the records instead of leaving them on screen.
+ * Records are shown only while the Spring identity is signed in. The identity, list and selected detail
+ * are read again when the tab regains focus or becomes visible, when the page is restored from the
+ * back-forward cache, and every 30 s; a failed read (sign-out, expiry, revoked role, outage) replaces the
+ * records instead of leaving them on screen.
  */
-const REVALIDATE_MS = 30_000;
-const SIGNED_OUT = { ok: false, failure: { kind: "session", code: "no_session", message: READ_UI_MESSAGES.no_session } } as const;
+const RETURN_TO = "/app/model-label/model-dashboard";
+const LIST_TARGET = "list";
+
+// Stable loaders: useRuntimeRead takes them as effect dependencies.
+const loadList = () => readModelApplicationList();
+const loadDetail = (id: string) => readModelApplication(id);
 
 export function ModelDashboard({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
   const params = useSearchParams();
   const selectedId = params.get("id");
+  const revalidation = useRevalidation();
 
-  const [listRead, setListRead] = useState<ListRead | null>(null);
-  const [detail, setDetail] = useState<{ id: string; read: DetailRead } | null>(null);
-  const [epoch, setEpoch] = useState(0);
-
-  useEffect(() => {
-    const revalidate = () => {
-      if (document.visibilityState !== "visible") return;
-      refreshIdentity();
-      setEpoch((e) => e + 1);
-    };
-    const restored = (e: PageTransitionEvent) => {
-      if (!e.persisted) return;
-      setListRead(null);
-      setDetail(null);
-      revalidate();
-    };
-    window.addEventListener("focus", revalidate);
-    document.addEventListener("visibilitychange", revalidate);
-    window.addEventListener("pageshow", restored);
-    const timer = window.setInterval(revalidate, REVALIDATE_MS);
-    return () => {
-      window.removeEventListener("focus", revalidate);
-      document.removeEventListener("visibilitychange", revalidate);
-      window.removeEventListener("pageshow", restored);
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  useEffect(() => {
-    let live = true;
-    readModelApplicationList().then((r) => {
-      if (live) setListRead(r);
-    });
-    return () => {
-      live = false;
-    };
-  }, [epoch]);
-
-  useEffect(() => {
-    if (!selectedId) return;
-    let live = true;
-    readModelApplication(selectedId).then((r) => {
-      if (live) setDetail({ id: selectedId, read: r });
-    });
-    return () => {
-      live = false;
-    };
-  }, [selectedId, epoch]);
-
-  const detailRead = selectedId && detail?.id === selectedId ? detail.read : null;
-  const shownList = gate(identity, listRead);
-  const shownDetail = gate(identity, detailRead);
+  const shownList = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
+  const shownDetail = gateRead(identity.status, useRuntimeRead(selectedId, loadDetail, revalidation));
 
   return (
     <ScreenChrome
@@ -110,7 +67,20 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
 
         <div className={`grid grid-cols-1 gap-space-md ${selectedId ? "lg:grid-cols-5" : ""}`}>
           <div className={selectedId ? "lg:col-span-3" : ""}>
-            <ListPanel listRead={shownList} selectedId={selectedId} />
+            <ReadPanel
+              title="My model applications"
+              read={shownList}
+              loadingText={READ_UI_MESSAGES.loading}
+              loadingTestId="model-applications-loading"
+              errorTestId="model-applications-list-error"
+              signInReturnTo={RETURN_TO}
+              isEmpty={(r) => r.list.count === 0}
+              emptyText={READ_UI_MESSAGES.empty_list}
+              emptyTestId="model-applications-empty"
+              resultAction={(r) => <span className="font-label-sm text-label-sm text-on-surface-variant">{r.list.count} records</span>}
+            >
+              {(r) => <ApplicationTable items={r.list.items} selectedId={selectedId} />}
+            </ReadPanel>
           </div>
           {selectedId ? (
             <div className="lg:col-span-2">
@@ -121,13 +91,6 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
       </div>
     </ScreenChrome>
   );
-}
-
-/** Nothing while the identity is loading; never records unless Spring reports a signed-in identity. */
-function gate<T extends ListRead | DetailRead>(identity: ReturnType<typeof useSpringIdentity>, read: T | null): T | null {
-  if (identity.status === "loading") return null;
-  if (identity.status === "signed-out") return (read && !read.ok ? read : SIGNED_OUT) as T;
-  return read;
 }
 
 function IdentityStrip({ identity }: { identity: ReturnType<typeof useSpringIdentity> }) {
@@ -158,90 +121,63 @@ function IdentityStrip({ identity }: { identity: ReturnType<typeof useSpringIden
   );
 }
 
-function ListPanel({ listRead, selectedId }: { listRead: ListRead | null; selectedId: string | null }) {
-  if (!listRead) {
-    return (
-      <Card title="My model applications">
-        <p className="font-body-md text-body-md text-on-surface-variant" data-testid="model-applications-loading">{READ_UI_MESSAGES.loading}</p>
-      </Card>
-    );
-  }
-
-  if (!listRead.ok) {
-    return (
-      <Card title="My model applications">
-        <FailureBanner failure={listRead.failure} testId="model-applications-list-error" />
-      </Card>
-    );
-  }
-
-  const { list } = listRead;
-  if (list.count === 0) {
-    return (
-      <Card title="My model applications" action={<span className="font-label-sm text-label-sm text-on-surface-variant">0 records</span>}>
-        <p className="font-body-md text-body-md text-on-surface-variant" data-testid="model-applications-empty">{READ_UI_MESSAGES.empty_list}</p>
-      </Card>
-    );
-  }
-
+function ApplicationTable({ items, selectedId }: { items: ModelApplication[]; selectedId: string | null }) {
   return (
-    <Card title="My model applications" action={<span className="font-label-sm text-label-sm text-on-surface-variant">{list.count} records</span>}>
-      <FakeTable
-        columns={["Reference", "Organisation", "Brand / Model", "Category", "State", ""]}
-        rows={list.items.map((a) => [
-          <span key="ref" className="font-mono" data-testid={`model-app-ref-${a.reference}`}>{a.reference}</span>,
-          a.organisation,
-          <div key="m">
-            <div className="font-semibold text-on-surface">{a.brandName}</div>
-            <div className="font-label-sm text-label-sm text-on-surface-variant">{a.modelNumber}</div>
-          </div>,
-          a.category,
-          <span key="s" className="capitalize">{stateLabel(a.state)}</span>,
-          <span key="acts" className="inline-flex flex-col gap-1 items-start">
+    <FakeTable
+      columns={["Reference", "Organisation", "Brand / Model", "Category", "State", ""]}
+      rows={items.map((a) => [
+        <span key="ref" className="font-mono" data-testid={`model-app-ref-${a.reference}`}>{a.reference}</span>,
+        a.organisation,
+        <div key="m">
+          <div className="font-semibold text-on-surface">{a.brandName}</div>
+          <div className="font-label-sm text-label-sm text-on-surface-variant">{a.modelNumber}</div>
+        </div>,
+        a.category,
+        <span key="s" className="capitalize">{stateLabel(a.state)}</span>,
+        <span key="acts" className="inline-flex flex-col gap-1 items-start">
+          <Link
+            href={modelDashboardHref(a.id)}
+            className={`font-label-sm text-label-sm inline-flex items-center gap-1 ${a.id === selectedId ? "text-on-surface font-semibold" : "text-primary hover:underline"}`}
+            data-testid={`model-app-open-${a.reference}`}
+          >
+            {a.id === selectedId ? "Selected" : "View"} <Icon name="arrow_forward" size={14} />
+          </Link>
+          {a.state === "draft" ? (
             <Link
-              href={modelDashboardHref(a.id)}
-              className={`font-label-sm text-label-sm inline-flex items-center gap-1 ${a.id === selectedId ? "text-on-surface font-semibold" : "text-primary hover:underline"}`}
-              data-testid={`model-app-open-${a.reference}`}
+              href={modelDraftFormHref(a.id)}
+              className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1"
+              data-testid={`model-app-edit-${a.reference}`}
             >
-              {a.id === selectedId ? "Selected" : "View"} <Icon name="arrow_forward" size={14} />
+              Edit <Icon name="edit" size={14} />
             </Link>
-            {a.state === "draft" ? (
-              <Link
-                href={modelDraftFormHref(a.id)}
-                className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1"
-                data-testid={`model-app-edit-${a.reference}`}
-              >
-                Edit <Icon name="edit" size={14} />
-              </Link>
-            ) : null}
-          </span>,
-        ])}
-      />
-    </Card>
+          ) : null}
+        </span>,
+      ])}
+    />
   );
 }
 
 function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRead: DetailRead | null }) {
   return (
-    <Card
-      title="Application detail"
-      action={
-        <Link href={modelDashboardHref()} className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1" data-testid="model-app-detail-close">
-          Close <Icon name="close" size={14} />
-        </Link>
-      }
-    >
-      <div data-testid="model-applications-detail" data-selected-id={selectedId}>
-        {!detailRead ? (
-          <p className="font-body-md text-body-md text-on-surface-variant">{READ_UI_MESSAGES.loading_detail}</p>
-        ) : !detailRead.ok ? (
-          <FailureBanner failure={detailRead.failure} testId="model-applications-detail-error" />
-        ) : (
+    <div data-testid="model-applications-detail" data-selected-id={selectedId}>
+      <ReadPanel
+        title="Application detail"
+        read={detailRead}
+        loadingText={READ_UI_MESSAGES.loading_detail}
+        errorTestId="model-applications-detail-error"
+        signInReturnTo={RETURN_TO}
+        action={
+          <Link href={modelDashboardHref()} className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1" data-testid="model-app-detail-close">
+            Close <Icon name="close" size={14} />
+          </Link>
+        }
+      >
+        {(r) => (
           <>
-            <DetailFields application={detailRead.application} />
-            {detailRead.application.state === "draft" ? (
+            <DetailFields application={r.application} />
+            {r.application.state === "draft" ? (
               <Link
-                href={modelDraftFormHref(detailRead.application.id)}
+                href={modelDraftFormHref(r.application.id)}
                 className="inline-flex items-center gap-1 mt-space-md px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md"
                 data-testid="model-app-detail-edit"
               >
@@ -250,51 +186,26 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
             ) : null}
           </>
         )}
-      </div>
-    </Card>
+      </ReadPanel>
+    </div>
   );
 }
 
 function DetailFields({ application }: { application: ModelApplication }) {
-  const rows: { label: string; value: string; mono?: boolean; capitalize?: boolean }[] = [
-    { label: "Reference", value: application.reference, mono: true },
-    { label: "Organisation", value: application.organisation },
-    { label: "Brand", value: application.brandName },
-    { label: "Model number", value: application.modelNumber },
-    { label: "Category", value: application.category },
-    { label: "State", value: stateLabel(application.state), capitalize: true },
-    { label: "Version", value: String(application.version) },
-    { label: "Read basis", value: application.readBasis.join(", ") },
-    { label: "Record id", value: application.id, mono: true },
-  ];
   return (
-    <dl className="space-y-space-sm" data-testid="model-applications-detail-fields">
-      {rows.map((row) => (
-        <div key={row.label}>
-          <dt className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide">{row.label}</dt>
-          <dd className={`font-body-sm text-body-sm text-on-surface mt-0.5 ${row.mono ? "font-mono break-all" : ""} ${row.capitalize ? "capitalize" : ""}`}>{row.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function FailureBanner({ failure, testId }: { failure: Extract<ListRead, { ok: false }>["failure"]; testId: string }) {
-  const icon = failure.kind === "session" ? "login" : failure.kind === "forbidden" ? "lock" : failure.kind === "not_found" ? "search_off" : "error";
-  return (
-    <div className="flex items-start gap-space-sm" data-testid={testId} data-failure-kind={failure.kind} data-failure-code={"code" in failure ? failure.code : failure.kind}>
-      <Icon name={icon} size={20} className="text-error shrink-0 mt-0.5" />
-      <div>
-        <p className="font-body-md text-body-md text-on-surface">{failure.message}</p>
-        {failure.kind === "not_found" ? (
-          <p className="font-label-sm text-label-sm text-on-surface-variant mt-1">The same message is shown whether the identifier is unknown or outside your scope.</p>
-        ) : null}
-        {failure.kind === "session" ? (
-          <Link href="/api/auth/login?returnTo=/app/model-label/model-dashboard" className="inline-flex items-center gap-1 mt-space-sm font-label-md text-label-md text-primary hover:underline">
-            Sign in <Icon name="arrow_forward" size={14} />
-          </Link>
-        ) : null}
-      </div>
-    </div>
+    <DescriptionList
+      testId="model-applications-detail-fields"
+      rows={[
+        { label: "Reference", value: application.reference, mono: true },
+        { label: "Organisation", value: application.organisation },
+        { label: "Brand", value: application.brandName },
+        { label: "Model number", value: application.modelNumber },
+        { label: "Category", value: application.category },
+        { label: "State", value: stateLabel(application.state), capitalize: true },
+        { label: "Version", value: String(application.version) },
+        { label: "Read basis", value: application.readBasis.join(", ") },
+        { label: "Record id", value: application.id, mono: true },
+      ]}
+    />
   );
 }

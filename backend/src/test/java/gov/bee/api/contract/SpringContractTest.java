@@ -9,7 +9,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -679,6 +681,19 @@ class SpringContractTest {
 
         // A required part missing is the contract's 422, not a 500, and the caller is authorised first.
         conforms(DOC_PATH, multipart(listPath).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345f"), 422, "validation_failed");
+
+        // The brand is valid at the early check and lapses before the recheck under the application lock:
+        // the upload is refused and nothing is recorded (the service wires recheckUnderLock, not a stub).
+        reset(documentRepo, documentStore, idempotency);
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()), Optional.empty());
+        when(documentStore.maxUploadBytes()).thenReturn(5_242_880L);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(documentStore.stage(any())).thenReturn(new StagedBlob(staged, "d".repeat(64), MIN_PDF.length));
+        when(documentRepo.lockApplicationState(NOVA_APP)).thenReturn(Optional.of("draft"));
+        conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345g"), 403, "brand_not_permitted");
+        verify(documentRepo, never()).recordVersion(any(), any(), any(), any(), anyLong(), any(), any(), any(), nullable(LocalDate.class), nullable(String.class), any());
     }
 
     @Test

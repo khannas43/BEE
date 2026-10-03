@@ -33,6 +33,26 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void aFullDiskReportedAsAPlainIoExceptionIsUnavailable() {
+        var diskFull = new MultipartException("Failed to parse multipart servlet request",
+            new java.io.IOException("No space left on device"));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, handler.missingPart(diskFull).getStatusCode());
+        var quota = new MultipartException("x", new java.io.IOException("spool", new java.io.IOException("Disk quota exceeded")));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, handler.missingPart(quota).getStatusCode());
+    }
+
+    @Test
+    void aCyclicCauseChainTerminates() {
+        var a = new java.io.IOException("a");
+        var b = new java.io.IOException("b");
+        a.initCause(b);
+        b.initCause(a);
+        var res = org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(5),
+            () -> handler.missingPart(new MultipartException("x", a)));
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, res.getStatusCode());
+    }
+
+    @Test
     void missingRequiredPartIsValidationFailed() {
         var res = handler.missingPart(new MissingServletRequestPartException("file"));
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, res.getStatusCode());

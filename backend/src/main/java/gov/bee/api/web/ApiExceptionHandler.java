@@ -1,7 +1,9 @@
 package gov.bee.api.web;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.file.FileSystemException;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,21 +47,44 @@ public class ApiExceptionHandler {
     @ExceptionHandler({MultipartException.class, MissingServletRequestPartException.class})
     ResponseEntity<Map<String, Object>> missingPart(Exception e) {
         if (serverSide(e)) {
-            log.error("request failed: {} (server-side)", e.getClass().getSimpleName());
+            log.error("request failed: {} caused by {} (server-side)", e.getClass().getSimpleName(),
+                rootCause(e).getClass().getName());
             return ApiErrors.response(HttpStatus.SERVICE_UNAVAILABLE, "service_unavailable");
         }
         log.warn("request failed: {}", e.getClass().getSimpleName());
         return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
     }
 
-    /** File-system causes (no space, access denied, missing temp directory) are never the caller's doing. */
+    private static final int MAX_CAUSE_DEPTH = 10;
+
+    /**
+     * File-system causes (access denied, missing temp directory) and a full disk, which Tomcat's spooling reports
+     * as a plain IOException, are never the caller's doing. The walk is depth-bounded so a cyclic cause chain
+     * cannot hang the failure path.
+     */
     static boolean serverSide(Throwable e) {
-        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+        Throwable t = e;
+        for (int depth = 0; t != null && depth < MAX_CAUSE_DEPTH; depth++, t = t.getCause() == t ? null : t.getCause()) {
             if (t instanceof FileSystemException || t instanceof FileNotFoundException) {
                 return true;
             }
+            String message = t.getMessage();
+            if (t instanceof IOException && message != null) {
+                String m = message.toLowerCase(Locale.ROOT);
+                if (m.contains("no space left") || m.contains("disk quota")) {
+                    return true;
+                }
+            }
         }
         return false;
+    }
+
+    private static Throwable rootCause(Throwable e) {
+        Throwable t = e;
+        for (int depth = 0; t.getCause() != null && t.getCause() != t && depth < MAX_CAUSE_DEPTH; depth++) {
+            t = t.getCause();
+        }
+        return t;
     }
 
     @ExceptionHandler(DataAccessException.class)

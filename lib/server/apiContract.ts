@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.6.0";
+export const CONTRACT_VERSION = "0.7.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -32,6 +32,10 @@ export const ERROR_MESSAGES = {
   not_submittable: "Only draft applications can be submitted.",
   rule_not_available: "Required category, standard or fee rules are not available.",
   validation_failed: "The request could not be accepted.",
+  role_not_permitted: "This role cannot perform this action.",
+  segregation_refused: "A person who acted at another stage of this application, or its own organisation, cannot confirm its fee.",
+  amount_mismatch: "The amount received does not match the fee due.",
+  assignee_unavailable: "No officer is available to take the next stage.",
   test_report_required: "A test report must be uploaded before the application can be submitted.",
   declared_efficiency_required: "The declared efficiency figure is required before the application can be submitted.",
   test_date_invalid: "A test date that is not in the future is required before the application can be submitted.",

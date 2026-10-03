@@ -35,6 +35,16 @@ export interface ModelApplication {
   laboratoryCode?: string;
   testedOn?: string;
   declaredIseer?: number;
+  /** The provisional fee captured at submit; present once the application has been submitted. */
+  submissionFee?: {
+    amountInr: string;
+    currency: string;
+    label: string;
+    feeRuleKey: string;
+    feeRuleVersion: number;
+    verificationStatus: string;
+    localDemoFee: boolean;
+  };
 }
 
 export interface ModelApplicationList {

@@ -32,6 +32,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     navRoles: ["manufacturer", "agency"],
     implemented: ["Create draft", "Edit draft", "Upload test reports", "Submit draft"],
   },
+  {
+    href: "/app/finance/finance-queue",
+    en: "Finance queue",
+    hi: "वित्त कतार",
+    icon: "payments",
+    navRoles: ["finance"],
+    implemented: ["List fee-due applications", "View fee and evidence", "Confirm fee received"],
+  },
 ];
 
 export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {

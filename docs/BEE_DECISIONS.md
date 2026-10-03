@@ -102,6 +102,19 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Recommendation.** The IAME scrutiny step records verified or not verified with a note.
 - **If unanswered.** Reports stay "pending verification" through the whole journey.
 
+### B11 — How the fee is confirmed, and who can correct a mistake
+- **Question.** Is the fee confirmed **by hand by Finance** after seeing the payment, or by the applicant uploading proof, or by a payment gateway? Who exactly may confirm? If a confirmation is wrong (wrong reference, wrong date), how is it corrected or reversed, and by whom?
+- **Today.** Finance confirms by hand, recording a receipt reference and the date received. The applicant's organisation and anyone who took part at another stage cannot confirm. A confirmation **cannot be undone** in the product.
+- **Options.** (a) As today, plus a correction step that needs a second Finance approver; (b) applicant uploads proof, Finance verifies it; (c) gateway callback with Finance reconciliation.
+- **Recommendation.** (a) for the first release: manual confirmation, with a defined correction route.
+- **If unanswered.** As today, with no correction route.
+
+### B12 — Amount received
+- **Question.** Must the amount received equal the fee exactly? What about part payments, overpayment, tax, or amounts deducted at source?
+- **Today.** The amount must equal the fee on the application exactly; anything else is refused and nothing changes.
+- **Recommendation.** State the tolerance, if any, and how a difference is recorded.
+- **If unanswered.** Exact match only.
+
 ### B9 — Approval chain (D1) and allocation (D2, D5)
 - **D1.** Is Secretary approval always required, or can the Director's recommendation be final for some categories? **Today:** always required. **Recommendation:** state the delegation rule, if any.
 - **D2.** Who assigns applications to IAME and Reviewer officers? **Today:** automatic round-robin; no allocator role. **Recommendation:** name the allocating role, or confirm round-robin.
@@ -132,6 +145,7 @@ Each decision below gives what the system does today, the realistic options, a r
 | A5 date rule | As today |
 | B1 to B8 | The local defaults stay and are labelled provisional |
 | B9, B10 | Defaults stay |
+| B11, B12 | Manual confirmation with an exact amount and no correction route |
 | C1 | Rule-editing screens stay read-only |
 
 ## Answer sheet
@@ -152,9 +166,11 @@ Each decision below gives what the system does today, the realistic options, a r
 | B7 | | | |
 | B8 | | | |
 | B9 (D1, D2, D5) | | | |
+| B11 | | | |
+| B12 | | | |
 | B10 | | | |
 | C1 | | | |
 
 ## References for the engineering team
 
-Source decision records and the build's provisional values: [wp01/SCREEN_ACTION_MATRIX.md](wp01/SCREEN_ACTION_MATRIX.md) (D1 to D6), [wp04/WP04.1_MASTERS.md](wp04/WP04.1_MASTERS.md) section 10 (M1 to M7), [wp05/WP05.1d_DECISIONS.md](wp05/WP05.1d_DECISIONS.md) and [wp05/WP05.1d_EVIDENCE_GATES.md](wp05/WP05.1d_EVIDENCE_GATES.md) (B1 to B8). Tracked in [BACKLOG.md](BACKLOG.md): BL-040 to BL-043, BL-064, BL-065, BL-068, BL-073.
+Source decision records and the build's provisional values: [wp01/SCREEN_ACTION_MATRIX.md](wp01/SCREEN_ACTION_MATRIX.md) (D1 to D6), [wp04/WP04.1_MASTERS.md](wp04/WP04.1_MASTERS.md) section 10 (M1 to M7), [wp05/WP05.1d_DECISIONS.md](wp05/WP05.1d_DECISIONS.md) and [wp05/WP05.1d_EVIDENCE_GATES.md](wp05/WP05.1d_EVIDENCE_GATES.md) (B1 to B8). Tracked in [BACKLOG.md](BACKLOG.md): BL-040 to BL-043, BL-064, BL-065, BL-068, BL-073, BL-084, BL-085, BL-086.

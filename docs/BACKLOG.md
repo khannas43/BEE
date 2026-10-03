@@ -110,3 +110,24 @@ Last updated: 3 October 2026 (command panel and feature template added).
 | BL-081 | No skeletons for the database test or the `SpringContractTest` section (the `@MockitoBean`, the documented-pairs test) | Both are the longest hand-written parts of a feature; the output names them but does not generate them | when the first generated command is implemented | open |
 | BL-082 | `CommandPanel` is used by the test-report upload only; the draft save and the submit confirm still use their own buttons and state | Two places show command failures differently until they move onto `useCommand` | next change to the draft form | open |
 
+## I. Dependencies
+
+| ID | Item | Why it matters | Owner / revisit at | Status |
+| --- | --- | --- | --- | --- |
+| BL-083 | `npm ci` reports 8 audit findings (7 high, 1 critical) and a deprecation warning for `eslint@9.39.5` | Local-only build tooling today, but a government portal needs a reviewed dependency baseline; do not run `npm audit fix --force` blindly (breaking changes) | a dedicated dependency review before any shared deployment | open |
+
+## J. WP07.1a Finance fee confirmation (first slice step 2)
+
+| ID | Item | Why it matters | Owner / revisit at | Status |
+| --- | --- | --- | --- | --- |
+| BL-084 | A confirmation cannot be reversed or corrected: both history tables are append-only and no compensating action exists | A wrong receipt reference or a mistaken confirmation has no remedy in the product; BEE must say how corrections work (BEE_DECISIONS B11) | BEE; WP07.3 (refunds and finance checks) | open |
+| BL-085 | The amount received must equal the fee snapshot exactly: part payments, overpayment, tax and fees deducted at source are not modelled | Real payments often differ; the rule is a provisional local default (BEE_DECISIONS A1, B12) | BEE; WP07.1 | open |
+| BL-086 | The D2 allocator picks the active IAME account with the fewest open assignments, ties by id, from all IAME accounts: no category, region, leave or reallocation rules | The first slice has one seeded officer; real allocation needs BEE's rule | BEE (D2); WP05.2 | open |
+| BL-087 | No notification to the applicant or the assigned officer when a fee is confirmed | The applicant sees the new state only by reloading; RFP expects notifications | notifications work (WP10 or earlier if prioritised) | open |
+| BL-088 | The matrix's "state" label for `finance-queue` (and `model-dashboard`) still names the prototype's data source (`lifecycle-store`, replaced by a work package) although both now read Spring | A reader of the matrix would think they are still fixtures | next matrix update | open |
+| BL-089 | `IdentityStrip` is now a kit component but `ModelDashboard` and `NewModelApplication` keep their own copies | Three places to change the wording | when the Cursor briefs 01 and 02 land | open |
+| BL-090 | The applicant's own fee view (`model-payment`) and Finance's reconciliation, refund and ledger screens are not built | Only the queue and the confirmation exist (Wave 4) | Wave 4 (WP07) | scheduled |
+| BL-091 | The Finance queue shows the whole fee_due list with no paging, sorting or filter | Fine for a handful of applications, not for a real queue | with BL-020 | open |
+| BL-092 | The segregation rule for "someone who acted at another stage" and the payer-organisation rule are proven by the contract test and the policy only; no live check, because it would need a Finance account that also took part in an application | A regression in those two refusals would not be seen live | when a second Finance twin or a multi-role twin exists | open |
+| BL-093 | `model_application_transition_event` is general but only fee confirmation writes it; submit keeps its own `model_application_submission_event`: two histories | Later steps will use the general one; a unified read is needed for the timeline | WP05.2 (history) | scheduled |
+

@@ -33,6 +33,7 @@ before(async () => {
     brands: await import("../../app/api/runtime/model-applications/eligible-brands/route.ts"),
     documents: await import("../../app/api/runtime/model-applications/[id]/documents/route.ts"),
     documentContent: await import("../../app/api/runtime/model-applications/[id]/documents/[documentId]/versions/[versionId]/content/route.ts"),
+    feeConfirmation: await import("../../app/api/runtime/model-applications/[id]/fee-confirmation/route.ts"),
   };
 });
 
@@ -160,6 +161,18 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/submit 401 sessio
   const res = await routes.submit.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/submit", "unit-submit-post-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123458" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/fee-confirmation 401 session_expired | Keycloak refusing refresh on fee confirmation", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.feeConfirmation.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/fee-confirmation", "unit-fee-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123460" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

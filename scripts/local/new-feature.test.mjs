@@ -43,7 +43,7 @@ function sandbox() {
 
 function scaffold(dir, extra = []) {
   try {
-    const out = execFileSync(process.execPath, [join(ROOT, "scripts/local/new-feature.cjs"), "--name", "fee-confirmation", "--package", "finance", "--path", "/api/model-applications/{id}/fee-confirmation", ...extra],
+    const out = execFileSync(process.execPath, [join(ROOT, "scripts/local/new-feature.cjs"), "--name", "sample-action", "--package", "sampleops", "--path", "/api/model-applications/{id}/sample-action", ...extra],
       { env: { ...process.env, NEW_FEATURE_ROOT: dir }, encoding: "utf8" });
     return { code: 0, out };
   } catch (e) {
@@ -52,13 +52,13 @@ function scaffold(dir, extra = []) {
 }
 
 const GENERATED = [
-  "backend/src/main/java/gov/bee/api/finance/FeeConfirmationController.java",
-  "backend/src/main/java/gov/bee/api/finance/FeeConfirmationService.java",
-  "backend/src/main/java/gov/bee/api/finance/FeeConfirmationRepository.java",
-  "app/api/runtime/model-applications/[id]/fee-confirmation/route.ts",
-  "lib/server/contracts/fee-confirmation.ts",
-  "lib/client/runtimeFeeConfirmation.ts",
-  "scripts/local/fee-confirmation.test.mjs",
+  "backend/src/main/java/gov/bee/api/sampleops/SampleActionController.java",
+  "backend/src/main/java/gov/bee/api/sampleops/SampleActionService.java",
+  "backend/src/main/java/gov/bee/api/sampleops/SampleActionRepository.java",
+  "app/api/runtime/model-applications/[id]/sample-action/route.ts",
+  "lib/server/contracts/sample-action.ts",
+  "lib/client/runtimeSampleAction.ts",
+  "scripts/local/sample-action.test.mjs",
 ];
 
 test("a dry run writes nothing and a bad name or path is refused", () => {
@@ -66,9 +66,9 @@ test("a dry run writes nothing and a bad name or path is refused", () => {
   try {
     const dry = scaffold(dir, ["--dry-run", "--apply"]);
     assert.equal(dry.code, 0, dry.out);
-    assert.match(dry.out, /would create: backend\/src\/main\/java\/gov\/bee\/api\/finance\/FeeConfirmationService\.java/);
+    assert.match(dry.out, /would create: backend\/src\/main\/java\/gov\/bee\/api\/sampleops\/SampleActionService\.java/);
     for (const f of GENERATED) assert.equal(existsSync(join(dir, f)), false, f);
-    assert.equal(readFileSync(join(dir, "docs/wp03/bee-local-api.openapi.json"), "utf8").includes("fee-confirmation"), false);
+    assert.equal(readFileSync(join(dir, "docs/wp03/bee-local-api.openapi.json"), "utf8").includes("sample-action"), false);
     const bad = execFileSync(process.execPath, ["-e", `
       const { spawnSync } = require("child_process");
       const r = spawnSync(process.execPath, [${JSON.stringify(join(ROOT, "scripts/local/new-feature.cjs"))}, "--name", "Bad_Name", "--path", "/api/other"], { encoding: "utf8", env: { ...process.env, NEW_FEATURE_ROOT: ${JSON.stringify(dir)} } });
@@ -86,17 +86,17 @@ test("--apply creates the files, registers the route everywhere, bumps and re-pi
     assert.equal(r.code, 0, r.out);
     for (const f of GENERATED) assert.equal(existsSync(join(dir, f)), true, f);
     assert.match(r.out, /wiring check: wiring checks: \d+ passed, 0 failed/);
-    assert.match(readFileSync(join(dir, "backend/src/main/java/gov/bee/api/security/SecurityConfig.java"), "utf8"), /requestMatchers\(HttpMethod\.POST, "\/api\/model-applications\/\*\/fee-confirmation"\)\.authenticated\(\)/);
-    assert.match(readFileSync(join(dir, "lib/server/requestLog.ts"), "utf8"), /"\/api\/runtime\/model-applications\/\{id\}\/fee-confirmation"/);
-    assert.match(readFileSync(join(dir, "package.json"), "utf8"), /scripts\/local\/fee-confirmation\.test\.mjs/);
+    assert.match(readFileSync(join(dir, "backend/src/main/java/gov/bee/api/security/SecurityConfig.java"), "utf8"), /requestMatchers\(HttpMethod\.POST, "\/api\/model-applications\/\*\/sample-action"\)\.authenticated\(\)/);
+    assert.match(readFileSync(join(dir, "lib/server/requestLog.ts"), "utf8"), /"\/api\/runtime\/model-applications\/\{id\}\/sample-action"/);
+    assert.match(readFileSync(join(dir, "package.json"), "utf8"), /scripts\/local\/sample-action\.test\.mjs/);
     // Contract: both layers documented, version bumped, pin and code agree with the file.
     const raw = readFileSync(join(dir, "docs/wp03/bee-local-api.openapi.json"), "utf8");
     const doc = JSON.parse(raw);
-    assert.ok(doc.paths["/api/model-applications/{id}/fee-confirmation"].post);
-    assert.ok(doc.paths["/api/runtime/model-applications/{id}/fee-confirmation"].post);
-    assert.ok(doc.components.schemas.FeeConfirmationRequest);
-    assert.equal(doc.paths["/api/model-applications/{id}/fee-confirmation"]["x-bee-audience"], "internal");
-    assert.equal(doc.paths["/api/runtime/model-applications/{id}/fee-confirmation"]["x-bee-audience"], "browser");
+    assert.ok(doc.paths["/api/model-applications/{id}/sample-action"].post);
+    assert.ok(doc.paths["/api/runtime/model-applications/{id}/sample-action"].post);
+    assert.ok(doc.components.schemas.SampleActionRequest);
+    assert.equal(doc.paths["/api/model-applications/{id}/sample-action"]["x-bee-audience"], "internal");
+    assert.equal(doc.paths["/api/runtime/model-applications/{id}/sample-action"]["x-bee-audience"], "browser");
     const pin = JSON.parse(readFileSync(join(dir, "scripts/local/contract-pin.json"), "utf8"));
     assert.equal(doc.info.version, pin.version);
     assert.notEqual(pin.version, JSON.parse(readFileSync(join(ROOT, "docs/wp03/bee-local-api.openapi.json"), "utf8")).info.version, "the version moved");

@@ -45,6 +45,11 @@ const SUBMIT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "not_submittable"], 404: ["not_found"], 503: ["service_unavailable"] },
   POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_submittable"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "fee_preview_conflict", "duplicate_model"], 422: ["validation_failed", "idempotency_key_required", "rule_not_available", "test_report_required", "declared_efficiency_required", "test_date_invalid", "laboratory_not_accredited", "standard_not_available"], 503: ["service_unavailable"] },
 };
+// First slice step 2 (Finance confirms the fee). Keep equal to lib/server/contracts/fee-confirmation.ts and the artifact (BL-080).
+const FEE_ROUTE = "/api/runtime/model-applications/{id}/fee-confirmation";
+const FEE_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "assignee_unavailable"], 422: ["validation_failed", "idempotency_key_required", "amount_mismatch"], 503: ["service_unavailable"] },
+};
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: WRITE_DENIALS, 503: ["service_unavailable"] },
@@ -232,17 +237,24 @@ function inventory() {
   walkJ(path.join(ROOT, "backend/src/main/java"));
   const mappings = new Set();
   for (const src of java) {
-    for (const m of src.matchAll(/@GetMapping\("([^"]+)"\)/g)) mappings.add(m[1]);
+    // Every Spring mapping, whatever the method: a command-only route (POST) has no GET mapping.
+    for (const m of src.matchAll(/@(?:Get|Post|Patch)Mapping\(\s*(?:path\s*=\s*)?"([^"]+)"/g)) mappings.add(m[1]);
   }
   const security = fs.readFileSync(path.join(ROOT, "backend/src/main/java/gov/bee/api/security/SecurityConfig.java"), "utf8");
   const allowed = [...security.matchAll(/requestMatchers\(HttpMethod\.(\w+), ([^)]+)\)/g)].flatMap((m) => [...m[2].matchAll(/"([^"]+)"/g)].map((x) => `${m[1]} ${x[1]}`));
   const internalPaths = internal.map(([r]) => r).sort();
   const springPaths = [...mappings, "/actuator/health"].sort();
-  if (springPaths.join() !== internalPaths.join()) problems.push(`Spring GET mappings ${springPaths} vs contract ${internalPaths}`);
-  const expectAllowed = ["GET /actuator/health", "GET /actuator/health/**", "GET /api/me", "GET /api/model-applications/eligible-brands", "GET /api/model-applications", "GET /api/model-applications/*", "GET /api/model-applications/*/submit", "POST /api/model-applications", "PATCH /api/model-applications/*", "POST /api/model-applications/*/submit", "GET /api/model-applications/*/documents", "POST /api/model-applications/*/documents", "GET /api/model-applications/*/documents/*/versions/*/content"];
-  if (allowed.sort().join() !== expectAllowed.sort().join()) problems.push(`SecurityConfig matchers changed: ${allowed}`);
+  if (springPaths.join() !== internalPaths.join()) problems.push(`Spring mappings ${springPaths} vs contract ${internalPaths}`);
+  // The security allowlist must be exactly the contract's internal operations (plus the health group): derived, not a snapshot.
+  const OPS = ["get", "post", "put", "patch", "delete"];
+  const expectAllowed = [...internal.flatMap(([route, item]) => OPS.filter((m) => item[m]).map((m) => `${m.toUpperCase()} ${route.replace(/\{[^}]+\}/g, "*")}`)), "GET /actuator/health/**"];
+  if (allowed.sort().join() !== expectAllowed.sort().join()) {
+    const extra = allowed.filter((x) => !expectAllowed.includes(x));
+    const missing = expectAllowed.filter((x) => !allowed.includes(x));
+    problems.push(`SecurityConfig matchers differ from the contract: extra [${extra}] missing [${missing}]`);
+  }
   check("contract.inventory", problems.length === 0,
-    `${routes.length} Next route files vs ${browser.length} browser paths + catch-all; ${springPaths.length} Spring GET routes vs ${internalPaths.length} internal paths; SecurityConfig matchers unchanged (${allowed.length})${show(problems)}`);
+    `${routes.length} Next route files vs ${browser.length} browser paths + catch-all; ${springPaths.length} Spring routes vs ${internalPaths.length} internal paths; SecurityConfig matchers equal the contract (${allowed.length})${show(problems)}`);
   check("contract.deferred-not-operational", doc["x-bee-deferred"].length >= 4 && doc["x-bee-deferred"].every((d) => d.owner && d.status !== "operational"),
     `${doc["x-bee-deferred"].length} deferred routes with owners (${[...new Set(doc["x-bee-deferred"].map((d) => d.owner))].join(", ")}); none operational`);
 }
@@ -373,6 +385,14 @@ async function nextChecks(jar, novaToken) {
   contract.record({ route: "/api/runtime/model-applications/{id}/submit", method: "POST", status: submitAnonPost.status, code: submitAnonPost.json?.error ?? "-", ok: submitNoSessOk && contract.conforms(doc, "/api/runtime/model-applications/{id}/submit", "POST", submitAnonPost).length === 0 });
   check("next.submit-no-session", submitNoSessOk && sameCorr(submitAnonGet) && sameCorr(submitAnonPost),
     `GET/POST runtime submit without cookie: ${submitAnonGet.status} ${submitAnonGet.json?.error}, ${submitAnonPost.status} ${submitAnonPost.json?.error}${show(e)}`);
+  const FEE_R = "/api/runtime/model-applications/{id}/fee-confirmation";
+  const feeAnon = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/fee-confirmation`, {
+    method: "POST", correlationId: cid("next-fee-anon-post"), headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123459" }, body: "{}",
+  });
+  e = contract.conforms(doc, FEE_R, "POST", feeAnon);
+  const feeNoSessOk = feeAnon.status === 401 && feeAnon.json?.error === "no_session" && e.length === 0;
+  contract.record({ route: FEE_R, method: "POST", status: feeAnon.status, code: feeAnon.json?.error ?? "-", ok: feeNoSessOk });
+  check("next.fee-confirmation-no-session", feeNoSessOk && sameCorr(feeAnon), `POST runtime fee-confirmation without cookie: ${feeAnon.status} ${feeAnon.json?.error}${show(e)}`);
   const docListAnonGet = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, { correlationId: cid("next-doc-anon-get") });
   const docUploadMp = contractUploadMultipart();
   const docListAnonPost = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, {
@@ -507,6 +527,7 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(DETAIL_ROUTE, `/api/runtime/model-applications/${NOVA_APP}`, "PATCH", sessionJar, DRAFT_UPSTREAM);
     await exerciseStandInPairs(SUBMIT_ROUTE, SUBMIT_URL, "GET", sessionJar);
     await exerciseStandInPairs(SUBMIT_ROUTE, SUBMIT_URL, "POST", sessionJar);
+    await exerciseStandInPairs(FEE_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/fee-confirmation`, "POST", sessionJar, FEE_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(DOC_CONTENT_ROUTE, DOC_CONTENT_URL, "GET", sessionJar, DOC_READ_UPSTREAM);

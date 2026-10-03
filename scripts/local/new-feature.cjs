@@ -412,7 +412,7 @@ function edit(rel, fn, what) {
     return;
   }
   if (!a.dry && a.apply) fs.writeFileSync(abs(rel), after);
-  log.push(`  ${a.apply ? "registered" : "would register"}: ${what}`);
+  log.push(`  ${a.apply && !a.dry ? "registered" : "would register"}: ${what}`);
 }
 
 function addToUnion(src, typeName, entry) {
@@ -420,6 +420,17 @@ function addToUnion(src, typeName, entry) {
   if (!m) throw new Error(`union ${typeName} not found`);
   if (m[2].includes(`"${entry}"`)) return src;
   return src.replace(m[0], `${m[1]}${m[2].replace(/\s+$/, "")}\n  | "${entry}";`);
+}
+
+/** Appends an entry to the "route" enum of the schema section that contains `marker`; a no-op if it is already there. */
+function addToRouteEnum(src, marker, entry) {
+  const at = src.indexOf(marker);
+  if (at < 0) throw new Error(`request-log schema section not found: ${marker}`);
+  const open = src.indexOf('"enum": [', src.indexOf('"route"', at));
+  const close = src.indexOf("]", open);
+  if (open < 0 || close < 0) throw new Error(`request-log schema route enum not found in: ${marker}`);
+  if (src.slice(open, close).includes(`"${entry}"`)) return src;
+  return `${src.slice(0, close).replace(/\s+$/, "")},\n              "${entry}"${src.slice(close)}`;
 }
 
 function register() {
@@ -452,28 +463,11 @@ function register() {
   }, `requestLog.ts: WebRoute, SpringRoute and springRoute() for ${springPath}`);
 
   edit("docs/wp03/request-log.schema.json", (s) => {
-    let out = s;
-    const specs = [
-      [`"${springPath}"`, '"/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",\n', `"/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",\n              "${springPath}",\n`],
-      [`"${runtimePath}"`, '"/api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",\n', `"/api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",\n              "${runtimePath}",\n`],
-    ];
-    if (!out.includes(`"${runtimePath}"`)) {
-      if (!out.includes(specs[1][1])) throw new Error("request-log schema anchor (runtime content) not found");
-      out = out.replace(specs[1][1], specs[1][2]);
-    }
-    if (out.split(`"${springPath}"`).length - 1 < 2) {
-      if (!out.split(`"${springPath}"`).length - 1) {
-        if (!out.includes(specs[0][1])) throw new Error("request-log schema anchor (spring content) not found");
-        out = out.replace(specs[0][1], specs[0][2]);
-      }
-      const upstream = '/versions/{versionId}/content"] },';
-      if (out.split(`"${springPath}"`).length - 1 < 2) {
-        if (!out.includes(upstream)) throw new Error("request-log schema anchor (upstream enum) not found");
-        out = out.replace(upstream, `/versions/{versionId}/content",\n            "${springPath}"] },`);
-      }
-    }
-    return out;
-  }, `request-log.schema.json: both Spring route enums and the browser enum for ${springPath}`);
+    // The request line's route enum holds Spring and browser routes; the upstream line's holds Spring routes.
+    const request = "One inbound request completed (Spring or a Next.js /api route).";
+    const upstream = "Next.js server call to Spring for that request.";
+    return [[request, springPath], [request, runtimePath], [upstream, springPath]].reduce((out, [marker, entry]) => addToRouteEnum(out, marker, entry), s);
+  }, `request-log.schema.json: the request and upstream route enums for ${springPath}`);
 
   // OpenAPI: clone the submit POST operations. Both layers, schema-valid by construction.
   edit("docs/wp03/bee-local-api.openapi.json", (s) => {

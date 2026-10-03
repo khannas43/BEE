@@ -1,6 +1,7 @@
 "use client";
 
 import { Module, Screen } from "@/lib/screens";
+import { FinanceQueue } from "./finance/FinanceQueue";
 import { ModelDashboard } from "./lifecycle/ModelDashboard";
 import { NewModelApplication } from "./lifecycle/NewModelApplication";
 import { StageScreen, StageVariant } from "./lifecycle/StageScreen";
@@ -37,6 +38,7 @@ const detail = (variant: DetailVariant): DeepComponent =>
 
 export const DEEP_SCREENS: Record<string, DeepComponent> = {
   // Model & Label — full lifecycle
+  "finance/finance-queue": FinanceQueue,
   "model-label/model-dashboard": ModelDashboard,
   "model-label/new-model-application": NewModelApplication,
   "model-label/model-payment": ModelPaymentScreen,

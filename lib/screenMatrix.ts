@@ -416,7 +416,7 @@ const CATALOGUE: Record<string, Spec> = {
   "production/compliance-exceptions": { ws: "production-finance", d: "retain" },
 
   // Finance
-  "finance/finance-queue": { ws: "production-finance", d: "retain" },
+  "finance/finance-queue": { ws: "production-finance", d: "retain", state: "lifecycle-store", replacedBy: "WP07", slice: true },
   "finance/payment-verification": { ws: "production-finance", d: "merge", target: "/app/finance/finance-queue", via: "Queue item detail", note: "Overlaps the Finance view of model-payment." },
   "finance/transaction-search": { ws: "production-finance", d: "retain" },
   "finance/payment-reconciliation": { ws: "production-finance", d: "retain" },
@@ -603,7 +603,7 @@ export const DEEP_KEYS_LIST: string[] = [
   "workflow/escalation-dashboard", "workflow/workflow-history",
   "mis-ai/risk-scoring", "mis-ai/production-anomaly", "mis-ai/extraction-review",
   "mis-ai/chatbot-review", "mis-ai/rating-trends", "mis-ai/model-monitoring",
-  "audit/integration-correlation",
+  "audit/integration-correlation", "finance/finance-queue",
 ];
 const DEEP_KEYS = new Set(DEEP_KEYS_LIST);
 

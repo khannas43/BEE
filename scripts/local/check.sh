@@ -198,6 +198,13 @@ read -r s_pass s_fail <<<"$(sed -nE 's/^model-submit checks: ([0-9]+) passed, ([
 if [[ -z "${s_pass:-}" ]]; then check "submit.run" 0 "model-submit did not complete: $(tail -1 <<<"$ms_out")"
 else pass=$((pass + s_pass)); fail=$((fail + s_fail)); fi
 
+# ---- first slice step 2: Finance confirms the fee through the BFF and the portal (records runtime fee-confirmation pairs)
+fc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/fee-confirmation-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$fc_out"
+read -r fc_pass fc_fail <<<"$(sed -nE 's/^fee-confirmation checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$fc_out")"
+if [[ -z "${fc_pass:-}" ]]; then check "fee.run" 0 "fee-confirmation-browser-check did not complete: $(tail -1 <<<"$fc_out")"
+else pass=$((pass + fc_pass)); fail=$((fail + fc_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

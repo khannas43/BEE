@@ -132,6 +132,9 @@ class SpringContractTest {
     DocumentRepository documentRepo;
 
     @MockitoBean
+    gov.bee.api.finance.FeeConfirmationRepository feeRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -197,6 +200,13 @@ class SpringContractTest {
         when(applications.list(any(), any())).thenReturn(List.of(row));
         when(applications.find(any(), any(), any())).thenReturn(Optional.empty());
         when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
+    }
+
+    /** A Finance caller whose own organisation is not the payer's (BEE staff), so only the rule under test can deny. */
+    void financeAccount(UUID staffOrg) {
+        account("finance", "all");
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staffOrg));
+        when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
     }
 
     /** Performs the request and checks the response against the artifact; returns it for further checks. */
@@ -778,6 +788,83 @@ class SpringContractTest {
         when(documentRepo.lockApplicationState(NOVA_APP)).thenReturn(Optional.of("draft"));
         conforms(DOC_PATH, multipart(listPath).file(pdf).param("documentKind", "test_report").param("reportLabel", "Lab A").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345g"), 403, "brand_not_permitted");
         verify(documentRepo, never()).recordVersion(any(), any(), any(), any(), anyLong(), any(), any(), any(), nullable(LocalDate.class), nullable(String.class), any());
+    }
+
+    @Test
+    void feeConfirmationOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/fee-confirmation";
+        String path = "/api/model-applications/" + NOVA_APP + "/fee-confirmation";
+        UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        String ok = "{\"version\":3,\"receiptReference\":\"UTR-1234\",\"receivedOn\":\"2026-10-02\",\"amountInr\":\"24000.00\"}";
+        var feeSnap = new ModelApplicationSubmitRepository.FeeSnapshotRow(UUID.randomUUID(), new BigDecimal("24000.00"), "INR", "RAC:new_model", 2,
+            "provisional", "ref", "note", java.time.Instant.now());
+        var confirmed = new gov.bee.api.finance.FeeConfirmationRepository.Result(gov.bee.api.finance.FeeConfirmationRepository.Outcome.CONFIRMED, 4,
+            Instant.parse("2026-10-03T10:00:00Z"));
+
+        financeAccount(staff);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(submissions.findFeeSnapshot(NOVA_APP)).thenReturn(Optional.of(feeSnap));
+        when(feeRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(feeRepo.confirm(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(confirmed);
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("finance"))));
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+
+        // Request shape and amount.
+        conforms(r, post(path).with(token("finance")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("2026-10-02", "2999-01-01")), 422, "validation_failed");
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("UTR-1234", "bad;ref")), 422, "validation_failed");
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("24000.00", "23999.00")), 422, "amount_mismatch");
+
+        // Version, idempotency and assignment conflicts.
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
+        when(feeRepo.confirm(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(
+            new gov.bee.api.finance.FeeConfirmationRepository.Result(gov.bee.api.finance.FeeConfirmationRepository.Outcome.STALE, 0, null));
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
+        when(feeRepo.confirm(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(
+            new gov.bee.api.finance.FeeConfirmationRepository.Result(gov.bee.api.finance.FeeConfirmationRepository.Outcome.NO_ASSIGNEE, 0, null));
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "assignee_unavailable");
+        when(feeRepo.confirm(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(confirmed);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        // A replay returns the stored receipt, not a record the caller may no longer read.
+        String stored = "{\"applicationId\":\"" + NOVA_APP + "\",\"reference\":\"LOCAL-MA-0002\",\"fromState\":\"fee_due\",\"toState\":\"iame_scrutiny\",\"version\":4,"
+            + "\"receiptReference\":\"UTR-1234\",\"amountInr\":\"24000.00\",\"receivedOn\":\"2026-10-02\",\"confirmedAt\":\"2026-10-03T10:00:00Z\"}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 4)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(ok))));
+        var replay = conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        // Who may confirm: only Finance, never the payer, never someone who acted at another stage, and only a fee_due record Finance can read.
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("auditor", "all");
+        conforms(r, post(path).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("finance", "all");   // this caller belongs to the paying organisation (NOVA)
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        financeAccount(staff);
+        when(feeRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of(USER));
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        when(feeRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+
+        // Identity denials and outage.
+        financeAccount(staff);
+        conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 401, "unauthenticated");
+        conforms(r, post(path).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "mfa_required");
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        financeAccount(staff);
+        doThrow(new DataAccessResourceFailureException("down")).when(feeRepo).confirm(any(), anyInt(), any(), any(), any(), any(), any(), any());
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 
     @Test

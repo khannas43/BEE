@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { refreshIdentity } from "@/components/app/SessionBadge";
 import type { ReadLike } from "@/lib/client/runtimeHttp";
 
@@ -11,6 +11,8 @@ export interface Revalidation {
   epoch: number;
   /** Bumps only on a back-forward-cache restore: records shown before it must not be shown again. */
   restores: number;
+  /** Re-read now, for example after a command changed what the screen shows. */
+  refresh: () => void;
 }
 
 /**
@@ -18,7 +20,8 @@ export interface Revalidation {
  * an expiry or a revoked role replaces what is on screen instead of leaving stale records visible.
  */
 export function useRevalidation(intervalMs: number = REVALIDATE_MS): Revalidation {
-  const [state, setState] = useState<Revalidation>({ epoch: 0, restores: 0 });
+  const [state, setState] = useState({ epoch: 0, restores: 0 });
+  const refresh = useCallback(() => setState((s) => ({ ...s, epoch: s.epoch + 1 })), []);
   useEffect(() => {
     const tick = (restored: boolean) => {
       const visible = document.visibilityState === "visible";
@@ -41,7 +44,7 @@ export function useRevalidation(intervalMs: number = REVALIDATE_MS): Revalidatio
       window.clearInterval(timer);
     };
   }, [intervalMs]);
-  return state;
+  return { ...state, refresh };
 }
 
 /**

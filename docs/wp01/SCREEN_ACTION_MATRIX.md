@@ -15,7 +15,7 @@ Rows: 158 (140 catalogue screens, 9 standalone console routes, 9 public routes).
 | retire | 2 | 0 | 0 |
 | dev-only | 0 | 1 | 0 |
 
-Retained console entry routes: 57. Bespoke catalogue screens: 38; generic placeholder screens: 102.
+Retained console entry routes: 57. Bespoke catalogue screens: 39; generic placeholder screens: 101.
 
 ## Legend
 
@@ -64,20 +64,20 @@ Basis: an **Annex A.1 cell** is an internal cell carried unchanged from `lib/scr
 
 | Role | Annex A.1 cell | WP01 proposal | On slice rows |
 | --- | ---: | ---: | ---: |
-| Adm | 87 | 4 | 10 |
-| Prg | 52 | 1 | 0 |
-| Rev | 52 | 1 | 0 |
-| Dir | 106 | 3 | 10 |
-| Sec | 106 | 3 | 10 |
+| Adm | 87 | 4 | 11 |
+| Prg | 52 | 1 | 1 |
+| Rev | 52 | 1 | 1 |
+| Dir | 106 | 3 | 11 |
+| Sec | 106 | 3 | 11 |
 | Fin | 14 | 0 | 0 |
 | HD | 36 | 0 | 8 |
-| Aud | 22 | 5 | 2 |
+| Aud | 22 | 5 | 3 |
 | Mfr | 0 | 22 | 6 |
 | Agy | 0 | 6 | 0 |
 | IAME | 0 | 9 | 6 |
 | SDA | 0 | 3 | 0 |
 | Lab | 0 | 8 | 0 |
-| **Total** | **475** | **65** | **52** |
+| **Total** | **475** | **65** | **58** |
 
 ### Proposals on slice rows
 
@@ -125,6 +125,12 @@ Basis: an **Annex A.1 cell** is an internal cell carried unchanged from `lib/scr
 | `/app/model-label/approval-note` | `/app/model-label/director-approval` | HD | V/R | Annex A.1 cell | needs policy review |
 | `/app/model-label/rating-calculation` | `/app/model-label/rating-calculation` | Dir | V | Annex A.1 cell | needs policy review |
 | `/app/model-label/rating-calculation` | `/app/model-label/rating-calculation` | Sec | V | Annex A.1 cell | needs policy review |
+| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Adm | R/X | Annex A.1 cell | needs policy review |
+| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Prg | R/X | Annex A.1 cell | needs policy review |
+| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Rev | R/X | Annex A.1 cell | needs policy review |
+| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Dir | V | Annex A.1 cell | needs policy review |
+| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Sec | V | Annex A.1 cell | needs policy review |
+| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Aud | V | Annex A.1 cell | needs policy review |
 | `/app/workflow/workflow-history` | `/app/registrations/record` | Adm | V/R/X | Annex A.1 cell | needs policy review |
 | `/app/workflow/workflow-history` | `/app/registrations/record` | Dir | V | Annex A.1 cell | needs policy review |
 | `/app/workflow/workflow-history` | `/app/registrations/record` | Sec | V | Annex A.1 cell | needs policy review |
@@ -138,7 +144,7 @@ Basis: an **Annex A.1 cell** is an internal cell carried unchanged from `lib/scr
 
 ### All other proposals
 
-<details><summary>488 rows</summary>
+<details><summary>482 rows</summary>
 
 | Row | Entry route | Role | Proposed capacity | Basis | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -349,12 +355,6 @@ Basis: an **Annex A.1 cell** is an internal cell carried unchanged from `lib/scr
 | `/app/production/compliance-exceptions` | `/app/production/compliance-exceptions` | Sec | V | Annex A.1 cell | needs policy review |
 | `/app/production/compliance-exceptions` | `/app/production/compliance-exceptions` | Fin | R/X | Annex A.1 cell | needs policy review |
 | `/app/production/compliance-exceptions` | `/app/production/compliance-exceptions` | HD | R/X | Annex A.1 cell | needs policy review |
-| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Adm | R/X | Annex A.1 cell | needs policy review |
-| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Prg | R/X | Annex A.1 cell | needs policy review |
-| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Rev | R/X | Annex A.1 cell | needs policy review |
-| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Dir | V | Annex A.1 cell | needs policy review |
-| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Sec | V | Annex A.1 cell | needs policy review |
-| `/app/finance/finance-queue` | `/app/finance/finance-queue` | Aud | V | Annex A.1 cell | needs policy review |
 | `/app/finance/payment-verification` | `/app/finance/finance-queue` | Adm | R/A | Annex A.1 cell | needs policy review |
 | `/app/finance/payment-verification` | `/app/finance/finance-queue` | Prg | R/A | Annex A.1 cell | needs policy review |
 | `/app/finance/payment-verification` | `/app/finance/finance-queue` | Rev | R/A | Annex A.1 cell | needs policy review |
@@ -967,7 +967,7 @@ Specific resolutions: `/app/administration/admin-dashboard` is entered by Admin 
 | `/app/production/reconciliation` | Reconciliation | retain | scaffold / scaffold | R/A | R/A | R/A | V | V | R/A | R/A | — | — | — | — | — | — |  |  |
 | `/app/production/correction-request` | Correction request | contextual → `/app/production/quarterly-submission` (Correction action) | scaffold / scaffold | V/R | V/R | V/R | V | V | V/R | V/R | — | C/S | C/S | — | — | — |  |  |
 | `/app/production/compliance-exceptions` | Compliance exceptions | retain | scaffold / scaffold | R/X | R/X | R/X | V | V | R/X | R/X | — | — | — | — | — | — |  |  |
-| `/app/finance/finance-queue` | Finance queue | retain | scaffold / scaffold | R/X | R/X | R/X | V | V | R/X | — | V | — | — | — | — | — |  |  |
+| `/app/finance/finance-queue` | Finance queue | retain | deep / lifecycle-store → WP07 | R/X | R/X | R/X | V | V | R/X | — | V | — | — | — | — | — |  | **slice** |
 | `/app/finance/payment-verification` | Payment verification | merge → `/app/finance/finance-queue` (Queue item detail) | scaffold / scaffold | R/A | R/A | R/A | V | V | R/A | — | V | — | — | — | — | — |  | Overlaps the Finance view of model-payment. |
 | `/app/finance/transaction-search` | Transaction search | retain | scaffold / scaffold | V | V | V | V | V | V | — | V | — | — | — | — | — |  |  |
 | `/app/finance/payment-reconciliation` | Payment reconciliation | retain | scaffold / scaffold | R/X | R/X | R/X | V | V | R/X | — | V | — | — | — | — | — |  |  |

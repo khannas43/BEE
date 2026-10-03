@@ -8,7 +8,7 @@
 3. **Revisit at the start of each wave** and at the end of each activity: scan the rows whose "Revisit at" matches, and close or re-date them.
 4. **Statuses:** `open`, `scheduled` (owned by a named package), `accepted limit` (a known limit the owner accepted; keep the row), `done` (kept for history, with the commit).
 
-Last updated: 3 October 2026 (React test runner for the kit hooks and panels).
+Last updated: 3 October 2026 (local:check preflight, stale lock, memory sampling).
 
 ## A. Deferred from the WP06.1a reviews (four rounds, no high-severity findings)
 
@@ -44,9 +44,9 @@ Last updated: 3 October 2026 (React test runner for the kit hooks and panels).
 
 | ID | Item | Why it matters | Owner / revisit at | Status |
 | --- | --- | --- | --- | --- |
-| BL-030 | `scripts/local/check.sh` does not start the servers; with them down it prints about 30 failures that look like code defects | The interrupted handover's "failing checks" were exactly this; add a fail-fast "runtime is not up, run `npm run local:up`" message | next tooling change | open |
-| BL-031 | A crashed run leaves `.local/run/run.lock` behind, and the next run fails until it is removed by hand | Cost time twice this session | next tooling change | open |
-| BL-032 | `local:check` memory budgets are noisy: `memory.web` measured 398 to 1541 MB against a 1500 MB budget across runs | One run failed only on this budget; a flaky gate trains people to ignore it | decide: raise the budget or measure after a settle period | open |
+| BL-030 | `scripts/local/check.sh` does not start the servers; with them down it prints about 30 failures that look like code defects | The interrupted handover's "failing checks" were exactly this; add a fail-fast "runtime is not up, run `npm run local:up`" message | done: `runtime.preflight` in `check.sh` (shared probes with `health.sh`); see `docs/local/CHECK_TOOLING.md` | done |
+| BL-031 | A crashed run leaves `.local/run/run.lock` behind, and the next run fails until it is removed by hand | Cost time twice this session | done: stale owner pid removed with a log line in `acquire_run_lock`; live owner still refused | done |
+| BL-032 | `local:check` memory budgets are noisy: `memory.web` measured 398 to 1541 MB against a 1500 MB budget across runs | One run failed only on this budget; a flaky gate trains people to ignore it | done: median of five samples (3 s apart); budgets overridable via `BEE_CHECK_MEMORY_BUDGET_*`; see `docs/local/CHECK_TOOLING.md` | done |
 | BL-033 | The full gate takes about 3 to 5 minutes plus a runtime restart, and was re-run after every review round | The main source of slow turnaround | adopt tiered gates (plan section 4, item 3) | open |
 | BL-034 | One `api:test` run stalled for 10 minutes in a file read while the repository was under `~/Documents` (iCloud "Desktop & Documents" sync is on and the disk is about 90% full) | Cloud-sync eviction and materialisation; the project is back under `~/Documents/Projects/BEE`, so the heavy folders are kept in `*.nosync` siblings (`npm run setup:nosync`, BL-094) | mitigated by the nosync layout; revisit if stalls recur | accepted limit |
 | BL-035 | Whole-repository lint baseline: 53 problems (32 errors) at the last measurement, including two `react-hooks/set-state-in-effect` errors in `NewModelApplication.tsx` from WP05.1c and a warning in `runtimeModelDrafts.ts` | Hides any new finding in a noisy baseline | a dedicated lint clean-up activity | open |

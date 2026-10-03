@@ -21,6 +21,9 @@ API_PID="$RUN_DIR/api.pid"
 WEB_PID="$RUN_DIR/web.pid"
 KC_ISSUER="http://127.0.0.1:${BEE_KC_PORT}/realms/${BEE_REALM}"
 
+log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
+die() { printf 'ERROR: %s\n' "$*" >&2; exit "${2:-1}"; }
+
 # One local run at a time: check.sh tears down every disposable twin when it starts, so an overlapping
 # run deletes the identities the other is signed in as. The lock belongs to the outermost shell (pid plus
 # start time, so a reused pid is not mistaken for the owner); nested scripts inherit it, and a lock whose
@@ -33,8 +36,13 @@ acquire_run_lock() {
   local me; me="$$ $(pid_started $$)"
   if ! mkdir "$RUN_LOCK" 2>/dev/null; then
     local owner pid; owner="$(cat "$RUN_LOCK/owner" 2>/dev/null || true)"; pid="${owner%% *}"
-    if [[ -n "$pid" && "$owner" == "$pid $(pid_started "$pid")" ]]; then
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && [[ "$owner" == "$pid $(pid_started "$pid")" ]]; then
       printf 'ERROR: another local run holds %s (pid %s: %s)\n' "$RUN_LOCK" "$pid" "$(ps -o command= -p "$pid" | cut -c1-100)" >&2; exit 1
+    fi
+    if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+      log "removed stale run lock at $RUN_LOCK (owner pid $pid is not running)"
+    else
+      log "removed stale run lock at $RUN_LOCK (owner is no longer valid)"
     fi
     rm -rf "$RUN_LOCK"; mkdir "$RUN_LOCK" || { echo "ERROR: could not take $RUN_LOCK" >&2; exit 1; }
   fi
@@ -43,10 +51,57 @@ acquire_run_lock() {
 }
 acquire_run_lock
 
+# One row per component: name|UP|detail or name|DOWN|detail (used by health.sh and check.sh preflight).
+runtime_health_rows() {
+  if container_running bee-local-postgres && docker exec bee-local-postgres pg_isready -q -U bee_super -d postgres 2>/dev/null; then
+    printf 'postgres|UP|127.0.0.1:%s\n' "$BEE_PG_PORT"
+  else
+    printf 'postgres|DOWN|127.0.0.1:%s\n' "$BEE_PG_PORT"
+  fi
+  local code body status db
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${KC_ISSUER}/.well-known/openid-configuration" || true)"
+  if [[ "$code" == 200 ]]; then
+    printf 'keycloak|UP|%s\n' "$KC_ISSUER"
+  else
+    printf 'keycloak|DOWN|realm discovery HTTP %s\n' "${code:-none}"
+  fi
+  body="$(curl -s --max-time 5 "http://127.0.0.1:${BEE_API_PORT}/actuator/health" || true)"
+  status="$(jq -r '.status // empty' <<<"$body" 2>/dev/null)"
+  if [[ "$status" == UP ]]; then
+    db="$(jq -r '.components.db.status // "?"' <<<"$body" 2>/dev/null)"
+    printf 'api|UP|db=%s\n' "$db"
+  else
+    printf 'api|DOWN|%s\n' "${body:-no response}"
+  fi
+  body="$(curl -s --max-time 10 "http://127.0.0.1:${BEE_WEB_PORT}/api/runtime/health" || true)"
+  if [[ "$(jq -r '.api // empty' <<<"$body" 2>/dev/null)" == UP ]]; then
+    printf 'web|UP|server-to-API path: api=UP\n'
+  else
+    printf 'web|DOWN|%s\n' "${body:-no response}"
+  fi
+}
+
+runtime_health_down() {
+  local name status detail
+  while IFS='|' read -r name status detail; do
+    [[ "$status" == DOWN ]] && printf '%s (%s)\n' "$name" "$detail"
+  done < <(runtime_health_rows)
+}
+
+# Median of positive integers (bash 3.2+).
+memory_median_mb() {
+  local -a vals=("$@")
+  ((${#vals[@]})) || { echo 0; return; }
+  local sorted line n mid
+  sorted="$(printf '%s\n' "${vals[@]}" | sort -n)"
+  n="$(wc -l <<<"$sorted" | tr -d ' ')"
+  mid=$(( (n + 1) / 2 ))
+  line="$(sed -n "${mid}p" <<<"$sorted")"
+  echo "${line:-0}"
+}
+
 java17_home() { /usr/libexec/java_home -v 17 2>/dev/null || { echo "Java 17 is required (ADR-001 D-RT1)" >&2; return 1; }; }
 
-log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
-die() { printf 'ERROR: %s\n' "$*" >&2; exit "${2:-1}"; }
 now_ms() { node -e 'process.stdout.write(String(Date.now()))'; }
 
 compose() { docker compose -p "$BEE_COMPOSE_PROJECT" -f "$ROOT/local/compose.yaml" "$@"; }

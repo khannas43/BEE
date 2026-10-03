@@ -91,7 +91,7 @@ Proposed changes, in order of payoff. These are recommendations for you to accep
 3. **Tier the gates.** Per change, run the focused tests (one to two minutes). Run the full `local:check` once per activity and once after the last review fix. Skip it for documentation-only edits.
 4. **One independent review per activity.** Fix high and medium findings. Write low-severity items to [BACKLOG.md](BACKLOG.md) instead of starting another fix-and-re-review round. Take a second review only if the fixes change authorisation, data integrity or the contract.
 5. **One authoritative folder.** Use `~/Code/BEE/worktrees/…` only; leave the Documents copy untouched as agreed. Keep the runtime stopped between sessions and keep the harness's own servers only.
-6. **Parallel work, carefully.** Once the kit and the split contract exist, independent workspaces (for example Wave 5 and Wave 6) can be built on separate branches by separate agents against unit, database and contract tests. Live browser checks need the single runtime (the local budget is about 3.6 GB), so they run one at a time. Merge only reviewed branches in wave order.
+6. **Parallel work, carefully** (agreement and briefs: [kit/PARALLEL_DEVELOPMENT.md](kit/PARALLEL_DEVELOPMENT.md), [cursor/README.md](cursor/README.md); Claude Code and Cursor now work in separate lanes and worktrees). Once the kit and the split contract exist, independent workspaces (for example Wave 5 and Wave 6) can be built on separate branches by separate agents against unit, database and contract tests. Live browser checks need the single runtime (the local budget is about 3.6 GB), so they run one at a time. Merge only reviewed branches in wave order.
 7. **Ship with labelled provisional defaults** where BEE has not decided (as with the ₹24,000 fee and the five-star formula), and track each in the decision register. Do not block a screen on a policy answer.
 
 ## 5. How each wave is run
@@ -182,6 +182,8 @@ Generated from the screen matrix. Status is as of 3 October 2026. "Not started" 
 | 6 | `/contact` | Contact | Public (no login) | Not started: public / none |
 
 ## 7. Decisions needed from you or BEE
+
+The BEE-owned decisions are collected, in plain language with an answer sheet, in [BEE_DECISIONS.md](BEE_DECISIONS.md). The table below is the owner's own list.
 
 | # | Decision | Needed by | Default if undecided |
 | --- | --- | --- | --- |

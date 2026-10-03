@@ -1,0 +1,21 @@
+---
+description: BEE portal working rules for any Cursor agent in this repository
+alwaysApply: true
+---
+
+# BEE portal — rules for Cursor
+
+You are one of two developers on this repository. The other is Claude Code (CLI). Read `docs/kit/PARALLEL_DEVELOPMENT.md` before you start; it is the agreement. The short version:
+
+- **Work only in your own git worktree and branch** (`cursor/<task>`), created from the base the brief names. Never work in `~/Code/BEE/worktrees/wp05.1-read-ui`; that is Claude's.
+- **Stay in your lane.** Frontend and tooling only unless a brief says otherwise. Do NOT edit `backend/**`, `docs/wp03/bee-local-api.openapi.json`, `scripts/local/contract-pin.json`, `lib/server/**`, `app/api/**`, the request-log files, or any Flyway migration. If the work needs one of them, stop and report; Claude owns them.
+- **Do not edit `AGENTS.md` or `CLAUDE.md`.** `next dev` rewrites them; a diff there is a tool artefact.
+- **This is not the Next.js you know.** Before writing Next.js code, read the relevant guide in `node_modules/next/dist/docs/`. Heed deprecation notices.
+- **One runtime on this Mac.** `npm run local:up` and every `local:*` browser check share fixed ports and Docker containers. Run them only if `.local/run/run.lock` (in the main worktree) is free and `docker ps` shows no `bee-local-*` containers you did not start. If in doubt, do not run them: list them under "Not run" in your hand-back and Claude runs them when merging.
+- **Real data only.** A screen's records come from Spring through the BFF. No `localStorage` or fixture as the source of truth, and the screen never decides access.
+- **Keep `data-testid` values and user-visible copy stable** unless the brief says to change them; live checks find elements by them.
+- **Never push, never force, never rewrite history, never edit an applied migration.** Commit on your branch only.
+- **Report honestly.** Say exactly what you ran and the totals. Say what you did not run. Record anything you defer in `docs/BACKLOG.md` (a new `BL-nnn` row) instead of leaving it in chat.
+- **Stop at the end of your task.** Do not start the next brief or tidy unrelated code.
+
+Gates for any change (run what applies, report each): `npx tsc --noEmit`; `npx eslint <changed files>` (the whole-repository lint baseline is known: BL-035; report new findings only); `npm run web:test`; `npm run build` (stop the dev runtime first if it is running in your worktree).

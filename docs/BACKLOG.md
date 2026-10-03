@@ -57,9 +57,9 @@ Last updated: 3 October 2026 (command panel and feature template added).
 
 | ID | Item | Why it matters | Owner / revisit at | Status |
 | --- | --- | --- | --- | --- |
-| BL-040 | The fee amount and its source (local ₹24,000 is provisional, not BEE-approved) and the approved rating formula | Shown as provisional everywhere; cannot be marked verified | BEE; before WP07.1 and WP05.2 | open |
-| BL-041 | M6: who may close or supersede a master version; master administration policy | No UI grant exists; blocks the admin master screens | BEE; before Wave 2 admin screens | open |
-| BL-042 | WP05.1d answers still undecided by BEE: all of 1–6 are provisional local defaults; 6 (other required documents) and 8 (who verifies a report, and the outcomes) are not built | Shown as provisional; none is a BEE rule | BEE; WP05.2 and WP06.2 | open |
+| BL-040 | (Put to BEE as A1 and A2 in [BEE_DECISIONS.md](BEE_DECISIONS.md).) The fee amount and its source (local ₹24,000 is provisional, not BEE-approved) and the approved rating formula | Shown as provisional everywhere; cannot be marked verified | BEE; before WP07.1 and WP05.2 | open |
+| BL-041 | (BEE_DECISIONS.md C1.) M6: who may close or supersede a master version; master administration policy | No UI grant exists; blocks the admin master screens | BEE; before Wave 2 admin screens | open |
+| BL-042 | (BEE_DECISIONS.md B1 to B8.) WP05.1d answers still undecided by BEE: all of 1–6 are provisional local defaults; 6 (other required documents) and 8 (who verifies a report, and the outcomes) are not built | Shown as provisional; none is a BEE rule | BEE; WP05.2 and WP06.2 | open |
 | BL-043 | The six decisions in [SCREEN_COMPLETION_PLAN.md](SCREEN_COMPLETION_PLAN.md) section 7 (tiers, review policy, parallel agents, the WP05.1d answers, M6, the re-estimate point) | The plan runs on stated defaults until answered | owner; Wave 1 start and end | scheduled |
 | BL-044 | Re-estimate the plan's person-days after the first vertical slice | The carried-over figures are not re-estimated | end of Wave 1 | scheduled |
 

@@ -426,7 +426,7 @@ function addToUnion(src, typeName, entry) {
 function addToRouteEnum(src, marker, entry) {
   const at = src.indexOf(marker);
   if (at < 0) throw new Error(`request-log schema section not found: ${marker}`);
-  const open = src.indexOf('"enum": [', src.indexOf('"route"', at));
+  const open = src.indexOf('"enum": [', src.indexOf('"route":', at));
   const close = src.indexOf("]", open);
   if (open < 0 || close < 0) throw new Error(`request-log schema route enum not found in: ${marker}`);
   if (src.slice(open, close).includes(`"${entry}"`)) return src;

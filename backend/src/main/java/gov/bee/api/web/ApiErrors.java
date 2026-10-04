@@ -30,7 +30,7 @@ public final class ApiErrors {
         Map.entry("rule_not_available", "Required category, standard or fee rules are not available."),
         Map.entry("validation_failed", "The request could not be accepted."),
         Map.entry("role_not_permitted", "This role cannot perform this action."),
-        Map.entry("segregation_refused", "A person who acted at another stage of this application, or its own organisation, cannot confirm its fee."),
+        Map.entry("segregation_refused", "A person who acted at another stage of this application, or its own organisation, cannot take this step."),
         Map.entry("amount_mismatch", "The amount received does not match the fee due."),
         Map.entry("assignee_unavailable", "No officer is available to take the next stage."),
         Map.entry("test_report_required", "A test report must be uploaded before the application can be submitted."),

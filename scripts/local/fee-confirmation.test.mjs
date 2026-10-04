@@ -39,7 +39,7 @@ test("each documented refusal is a typed failure with the contract's message, an
   const realFetch = globalThis.fetch;
   const cases = [
     [403, "role_not_permitted", "This role cannot perform this action.", "denied"],
-    [403, "segregation_refused", "A person who acted at another stage of this application, or its own organisation, cannot confirm its fee.", "denied"],
+    [403, "segregation_refused", "A person who acted at another stage of this application, or its own organisation, cannot take this step.", "denied"],
     [409, "version_conflict", "The record has changed since it was loaded.", "conflict"],
     [409, "assignee_unavailable", "No officer is available to take the next stage.", "conflict"],
     [422, "amount_mismatch", "The amount received does not match the fee due.", "validation"],

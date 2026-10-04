@@ -89,6 +89,21 @@ test("--apply creates the files, registers the route everywhere, bumps and re-pi
     assert.match(readFileSync(join(dir, "backend/src/main/java/gov/bee/api/security/SecurityConfig.java"), "utf8"), /requestMatchers\(HttpMethod\.POST, "\/api\/model-applications\/\*\/sample-action"\)\.authenticated\(\)/);
     assert.match(readFileSync(join(dir, "lib/server/requestLog.ts"), "utf8"), /"\/api\/runtime\/model-applications\/\{id\}\/sample-action"/);
     assert.match(readFileSync(join(dir, "package.json"), "utf8"), /scripts\/local\/sample-action\.test\.mjs/);
+    // The request-log schema: the routes go into the route enums, and the layer and method enums are left alone
+    // (a search for the word "route" once matched the required list and edited the wrong enum).
+    const log = JSON.parse(readFileSync(join(dir, "docs/wp03/request-log.schema.json"), "utf8"));
+    const lines = JSON.stringify(log);
+    for (const entry of ["/api/model-applications/{id}/sample-action", "/api/runtime/model-applications/{id}/sample-action"]) {
+      assert.ok(lines.includes(`"${entry}"`), entry);
+    }
+    const branches = log.line.oneOf;
+    const requestLine = branches.find((b) => b.properties?.event?.const === "request");
+    assert.deepEqual(requestLine.properties.layer.enum, ["api", "web"]);
+    assert.ok(requestLine.properties.route.enum.includes("/api/model-applications/{id}/sample-action"));
+    assert.ok(requestLine.properties.route.enum.includes("/api/runtime/model-applications/{id}/sample-action"));
+    const upstreamLine = branches.find((b) => b.properties?.event?.const === "upstream");
+    assert.deepEqual(upstreamLine.properties.method.enum, ["GET", "POST", "PATCH"]);
+    assert.ok(upstreamLine.properties.route.enum.includes("/api/model-applications/{id}/sample-action"));
     // Contract: both layers documented, version bumped, pin and code agree with the file.
     const raw = readFileSync(join(dir, "docs/wp03/bee-local-api.openapi.json"), "utf8");
     const doc = JSON.parse(raw);

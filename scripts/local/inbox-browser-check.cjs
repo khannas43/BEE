@@ -1,5 +1,5 @@
 /* eslint-disable */
-/** Wave 1: the inbox ("My work") and "My approvals": each person sees the applications waiting for them, with the action and a link to the screen where it is done; read-only, baseline-preserving, run twice. */
+/** Wave 1: the inbox ("My work"), "My approvals" and the review, history and escalation views: each person sees the applications waiting for them, with the action and a link to the screen where it is done; read-only, baseline-preserving, run twice. */
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 const totp = require("./totp.cjs");
@@ -23,9 +23,13 @@ const refsOf = (page, prefix) => page.eval(`[...document.querySelectorAll('[data
 const hrefOf = (page, prefix, ref) => page.eval(`document.querySelector('[data-testid="${prefix}-open-${ref}"]')?.getAttribute("href") ?? ""`);
 const rowText = (page, prefix, ref) => page.eval(`document.querySelector('[data-testid="${prefix}-ref-${ref}"]')?.closest("tr")?.textContent ?? ""`);
 
+const page_goto = (page, route) => page.goto(`${WEB}${route}`);
+const page_wait = (page, expr) => page.waitFor(expr, 30000);
+const page_counts = (page) => page.eval(`[...document.querySelectorAll('[data-testid^="escalation-count-"]')].map((e) => e.getAttribute('data-testid').replace('escalation-count-', '') + '=' + e.textContent.trim()).join(',')`);
+
 async function open(page, route, prefix, settle) {
   await page.goto(`${WEB}${route}`);
-  return page.waitFor(`!!document.querySelector('[data-testid="${prefix}-table"], [data-testid="${prefix}-empty"], [data-testid="${prefix}-error"]')`, 30000);
+  return page.waitFor(`!!document.querySelector('[data-testid="${prefix}-table"], [data-testid="${prefix}-counts"], [data-testid="${prefix}-empty"], [data-testid="${prefix}-error"]')`, 30000);
 }
 
 const DISPOSABLE = [["LOCAL-MA-9101", "rating"], ["LOCAL-MA-9102", "director_review"], ["LOCAL-MA-9103", "secretary_approval"]];
@@ -73,6 +77,35 @@ async function runChecks(run, pages) {
     const sec = await refsOf(pages.secretary, "approvals");
     check(`${run}.secretary.approvals`, sec.join(",") === "LOCAL-MA-9103", `approvals: ${sec.join(",")}`);
     check(`${run}.secretary.task-text`, /Give final approval/.test(await rowText(pages.secretary, "approvals", "LOCAL-MA-9103")), "final approval");
+
+    // Application review, workflow history and escalations: the same scoped list, arranged for reading.
+    const text = (page, sel) => page.eval(`document.querySelector('${sel}')?.textContent ?? ""`);
+    await open(pages.director, "/app/workflow/application-review", "review");
+    const dRev = await refsOf(pages.director, "review");
+    check(`${run}.review.director-sees-own-stage`, dRev.join(",") === "LOCAL-MA-9102", `rows: ${dRev.join(",")}`);
+    check(`${run}.review.director-next-action`, /Recommend a decision/.test(await text(pages.director, '[data-testid="review-action-LOCAL-MA-9102"]')), "link to the approval screen");
+    await open(pages.nova, "/app/workflow/application-review", "review");
+    const nRev = await refsOf(pages.nova, "review");
+    check(`${run}.review.applicant-no-draft-no-finished`, !nRev.includes("LOCAL-MA-0001") && nRev.includes("LOCAL-MA-0002") && nRev.includes("LOCAL-MA-9101"), `rows: ${nRev.join(",")}`);
+    check(`${run}.review.applicant-has-no-action-on-officer-stages`, /None for you/.test(await text(pages.nova, '[data-testid="review-action-LOCAL-MA-9101"]')), "nothing for the applicant to do at rating");
+    await open(pages.finance, "/app/workflow/application-review", "review");
+    check(`${run}.review.finance-fee-action`, /Confirm the fee was received/.test(await text(pages.finance, '[data-testid="review-action-LOCAL-MA-0002"]')), "fee confirmation");
+
+    await open(pages.nova, "/app/workflow/workflow-history", "wfh");
+    const wfhRefs = await refsOf(pages.nova, "wfh");
+    check(`${run}.history.lists-visible-applications`, wfhRefs.includes("LOCAL-MA-0001") && wfhRefs.includes("LOCAL-MA-9102"), `rows: ${wfhRefs.length}`);
+    const target = sqlApp(`SELECT id FROM app.model_application WHERE reference = 'LOCAL-MA-0002'`);
+    await page_goto(pages.nova, `/app/workflow/workflow-history?id=${target}`);
+    check(`${run}.history.shows-the-selected-history`, !!(await page_wait(pages.nova, `!!document.querySelector('[data-testid="wfh-history-list"], [data-testid="wfh-history-empty"]')`)), "history for the selected application");
+    check(`${run}.history.selected-marker`, (await text(pages.nova, '[data-testid="wfh-open-LOCAL-MA-0002"]')).trim() === "Selected", "Selected");
+
+    await open(pages.director, "/app/workflow/escalation-dashboard", "escalation");
+    const dCount = await text(pages.director, '[data-testid="escalation-count-director_review"]');
+    check(`${run}.escalation.director-counts`, dCount.trim() === "1", `director_review=${dCount.trim()}`);
+    check(`${run}.escalation.states-no-limits`, /No time limits are set/.test(await text(pages.director, '[data-testid="escalation-no-limits"]')), "nothing is called late");
+    await open(pages.nova, "/app/workflow/escalation-dashboard", "escalation");
+    const counts = await page_counts(pages.nova);
+    check(`${run}.escalation.applicant-counts`, counts === "fee_due=1,iame_scrutiny=0,bee_scrutiny=1,rating=1,director_review=1,secretary_approval=1,returned=0", counts);
 
     // Menu entries come from the Spring identity.
     const menu = (page) => page.eval(`[...document.querySelectorAll('[data-testid^="runtime-nav-"]')].map((e) => e.getAttribute("data-testid").replace("runtime-nav-", ""))`);

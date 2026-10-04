@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { Card, FakeTable, ScreenChrome } from "@/components/app/ScreenScaffold";
+import { Card, ScreenChrome } from "@/components/app/ScreenScaffold";
+import { DataTable, type DataTableColumn } from "@/components/app/kit/DataTable";
+import { RecordTabs } from "@/components/app/kit/RecordTabs";
 import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { orgsText, rolesText, useSpringIdentity } from "@/components/app/SessionBadge";
@@ -18,8 +21,28 @@ import {
   readModelApplicationList,
   stateLabel,
 } from "@/lib/client/runtimeModelApplications";
+import {
+  documentContentPath,
+  listModelDocuments,
+  type ModelDocument,
+} from "@/lib/client/runtimeModelDocuments";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
+
+const DETAIL_TAB_DETAILS = "details";
+const DETAIL_TAB_DOCUMENTS = "documents";
+/** Large page size keeps every scoped row visible for the live read-ui check (client-side paging only). */
+const APPLICATION_TABLE_PAGE_SIZE = 100;
+
+function detailTabFromParam(raw: string | null): string {
+  return raw === DETAIL_TAB_DOCUMENTS ? DETAIL_TAB_DOCUMENTS : DETAIL_TAB_DETAILS;
+}
+
+function modelDashboardHrefWithTab(id: string, tab: string): string {
+  const q = new URLSearchParams({ id });
+  if (tab !== DETAIL_TAB_DETAILS) q.set("tab", tab);
+  return `/app/model-label/model-dashboard?${q.toString()}`;
+}
 
 /**
  * WP05.1a read-only list/detail on the existing model-dashboard route, built on the screen kit
@@ -122,19 +145,51 @@ function IdentityStrip({ identity }: { identity: ReturnType<typeof useSpringIden
 }
 
 function ApplicationTable({ items, selectedId }: { items: ModelApplication[]; selectedId: string | null }) {
-  return (
-    <FakeTable
-      columns={["Reference", "Organisation", "Brand / Model", "Category", "State", ""]}
-      rows={items.map((a) => [
-        <span key="ref" className="font-mono" data-testid={`model-app-ref-${a.reference}`}>{a.reference}</span>,
-        a.organisation,
-        <div key="m">
+  const columns: DataTableColumn<ModelApplication>[] = [
+    {
+      key: "reference",
+      header: "Reference",
+      sortValue: (a) => a.reference,
+      render: (a) => (
+        <span className="font-mono" data-testid={`model-app-ref-${a.reference}`}>
+          {a.reference}
+        </span>
+      ),
+    },
+    {
+      key: "organisation",
+      header: "Organisation",
+      sortValue: (a) => a.organisation,
+      render: (a) => a.organisation,
+    },
+    {
+      key: "brand",
+      header: "Brand / Model",
+      sortValue: (a) => `${a.brandName} ${a.modelNumber}`,
+      render: (a) => (
+        <div>
           <div className="font-semibold text-on-surface">{a.brandName}</div>
           <div className="font-label-sm text-label-sm text-on-surface-variant">{a.modelNumber}</div>
-        </div>,
-        a.category,
-        <span key="s" className="capitalize">{stateLabel(a.state)}</span>,
-        <span key="acts" className="inline-flex flex-col gap-1 items-start">
+        </div>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      sortValue: (a) => a.category,
+      render: (a) => a.category,
+    },
+    {
+      key: "state",
+      header: "State",
+      sortValue: (a) => a.state,
+      render: (a) => <span className="capitalize">{stateLabel(a.state)}</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (a) => (
+        <span className="inline-flex flex-col gap-1 items-start">
           <Link
             href={modelDashboardHref(a.id)}
             className={`font-label-sm text-label-sm inline-flex items-center gap-1 ${a.id === selectedId ? "text-on-surface font-semibold" : "text-primary hover:underline"}`}
@@ -151,13 +206,35 @@ function ApplicationTable({ items, selectedId }: { items: ModelApplication[]; se
               Edit <Icon name="edit" size={14} />
             </Link>
           ) : null}
-        </span>,
-      ])}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={items}
+      rowKey={(a) => a.id}
+      pageSize={APPLICATION_TABLE_PAGE_SIZE}
+      tableTestId="model-applications-table"
+      filterTestId="model-applications-table-filter"
     />
   );
 }
 
 function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRead: DetailRead | null }) {
+  const params = useSearchParams();
+  const router = useRouter();
+  const activeTab = detailTabFromParam(params.get("tab"));
+
+  const onTabChange = useCallback(
+    (tabId: string) => {
+      router.replace(modelDashboardHrefWithTab(selectedId, tabId));
+    },
+    [router, selectedId],
+  );
+
   return (
     <div data-testid="model-applications-detail" data-selected-id={selectedId}>
       <ReadPanel
@@ -174,7 +251,25 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
       >
         {(r) => (
           <>
-            <DetailFields application={r.application} />
+            <RecordTabs
+              tabs={[
+                {
+                  id: DETAIL_TAB_DETAILS,
+                  label: "Details",
+                  render: () => <DetailFields application={r.application} />,
+                },
+                {
+                  id: DETAIL_TAB_DOCUMENTS,
+                  label: "Documents",
+                  render: () => <ApplicationDocuments key={r.application.id} applicationId={r.application.id} />,
+                },
+              ]}
+              activeTabId={activeTab}
+              onTabChange={onTabChange}
+              tabListTestId="model-app-detail-tabs"
+              tabTestId={(id) => `model-app-detail-tab-${id}`}
+              panelTestId={(id) => `model-app-detail-panel-${id}`}
+            />
             {r.application.state === "draft" ? (
               <Link
                 href={modelDraftFormHref(r.application.id)}
@@ -187,6 +282,69 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
           </>
         )}
       </ReadPanel>
+    </div>
+  );
+}
+
+function ApplicationDocuments({ applicationId }: { applicationId: string }) {
+  const [docs, setDocs] = useState<ModelDocument[]>([]);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listModelDocuments(applicationId).then((res) => {
+      if (cancelled) return;
+      if (!res.ok) {
+        setError(res.failure.message);
+        return;
+      }
+      setDocs(res.list.items);
+      setNote(res.list.verificationNote);
+      setError(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationId]);
+
+  const report = docs.find((d) => d.documentKind === "test_report");
+  const versions = report?.versions ?? [];
+
+  if (error) {
+    return (
+      <p className="font-body-sm text-body-sm text-error" data-testid="model-app-detail-documents-error">
+        {error}
+      </p>
+    );
+  }
+
+  return (
+    <div data-testid="model-app-detail-documents">
+      <p className="font-body-sm text-on-surface-variant" data-testid="model-doc-verification-note">
+        {note ?? "Local store only — pending verification. Upload does not claim laboratory accreditation, malware clearance or BEE approval."}
+      </p>
+      <ul className="mt-space-md space-y-space-sm" data-testid="model-doc-versions">
+        {versions.length === 0 ? (
+          <li className="font-body-sm text-on-surface-variant">No test report uploaded yet.</li>
+        ) : (
+          versions.map((v) => (
+            <li key={v.id} className="font-body-sm" data-testid={`model-doc-version-${v.versionNumber}`}>
+              <span className="font-label-sm">v{v.versionNumber}</span> · {v.reportLabel} · {v.originalFilename} ·{" "}
+              <span className="font-mono text-[11px]">{v.contentSha256.slice(0, 12)}…</span> ·{" "}
+              <span className="text-on-surface-variant">{v.verificationStatus.replaceAll("_", " ")}</span>
+              {" · "}
+              <a
+                href={documentContentPath(applicationId, report!.id, v.id)}
+                className="text-primary"
+                data-testid={`model-doc-download-${v.versionNumber}`}
+              >
+                Download
+              </a>
+            </li>
+          ))
+        )}
+      </ul>
     </div>
   );
 }

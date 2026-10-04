@@ -261,7 +261,7 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
                 {
                   id: DETAIL_TAB_DOCUMENTS,
                   label: "Documents",
-                  render: () => <ApplicationDocuments applicationId={r.application.id} />,
+                  render: () => <ApplicationDocuments key={r.application.id} applicationId={r.application.id} />,
                 },
               ]}
               activeTabId={activeTab}

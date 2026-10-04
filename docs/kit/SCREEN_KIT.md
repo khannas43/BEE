@@ -48,10 +48,12 @@ For a new command start from the scaffolder ([FEATURE_TEMPLATE.md](FEATURE_TEMPL
 - A screen is complete only when it meets the definition in `docs/SCREEN_COMPLETION_PLAN.md` section 2.
 - Preview roles never select records; they only choose what the menu displays.
 
+## Table and tabs
+
+See [TABLE_AND_TABS.md](TABLE_AND_TABS.md) for `DataTable` (client-side filter, sort, paging) and `RecordTabs` (URL tab id owned by the screen). Server-scoped paging remains BL-020 / BL-096.
+
 ## Not in the kit yet (build when the first screen needs it; tracked as BL-020 to BL-027 in [../BACKLOG.md](../BACKLOG.md))
 
-- Paged, filtered, sortable server-scoped table (the dashboard shows the whole scoped list).
-- Tabs for a record's contextual panels (documents, history, approvals).
 - Wider use of the command panel: it exists (`useCommand` and `CommandPanel`) and the test-report upload uses it; the draft save and submit confirm do not yet (BL-082).
 - A generic document card: `DraftTestReports` is the model; generalise it when a second document kind exists.
 - The rest of the backend half: the feature template exists for POST commands (see [FEATURE_TEMPLATE.md](FEATURE_TEMPLATE.md)); reads, other resources, test skeletons and splitting the OpenAPI artifact per module are open (BL-024, BL-078 to BL-082).

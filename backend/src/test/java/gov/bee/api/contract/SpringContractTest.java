@@ -141,6 +141,9 @@ class SpringContractTest {
     gov.bee.api.reviewer.ReviewerForwardRepository reviewerRepo;
 
     @MockitoBean
+    gov.bee.api.rating.RatingRepository ratingRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -232,6 +235,16 @@ class SpringContractTest {
         when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
         var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "bee_scrutiny", 3,
             Set.of("bee_scrutiny"), null, null, null);
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
+    }
+
+    /** A Programme officer outside the applicant's organisation, with a record in the rating stage that declared 4.50. */
+    void programmeAccount(UUID staffOrg) {
+        account("programme", "all");
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staffOrg));
+        when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
+        var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "rating", 4,
+            Set.of(), null, null, null, "LAB", java.time.LocalDate.of(2026, 9, 1), new BigDecimal("4.50"));
         when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
     }
 
@@ -1046,6 +1059,95 @@ class SpringContractTest {
         reviewerAccount(staff);
         doThrow(new DataAccessResourceFailureException("down")).when(reviewerRepo).forward(any(), anyInt(), any(), any(), any());
         conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+    }
+
+    @Test
+    void ratingOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/rating";
+        String path = "/api/model-applications/" + NOVA_APP + "/rating";
+        UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        String ok = "{\"version\":4,\"verifiedIseer\":\"4.62\"}";
+        var done = new gov.bee.api.rating.RatingRepository.Result(gov.bee.api.rating.RatingRepository.Outcome.COMPUTED, 5, 1,
+            Instant.parse("2026-10-04T10:00:00Z"));
+        var bands = List.of(
+            new gov.bee.api.rating.RatingRepository.Band("RAC-ISEER-DEMO-1", 1, new BigDecimal("3.30")),
+            new gov.bee.api.rating.RatingRepository.Band("RAC-ISEER-DEMO-1", 2, new BigDecimal("3.50")),
+            new gov.bee.api.rating.RatingRepository.Band("RAC-ISEER-DEMO-1", 3, new BigDecimal("4.00")),
+            new gov.bee.api.rating.RatingRepository.Band("RAC-ISEER-DEMO-1", 4, new BigDecimal("4.50")),
+            new gov.bee.api.rating.RatingRepository.Band("RAC-ISEER-DEMO-1", 5, new BigDecimal("5.00")));
+
+        programmeAccount(staff);
+        when(ratingRepo.bandsInForce(any(), any())).thenReturn(bands);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(ratingRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(ratingRepo.compute(any(), anyInt(), any(), any(), any(), any(), any(), anyInt())).thenReturn(done);
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("programme"))));
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+
+        // Request shape.
+        conforms(r, post(path).with(token("programme")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        for (String bad : List.of("abc", "0", "0.00", "100.5", "4.555", "-4.5", "")) {
+            conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json")
+                .content(ok.replace("4.62", bad)), 422, "validation_failed");
+        }
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content("{\"version\":4,\"verifiedIseer\":4.62}"), 422, "validation_failed");
+        // Below the lowest band, and no scheme in force: nothing is written.
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("4.62", "3.29")), 422, "rating_below_threshold");
+        when(ratingRepo.bandsInForce(any(), any())).thenReturn(List.of());
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "rule_not_available");
+        when(ratingRepo.bandsInForce(any(), any())).thenReturn(bands);
+
+        // Version, idempotency and assignment conflicts.
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":4", "\"version\":3")), 409, "version_conflict");
+        when(ratingRepo.compute(any(), anyInt(), any(), any(), any(), any(), any(), anyInt())).thenReturn(
+            new gov.bee.api.rating.RatingRepository.Result(gov.bee.api.rating.RatingRepository.Outcome.STALE, 0, 0, null));
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
+        when(ratingRepo.compute(any(), anyInt(), any(), any(), any(), any(), any(), anyInt())).thenReturn(done);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        // A replay returns the stored receipt, not a record Programme may no longer read.
+        String stored = "{\"applicationId\":\"" + NOVA_APP + "\",\"reference\":\"LOCAL-MA-0002\",\"fromState\":\"rating\",\"toState\":\"director_review\",\"version\":5,"
+            + "\"ratingVersion\":1,\"schemeKey\":\"RAC-ISEER-DEMO-1\",\"declaredIseer\":\"4.50\",\"verifiedIseer\":\"4.62\",\"stars\":4,"
+            + "\"localDemoRating\":true,\"computedAt\":\"2026-10-04T10:00:00Z\"}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 4)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(ok))));
+        var replay = conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        // Who may rate: only Programme, never the applicant's own organisation, never someone who acted at another stage.
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("auditor", "all");
+        conforms(r, post(path).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        programmeAccount(staff);
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(NOVA));   // the officer belongs to the applicant's organisation
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        programmeAccount(staff);
+        when(ratingRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of(USER));
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        when(ratingRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+
+        // Identity denials and outage.
+        programmeAccount(staff);
+        conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 401, "unauthenticated");
+        conforms(r, post(path).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "mfa_required");
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        programmeAccount(staff);
+        doThrow(new DataAccessResourceFailureException("down")).when(ratingRepo).compute(any(), anyInt(), any(), any(), any(), any(), any(), anyInt());
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 
     @Test

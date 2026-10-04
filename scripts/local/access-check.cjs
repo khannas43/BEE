@@ -180,7 +180,7 @@ async function main() {
     ["bee.finance", "POST", `/api/model-applications/${id}/fee/confirm`],
     ["iame.officer", "POST", `/api/model-applications/${pid}/recommend`],
     ["bee.reviewer", "POST", `/api/model-applications/${byRef["LOCAL-MA-0004"].id}/recommend`],
-    ["bee.programme", "POST", `/api/model-applications/${id}/rating`],
+    ["bee.programme", "POST", `/api/model-applications/${id}/rating/override`],
     ["bee.director", "POST", `/api/model-applications/${id}/decision`],
     ["bee.secretary", "POST", `/api/model-applications/${id}/decision`],
     ["iame.officer", "POST", `/api/model-applications/${pid}/return`],

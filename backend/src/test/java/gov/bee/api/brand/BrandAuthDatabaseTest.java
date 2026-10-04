@@ -320,7 +320,7 @@ class BrandAuthDatabaseTest {
         assertTrue(versions.stream().anyMatch(v -> "4".equals(String.valueOf(v.get("version")))));
         assertTrue(versions.stream().anyMatch(v -> "6".equals(String.valueOf(v.get("version")))));
         assertTrue(versions.stream().anyMatch(v -> "5".equals(String.valueOf(v.get("version")))));
-        assertEquals(27, max, "throwaway schema migrated V1 through V27");
+        assertEquals(28, max, "throwaway schema migrated V1 through V28");
         assertEquals(appBrandTablesBefore, admin.queryForObject(
             "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('brand', 'agency_authorisation')",
             Integer.class));

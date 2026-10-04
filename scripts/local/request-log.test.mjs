@@ -36,6 +36,7 @@ before(async () => {
     feeConfirmation: await import("../../app/api/runtime/model-applications/[id]/fee-confirmation/route.ts"),
     iameRecommendation: await import("../../app/api/runtime/model-applications/[id]/iame-recommendation/route.ts"),
     reviewerForward: await import("../../app/api/runtime/model-applications/[id]/reviewer-forward/route.ts"),
+    rating: await import("../../app/api/runtime/model-applications/[id]/rating/route.ts"),
   };
 });
 
@@ -199,6 +200,18 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/reviewer-forward 
   const res = await routes.reviewerForward.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/reviewer-forward", "unit-reviewer-post-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123463" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/rating 401 session_expired | Keycloak refusing refresh on rating", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.rating.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/rating", "unit-rating-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123465" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

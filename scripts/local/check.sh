@@ -275,6 +275,13 @@ read -r hs_pass hs_fail <<<"$(sed -nE 's/^history checks: ([0-9]+) passed, ([0-9
 if [[ -z "${hs_pass:-}" ]]; then check "history.run" 0 "history-browser-check did not complete: $(tail -1 <<<"$hs_out")"
 else pass=$((pass + hs_pass)); fail=$((fail + hs_fail)); fi
 
+# ---- Wave 2 start: fee-rule administration (records the runtime fee-rule pairs)
+fr_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/fee-rules-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$fr_out"
+read -r fr_pass fr_fail <<<"$(sed -nE 's/^fee-rules checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$fr_out")"
+if [[ -z "${fr_pass:-}" ]]; then check "feerules.run" 0 "fee-rules-browser-check did not complete: $(tail -1 <<<"$fr_out")"
+else pass=$((pass + fr_pass)); fail=$((fail + fr_fail)); fi
+
 # ---- Wave 1: the inbox and My approvals (read-only; no contract pairs)
 ib_out="$(node "$ROOT/scripts/local/inbox-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$ib_out"

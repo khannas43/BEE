@@ -89,6 +89,18 @@ const REJECT_ROUTE = "/api/runtime/model-applications/{id}/reject";
 const REJECT_UPSTREAM = {
   POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
 };
+// Fee-rule administration. Keep equal to lib/server/contracts/fee-rules.ts and the artifact.
+const FEE_RULES_ROUTE = "/api/runtime/fee-rules";
+const FEE_PROPOSAL_ROUTE = "/api/runtime/fee-rules/proposals";
+const FEE_DECISION_ROUTE = "/api/runtime/fee-rules/proposals/{id}/decision";
+const FEE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted"];
+const FEE_RULES_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: FEE_DENIALS, 503: ["service_unavailable"] } };
+const FEE_PROPOSAL_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: FEE_DENIALS, 409: ["idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
+const FEE_DECISION_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "effective_date_passed", "rule_conflict", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: WRITE_DENIALS, 503: ["service_unavailable"] },
@@ -488,6 +500,17 @@ async function nextChecks(jar, novaToken) {
   const rejectAnonOk = rejectAnon.status === 401 && rejectAnon.json?.error === "no_session" && e.length === 0;
   contract.record({ route: REJECT_ROUTE, method: "POST", status: rejectAnon.status, code: rejectAnon.json?.error ?? "-", ok: rejectAnonOk });
   check("next.reject-no-session", rejectAnonOk && sameCorr(rejectAnon), `POST runtime reject without cookie: ${rejectAnon.status} ${rejectAnon.json?.error}${show(e)}`);
+  for (const [route, path, method, tag, body] of [
+    [FEE_RULES_ROUTE, "/api/runtime/fee-rules", "GET", "fee-rules-anon-get", undefined],
+    [FEE_PROPOSAL_ROUTE, "/api/runtime/fee-rules/proposals", "POST", "fee-proposal-anon-post", "{}"],
+    [FEE_DECISION_ROUTE, `/api/runtime/fee-rules/proposals/${NOVA_APP}/decision`, "POST", "fee-decision-anon-post", "{}"],
+  ]) {
+    const r = await call(`${WEB}${path}`, { method, correlationId: cid(`next-${tag}`), ...(body ? { headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123477" }, body } : {}) });
+    e = contract.conforms(doc, route, method, r);
+    const ok = r.status === 401 && r.json?.error === "no_session" && e.length === 0;
+    contract.record({ route, method, status: r.status, code: r.json?.error ?? "-", ok });
+    check(`next.${tag.replace("-anon-", "-no-session-").replace(/-(get|post)$/, "")}`, ok && sameCorr(r), `${method} ${route} without cookie: ${r.status} ${r.json?.error}${show(e)}`);
+  }
   const historyAnon = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/history`, { correlationId: cid("next-history-anon-get") });
   e = contract.conforms(doc, "/api/runtime/model-applications/{id}/history", "GET", historyAnon);
   const historyAnonOk = historyAnon.status === 401 && historyAnon.json?.error === "no_session" && e.length === 0;
@@ -636,6 +659,9 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(RETURN_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/return`, "POST", sessionJar, RETURN_UPSTREAM);
     await exerciseStandInPairs(RESUBMIT_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/resubmit`, "POST", sessionJar, RESUBMIT_UPSTREAM);
     await exerciseStandInPairs(REJECT_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/reject`, "POST", sessionJar, REJECT_UPSTREAM);
+    await exerciseStandInPairs(FEE_RULES_ROUTE, "/api/runtime/fee-rules", "GET", sessionJar, FEE_RULES_UPSTREAM);
+    await exerciseStandInPairs(FEE_PROPOSAL_ROUTE, "/api/runtime/fee-rules/proposals", "POST", sessionJar, FEE_PROPOSAL_UPSTREAM);
+    await exerciseStandInPairs(FEE_DECISION_ROUTE, `/api/runtime/fee-rules/proposals/${NOVA_APP}/decision`, "POST", sessionJar, FEE_DECISION_UPSTREAM);
     await exerciseStandInPairs("/api/runtime/model-applications/{id}/history", `/api/runtime/model-applications/${NOVA_APP}/history`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);

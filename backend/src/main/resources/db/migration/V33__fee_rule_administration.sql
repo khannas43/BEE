@@ -45,9 +45,10 @@ CREATE TABLE fee_rule_proposal (
 );
 CREATE INDEX fee_rule_proposal_state ON fee_rule_proposal (state, proposed_at);
 
--- Decides one proposal. p_decision is 'approve', 'reject' or 'withdraw'. Returns the new state and, for an approval, the version
--- of the rule that now applies. Errors carry a stable code in the message: not_found, not_pending, not_permitted,
--- same_person, only_proposer, date_passed, rule_conflict.
+-- Decides one proposal. p_decision is 'approve', 'reject' or 'withdraw'. Returns the new state ('approved', 'rejected',
+-- 'withdrawn') and, for an approval, the version of the rule that now applies; OR a refusal as the first column, one of
+-- not_found, not_pending, not_permitted, same_person, only_proposer, date_passed, rule_conflict. A refusal is a result, not an
+-- error, so the caller's transaction stays usable and nothing has changed.
 CREATE FUNCTION fee_rule_decide(p_proposal uuid, p_decider uuid, p_decision text, p_note text)
 RETURNS TABLE (out_state text, out_version integer, out_key text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
@@ -65,20 +66,24 @@ BEGIN
   END IF;
   SELECT * INTO p FROM fee_rule_proposal WHERE id = p_proposal FOR UPDATE;
   IF NOT FOUND THEN
-    RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'not_found';
+    RETURN QUERY SELECT 'not_found'::text, NULL::integer, NULL::text;
+    RETURN;
   END IF;
   IF p.state <> 'pending' THEN
-    RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'not_pending';
+    RETURN QUERY SELECT 'not_pending'::text, NULL::integer, NULL::text;
+    RETURN;
   END IF;
   SELECT EXISTS (SELECT 1 FROM role_assignment ra JOIN capability_grant g ON g.role = ra.role AND g.capability = 'fee_rule_manage'
                   WHERE ra.user_id = p_decider AND ra.active) INTO holds;
   IF NOT holds THEN
-    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'not_permitted';
+    RETURN QUERY SELECT 'not_permitted'::text, NULL::integer, NULL::text;
+    RETURN;
   END IF;
 
   IF p_decision = 'withdraw' THEN
     IF p_decider <> p.proposed_by THEN
-      RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'only_proposer';
+      RETURN QUERY SELECT 'only_proposer'::text, NULL::integer, NULL::text;
+    RETURN;
     END IF;
     UPDATE fee_rule_proposal SET state = 'withdrawn', decided_by = p_decider, decided_at = now(), decision_note = p_note WHERE id = p.id;
     RETURN QUERY SELECT 'withdrawn'::text, NULL::integer, (p.category_code || ':' || p.application_type)::text;
@@ -87,7 +92,8 @@ BEGIN
 
   -- Approving or rejecting is the second person's step, never the proposer's own.
   IF p_decider = p.proposed_by THEN
-    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'same_person';
+    RETURN QUERY SELECT 'same_person'::text, NULL::integer, NULL::text;
+    RETURN;
   END IF;
   IF p_decision = 'reject' THEN
     UPDATE fee_rule_proposal SET state = 'rejected', decided_by = p_decider, decided_at = now(), decision_note = p_note WHERE id = p.id;
@@ -97,13 +103,15 @@ BEGIN
 
   -- Approve: the rule may not start in the past, however long the proposal waited.
   IF p.effective_from < today THEN
-    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'date_passed';
+    RETURN QUERY SELECT 'date_passed'::text, NULL::integer, NULL::text;
+    RETURN;
   END IF;
   v_key := p.category_code || ':' || p.application_type;
   PERFORM pg_advisory_xact_lock(hashtext(current_schema() || '.master_fee_rule'), hashtext(v_key));
   IF NOT EXISTS (SELECT 1 FROM master_category c WHERE c.rule_key = p.category_code AND c.effective_from <= p.effective_from
                   AND (c.effective_to IS NULL OR c.effective_to > p.effective_from)) THEN
-    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'rule_conflict';
+    RETURN QUERY SELECT 'rule_conflict'::text, NULL::integer, NULL::text;
+    RETURN;
   END IF;
 
   v_json := jsonb_build_object('category_code', p.category_code, 'application_type', p.application_type, 'amount_inr', p.amount_inr,
@@ -125,8 +133,13 @@ BEGIN
                                      'legacy_id', NULL, 'recorded_at', now()));
     END IF;
   EXCEPTION WHEN SQLSTATE '22023' OR SQLSTATE '23P01' OR SQLSTATE '23505' THEN
-    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'rule_conflict';
+    -- Everything the block did is rolled back; report the clash as a refusal.
+    v_next := NULL;
   END;
+  IF v_next IS NULL THEN
+    RETURN QUERY SELECT 'rule_conflict'::text, NULL::integer, NULL::text;
+    RETURN;
+  END IF;
   UPDATE fee_rule_proposal SET state = 'approved', decided_by = p_decider, decided_at = now(), decision_note = p_note, applied_version = v_next
    WHERE id = p.id;
   RETURN QUERY SELECT 'approved'::text, v_next, v_key::text;

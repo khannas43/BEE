@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -120,32 +119,21 @@ public class FeeRuleRepository {
         return proposal(id).orElseThrow();
     }
 
-    /** Approve, reject or withdraw. The database function enforces who may do it and when; its stable codes become outcomes. */
+    /**
+     * Approve, reject or withdraw. The database function enforces who may do it and when. A refusal comes back as a result (not
+     * an error), so the surrounding transaction stays usable.
+     */
     public Decided decide(UUID proposalId, UUID deciderAccountId, String decision, String note) {
-        try {
-            return jdbc.query("SELECT out_state, out_version FROM fee_rule_decide(?, ?, ?, ?)", rs -> {
-                rs.next();
-                int v = rs.getInt("out_version");
-                Integer version = rs.wasNull() ? null : v;
-                return new Decided(Outcome.DONE, rs.getString("out_state"), version);
-            }, proposalId, deciderAccountId, decision, note);
-        } catch (DataAccessException e) {
-            String message = String.valueOf(rootMessage(e));
-            for (Outcome o : Outcome.values()) {
-                if (o != Outcome.DONE && message.contains(o.name().toLowerCase())) {
-                    return Decided.of(o);
-                }
+        return jdbc.query("SELECT out_state, out_version FROM fee_rule_decide(?, ?, ?, ?)", rs -> {
+            rs.next();
+            String state = rs.getString("out_state");
+            int v = rs.getInt("out_version");
+            Integer version = rs.wasNull() ? null : v;
+            if (state.equals("approved") || state.equals("rejected") || state.equals("withdrawn")) {
+                return new Decided(Outcome.DONE, state, version);
             }
-            throw e;
-        }
-    }
-
-    private static String rootMessage(Throwable e) {
-        Throwable t = e;
-        while (t.getCause() != null) {
-            t = t.getCause();
-        }
-        return t.getMessage();
+            return Decided.of(Outcome.valueOf(state.toUpperCase()));
+        }, proposalId, deciderAccountId, decision, note);
     }
 
     private Proposal mapProposal(ResultSet rs, int i) throws SQLException {

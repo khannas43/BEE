@@ -43,6 +43,9 @@ before(async () => {
     resubmit: await import("../../app/api/runtime/model-applications/[id]/resubmit/route.ts"),
     stageReject: await import("../../app/api/runtime/model-applications/[id]/reject/route.ts"),
     history: await import("../../app/api/runtime/model-applications/[id]/history/route.ts"),
+    feeRules: await import("../../app/api/runtime/fee-rules/route.ts"),
+    feeProposals: await import("../../app/api/runtime/fee-rules/proposals/route.ts"),
+    feeDecision: await import("../../app/api/runtime/fee-rules/proposals/[id]/decision/route.ts"),
   };
 });
 
@@ -278,6 +281,38 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/reject 401 sessio
   const res = await routes.stageReject.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/reject", "unit-reject-post-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123475" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/fee-rules 401 session_expired | Keycloak refusing refresh on fee rules", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.feeRules.GET(req("/api/runtime/fee-rules", "unit-fee-rules-refresh-refused", cookie));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/fee-rules/proposals 401 session_expired | Keycloak refusing refresh on a fee-rule proposal", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.feeProposals.POST(req("/api/runtime/fee-rules/proposals", "unit-fee-proposal-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123478" },
+    body: "{}",
+  }));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/fee-rules/proposals/{id}/decision 401 session_expired | Keycloak refusing refresh on a fee-rule decision", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.feeDecision.POST(req("/api/runtime/fee-rules/proposals/00000000-0000-4000-c000-000000000002/decision", "unit-fee-decision-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123479" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

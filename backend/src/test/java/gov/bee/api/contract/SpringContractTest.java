@@ -148,6 +148,9 @@ class SpringContractTest {
     gov.bee.api.director.DirectorRecommendationRepository directorRepo;
 
     @MockitoBean
+    gov.bee.api.secretary.SecretaryApprovalRepository secretaryRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -258,6 +261,16 @@ class SpringContractTest {
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staffOrg));
         when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
         var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "director_review", 5,
+            Set.of(), null, null, null, "LAB", java.time.LocalDate.of(2026, 9, 1), new BigDecimal("4.50"));
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
+    }
+
+    /** A Secretary outside the applicant's organisation, with a record in the secretary_approval stage. */
+    void secretaryAccount(UUID staffOrg) {
+        account("secretary", "all");
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staffOrg));
+        when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
+        var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "secretary_approval", 6,
             Set.of(), null, null, null, "LAB", java.time.LocalDate.of(2026, 9, 1), new BigDecimal("4.50"));
         when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
     }
@@ -1073,6 +1086,81 @@ class SpringContractTest {
         reviewerAccount(staff);
         doThrow(new DataAccessResourceFailureException("down")).when(reviewerRepo).forward(any(), anyInt(), any(), any(), any());
         conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+    }
+
+    @Test
+    void secretaryApprovalOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/secretary-approval";
+        String path = "/api/model-applications/" + NOVA_APP + "/secretary-approval";
+        UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        String ok = "{\"version\":6,\"note\":\"Rating reviewed; approved.\"}";
+        var done = new gov.bee.api.secretary.SecretaryApprovalRepository.Result(gov.bee.api.secretary.SecretaryApprovalRepository.Outcome.APPROVED, 7,
+            Instant.parse("2026-10-04T10:00:00Z"));
+
+        secretaryAccount(staff);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(secretaryRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(secretaryRepo.approve(any(), anyInt(), any(), any(), any())).thenReturn(done);
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("secretary"))));
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+
+        // Request shape.
+        conforms(r, post(path).with(token("secretary")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Rating reviewed; approved.", "   ")), 422, "validation_failed");
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Rating reviewed", "Rating\\nreviewed")), 422, "validation_failed");
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Rating reviewed; approved.", "x".repeat(501))), 422, "validation_failed");
+
+        // Version, idempotency and assignment conflicts.
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":6", "\"version\":5")), 409, "version_conflict");
+        when(secretaryRepo.approve(any(), anyInt(), any(), any(), any())).thenReturn(
+            new gov.bee.api.secretary.SecretaryApprovalRepository.Result(gov.bee.api.secretary.SecretaryApprovalRepository.Outcome.STALE, 0, null));
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
+        when(secretaryRepo.approve(any(), anyInt(), any(), any(), any())).thenReturn(done);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        // A replay returns the stored receipt, not a record the Secretary may no longer read.
+        String stored = "{\"applicationId\":\"" + NOVA_APP + "\",\"reference\":\"LOCAL-MA-0002\",\"fromState\":\"secretary_approval\",\"toState\":\"approved\",\"version\":7,"
+            + "\"note\":\"Rating reviewed; approved.\",\"approvedAt\":\"2026-10-04T10:00:00Z\"}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 4)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(ok))));
+        var replay = conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        // Who may approve: only the Secretary, never the applicant's own organisation, never someone who acted at another stage.
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("auditor", "all");
+        conforms(r, post(path).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        secretaryAccount(staff);
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(NOVA));   // the Secretary belongs to the applicant's organisation
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        secretaryAccount(staff);
+        when(secretaryRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of(USER));
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        when(secretaryRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+
+        // Identity denials and outage.
+        secretaryAccount(staff);
+        conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 401, "unauthenticated");
+        conforms(r, post(path).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "mfa_required");
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        secretaryAccount(staff);
+        doThrow(new DataAccessResourceFailureException("down")).when(secretaryRepo).approve(any(), anyInt(), any(), any(), any());
+        conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 
     @Test

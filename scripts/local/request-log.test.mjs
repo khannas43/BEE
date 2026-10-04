@@ -38,6 +38,7 @@ before(async () => {
     reviewerForward: await import("../../app/api/runtime/model-applications/[id]/reviewer-forward/route.ts"),
     rating: await import("../../app/api/runtime/model-applications/[id]/rating/route.ts"),
     directorRecommendation: await import("../../app/api/runtime/model-applications/[id]/director-recommendation/route.ts"),
+    secretaryApproval: await import("../../app/api/runtime/model-applications/[id]/secretary-approval/route.ts"),
   };
 });
 
@@ -225,6 +226,18 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/director-recommen
   const res = await routes.directorRecommendation.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/director-recommendation", "unit-director-post-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123467" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/secretary-approval 401 session_expired | Keycloak refusing refresh on Secretary approval", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.secretaryApproval.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/secretary-approval", "unit-secretary-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123469" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

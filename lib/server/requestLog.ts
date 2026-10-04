@@ -27,7 +27,8 @@ export type WebRoute =
   | "/api/runtime/model-applications/{id}/iame-recommendation"
   | "/api/runtime/model-applications/{id}/reviewer-forward"
   | "/api/runtime/model-applications/{id}/rating"
-  | "/api/runtime/model-applications/{id}/director-recommendation";
+  | "/api/runtime/model-applications/{id}/director-recommendation"
+  | "/api/runtime/model-applications/{id}/secretary-approval";
 
 export type SpringRoute =
   | "/actuator/health"
@@ -42,7 +43,8 @@ export type SpringRoute =
   | "/api/model-applications/{id}/iame-recommendation"
   | "/api/model-applications/{id}/reviewer-forward"
   | "/api/model-applications/{id}/rating"
-  | "/api/model-applications/{id}/director-recommendation";
+  | "/api/model-applications/{id}/director-recommendation"
+  | "/api/model-applications/{id}/secretary-approval";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
 
@@ -67,6 +69,7 @@ export function springRoute(path: string): SpringRoute {
   const p = path.split("?")[0];
   if (p === "/api/me" || p === "/api/model-applications" || p === "/api/model-applications/eligible-brands" || p === "/actuator/health") return p;
   if (/^\/api\/model-applications\/[^/]+\/submit$/.test(p)) return "/api/model-applications/{id}/submit";
+  if (/^\/api\/model-applications\/[^\/]+\/secretary-approval$/.test(p)) return "/api/model-applications/{id}/secretary-approval";
   if (/^\/api\/model-applications\/[^\/]+\/director-recommendation$/.test(p)) return "/api/model-applications/{id}/director-recommendation";
   if (/^\/api\/model-applications\/[^\/]+\/rating$/.test(p)) return "/api/model-applications/{id}/rating";
   if (/^\/api\/model-applications\/[^\/]+\/reviewer-forward$/.test(p)) return "/api/model-applications/{id}/reviewer-forward";

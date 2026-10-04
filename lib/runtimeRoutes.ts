@@ -66,11 +66,11 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   },
   {
     href: "/app/model-label/director-approval",
-    en: "Director approval",
-    hi: "निदेशक अनुमोदन",
+    en: "Approval",
+    hi: "अनुमोदन",
     icon: "how_to_reg",
-    navRoles: ["director"],
-    implemented: ["List applications awaiting a recommendation", "View the rating, evidence and test reports", "Recommend approval"],
+    navRoles: ["director", "secretary"],
+    implemented: ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)"],
   },
 ];
 

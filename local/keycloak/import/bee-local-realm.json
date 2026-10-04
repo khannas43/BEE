@@ -1,0 +1,647 @@
+{
+  "realm": "bee-local",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "verifyEmail": false,
+  "accessTokenLifespan": 300,
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyCodeReusable": false,
+  "browserFlow": "bee browser with otp",
+  "directGrantFlow": "bee direct grant with otp",
+  "authenticationFlows": [
+    {
+      "alias": "bee browser with otp",
+      "description": "Cookie, or username/password then OTP (required). No conditional bypass.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "flowAlias": "bee browser otp forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "bee browser otp forms",
+      "description": "Password, then OTP; enrollment is forced when no OTP credential exists.",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "bee-amr-pwd"
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "bee-amr-otp"
+        }
+      ]
+    },
+    {
+      "alias": "bee direct grant with otp",
+      "description": "Local check client only: username, password and OTP all required.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "direct-grant-validate-username",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "direct-grant-validate-password",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "bee-amr-pwd-grant"
+        },
+        {
+          "authenticator": "direct-grant-validate-otp",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 30,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "bee-amr-otp-grant"
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "bee-amr-pwd",
+      "config": {
+        "default.reference.value": "pwd",
+        "default.reference.maxAge": "36000"
+      }
+    },
+    {
+      "alias": "bee-amr-otp",
+      "config": {
+        "default.reference.value": "otp",
+        "default.reference.maxAge": "36000"
+      }
+    },
+    {
+      "alias": "bee-amr-pwd-grant",
+      "config": {
+        "default.reference.value": "pwd",
+        "default.reference.maxAge": "36000"
+      }
+    },
+    {
+      "alias": "bee-amr-otp-grant",
+      "config": {
+        "default.reference.value": "otp",
+        "default.reference.maxAge": "36000"
+      }
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "BEE persona: admin"
+      },
+      {
+        "name": "programme",
+        "description": "BEE persona: programme"
+      },
+      {
+        "name": "reviewer",
+        "description": "BEE persona: reviewer"
+      },
+      {
+        "name": "director",
+        "description": "BEE persona: director"
+      },
+      {
+        "name": "secretary",
+        "description": "BEE persona: secretary"
+      },
+      {
+        "name": "finance",
+        "description": "BEE persona: finance"
+      },
+      {
+        "name": "helpdesk",
+        "description": "BEE persona: helpdesk"
+      },
+      {
+        "name": "auditor",
+        "description": "BEE persona: auditor"
+      },
+      {
+        "name": "manufacturer",
+        "description": "BEE persona: manufacturer"
+      },
+      {
+        "name": "agency",
+        "description": "BEE persona: agency"
+      },
+      {
+        "name": "iame",
+        "description": "BEE persona: iame"
+      },
+      {
+        "name": "sda",
+        "description": "BEE persona: sda"
+      },
+      {
+        "name": "laboratory",
+        "description": "BEE persona: laboratory"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bee-web",
+      "name": "BEE portal (Next.js server, authorization code + PKCE)",
+      "description": "Short access tokens so local checks exercise refresh. The organisation claim is wrong for every user on purpose: Spring must ignore it.",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "bee-local-web-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:3100/api/auth/callback"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "60",
+        "post.logout.redirect.uris": "http://127.0.0.1:3100/login"
+      },
+      "protocolMappers": [
+        {
+          "name": "bee-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "bee-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "authentication-method-reference",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "misleading-organisation-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "organisation",
+            "claim.value": "Bureau of Energy Efficiency (local)",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "bee-local-check",
+      "name": "Local checks only (password grant; not used by the portal)",
+      "description": "Adds a deliberately misleading organisation claim so checks can prove Spring ignores token attributes for access.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "bee-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "bee-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "authentication-method-reference",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "misleading-organisation-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "organisation",
+            "claim.value": "PixelCert Agency (synthetic)",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "00000000-0000-4000-a000-000000000001",
+      "username": "nova.applicant",
+      "email": "nova.applicant@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Nova",
+      "lastName": "Applicant",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "manufacturer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000002",
+      "username": "pixel.applicant",
+      "email": "pixel.applicant@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Pixel",
+      "lastName": "Applicant",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "agency"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000003",
+      "username": "bee.finance",
+      "email": "bee.finance@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Finance",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "finance"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000004",
+      "username": "iame.officer",
+      "email": "iame.officer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "IAME",
+      "lastName": "Officer",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "iame"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000005",
+      "username": "bee.reviewer",
+      "email": "bee.reviewer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Reviewer",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "reviewer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000006",
+      "username": "bee.programme",
+      "email": "bee.programme@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Programme",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "programme"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000007",
+      "username": "bee.director",
+      "email": "bee.director@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Director",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "director"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000008",
+      "username": "bee.secretary",
+      "email": "bee.secretary@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Secretary",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "secretary"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000009",
+      "username": "bee.admin",
+      "email": "bee.admin@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Admin",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000010",
+      "username": "bee.helpdesk",
+      "email": "bee.helpdesk@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Helpdesk",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "helpdesk"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000011",
+      "username": "bee.auditor",
+      "email": "bee.auditor@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Auditor",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "auditor"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000012",
+      "username": "sda.officer",
+      "email": "sda.officer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "SDA",
+      "lastName": "Officer",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "sda"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000013",
+      "username": "lab.officer",
+      "email": "lab.officer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Lab",
+      "lastName": "Officer",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "laboratory"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000014",
+      "username": "no.account",
+      "email": "no.account@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "No",
+      "lastName": "Account",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "manufacturer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000015",
+      "username": "inactive.role",
+      "email": "inactive.role@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Inactive",
+      "lastName": "Role",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "reviewer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000016",
+      "username": "role.mismatch",
+      "email": "role.mismatch@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Role",
+      "lastName": "Mismatch",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "finance"
+      ]
+    }
+  ]
+}

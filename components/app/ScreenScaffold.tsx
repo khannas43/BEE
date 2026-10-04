@@ -656,6 +656,7 @@ export function ScreenChrome({
   screen,
   actions,
   subtitle,
+  implemented,
   children,
 }: {
   module: Module;
@@ -663,6 +664,8 @@ export function ScreenChrome({
   /** Header action controls. Deep screens provide their own; omit for none. */
   actions?: React.ReactNode;
   subtitle?: string;
+  /** Capabilities the screen really implements; replaces the preview-derived access chips and the preview lock. */
+  implemented?: readonly string[];
   children: React.ReactNode;
 }) {
   const { role } = useRole();
@@ -689,8 +692,16 @@ export function ScreenChrome({
               <div className="flex items-center gap-space-sm mt-1 flex-wrap">
                 <span className="font-label-sm text-label-sm text-on-surface-variant">{subtitle ?? `${screen.archetype} ${t("app.screenSuffix")}`}</span>
                 <span className="text-on-surface-variant/40">•</span>
-                <span className="font-label-sm text-label-sm text-on-surface-variant">{t("app.yourAccess")}</span>
-                {codes.length ? codes.map((c) => <Chip key={c} code={c} />) : <span className="font-label-sm text-label-sm text-error">{t("app.noAccess")}</span>}
+                {implemented ? (
+                  <span className="font-label-sm text-label-sm text-on-surface-variant" data-testid="implemented-capabilities">
+                    Implemented here: {implemented.join(" · ")}
+                  </span>
+                ) : (
+                  <>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant">{t("app.yourAccess")}</span>
+                    {codes.length ? codes.map((c) => <Chip key={c} code={c} />) : <span className="font-label-sm text-label-sm text-error">{t("app.noAccess")}</span>}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -698,7 +709,7 @@ export function ScreenChrome({
         </div>
       </div>
 
-      {codes.length === 0 ? (
+      {codes.length === 0 && !implemented ? (
         <div className="bg-surface-card rounded-xl shadow-sm p-space-2xl text-center">
           <Icon name="lock" size={40} className="text-outline" />
           <p className="font-body-md text-body-md text-on-surface mt-2">{t("app.notAvailable")}</p>

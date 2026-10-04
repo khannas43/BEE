@@ -1,0 +1,75 @@
+{
+  "$comment": "WP03.3 local request log line (one JSON object per line). Written by Spring to $BEE_LOG_DIR/api-requests.jsonl and by Next.js to $BEE_LOG_DIR/web-requests.jsonl. Every value is a fixed enum, a safe pattern or a number, so no token, cookie, code, state, query string, body, record value or personal data can be written. Checked by contract-lib.cjs (same keyword subset as the OpenAPI artifact) and by the Spring tests. See WP03.3_CONTRACT_TESTS.md.",
+  "version": "1",
+  "retention": {
+    "api": { "file": "api-requests.jsonl", "rotation": "daily and at 5 MB", "maxHistoryDays": 7, "totalSizeCapMB": 20 },
+    "web": { "file": "web-requests.jsonl", "rotation": "at 5 MB", "maxRotatedFiles": 3, "maxAgeDays": 7 }
+  },
+  "line": {
+    "oneOf": [
+      {
+        "description": "One inbound request completed (Spring or a Next.js /api route).",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts", "layer", "event", "correlationId", "method", "route", "status", "outcome", "durationMs"],
+        "properties": {
+          "ts": { "type": "string", "format": "date-time" },
+          "layer": { "type": "string", "enum": ["api", "web"] },
+          "event": { "const": "request" },
+          "correlationId": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$" },
+          "method": { "type": "string", "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "OTHER"] },
+          "route": {
+            "type": "string",
+            "enum": [
+              "/actuator/health", "/actuator/health/{group}", "/api/me", "/api/model-applications", "/api/model-applications/eligible-brands", "/api/model-applications/{id}", "/api/model-applications/{id}/history", "/api/model-applications/{id}/submit", "unmapped",
+              "/api/model-applications/{id}/documents", "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",
+              "/api/model-applications/{id}/fee-confirmation",
+              "/api/runtime/health", "/api/runtime/me", "/api/runtime/model-applications", "/api/runtime/model-applications/eligible-brands",               "/api/runtime/model-applications/{id}", "/api/runtime/model-applications/{id}/submit",
+              "/api/runtime/model-applications/{id}/documents", "/api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",
+              "/api/runtime/model-applications/{id}/fee-confirmation",
+              "/api/auth/session", "/api/auth/login", "/api/auth/callback", "/api/auth/logout", "/api/{unmatched}"
+            ]
+          },
+          "status": { "type": "integer", "minimum": 100 },
+          "outcome": { "type": "string", "pattern": "^[a-z_]{2,40}$", "description": "ok, or the contract error code / sign-in redirect code" },
+          "durationMs": { "type": "integer", "minimum": 0 }
+        }
+      },
+      {
+        "description": "Next.js server call to Spring for that request.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts", "layer", "event", "correlationId", "method", "route", "status", "outcome", "durationMs"],
+        "properties": {
+          "ts": { "type": "string", "format": "date-time" },
+          "layer": { "const": "web" },
+          "event": { "const": "upstream" },
+          "correlationId": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$" },
+          "method": { "enum": ["GET", "POST", "PATCH"] },
+          "route": { "type": "string", "enum": ["/actuator/health", "/api/me", "/api/model-applications", "/api/model-applications/eligible-brands", "/api/model-applications/{id}", "/api/model-applications/{id}/submit",
+            "/api/model-applications/{id}/documents", "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",
+            "/api/model-applications/{id}/fee-confirmation"] },
+          "status": { "type": "integer", "minimum": 100 },
+          "outcome": { "type": "string", "pattern": "^[a-z_]{2,40}$", "description": "ok, Spring's documented error code, api_unreachable, or unlisted" },
+          "durationMs": { "type": "integer", "minimum": 0 }
+        }
+      },
+      {
+        "description": "Next.js server call to Keycloak for that request. Keycloak is not sent and does not record the correlation ID; only the portal logs it.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts", "layer", "event", "correlationId", "operation", "status", "outcome", "durationMs"],
+        "properties": {
+          "ts": { "type": "string", "format": "date-time" },
+          "layer": { "const": "web" },
+          "event": { "const": "identity" },
+          "correlationId": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$" },
+          "operation": { "type": "string", "enum": ["discovery", "jwks", "token.code", "token.refresh", "logout"] },
+          "status": { "type": "integer", "minimum": 0, "description": "Keycloak's HTTP status, 0 when unreachable" },
+          "outcome": { "type": "string", "enum": ["ok", "invalid_grant", "invalid_client", "invalid_request", "unauthorized_client", "unsupported_grant_type", "invalid_scope", "refused", "unreachable"] },
+          "durationMs": { "type": "integer", "minimum": 0 }
+        }
+      }
+    ]
+  }
+}

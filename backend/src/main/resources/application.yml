@@ -1,0 +1,51 @@
+server:
+  address: 127.0.0.1
+  port: ${BEE_API_PORT:8090}
+
+spring:
+  application:
+    name: bee-api
+  main:
+    banner-mode: "off"
+  jackson:
+    deserialization:
+      # Request numbers keep their exact decimal value, so a figure with more than two decimals is refused, not rounded.
+      use-big-decimal-for-floats: true
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:${BEE_PG_PORT:5434}/${BEE_APP_DB:bee_app}?currentSchema=app
+    username: ${BEE_RUNTIME_DB_USER:bee_runtime}
+    password: ${BEE_RUNTIME_DB_PASSWORD:bee-local-runtime}
+    hikari:
+      maximum-pool-size: 5
+  flyway:
+    schemas: app
+    default-schema: app
+    create-schemas: false
+    user: ${BEE_FLYWAY_DB_USER:bee_app}
+    password: ${BEE_FLYWAY_DB_PASSWORD:${BEE_APP_DB_PASSWORD:bee-local-app}}
+  servlet:
+    multipart:
+      max-file-size: ${BEE_DOCUMENTS_MAX_BYTES:5242880}
+      # Larger than the file limit: form fields and boundaries add to the request. Keep <= the BFF's 6 MiB guard.
+      max-request-size: ${BEE_DOCUMENTS_MAX_REQUEST_BYTES:6291456}
+
+bee:
+  security:
+    issuer: http://127.0.0.1:${BEE_KC_PORT:8180}/realms/${BEE_REALM:bee-local}
+    audience: bee-api
+  documents:
+    # Git-ignored local content-addressed store (ADR-001 D-RT6). Override with an absolute path in local:check.
+    store-path: ${BEE_DOCUMENTS_STORE:.local/documents}
+    max-upload-bytes: ${BEE_DOCUMENTS_MAX_BYTES:5242880}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-components: always
+      show-details: never
+      probes:
+        enabled: true

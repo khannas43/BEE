@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { useRole } from "@/components/app/RoleContext";
+import { PREVIEW_SUFFIX, useRole } from "@/components/app/RoleContext";
 import { useLang } from "@/components/i18n/LangProvider";
 import { countForRole, SCREEN_COUNT } from "@/lib/screens";
 import { categoriesForRole } from "@/lib/categories";
@@ -51,7 +51,7 @@ export default function AppOverview() {
       <div className="bg-forest-dark text-on-primary rounded-xl p-space-lg flex flex-col md:flex-row md:items-center justify-between gap-space-md">
         <div>
           <div className="font-label-sm text-label-sm text-primary-fixed uppercase tracking-wider">{external ? t("app.partnerConsole") : t("app.officerConsole")}</div>
-          <h1 className="font-headline-lg text-headline-lg font-bold">{t("app.welcome").replace("{name}", t(`role.${role}`))}</h1>
+          <h1 className="font-headline-lg text-headline-lg font-bold" data-preview-role>{t("app.welcome").replace("{name}", t(`role.${role}`) + PREVIEW_SUFFIX)}</h1>
           <p className="font-body-md text-body-md text-forest-light/85 mt-1">{summary}</p>
         </div>
         <div className="flex items-center gap-space-md">

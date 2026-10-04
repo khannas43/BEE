@@ -1,9 +1,29 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { RoleKey } from "@/lib/roles";
+import { RoleKey, roleByKey } from "@/lib/roles";
 
 const KEY = "bee-role";
+
+/**
+ * The prototype role switcher is a development preview of screens and menus. It
+ * lives only in this browser's localStorage, is never sent to the server and
+ * never creates a server session; sign-in is /api/auth/login (WP02.1). It is off
+ * in production builds unless NEXT_PUBLIC_BEE_ROLE_PREVIEW=1.
+ */
+export const ROLE_PREVIEW_ENABLED = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_BEE_ROLE_PREVIEW === "1";
+
+/**
+ * Every name derived from the preview role carries this suffix, so a preview role
+ * can never read as the signed-in person or as an access grant. Elements that
+ * render a preview role also carry data-preview-role (checked by local:browser).
+ */
+export const PREVIEW_SUFFIX = " (preview)";
+
+export function previewRoleOf(r: RoleKey) {
+  const base = roleByKey(r);
+  return { ...base, name: base.name + PREVIEW_SUFFIX, short: base.short + PREVIEW_SUFFIX };
+}
 
 interface RoleCtx {
   role: RoleKey;
@@ -19,7 +39,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(KEY) as RoleKey | null;
+      const saved = ROLE_PREVIEW_ENABLED ? (localStorage.getItem(KEY) as RoleKey | null) : null;
       if (saved) setRoleState(saved);
     } catch {
       /* ignore */
@@ -28,6 +48,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setRole = (r: RoleKey) => {
+    if (!ROLE_PREVIEW_ENABLED) return;
     setRoleState(r);
     try {
       localStorage.setItem(KEY, r);
@@ -43,8 +64,9 @@ export function useRole() {
   return useContext(Ctx);
 }
 
-/** Helper for the login page to set role before navigating. */
+/** Helper for the login page's preview picker to set role before navigating. */
 export function persistRole(r: RoleKey) {
+  if (!ROLE_PREVIEW_ENABLED) return;
   try {
     localStorage.setItem(KEY, r);
   } catch {

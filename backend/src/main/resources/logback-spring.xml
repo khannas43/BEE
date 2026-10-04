@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WP03.3 local logging. Framework and application messages stay on the console (api.log,
+  recreated at each start). The bee.access request lines (docs/wp03/request-log.schema.json)
+  go only to $BEE_LOG_DIR/api-requests.jsonl, rolled daily and at 5 MB, kept 7 days and
+  20 MB in total. The values below are asserted by scripts/local/api-contract.test.mjs.
+-->
+<configuration>
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+  <springProperty scope="context" name="BEE_LOG_DIR" source="bee.log.dir" defaultValue="target/logs"/>
+
+  <appender name="REQUESTS" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${BEE_LOG_DIR}/api-requests.jsonl</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${BEE_LOG_DIR}/api-requests.%d{yyyy-MM-dd}.%i.jsonl</fileNamePattern>
+      <maxFileSize>5MB</maxFileSize>
+      <maxHistory>7</maxHistory>
+      <totalSizeCap>20MB</totalSizeCap>
+      <cleanHistoryOnStart>true</cleanHistoryOnStart>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%msg%n</pattern>
+      <charset>UTF-8</charset>
+    </encoder>
+  </appender>
+
+  <logger name="bee.access" level="INFO" additivity="false">
+    <appender-ref ref="REQUESTS"/>
+  </logger>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+</configuration>

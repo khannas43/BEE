@@ -10,6 +10,7 @@ import { RouteGuard } from "@/components/app/RouteGuard";
 import { LangProvider } from "@/components/i18n/LangProvider";
 import { AppSidebar } from "@/components/app/AppSidebar";
 import { AppTopbar } from "@/components/app/AppTopbar";
+import { PreviewBanner } from "@/components/app/PreviewBanner";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -39,6 +40,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Main column */}
         <div className="flex-1 flex flex-col min-w-0">
+          <PreviewBanner />
           <AppTopbar onMenu={() => setMobileOpen(true)} />
           <main className="flex-1 overflow-y-auto app-scroll">
             <div key={pathname} className="screen-enter"><RouteGuard>{children}</RouteGuard></div>

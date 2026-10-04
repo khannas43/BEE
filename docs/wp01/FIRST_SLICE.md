@@ -1,6 +1,6 @@
 # WP01.2 First vertical slice: registration to approved model with computed rating
 
-Status: WP01.2 and WP01.3 passed documentation review on 30 September 2026. WP01 is accepted as documentation and design evidence (1 of 11 work packages, 9.1%). Nothing in this first slice is implemented in the running app yet.
+Status: WP01.2 and WP01.3 passed documentation review on 30 September 2026. WP01 is accepted as documentation and design evidence (1 of 11 work packages, 9.1%). WP02.2 local list/read policy activity accepted on 30 September 2026; WP02 remains open: Spring enforces the list and read scope in §7 from its own account, role, membership and assignment records, and defines reusable checks for the seven steps in §3. Every transition and the history read stay denied by default. Rules, evidence and deferred actions: [WP02.2_POLICY.md](../wp02/WP02.2_POLICY.md). No slice transition is implemented yet.
 
 This is the first increment of real behaviour after WP01. It is chosen because it exercises the three controls every later work package depends on: organisation-scoped partner access, manual Finance fee confirmation with no payer self-confirmation, and a two-stage BEE approval taken on a computed, versioned star rating. Requirement references (R1 to R15) and gap references (G01 to G25) are in [INVENTORY.md](INVENTORY.md). The role and route capacity for every slice step is in [SCREEN_ACTION_MATRIX.md](SCREEN_ACTION_MATRIX.md) (rows whose note starts with **slice**), and `scripts/screen-matrix.cjs` checks it.
 
@@ -98,15 +98,17 @@ Only what the slice needs. Names are indicative; WP04 and WP05 own the final sch
 | `brand` | id, owner organisation id, name, status |
 | `agency_authorisation` | agency organisation id, principal organisation id, brand id, valid from/to |
 | `model_application` | id (server sequence), organisation id, brand id, category, model number, declared metric (ISEER), test lab, test report reference, state, returned-from state, current rating result id, version |
-| `fee_rule` | id, category, amount, effective from/to |
+| `fee_rule` | id, category, amount, effective from/to (now `master_fee_rule`, versioned with source and verification status; see [WP04.1_MASTERS.md](../wp04/WP04.1_MASTERS.md)) |
 | `fee_confirmation` | application id, fee rule id, amount due, amount received, reference, confirmed by, confirmed at |
 | `assignment` | application id, stage, assignee user id (IAME and Reviewer) |
-| `rating_formula` | id, category, version, thresholds, effective from/to, source reference, verification status |
+| `rating_formula` | id, category, version, thresholds, effective from/to, source reference, verification status (now `master_rating_formula`, metadata only; see [WP04.1_MASTERS.md](../wp04/WP04.1_MASTERS.md)) |
 | `rating_result` | id, application id, formula id and version, inputs, star result, computed by, computed at, superseded by |
 | `approval_decision` | application id, stage (director, secretary), decision, rating result id, decided by, decided at, note |
 | `transition` | append-only history, as in §4 |
 
 IDs are issued by the server. The client does not predict them (G07).
+
+WP02.2 persists only the part of `model_application` that the scope checks need: id, reference, organisation id, brand name as text, category, model number, state and version (`V3__model_application.sql`). Brand, fee, rating and history columns and tables stay with WP04, WP05 and WP07.
 
 ## 7. API outline
 
@@ -126,6 +128,8 @@ IDs are issued by the server. The client does not predict them (G07).
 
 Every write checks, on the server: the user's role owns the current state, the application is inside the user's scope, and the expected version matches (optimistic concurrency).
 
+Implemented in WP02.2: the two `GET` list and read routes, filtered on the server by rules P1–P6 in [WP02.2_POLICY.md](../wp02/WP02.2_POLICY.md). A read outside scope returns the same 404 as an unknown ID. Every other route in this table returns 403 `denied_by_default` until its owning activity implements it.
+
 ## 8. Denial cases
 
 Each of these must fail with a server error and must leave no transition entry:
@@ -140,6 +144,8 @@ Each of these must fail with a server error and must leave no transition entry:
 8. The same user acts at two stages of one application.
 9. Any role acts on an application that is not in that role's stage.
 10. Helpdesk, Admin or Auditor performs any slice transition. (Annex A.1 would grant Admin, Finance and Helpdesk approve on director and secretary approval; the slice overrides it, G10.)
+
+WP02.2 enforces case 1 for list and read and denies case 10's roles any read. Cases 1, 2, 3, 4, 5, 7, 8, 9 and 10 have unit-tested step checks (P7 in [WP02.2_POLICY.md](../wp02/WP02.2_POLICY.md)). None of them can yet be exercised through the API, because every transition is still denied. Case 6 is deferred to WP05.2.
 
 ## 9. Proposed local acceptance checks
 
@@ -165,9 +171,9 @@ The local demo uses these defaults. Each is **provisional and pending a BEE deci
 | --- | --- | --- | --- |
 | D1 | Is Secretary approval always required, or can it be delegated to the Director for some categories? | Always required: Director recommends, Secretary gives final approval | RFP Vol 2 §1.3 lists both; DDD §5.3 says "per delegation" |
 | D2 | Who allocates applications to IAME and Reviewer users? | Seeded round-robin assignment; no allocator role in the slice | RFP Vol 2 §1.3 names a Data Analyst role, which the prototype lacks (G12) |
-| D3 | Which approved star-rating formula and version applies to each category? | Current `computeStars` thresholds, recorded as formula version "0-unverified" | RFP Vol 2 SoW (b); the corrigendum (row 70) refers to beestarlabel.com (G13) |
+| D3 | Which approved star-rating formula and version applies to each category? | Current `computeStars` thresholds, recorded as formula version "0-unverified". WP04.1 stores only the label, with an empty definition and computation disallowed (decision M5) | RFP Vol 2 SoW (b); the corrigendum (row 70) refers to beestarlabel.com (G13) |
 | D4 | Does `/app/registrations/record` become the applicant's model record? | Yes, scoped to the applicant's organisation | Today the manufacturer cannot open it (G02) |
 | D5 | Is the IAME verifier (note-sheet) a separate step from IAME scrutiny? | Single IAME step in the slice | RFP Vol 2 §1.3; DDD §4.3 (G11) |
-| D6 | Which fee rule applies per category and application type? | One seeded rule: ₹24,000 for room air conditioners | DDD §5.3 (G08) |
+| D6 | Which fee rule applies per category and application type? | One seeded rule: ₹24,000 for room air conditioners. The earlier local seed held ₹1,000. WP04.1 keeps both as labelled versions, neither BEE-approved: ₹1,000 synthetic before 2026-10-01 and ₹24,000 provisional from 2026-10-01 (synthetic split date; decision M4; [WP04.1_MASTERS.md](../wp04/WP04.1_MASTERS.md) §6) | DDD §5.3 (G08) |
 
 Because D3 is unverified, any rating computed in the local demo carries formula version "0-unverified" and must not be presented as an official star rating.

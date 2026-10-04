@@ -1,0 +1,23 @@
+---
+description: BEE portal working rules for any Cursor agent in this repository
+alwaysApply: true
+---
+
+# BEE portal — rules for Cursor
+
+You are one of two developers on this repository. The other is Claude Code (CLI), working in the same folder. Read `docs/kit/AGENT_HANDOFF.md` before you start; it is the agreement. The short version:
+
+- **There is one folder and one agent in it at a time.** Check the `.baton` file in the repository root first. If it does not say `cursor` followed by your task branch, STOP and tell the owner: Claude holds the folder and you must not edit anything.
+- **Work only on the branch named in `docs/cursor/CURRENT_TASK.md`** (`cursor/<task>`, already checked out). Confirm with `git branch --show-current`. If you are on `wp06.1a-document-intake` or `main`, STOP.
+- **Stay in your lane.** Frontend and tooling only unless a brief says otherwise. Do NOT edit `backend/**`, `docs/wp03/bee-local-api.openapi.json`, `scripts/local/contract-pin.json`, `lib/server/**`, `app/api/**`, the request-log files, or any Flyway migration. If the work needs one of them, stop and report; Claude owns them.
+- **Do not edit `AGENTS.md` or `CLAUDE.md`.** `next dev` rewrites them; a diff there is a tool artefact.
+- **This is not the Next.js you know.** Before writing Next.js code, read the relevant guide in `node_modules/next/dist/docs/`. Heed deprecation notices.
+- **One runtime.** `npm run local:up` and the `local:*` browser checks use fixed ports and the Docker project `bee-local`. Run them only if your task asks for them; start the runtime yourself and run `npm run local:down` before you hand back. Otherwise list them under "Not run" in your hand-back and Claude runs them when merging.
+- **Real data only.** A screen's records come from Spring through the BFF. No `localStorage` or fixture as the source of truth, and the screen never decides access.
+- **After every `npm ci` run `npm run setup:nosync`** (the project is in an iCloud-synced folder; this keeps `node_modules` and build output out of sync).
+- **Keep `data-testid` values and user-visible copy stable** unless the brief says to change them; live checks find elements by them.
+- **Never push, never tag, never force, never rewrite history, never edit an applied migration.** Commit on your task branch only; Claude pushes when the owner asks.
+- **Report honestly.** Say exactly what you ran and the totals. Say what you did not run. Record anything you defer in `docs/BACKLOG.md` (a new `BL-nnn` row) instead of leaving it in chat.
+- **Stop at the end of your task** with `/bee-handback`. Do not start the next brief or tidy unrelated code.
+
+Gates for any change (run what applies, report each): `npx tsc --noEmit`; `npx eslint <changed files>` (the whole-repository lint baseline is known: BL-035; report new findings only); `npm run web:test`; `npm run build` (stop the dev runtime first if it is running in your clone).

@@ -92,6 +92,7 @@ function springEvidence(p) {
   if (p.route === "/api/model-applications/{id}/return") return mockMvc("stageReturnOperationsDocumentedPairs");
   if (p.route === "/api/model-applications/{id}/resubmit") return mockMvc("resubmitApplicationOperationsDocumentedPairs");
   if (p.route === "/api/model-applications/{id}/reject") return mockMvc("stageRejectOperationsDocumentedPairs");
+  if (p.route === "/api/fee-rules" || p.route === "/api/fee-rules/proposals" || p.route === "/api/fee-rules/proposals/{id}/decision") return mockMvc("feeRuleOperationsDocumentedPairs");
   if (p.route === "/api/model-applications/{id}/history") return mockMvc("applicationHistoryOperationsDocumentedPairs");
   const documentRoutes = new Set(["/api/model-applications/{id}/documents", "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content"]);
   if (documentRoutes.has(p.route)) return mockMvc("documentOperationsDocumentedPairs");

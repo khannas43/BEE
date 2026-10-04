@@ -108,7 +108,7 @@ Last updated: 3 October 2026 (local:check preflight, stale lock, memory sampling
 | BL-079 | `contract-coverage.cjs` `springEvidence()` hard-codes which MockMvc test covers which route | Every new route needs a hand edit there; an annotation or a convention in the test name would make it data-driven | with BL-025 | open |
 | BL-080 | The stand-in tables in `contract-check.cjs` (`SUBMIT_UPSTREAM` and the like) are hard-coded per route and must equal the artifact's `x-error-codes` | They drifted once already (WP05.1d); generating them from the artifact would remove the duplicate | with BL-025 | open |
 | BL-081 | No skeletons for the database test or the `SpringContractTest` section (the `@MockitoBean`, the documented-pairs test) | Both are the longest hand-written parts of a feature; the output names them but does not generate them | when the first generated command is implemented | open |
-| BL-082 | `CommandPanel` is used by the test-report upload only; the draft save and the submit confirm still use their own buttons and state | Two places show command failures differently until they move onto `useCommand` | next change to the draft form | open |
+| BL-082 | `CommandPanel` is used by the test-report upload only; the draft save and the submit confirm still use their own buttons and state | Two places show command failures differently until they move onto `useCommand` | `cursor/draft-form-on-kit`: draft save and submit confirm now use `useCommand` (submit card keeps its own buttons); `local:model-drafts` and `local:model-submit` not run in Cursor — Claude at merge | open |
 
 ## I. Dependencies
 

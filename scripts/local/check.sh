@@ -275,6 +275,13 @@ read -r hs_pass hs_fail <<<"$(sed -nE 's/^history checks: ([0-9]+) passed, ([0-9
 if [[ -z "${hs_pass:-}" ]]; then check "history.run" 0 "history-browser-check did not complete: $(tail -1 <<<"$hs_out")"
 else pass=$((pass + hs_pass)); fail=$((fail + hs_fail)); fi
 
+# ---- Wave 1: the inbox and My approvals (read-only; no contract pairs)
+ib_out="$(node "$ROOT/scripts/local/inbox-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$ib_out"
+read -r ib_pass ib_fail <<<"$(sed -nE 's/^inbox checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$ib_out")"
+if [[ -z "${ib_pass:-}" ]]; then check "inbox.run" 0 "inbox-browser-check did not complete: $(tail -1 <<<"$ib_out")"
+else pass=$((pass + ib_pass)); fail=$((fail + ib_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

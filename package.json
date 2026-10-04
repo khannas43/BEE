@@ -33,6 +33,7 @@
     "local:return-resubmit": "bash -c 'source scripts/local/lib.sh && node scripts/local/return-resubmit-browser-check.cjs'",
     "local:reject": "bash -c 'source scripts/local/lib.sh && node scripts/local/reject-browser-check.cjs'",
     "local:history": "bash -c 'source scripts/local/lib.sh && node scripts/local/history-browser-check.cjs'",
+    "local:inbox": "bash -c 'source scripts/local/lib.sh && node scripts/local/inbox-browser-check.cjs'",
     "local:model-submit": "bash -c 'source scripts/local/lib.sh && node scripts/local/model-submit-browser-check.cjs'",
     "local:model-documents": "bash -c 'source scripts/local/lib.sh && node scripts/local/model-documents-browser-check.cjs'",
     "api:test:submit": "JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -q -B -f backend/pom.xml test -Dtest=ModelApplicationSubmitDatabaseTest -Dgroups=db -Dbee.test.excludedGroups=none -Dsurefire.failIfNoSpecifiedTests=false",

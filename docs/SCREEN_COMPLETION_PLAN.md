@@ -122,8 +122,8 @@ Generated from the screen matrix. Status is as of 3 October 2026. "Not started" 
 | 1 | `/app/model-label/bee-scrutiny` | BEE scrutiny | My work and approvals | Not started: deep / lifecycle-store → WP05 |
 | 1 | `/app/model-label/director-approval` | Director approval | My work and approvals | Not started: deep / lifecycle-store → WP05 |
 | 1 | `/app/model-label/rating-calculation` | Rating calculation | My work and approvals | Not started: deep / lifecycle-store → WP05 |
-| 1 | `/app/workflow/personal-inbox` | Personal inbox | My work and approvals | Not started: deep / lifecycle-store → WP05 |
-| 1 | `/app/workflow/my-approvals` | My approvals | My work and approvals | Not started: standalone / static-fixture → WP05 |
+| 1 | `/app/workflow/personal-inbox` | Personal inbox | My work and approvals | Real: the applications waiting for the signed-in person, from the scoped list (WP07.1j) |
+| 1 | `/app/workflow/my-approvals` | My approvals | My work and approvals | Real: the Director and Secretary decisions waiting (WP07.1j) |
 | 1 | `/app/model-label/model-payment` | Model payment | Production and finance | Not started: deep / lifecycle-store → WP07 |
 | 1 | `/app/finance/finance-queue` | Finance queue | Production and finance | Not started: scaffold / scaffold |
 | 2 | `/app/identity/organisation-users` | Organisation users | Registrations | Not started: scaffold / scaffold |

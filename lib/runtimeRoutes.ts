@@ -17,6 +17,22 @@ export interface RuntimeRoute {
 
 export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   {
+    href: "/app/workflow/personal-inbox",
+    en: "My work",
+    hi: "मेरा कार्य",
+    icon: "inbox",
+    navRoles: ["manufacturer", "agency", "finance", "iame", "reviewer", "programme", "director", "secretary"],
+    implemented: ["List the applications waiting for you", "Open the screen where each is done"],
+  },
+  {
+    href: "/app/workflow/my-approvals",
+    en: "My approvals",
+    hi: "मेरे अनुमोदन",
+    icon: "how_to_reg",
+    navRoles: ["director", "secretary"],
+    implemented: ["List the applications waiting for your decision", "Open the approval screen"],
+  },
+  {
     href: "/app/model-label/model-dashboard",
     en: "My model applications",
     hi: "मेरे मॉडल आवेदन",

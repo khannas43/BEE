@@ -291,6 +291,8 @@ test("detail href stays on model-dashboard; state labels are humanised", () => {
 test("runtime routes: Spring identity menu for dashboard, draft form and finance queue, not the preview role", async () => {
   const { RUNTIME_ROUTES, runtimeNavFor, runtimeRouteFor } = await import("../../lib/runtimeRoutes.ts");
   assert.deepEqual(RUNTIME_ROUTES.map((r) => r.href), [
+    "/app/workflow/personal-inbox",
+    "/app/workflow/my-approvals",
     "/app/model-label/model-dashboard",
     "/app/model-label/new-model-application",
     "/app/finance/finance-queue",
@@ -299,18 +301,18 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
     "/app/model-label/rating-calculation",
     "/app/model-label/director-approval",
   ]);
-  assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).length, 2);
-  assert.equal(runtimeNavFor([{ role: "agency", scope: "own-org" }]).length, 2);
-  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }]).map((r) => r.href), ["/app/finance/finance-queue"], "Finance gets only its queue");
+  assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).length, 3);
+  assert.equal(runtimeNavFor([{ role: "agency", scope: "own-org" }]).length, 3);
+  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/finance/finance-queue"], "Finance gets its queue and the inbox");
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/finance/finance-queue"), false, "an applicant never gets the Finance entry");
-  assert.deepEqual(runtimeNavFor([{ role: "iame", scope: "assigned" }]).map((r) => r.href), ["/app/model-label/iame-scrutiny"], "IAME gets only its scrutiny screen");
+  assert.deepEqual(runtimeNavFor([{ role: "iame", scope: "assigned" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/model-label/iame-scrutiny"], "IAME gets only its scrutiny screen");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }]).some((r) => r.href === "/app/model-label/iame-scrutiny"), false, "Finance never gets the IAME entry");
-  assert.deepEqual(runtimeNavFor([{ role: "reviewer", scope: "assigned" }]).map((r) => r.href), ["/app/model-label/bee-scrutiny"], "the Reviewer gets only BEE scrutiny");
+  assert.deepEqual(runtimeNavFor([{ role: "reviewer", scope: "assigned" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/model-label/bee-scrutiny"], "the Reviewer gets only BEE scrutiny");
   assert.equal(runtimeNavFor([{ role: "iame", scope: "assigned" }]).some((r) => r.href === "/app/model-label/bee-scrutiny"), false, "IAME never gets the Reviewer entry");
-  assert.deepEqual(runtimeNavFor([{ role: "programme", scope: "all" }]).map((r) => r.href), ["/app/model-label/rating-calculation"], "Programme gets only the rating screen");
+  assert.deepEqual(runtimeNavFor([{ role: "programme", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/model-label/rating-calculation"], "Programme gets only the rating screen");
   assert.equal(runtimeNavFor([{ role: "reviewer", scope: "assigned" }]).some((r) => r.href === "/app/model-label/rating-calculation"), false, "the Reviewer never gets the Programme entry");
-  assert.deepEqual(runtimeNavFor([{ role: "director", scope: "all" }]).map((r) => r.href), ["/app/model-label/director-approval"], "the Director gets only the approval screen");
-  assert.deepEqual(runtimeNavFor([{ role: "secretary", scope: "all" }]).map((r) => r.href), ["/app/model-label/director-approval"], "the Secretary gets the same approval screen, for its own stage");
+  assert.deepEqual(runtimeNavFor([{ role: "director", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval"], "the Director gets only the approval screen");
+  assert.deepEqual(runtimeNavFor([{ role: "secretary", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval"], "the Secretary gets the same approval screen, for its own stage");
   assert.equal(runtimeNavFor([{ role: "programme", scope: "all" }]).some((r) => r.href === "/app/model-label/director-approval"), false, "Programme never gets the Director entry");
   for (const roles of [null, [], [{ role: "laboratory", scope: "assigned" }], [{ role: "admin", scope: "all" }], [{ role: "auditor", scope: "all" }]]) {
     assert.equal(runtimeNavFor(roles).length, 0, JSON.stringify(roles));
@@ -322,6 +324,8 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.ok(runtimeRouteFor("/app/model-label/bee-scrutiny"));
   assert.ok(runtimeRouteFor("/app/model-label/rating-calculation"));
   assert.ok(runtimeRouteFor("/app/model-label/director-approval"));
+  assert.ok(runtimeRouteFor("/app/workflow/personal-inbox"));
+  assert.ok(runtimeRouteFor("/app/workflow/my-approvals"));
   for (const p of ["/app/registrations/record", "/app", "/app/model-label/model-dashboard/x"]) {
     assert.equal(runtimeRouteFor(p), undefined, p);
   }

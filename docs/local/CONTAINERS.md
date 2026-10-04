@@ -20,7 +20,7 @@ Use one mode at a time: both bind the same ports (`8090`, `3100`). `local:app:up
 
 ## Verified
 
-The live checks `local:inbox` (36), `local:history` (57) and `model-documents` (50) pass against the containers. Memory at rest: API about 385 MB, portal about 110 MB.
+The live checks `local:inbox` (36), `local:history` (57) and `model-documents` (50) pass against the containers. The full gate in host mode, with these changes in place, passes: 1081 passed, 0 failed. Memory at rest: API about 385 MB, portal about 110 MB.
 
 ## Not done (BL-130)
 

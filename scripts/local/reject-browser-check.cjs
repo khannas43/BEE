@@ -285,10 +285,10 @@ async function runRejectChecks(runLabel, P) {
     const uiC = await rejectThroughScreen(P.reviewer, "/app/model-label/bee-scrutiny", C.id, "reviewer", "reviewer");
     check(`${runLabel}.C.ui.reviewer-rejected`, uiC.ok && stateOf(C.id) === "rejected" && rejRow(C.id).startsWith("bee_scrutiny|"), rejRow(C.id).slice(0, 40));
     const D = await chainTo("director_review", P, createdIds, `RJ-D-${tag}`);
-    const uiD = await rejectThroughScreen(P.director, "/app/model-label/director-approval", D.id, "director", "director");
+    const uiD = await rejectThroughScreen(P.director, "/app/model-label/director-approval", D.id, "approval", "approval");
     check(`${runLabel}.D.ui.director-rejected`, uiD.ok && stateOf(D.id) === "rejected" && rejRow(D.id).startsWith("director_review|"), rejRow(D.id).slice(0, 40));
     const Sx = await chainTo("secretary_approval", P, createdIds, `RJ-S-${tag}`);
-    const uiS = await rejectThroughScreen(P.secretary, "/app/model-label/director-approval", Sx.id, "secretary", "director");
+    const uiS = await rejectThroughScreen(P.secretary, "/app/model-label/director-approval", Sx.id, "approval", "approval");
     check(`${runLabel}.D.ui.secretary-rejected`, uiS.ok && stateOf(Sx.id) === "rejected" && rejRow(Sx.id).startsWith("secretary_approval|"), rejRow(Sx.id).slice(0, 40));
     check(`${runLabel}.D.db.history-ends-in-reject`, actions(Sx.id) === "confirm_fee,iame_recommend,reviewer_forward,compute_rating,director_recommend,reject", actions(Sx.id));
 

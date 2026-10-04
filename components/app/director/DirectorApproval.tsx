@@ -25,7 +25,7 @@ import { Module, Screen } from "@/lib/screens";
 const ROUTE = "/app/model-label/director-approval";
 const NOTE_MAX = 500;
 
-export const DIRECTOR_TESTID_TEMPLATES = ["director-open-${a.reference}", "director-ref-${a.reference}"] as const;
+export const APPROVAL_TESTID_TEMPLATES = ["approval-open-${a.reference}", "approval-ref-${a.reference}"] as const;
 
 export const DIRECTOR_COPY = {
   listTitle: "Applications waiting for your decision",
@@ -57,14 +57,12 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
       screen={screen}
       route={ROUTE}
       subtitle="Review the rating and recommend approval"
-      screenTestId="director-scrutiny"
-      testIdPrefix="director"
+      screenTestId="approval-scrutiny"
+      testIdPrefix="approval"
       copy={DIRECTOR_COPY}
-      detailFieldsTestId="director-detail-fields"
-      historyTestIdPrefix="director-history"
-      returnRejectTestIdPrefix={(application) =>
-        application.state === "secretary_approval" ? "secretary" : "director"
-      }
+      detailFieldsTestId="approval-detail-fields"
+      historyTestIdPrefix="approval-history"
+      returnRejectTestIdPrefix="approval"
       detailRows={(application) => stageDetailRows(application, { includeStage: true })}
       renderExtraDetail={(application) => <RatingBlock application={application} />}
       renderPrimary={(application, helpers) =>
@@ -94,8 +92,8 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
         if (!done || done.receipt.applicationId !== selectedId) return undefined;
         if (done.kind === "director") return <RecommendedNote receipt={done.receipt} />;
         if (done.kind === "secretary") return <ApprovedNote receipt={done.receipt} />;
-        if (done.kind === "returned") return <ReturnedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />;
-        return <RejectedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />;
+        if (done.kind === "returned") return <ReturnedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="approval" />;
+        return <RejectedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="approval" />;
       }}
     />
   );
@@ -254,11 +252,11 @@ function SecretaryPrimaryCommand({
 function RatingBlock({ application }: { application: ModelApplication }) {
   const rating = application.rating;
   return (
-    <div className="mt-space-md" data-testid="director-rating">
+    <div className="mt-space-md" data-testid="approval-rating">
       <h3 className="font-label-md text-label-md text-on-surface">Rating</h3>
       {rating ? (
         <>
-          <p className="font-body-md text-body-md" data-testid="director-rating-stars">
+          <p className="font-body-md text-body-md" data-testid="approval-rating-stars">
             {"★".repeat(rating.stars)}{"☆".repeat(5 - rating.stars)} {rating.stars} {rating.stars === 1 ? "star" : "stars"}
           </p>
           <p className="font-body-sm text-body-sm text-on-surface-variant">

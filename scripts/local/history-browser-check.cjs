@@ -262,8 +262,8 @@ async function runHistoryChecks(runLabel, P) {
     // The officer screens: an application at each officer's stage, with the earlier notes on the screen itself.
     const X = await chainTo("director_review", P, createdIds, `HS-X-${tag}`);
     await P.director.goto(`${WEB}/app/model-label/director-approval?id=${encodeURIComponent(X.id)}`);
-    const dirReady = await present(P.director, "director-history-list");
-    const dirText = dirReady ? await textOf(P.director, "director-history-list") : "";
+    const dirReady = await present(P.director, "approval-history-list");
+    const dirText = dirReady ? await textOf(P.director, "approval-history-list") : "";
     check(`${runLabel}.ui.director-screen-shows-the-earlier-steps`, dirReady && /Fee confirmed/.test(dirText) && /IAME scrutiny recommended/.test(dirText) && /Rating computed/.test(dirText) && /Verified efficiency/.test(dirText) && /IAME Officer/.test(dirText), dirText.slice(0, 80).replace(/\s+/g, " "));
     const Y = await chainTo("bee_scrutiny", P, createdIds, `HS-Y-${tag}`);
     await P.reviewer.goto(`${WEB}/app/model-label/bee-scrutiny?id=${encodeURIComponent(Y.id)}`);

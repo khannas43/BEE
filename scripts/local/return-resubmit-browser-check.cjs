@@ -296,10 +296,10 @@ async function runReworkChecks(runLabel, P) {
     // ---------------- Scenario C: the Director returns; a rating input changes, so the rating is redone ----------------
     const C = await chainTo("director_review", P, createdIds, `RW-C-${tag}`);
     await P.director.goto(`${WEB}/app/model-label/director-approval?id=${encodeURIComponent(C.id)}`);
-    if (!(await present(P.director, "director-return-run"))) { check(`${runLabel}.C.ui.loaded`, false, "director screen did not load"); return; }
-    await setInput(P.director, "director-return-reason", "The declared efficiency looks too low for this model.", "HTMLTextAreaElement");
-    await uiClick(P.director, "director-return-run");
-    check(`${runLabel}.C.ui.director-returned`, (await present(P.director, "director-return-success", 15000)) && stateOf(C.id) === "returned" && returnRow(C.id).startsWith("director_review|"), returnRow(C.id).slice(0, 70));
+    if (!(await present(P.director, "approval-return-run"))) { check(`${runLabel}.C.ui.loaded`, false, "director screen did not load"); return; }
+    await setInput(P.director, "approval-return-reason", "The declared efficiency looks too low for this model.", "HTMLTextAreaElement");
+    await uiClick(P.director, "approval-return-run");
+    check(`${runLabel}.C.ui.director-returned`, (await present(P.director, "approval-return-success", 15000)) && stateOf(C.id) === "returned" && returnRow(C.id).startsWith("director_review|"), returnRow(C.id).slice(0, 70));
     r = await patchDraft(P.nova, { id: C.id, version: Number(sql(`SELECT version FROM app.model_application WHERE id = '${C.id}'`)), model: C.model }, { laboratoryCode: "LAB", testedOn: TESTED_OK, declaredIseer: 4.8 });
     check(`${runLabel}.C.applicant-corrects-the-figure`, r.status === 200 && sql(`SELECT declared_iseer FROM app.model_application WHERE id = '${C.id}'`) === "4.80", `${r.status}, declared 4.80`);
     r = await resubmitApi(P.nova, C.id, { version: Number(sql(`SELECT version FROM app.model_application WHERE id = '${C.id}'`)) }, key());
@@ -317,10 +317,10 @@ async function runReworkChecks(runLabel, P) {
     // ---------------- Scenario D: the Secretary returns; resubmitted unchanged, it goes back and is approved ----------------
     const D = await chainTo("secretary_approval", P, createdIds, `RW-D-${tag}`);
     await P.secretary.goto(`${WEB}/app/model-label/director-approval?id=${encodeURIComponent(D.id)}`);
-    if (!(await present(P.secretary, "secretary-return-run"))) { check(`${runLabel}.D.ui.loaded`, false, "secretary screen did not load"); return; }
-    await setInput(P.secretary, "secretary-return-reason", "Please confirm the laboratory accreditation date.", "HTMLTextAreaElement");
-    await uiClick(P.secretary, "secretary-return-run");
-    check(`${runLabel}.D.ui.secretary-returned`, (await present(P.secretary, "director-return-success", 15000)) && stateOf(D.id) === "returned" && returnRow(D.id).startsWith("secretary_approval|"), returnRow(D.id).slice(0, 70));
+    if (!(await present(P.secretary, "approval-return-run"))) { check(`${runLabel}.D.ui.loaded`, false, "secretary screen did not load"); return; }
+    await setInput(P.secretary, "approval-return-reason", "Please confirm the laboratory accreditation date.", "HTMLTextAreaElement");
+    await uiClick(P.secretary, "approval-return-run");
+    check(`${runLabel}.D.ui.secretary-returned`, (await present(P.secretary, "approval-return-success", 15000)) && stateOf(D.id) === "returned" && returnRow(D.id).startsWith("secretary_approval|"), returnRow(D.id).slice(0, 70));
     r = await resubmitApi(P.nova, D.id, { version: Number(sql(`SELECT version FROM app.model_application WHERE id = '${D.id}'`)) }, key());
     check(`${runLabel}.D.back-at-the-secretary-without-a-new-rating`, r.status === 200 && r.body?.toState === "secretary_approval" && r.body?.ratingSuperseded === false && countOf("model_application_rating", D.id) === 1, `${r.status} -> ${r.body?.toState}, ${countOf("model_application_rating", D.id)} rating`);
     r = await api(P.secretary, "POST", `${WEB}/api/runtime/model-applications/${D.id}/secretary-approval`, { version: Number(sql(`SELECT version FROM app.model_application WHERE id = '${D.id}'`)), note: "Confirmed; approved." }, key());

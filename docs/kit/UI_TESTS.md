@@ -8,7 +8,49 @@ The node:test suite (`npm run web:test`) does not render React. Hook and panel t
 npm run web:test:ui
 ```
 
-That is Vitest, in jsdom, with Testing Library. It only collects `components/app/kit/__tests__/**/*.test.tsx` (`vitest.config.ts`). Do not add those files to `web:test`; `local:check` depends on that script staying the node:test list.
+That is Vitest, in jsdom, with Testing Library. It collects `components/app/kit/__tests__/**/*.test.tsx` and `components/app/lifecycle/__tests__/**/*.test.tsx` (`vitest.config.ts`). Do not add those files to `web:test`; `local:check` depends on that script staying the node:test list.
+
+## Approval screen ids
+
+The shared Director and Secretary screen (`DirectorApproval.tsx`, `StageWorkScreen` with `testIdPrefix="approval"`) uses neutral ids for both roles. Role-specific command ids are unchanged.
+
+| Old id | New id |
+| --- | --- |
+| `director-scrutiny` | `approval-scrutiny` |
+| `director-identity` | `approval-identity` |
+| `director-queue-loading` | `approval-queue-loading` |
+| `director-queue-error` | `approval-queue-error` |
+| `director-queue-empty` | `approval-queue-empty` |
+| `director-queue-table` | `approval-queue-table` |
+| `director-queue-filter` | `approval-queue-filter` |
+| `director-ref-{reference}` | `approval-ref-{reference}` |
+| `director-open-{reference}` | `approval-open-{reference}` |
+| `director-detail` | `approval-detail` |
+| `director-detail-close` | `approval-detail-close` |
+| `director-detail-error` | `approval-detail-error` |
+| `director-detail-fields` | `approval-detail-fields` |
+| `director-history` (and `-list`, `-step-*`, etc.) | `approval-history` (same suffixes) |
+| `director-rating` | `approval-rating` |
+| `director-rating-stars` | `approval-rating-stars` |
+| `director-return` / `secretary-return` (panel) | `approval-return` |
+| `director-return-run` / `secretary-return-run` | `approval-return-run` |
+| `director-return-reason` / `secretary-return-reason` | `approval-return-reason` |
+| `director-return-error` / `secretary-return-error` | `approval-return-error` |
+| `director-return-reload` / `secretary-return-reload` | `approval-return-reload` |
+| `director-return-input-error` / `secretary-return-input-error` | `approval-return-input-error` |
+| `director-return-success` (both roles) | `approval-return-success` |
+| `director-return-back` | `approval-return-back` |
+| `director-reject` / `secretary-reject` (panel) | `approval-reject` |
+| `director-reject-run` / `secretary-reject-run` | `approval-reject-run` |
+| `director-reject-reason` / `secretary-reject-reason` | `approval-reject-reason` |
+| `director-reject-confirm` / `secretary-reject-confirm` | `approval-reject-confirm` |
+| `director-reject-error` / `secretary-reject-error` | `approval-reject-error` |
+| `director-reject-reload` / `secretary-reject-reload` | `approval-reject-reload` |
+| `director-reject-input-error` / `secretary-reject-input-error` | `approval-reject-input-error` |
+| `director-reject-success` (both roles) | `approval-reject-success` |
+| `director-reject-back` | `approval-reject-back` |
+
+Unchanged: `director-recommend-*`, `secretary-approve-*`.
 
 ## Writing a test
 

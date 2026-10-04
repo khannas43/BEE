@@ -1,6 +1,6 @@
 # Claude Code and Cursor in one repository: the hand-off
 
-**Status:** Working agreement, 3 October 2026. It replaces the earlier two-clone and worktree designs. The owner can change it.
+**Status:** Working agreement, 3 October 2026; integration branch changed to `main` on 4 October 2026 (PR #1 merged). It replaces the earlier two-clone and worktree designs. The owner can change it.
 
 ## One project, one folder
 
@@ -34,7 +34,7 @@ cursor cursor/<task> <date>
 
 1. **Claude prepares.** Picks a brief from `docs/cursor/` (or writes a new one), then writes `docs/cursor/CURRENT_TASK.md`: the brief to follow, the branch name `cursor/<task>`, anything to add or override, and the exact acceptance commands. Commits that, runs `git switch -c cursor/<task>`, writes `.baton` as `cursor cursor/<task> <date>`.
 2. **Cursor executes.** The owner runs `/bee-run-task` in Cursor's Agent chat. It reads `.cursor/rules/bee-portal.mdc`, `CURRENT_TASK.md` and the brief, checks `.baton` and the branch, does the work inside its lane, runs the gates, commits on the task branch, and runs `/bee-handback`.
-3. **Claude reviews and merges.** Runs `/code-review` on the range (one review per task; fixes for high and medium findings, the rest to the backlog), merges into the integration branch (`git switch wp06.1a-document-intake && git merge --no-ff cursor/<task>`), deletes the task branch, runs the full gate, sets `.baton` back to `claude`, and pushes only when the owner asks. After any review run, check `git branch --show-current` (BL-077).
+3. **Claude reviews and merges.** Runs `/code-review` on the range (one review per task; fixes for high and medium findings, the rest to the backlog), merges into `main` (`git switch main && git merge --no-ff cursor/<task>`), deletes the task branch, runs the full gate, sets `.baton` back to `claude`, and pushes only when the owner asks. After any review run, check `git branch --show-current` (BL-077).
 
 Cursor never pushes. Only Claude pushes, and only when the owner asks.
 

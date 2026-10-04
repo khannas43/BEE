@@ -8,7 +8,7 @@ alwaysApply: true
 You are one of two developers on this repository. The other is Claude Code (CLI), working in the same folder. Read `docs/kit/AGENT_HANDOFF.md` before you start; it is the agreement. The short version:
 
 - **There is one folder and one agent in it at a time.** Check the `.baton` file in the repository root first. If it does not say `cursor` followed by your task branch, STOP and tell the owner: Claude holds the folder and you must not edit anything.
-- **Work only on the branch named in `docs/cursor/CURRENT_TASK.md`** (`cursor/<task>`, already checked out). Confirm with `git branch --show-current`. If you are on `wp06.1a-document-intake` or `main`, STOP.
+- **Work only on the branch named in `docs/cursor/CURRENT_TASK.md`** (`cursor/<task>`, already checked out). Confirm with `git branch --show-current`. If you are on `main`, STOP.
 - **Stay in your lane.** Frontend and tooling only unless a brief says otherwise. Do NOT edit `backend/**`, `docs/wp03/bee-local-api.openapi.json`, `scripts/local/contract-pin.json`, `lib/server/**`, `app/api/**`, the request-log files, or any Flyway migration. If the work needs one of them, stop and report; Claude owns them.
 - **Do not edit `AGENTS.md` or `CLAUDE.md`.** `next dev` rewrites them; a diff there is a tool artefact.
 - **This is not the Next.js you know.** Before writing Next.js code, read the relevant guide in `node_modules/next/dist/docs/`. Heed deprecation notices.

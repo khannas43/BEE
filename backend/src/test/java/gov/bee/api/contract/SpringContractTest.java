@@ -160,6 +160,9 @@ class SpringContractTest {
     gov.bee.api.rework.StageRejectRepository rejectRepo;
 
     @MockitoBean
+    gov.bee.api.history.HistoryRepository historyRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -301,6 +304,18 @@ class SpringContractTest {
         when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
     }
 
+    /** A history row with only what the step needs; the repository would fill the rest from the step's own record. */
+    static gov.bee.api.history.HistoryRepository.Row hist(String action, String from, String to, String role, String name, String org, java.util.function.UnaryOperator<Object[]> more) {
+        Object[] x = new Object[17];
+        if (more != null) {
+            x = more.apply(x);
+        }
+        return new gov.bee.api.history.HistoryRepository.Row(Instant.parse("2026-10-04T10:00:00Z"), action, from, to, role, name, org,
+            (String) x[0], (BigDecimal) x[1], (java.sql.Date) x[2], (String) x[3], (String) x[4], (String) x[5],
+            (Integer) x[6], (Integer) x[7], (BigDecimal) x[8], (BigDecimal) x[9], (String) x[10], (String) x[11], (Boolean) x[12], (String) x[13],
+            (String) x[14], (String) x[15], (Boolean) x[16], null);
+    }
+
     /** Performs the request and checks the response against the artifact; returns it for further checks. */
     MockHttpServletResponse conforms(String route, MockHttpServletRequestBuilder request, int status, String code) throws Exception {
         String cid = "spring-contract-" + RUN + "-" + SEQ.incrementAndGet();
@@ -424,7 +439,7 @@ class SpringContractTest {
     void everythingElseIsDeniedByDefault() throws Exception {
         account("manufacturer", "own-org");
         conforms("default-deny", post(LIST).contentType("application/json").content("{\"secret\":\"" + PLANTED + "\"}"), 401, "unauthenticated");
-        for (MockHttpServletRequestBuilder b : List.of(delete(path(DETAIL)), get(path(DETAIL) + "/history"), post(ME), get("/actuator/env"))) {
+        for (MockHttpServletRequestBuilder b : List.of(delete(path(DETAIL)), get(path(DETAIL) + "/history/export"), post(ME), get("/actuator/env"))) {
             conforms("default-deny", b.with(token("manufacturer")), 403, "denied_by_default");
         }
     }
@@ -1638,6 +1653,71 @@ class SpringContractTest {
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
         doThrow(new DataAccessResourceFailureException("down")).when(resubmitRepo).openReturn(any());
         conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+    }
+
+    @Test
+    void applicationHistoryOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/history";
+        String path = "/api/model-applications/" + NOVA_APP + "/history";
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("reviewer"))));
+        String iameNote = "Report matches the declared laboratory and date.";
+        String returnReason = "The laboratory name on the report does not match.";
+        var rows = List.of(
+            hist("submit", "draft", "fee_due", "manufacturer", "Nova Applicant", "NOVA", null),
+            hist("confirm_fee", "fee_due", "iame_scrutiny", "finance", "BEE Finance", "BEE", x -> { x[0] = "UTR-1234"; x[1] = new BigDecimal("24000.00"); x[2] = java.sql.Date.valueOf("2026-10-02"); return x; }),
+            hist("iame_recommend", "iame_scrutiny", "bee_scrutiny", "iame", "IAME Officer", "IAME", x -> { x[3] = "verified"; x[4] = iameNote; return x; }),
+            hist("reviewer_forward", "bee_scrutiny", "rating", "reviewer", "BEE Reviewer", "BEE", x -> { x[5] = "Checked against the IAME note."; return x; }),
+            hist("compute_rating", "rating", "director_review", "programme", "BEE Programme", "BEE", x -> { x[6] = 1; x[7] = 4; x[8] = new BigDecimal("4.50"); x[9] = new BigDecimal("4.62"); x[10] = "RAC-ISEER-DEMO-1"; return x; }),
+            hist("director_recommend", "director_review", "secretary_approval", "director", "BEE Director", "BEE", x -> { x[11] = "Recommend approval."; x[12] = false; return x; }),
+            hist("return", "secretary_approval", "returned", "secretary", "BEE Secretary", "BEE", x -> { x[14] = returnReason; return x; }),
+            hist("resubmit", "returned", "secretary_approval", "manufacturer", "Nova Applicant", "NOVA", x -> { x[15] = "Corrected the laboratory."; x[16] = false; return x; }),
+            hist("secretary_approve", "secretary_approval", "approved", "secretary", "BEE Secretary", "BEE", x -> { x[13] = "Approved."; return x; }));
+        when(historyRepo.events(NOVA_APP)).thenReturn(rows);
+
+        // An officer who can read the application sees every step, every note and finding, and who took it.
+        account("iame", "assigned");
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(
+            new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "iame_scrutiny", 3, Set.of("iame_scrutiny"), null, null, null)));
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(UUID.fromString("00000000-0000-4000-b000-0000000000aa")));
+        var officer = conforms(r, get(path).with(token("iame")), 200, null).getContentAsString();
+        assertTrue(officer.contains("\"viewedAs\":\"officer\"") && officer.contains("\"count\":9") && officer.contains("\"actorName\":\"BEE Director\""), officer);
+        assertTrue(officer.contains(iameNote) && officer.contains("Checked against the IAME note.") && officer.contains("Recommend approval.") && officer.contains(returnReason), "an officer sees the notes");
+        assertTrue(officer.contains("\"Receipt reference\"") && officer.contains("UTR-1234") && officer.contains("local demonstration, not a BEE rating"), "and the facts, with the rating labelled");
+        assertTrue(officer.indexOf("\"sequence\":1,") < officer.indexOf("\"sequence\":9,") && officer.contains("\"withheld\":false") && !officer.contains("\"withheld\":true"), "in order, nothing withheld");
+
+        // The applicant sees the whole timeline but only the notes addressed to them, and no personal names.
+        account("manufacturer", "own-org");
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(
+            new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "approved", 8, Set.of(), null, null, null)));
+        var applicant = conforms(r, get(path).with(token("manufacturer")), 200, null).getContentAsString();
+        assertTrue(applicant.contains("\"viewedAs\":\"applicant\"") && applicant.contains("\"count\":9") && !applicant.contains("actorName"), "no personal names: " + applicant);
+        assertTrue(!applicant.contains(iameNote) && !applicant.contains("Checked against the IAME note.") && !applicant.contains("Recommend approval.") && !applicant.contains("Approved.")
+            && !applicant.contains("RAC-ISEER-DEMO-1") && !applicant.contains("Verified efficiency") && !applicant.contains("\"Finding on the test report\""), "the officers' internal notes, findings and rating figures are withheld");
+        assertTrue(applicant.contains(returnReason) && applicant.contains("Corrected the laboratory.") && applicant.contains("UTR-1234"), "the reason they were given, their own resubmission note and their payment are shown");
+        assertEquals(5, applicant.split("\"withheld\":true", -1).length - 1, "the five internal steps say they are withheld");
+
+        // Who may read it is who may read the application, with the same refusals.
+        account("auditor", "all");
+        conforms(r, get(path).with(token("auditor")), 403, "no_read_scope");
+        account("iame", "assigned");
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.empty());
+        conforms(r, get(path).with(token("iame")), 404, "not_found");
+        conforms(r, get("/api/model-applications/not-a-uuid/history").with(token("iame")), 404, "not_found");
+        account("iame", "assigned");
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(
+            new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "iame_scrutiny", 3, Set.<String>of(), null, null, null)));
+        conforms(r, get(path).with(token("iame")), 404, "not_found");   // not assigned: indistinguishable from an unknown application
+
+        // Identity denials and outage.
+        conforms(r, get(path), 401, "unauthenticated");
+        conforms(r, get(path).with(pwdOnly), 403, "mfa_required");
+        account("manufacturer", "own-org");
+        conforms(r, get(path).with(token("reviewer")), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, get(path).with(token("manufacturer")), 403, "no_active_account");
+        account("manufacturer", "own-org");
+        doThrow(new DataAccessResourceFailureException("down")).when(historyRepo).events(any());
+        conforms(r, get(path).with(token("manufacturer")), 503, "service_unavailable");
     }
 
     @Test

@@ -350,7 +350,7 @@ async function springChecks(nova, inactive, noAmr) {
 
   const draftMissingKey = [["POST", "/api/model-applications"], ["PATCH", `/api/model-applications/${NOVA_APP}`], ["POST", `/api/model-applications/${NOVA_APP}/submit`], ["POST", `/api/model-applications/${NOVA_APP}/documents`]];
   const deniedWrites = [["PUT", `/api/model-applications/${NOVA_APP}`], ["DELETE", `/api/model-applications/${NOVA_APP}`],
-    ["GET", `/api/model-applications/${NOVA_APP}/history`], ["POST", "/api/me"], ["GET", "/actuator/env"]];
+    ["GET", `/api/model-applications/${NOVA_APP}/history/export`], ["POST", "/api/me"], ["GET", "/actuator/env"]];
   const want = JSON.stringify({ error: "denied_by_default", message: doc["x-bee-error-codes"].denied_by_default.message });
   const denied = [];
   for (const [m, p] of deniedWrites) {
@@ -488,6 +488,11 @@ async function nextChecks(jar, novaToken) {
   const rejectAnonOk = rejectAnon.status === 401 && rejectAnon.json?.error === "no_session" && e.length === 0;
   contract.record({ route: REJECT_ROUTE, method: "POST", status: rejectAnon.status, code: rejectAnon.json?.error ?? "-", ok: rejectAnonOk });
   check("next.reject-no-session", rejectAnonOk && sameCorr(rejectAnon), `POST runtime reject without cookie: ${rejectAnon.status} ${rejectAnon.json?.error}${show(e)}`);
+  const historyAnon = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/history`, { correlationId: cid("next-history-anon-get") });
+  e = contract.conforms(doc, "/api/runtime/model-applications/{id}/history", "GET", historyAnon);
+  const historyAnonOk = historyAnon.status === 401 && historyAnon.json?.error === "no_session" && e.length === 0;
+  contract.record({ route: "/api/runtime/model-applications/{id}/history", method: "GET", status: historyAnon.status, code: historyAnon.json?.error ?? "-", ok: historyAnonOk });
+  check("next.history-no-session", historyAnonOk && sameCorr(historyAnon), `GET runtime history without cookie: ${historyAnon.status} ${historyAnon.json?.error}${show(e)}`);
   const docListAnonGet = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, { correlationId: cid("next-doc-anon-get") });
   const docUploadMp = contractUploadMultipart();
   const docListAnonPost = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, {
@@ -535,13 +540,13 @@ async function nextChecks(jar, novaToken) {
   check("next.denied-write", m405.every((x) => x.x.status === 405 && x.x.json?.error === "method_not_allowed" && x.x.headers.get("allow") && sameCorr(x.x)) && cross.status === 403 && cross.json?.error === "cross_origin" && still.status === 200 && e.length === 0,
     `${m405.length} unsupported methods -> 405 method_not_allowed with Allow; cross-origin logout -> ${cross.status} ${cross.json?.error}; session still valid (${still.status})${show(e)}`);
   const um = [];
-  for (const [m, p] of [["GET", `/api/runtime/model-applications/${NOVA_APP}/history`], ["POST", `/api/runtime/model-applications/${NOVA_APP}/history`], ["GET", "/api/runtime/model-applications/a/b"], ["GET", "/api/nothing-here"]]) {
+  for (const [m, p] of [["GET", `/api/runtime/model-applications/${NOVA_APP}/history/export`], ["POST", `/api/runtime/model-applications/${NOVA_APP}/history/export`], ["GET", "/api/runtime/model-applications/a/b"], ["GET", "/api/nothing-here"]]) {
     const x = await call(`${WEB}${p}`, { method: m, jar, correlationId: cid("next-404"), body: m === "GET" ? undefined : "{}", headers: { "Content-Type": "application/json" } });
     um.push({ m, p, x, e: contract.validate(doc.components.schemas.Error, x.json, doc) });
   }
   for (const x of um) contract.record({ route: "unmatched", method: x.m, status: x.x.status, code: x.x.json?.error ?? null, ok: x.x.status === 404 && x.e.length === 0 && sameCorr(x.x) && noStore(x.x) });
   check("next.unmatched-not-found", um.every((x) => x.x.status === 404 && x.x.json?.error === "not_found" && x.e.length === 0 && sameCorr(x.x) && noStore(x.x)),
-    `${um.map((x) => `${x.m} ${x.p.replace(NOVA_APP, "{id}")} ${x.x.status}`).join(", ")} (no history or workflow route exists; JSON 404, not the HTML page)`);
+    `${um.map((x) => `${x.m} ${x.p.replace(NOVA_APP, "{id}")} ${x.x.status}`).join(", ")} (no export or workflow route exists; JSON 404, not the HTML page)`);
   return { meId, replaced };
 }
 
@@ -631,6 +636,7 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(RETURN_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/return`, "POST", sessionJar, RETURN_UPSTREAM);
     await exerciseStandInPairs(RESUBMIT_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/resubmit`, "POST", sessionJar, RESUBMIT_UPSTREAM);
     await exerciseStandInPairs(REJECT_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/reject`, "POST", sessionJar, REJECT_UPSTREAM);
+    await exerciseStandInPairs("/api/runtime/model-applications/{id}/history", `/api/runtime/model-applications/${NOVA_APP}/history`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(DOC_CONTENT_ROUTE, DOC_CONTENT_URL, "GET", sessionJar, DOC_READ_UPSTREAM);

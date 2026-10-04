@@ -9,19 +9,43 @@ const fs = require("fs");
 const path = require("path");
 const contract = require("./contract-lib.cjs");
 
-const LOG_DIR = path.join(__dirname, "../../.local/logs");
+// BEE_REQUEST_LOGS_DIR lets a unit test point the reader at a temporary directory.
+const LOG_DIR = process.env.BEE_REQUEST_LOGS_DIR || path.join(__dirname, "../../.local/logs");
 const SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, "../../docs/wp03/request-log.schema.json"), "utf8"));
 const FILES = { api: "api-requests.jsonl", web: "web-requests.jsonl", apiConsole: "api.log", webConsole: "web.log", apiConsoleBefore: "api.before-contract-restart.log" };
+/** The structured logs rotate (the portal's at 5 MiB, Spring's by size and day), so a mark must survive a rotation. */
+const STRUCTURED = { api: /^api-requests(\..*)?\.jsonl$/, web: /^web-requests(\..*)?\.jsonl$/ };
 
-const size = (f) => { try { return fs.statSync(path.join(LOG_DIR, f)).size; } catch { return 0; } };
-/** Current sizes; text after a mark is read from there, or from 0 if the file was rotated or recreated. */
-const mark = () => ({ ...Object.fromEntries(Object.entries(FILES).map(([k, f]) => [k, size(f)])), apiConsoleBefore: 0 });
+const stat = (f) => { try { return fs.statSync(path.join(LOG_DIR, f)); } catch { return null; } };
+const size = (f) => stat(f)?.size ?? 0;
+/** The current file and every rotated sibling of a structured log, oldest first (a rotation renames, so the inode follows the data). */
+function family(key) {
+  let names = [];
+  try { names = fs.readdirSync(LOG_DIR).filter((n) => STRUCTURED[key].test(n)); } catch { return []; }
+  return names.map((n) => ({ name: n, st: stat(n) })).filter((x) => x.st).sort((a, b) => a.st.mtimeMs - b.st.mtimeMs || a.name.localeCompare(b.name));
+}
+/**
+ * Sizes now, and for the structured logs which file (by inode) the size belongs to. Text after a mark is read from there; if
+ * the file was rotated meanwhile, from the rest of the marked file plus every newer file, so no line is lost to a rotation.
+ */
+const mark = () => ({
+  ...Object.fromEntries(Object.entries(FILES).map(([k, f]) => [k, size(f)])),
+  ...Object.fromEntries(Object.keys(STRUCTURED).map((k) => [`${k}Ino`, stat(FILES[k])?.ino ?? null])),
+  apiConsoleBefore: 0,
+});
+const readFrom = (name, from) => { try { const b = fs.readFileSync(path.join(LOG_DIR, name)); return b.subarray(b.length >= from ? from : 0).toString("utf8"); } catch { return ""; } };
 function since(m = {}, key) {
-  const f = path.join(LOG_DIR, FILES[key]);
-  try {
-    const buf = fs.readFileSync(f);
-    return buf.subarray(buf.length >= (m[key] || 0) ? m[key] || 0 : 0).toString("utf8");
-  } catch { return ""; }
+  if (STRUCTURED[key] && m[`${key}Ino`] != null) {
+    const fam = family(key);
+    const at = fam.findIndex((x) => x.st.ino === m[`${key}Ino`]);
+    if (at >= 0) {
+      // The marked file may have been renamed by a rotation: take the rest of it, then each newer file in full.
+      return fam.slice(at).map((x, i) => readFrom(x.name, i === 0 ? m[key] || 0 : 0)).join("");
+    }
+    // The marked file is gone (rotated out of retention): everything that still exists is newer than the mark.
+    return fam.map((x) => readFrom(x.name, 0)).join("");
+  }
+  return readFrom(FILES[key], m[key] || 0);
 }
 function lines(m, key) {
   return since(m, key).split("\n").filter(Boolean).map((text) => {

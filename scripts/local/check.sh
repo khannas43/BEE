@@ -268,6 +268,13 @@ read -r rj_pass rj_fail <<<"$(sed -nE 's/^reject checks: ([0-9]+) passed, ([0-9]
 if [[ -z "${rj_pass:-}" ]]; then check "reject.run" 0 "reject-browser-check did not complete: $(tail -1 <<<"$rj_out")"
 else pass=$((pass + rj_pass)); fail=$((fail + rj_fail)); fi
 
+# ---- Wave 1: the history of an application, and what each reader sees of it (records the runtime history pairs)
+hs_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/history-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$hs_out"
+read -r hs_pass hs_fail <<<"$(sed -nE 's/^history checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$hs_out")"
+if [[ -z "${hs_pass:-}" ]]; then check "history.run" 0 "history-browser-check did not complete: $(tail -1 <<<"$hs_out")"
+else pass=$((pass + hs_pass)); fail=$((fail + hs_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

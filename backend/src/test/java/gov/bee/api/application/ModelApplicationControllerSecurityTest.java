@@ -235,7 +235,7 @@ class ModelApplicationControllerSecurityTest {
         "POST,/api/model-applications/{id}/decision,secretary",
         "POST,/api/model-applications/{id}/return/override,iame",
         "POST,/api/model-applications/{id}/reject/override,reviewer",
-        "GET,/api/model-applications/{id}/history,manufacturer",
+        "GET,/api/model-applications/{id}/history/export,manufacturer",
     })
     void transitionsAndHistoryAreDeniedByDefault(String method, String path, String role) throws Exception {
         String url = path.replace("{id}", NOVA_APP.toString());

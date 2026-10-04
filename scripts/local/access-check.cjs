@@ -186,7 +186,7 @@ async function main() {
     ["iame.officer", "POST", `/api/model-applications/${pid}/return/override`],
     ["iame.officer", "POST", `/api/model-applications/${pid}/reject/override`],
     ["bee.admin", "POST", `/api/model-applications/${id}/decision`],
-    ["nova.applicant", "GET", `/api/model-applications/${id}/history`],
+    ["nova.applicant", "GET", `/api/model-applications/${id}/history/export`],
   ];
   const draftWrites = writes.slice(0, 4);
   const transitions = writes.slice(4);

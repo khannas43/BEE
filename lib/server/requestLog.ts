@@ -17,6 +17,7 @@ export type WebRoute =
   | "/api/runtime/model-applications/{id}"
   | "/api/runtime/model-applications/{id}/submit"
   | "/api/runtime/model-applications/{id}/documents"
+  | "/api/runtime/model-applications/{id}/history"
   | "/api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content"
   | "/api/auth/session"
   | "/api/auth/login"
@@ -41,6 +42,7 @@ export type SpringRoute =
   | "/api/model-applications/{id}"
   | "/api/model-applications/{id}/submit"
   | "/api/model-applications/{id}/documents"
+  | "/api/model-applications/{id}/history"
   | "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content"
   | "/api/model-applications/{id}/fee-confirmation"
   | "/api/model-applications/{id}/iame-recommendation"
@@ -85,6 +87,7 @@ export function springRoute(path: string): SpringRoute {
   if (/^\/api\/model-applications\/[^\/]+\/iame-recommendation$/.test(p)) return "/api/model-applications/{id}/iame-recommendation";
   if (/^\/api\/model-applications\/[^\/]+\/fee-confirmation$/.test(p)) return "/api/model-applications/{id}/fee-confirmation";
   if (/^\/api\/model-applications\/[^/]+\/documents$/.test(p)) return "/api/model-applications/{id}/documents";
+  if (/^\/api\/model-applications\/[^/]+\/history$/.test(p)) return "/api/model-applications/{id}/history";
   if (/^\/api\/model-applications\/[^/]+\/documents\/[^/]+\/versions\/[^/]+\/content$/.test(p)) {
     return "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
   }

@@ -121,6 +121,12 @@ Each decision below gives what the system does today, the realistic options, a r
 - **D5.** Is the IAME verifier (note-sheet) a separate step from IAME scrutiny? **Today:** one IAME step. **Recommendation:** say whether a second step exists.
 - **If unanswered.** The defaults stay.
 
+### B13 — What the applicant may see of the officers' notes (the history)
+- **Question.** The history of an application lists every step with who took it and the note that went with it. May the applicant see the officers' internal notes and findings (for example the IAME finding on the test report, the Reviewer's and the Director's notes, the rating figures), or only the steps and the notes addressed to them (a return or rejection reason, their own resubmission)? May the applicant see an officer's name, or only the role and organisation?
+- **Today.** The build shows the applicant the whole timeline but withholds the officers' internal notes, findings and rating figures (the step says "Internal note, not shown to you") and shows no personal names; an officer who can read the application sees everything. This is a provisional choice, not a BEE rule.
+- **Recommendation.** Keep it: the applicant sees what was addressed to them; the officers' working notes stay internal.
+- **If unanswered.** The provisional rule stays and is labelled.
+
 ### B10 — The applicant's model record (D4)
 - **Question.** Should the registration record screen become the applicant's own record of their models?
 - **Today.** Yes, limited to the applicant's organisation.
@@ -145,6 +151,7 @@ Each decision below gives what the system does today, the realistic options, a r
 | A5 date rule | As today |
 | B1 to B8 | The local defaults stay and are labelled provisional |
 | B9, B10 | Defaults stay |
+| B13 | The applicant sees the timeline and the notes addressed to them, not the officers' internal notes |
 | B11, B12 | Manual confirmation with an exact amount and no correction route |
 | C1 | Rule-editing screens stay read-only |
 
@@ -169,6 +176,7 @@ Each decision below gives what the system does today, the realistic options, a r
 | B11 | | | |
 | B12 | | | |
 | B10 | | | |
+| B13 | | | |
 | C1 | | | |
 
 ## References for the engineering team

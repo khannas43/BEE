@@ -55,6 +55,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/model-applications/*/documents/*/versions/*/content").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/model-applications/*/fee-confirmation").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/model-applications/*/iame-recommendation").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/model-applications/*/reviewer-forward").authenticated()
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o -> o
                 .jwt(Customizer.withDefaults())

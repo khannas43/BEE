@@ -226,6 +226,13 @@ read -r ir_pass ir_fail <<<"$(sed -nE 's/^iame-recommendation checks: ([0-9]+) p
 if [[ -z "${ir_pass:-}" ]]; then check "iame.run" 0 "iame-recommendation-browser-check did not complete: $(tail -1 <<<"$ir_out")"
 else pass=$((pass + ir_pass)); fail=$((fail + ir_fail)); fi
 
+# ---- first slice step 4: the assigned Reviewer forwards through the BFF and the portal (records runtime reviewer-forward pairs)
+rf_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/reviewer-forward-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$rf_out"
+read -r rf_pass rf_fail <<<"$(sed -nE 's/^reviewer-forward checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$rf_out")"
+if [[ -z "${rf_pass:-}" ]]; then check "reviewer.run" 0 "reviewer-forward-browser-check did not complete: $(tail -1 <<<"$rf_out")"
+else pass=$((pass + rf_pass)); fail=$((fail + rf_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

@@ -48,6 +48,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     navRoles: ["iame"],
     implemented: ["List assigned applications", "View evidence and test reports", "Record finding and forward"],
   },
+  {
+    href: "/app/model-label/bee-scrutiny",
+    en: "BEE scrutiny",
+    hi: "बीईई जाँच",
+    icon: "rule",
+    navRoles: ["reviewer"],
+    implemented: ["List assigned applications", "View evidence and test reports", "Forward to rating"],
+  },
 ];
 
 export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {

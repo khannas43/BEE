@@ -37,6 +37,7 @@ before(async () => {
     iameRecommendation: await import("../../app/api/runtime/model-applications/[id]/iame-recommendation/route.ts"),
     reviewerForward: await import("../../app/api/runtime/model-applications/[id]/reviewer-forward/route.ts"),
     rating: await import("../../app/api/runtime/model-applications/[id]/rating/route.ts"),
+    directorRecommendation: await import("../../app/api/runtime/model-applications/[id]/director-recommendation/route.ts"),
   };
 });
 
@@ -212,6 +213,18 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/rating 401 sessio
   const res = await routes.rating.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/rating", "unit-rating-post-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123465" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/director-recommendation 401 session_expired | Keycloak refusing refresh on Director recommendation", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.directorRecommendation.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/director-recommendation", "unit-director-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123467" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

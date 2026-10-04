@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -144,6 +145,9 @@ class SpringContractTest {
     gov.bee.api.rating.RatingRepository ratingRepo;
 
     @MockitoBean
+    gov.bee.api.director.DirectorRecommendationRepository directorRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -244,6 +248,16 @@ class SpringContractTest {
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staffOrg));
         when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
         var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "rating", 4,
+            Set.of(), null, null, null, "LAB", java.time.LocalDate.of(2026, 9, 1), new BigDecimal("4.50"));
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
+    }
+
+    /** A Director outside the applicant's organisation, with a record in the director_review stage. */
+    void directorAccount(UUID staffOrg) {
+        account("director", "all");
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staffOrg));
+        when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
+        var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "director_review", 5,
             Set.of(), null, null, null, "LAB", java.time.LocalDate.of(2026, 9, 1), new BigDecimal("4.50"));
         when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
     }
@@ -1059,6 +1073,91 @@ class SpringContractTest {
         reviewerAccount(staff);
         doThrow(new DataAccessResourceFailureException("down")).when(reviewerRepo).forward(any(), anyInt(), any(), any(), any());
         conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+    }
+
+    @Test
+    void directorRecommendationOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/director-recommendation";
+        String path = "/api/model-applications/" + NOVA_APP + "/director-recommendation";
+        UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        String ok = "{\"version\":5,\"note\":\"Rating reviewed; recommend approval.\"}";
+        var done = new gov.bee.api.director.DirectorRecommendationRepository.Result(gov.bee.api.director.DirectorRecommendationRepository.Outcome.RECOMMENDED, 6,
+            "secretary_approval", Instant.parse("2026-10-04T10:00:00Z"));
+
+        directorAccount(staff);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(directorRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(directorRepo.recommend(any(), anyInt(), any(), any(), any(), anyBoolean())).thenReturn(done);
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("director"))));
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+
+        // The owner's D1 assumption: where the recommendation is final for the category, the answer says so and the state is approved.
+        when(directorRepo.directorFinal(any(), any())).thenReturn(true);
+        when(directorRepo.recommend(any(), anyInt(), any(), any(), any(), anyBoolean())).thenReturn(
+            new gov.bee.api.director.DirectorRecommendationRepository.Result(gov.bee.api.director.DirectorRecommendationRepository.Outcome.RECOMMENDED, 6,
+                "approved", Instant.parse("2026-10-04T10:00:00Z")));
+        var finalRes = conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertTrue(finalRes.getContentAsString().contains("\"toState\":\"approved\"") && finalRes.getContentAsString().contains("\"directorFinal\":true"), finalRes.getContentAsString());
+        when(directorRepo.directorFinal(any(), any())).thenReturn(false);
+        when(directorRepo.recommend(any(), anyInt(), any(), any(), any(), anyBoolean())).thenReturn(done);
+
+        // Request shape.
+        conforms(r, post(path).with(token("director")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Rating reviewed; recommend approval.", "   ")), 422, "validation_failed");
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Rating reviewed", "Rating\\nreviewed")), 422, "validation_failed");
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Rating reviewed; recommend approval.", "x".repeat(501))), 422, "validation_failed");
+
+        // Version, idempotency and assignment conflicts.
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":5", "\"version\":4")), 409, "version_conflict");
+        when(directorRepo.recommend(any(), anyInt(), any(), any(), any(), anyBoolean())).thenReturn(
+            new gov.bee.api.director.DirectorRecommendationRepository.Result(gov.bee.api.director.DirectorRecommendationRepository.Outcome.STALE, 0, null, null));
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
+        when(directorRepo.recommend(any(), anyInt(), any(), any(), any(), anyBoolean())).thenReturn(done);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        // A replay returns the stored receipt, not a record the Director may no longer read.
+        String stored = "{\"applicationId\":\"" + NOVA_APP + "\",\"reference\":\"LOCAL-MA-0002\",\"fromState\":\"director_review\",\"toState\":\"secretary_approval\",\"version\":6,"
+            + "\"note\":\"Rating reviewed; recommend approval.\",\"directorFinal\":false,\"recommendedAt\":\"2026-10-04T10:00:00Z\"}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 4)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(ok))));
+        var replay = conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        // Who may recommend: only the Director, never the applicant's own organisation, never someone who acted at another stage.
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("auditor", "all");
+        conforms(r, post(path).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        directorAccount(staff);
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(NOVA));   // the Director belongs to the applicant's organisation
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        directorAccount(staff);
+        when(directorRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of(USER));
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        when(directorRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+
+        // Identity denials and outage.
+        directorAccount(staff);
+        conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 401, "unauthenticated");
+        conforms(r, post(path).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "mfa_required");
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        directorAccount(staff);
+        doThrow(new DataAccessResourceFailureException("down")).when(directorRepo).recommend(any(), anyInt(), any(), any(), any(), anyBoolean());
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 
     @Test

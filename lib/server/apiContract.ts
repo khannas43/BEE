@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.10.0";
+export const CONTRACT_VERSION = "0.11.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -187,6 +187,7 @@ export interface ModelApplication {
   testedOn?: string;
   declaredIseer?: number;
   submissionFee?: SubmissionFee;
+  rating?: ApplicationRating;
 }
 
 export interface ModelApplicationList {
@@ -220,8 +221,30 @@ export const validateSubmissionFee: Validator<SubmissionFee> = (body) => {
   return ok ? (b as unknown as SubmissionFee) : null;
 };
 
+/** The latest rating record, on the detail read only. PROVISIONAL LOCAL DEMONSTRATION: never a BEE rating. */
+export interface ApplicationRating {
+  ratingVersion: number;
+  schemeKey: string;
+  declaredIseer: string;
+  verifiedIseer: string;
+  stars: number;
+  localDemoRating: true;
+  computedAt: string;
+}
+
+export const validateApplicationRating: Validator<ApplicationRating> = (body) => {
+  if (!exactKeys(body, ["ratingVersion", "schemeKey", "declaredIseer", "verifiedIseer", "stars", "localDemoRating", "computedAt"])) return null;
+  const b = body;
+  const ok =
+    Number.isInteger(b.ratingVersion) && (b.ratingVersion as number) >= 1 &&
+    isString(b.schemeKey) && isString(b.declaredIseer) && isString(b.verifiedIseer) &&
+    Number.isInteger(b.stars) && (b.stars as number) >= 1 && (b.stars as number) <= 5 &&
+    b.localDemoRating === true && isString(b.computedAt) && !Number.isNaN(Date.parse(b.computedAt));
+  return ok ? (b as unknown as ApplicationRating) : null;
+};
+
 export const MODEL_APPLICATION_KEYS = ["id", "reference", "organisation", "brandName", "category", "modelNumber", "state", "version", "readBasis"] as const;
-export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee"] as const;
+export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee", "rating"] as const;
 export const MODEL_APPLICATION_LIST_KEYS = ["items", "count", "authority"] as const;
 const READ_BASIS = /^(own-org|assigned|stage:[a-z_]+)$/;
 const LABORATORY_CODE = /^[A-Z0-9_-]{1,32}$/;
@@ -240,7 +263,8 @@ export const validateModelApplication: Validator<ModelApplication> = (body) => {
     (b.laboratoryCode === undefined || (isString(b.laboratoryCode) && LABORATORY_CODE.test(b.laboratoryCode))) &&
     (b.testedOn === undefined || (isString(b.testedOn) && ISO_DATE.test(b.testedOn))) &&
     (b.declaredIseer === undefined || (typeof b.declaredIseer === "number" && b.declaredIseer > 0 && b.declaredIseer <= 99.99)) &&
-    (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null);
+    (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null) &&
+    (b.rating === undefined || validateApplicationRating(b.rating) !== null);
   return ok ? (b as unknown as ModelApplication) : null;
 };
 

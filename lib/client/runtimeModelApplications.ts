@@ -45,6 +45,16 @@ export interface ModelApplication {
     verificationStatus: string;
     localDemoFee: boolean;
   };
+  /** The latest rating record, on the detail read once Programme has rated it. A local demonstration, never a BEE rating. */
+  rating?: {
+    ratingVersion: number;
+    schemeKey: string;
+    declaredIseer: string;
+    verifiedIseer: string;
+    stars: number;
+    localDemoRating: true;
+    computedAt: string;
+  };
 }
 
 export interface ModelApplicationList {

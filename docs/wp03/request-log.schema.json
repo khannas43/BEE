@@ -33,7 +33,9 @@
               "/api/model-applications/{id}/reviewer-forward",
               "/api/runtime/model-applications/{id}/reviewer-forward",
               "/api/model-applications/{id}/rating",
-              "/api/runtime/model-applications/{id}/rating"]
+              "/api/runtime/model-applications/{id}/rating",
+              "/api/model-applications/{id}/director-recommendation",
+              "/api/runtime/model-applications/{id}/director-recommendation"]
           },
           "status": { "type": "integer", "minimum": 100 },
           "outcome": { "type": "string", "pattern": "^[a-z_]{2,40}$", "description": "ok, or the contract error code / sign-in redirect code" },
@@ -56,7 +58,8 @@
             "/api/model-applications/{id}/fee-confirmation",
             "/api/model-applications/{id}/iame-recommendation",
               "/api/model-applications/{id}/reviewer-forward",
-              "/api/model-applications/{id}/rating"] },
+              "/api/model-applications/{id}/rating",
+              "/api/model-applications/{id}/director-recommendation"] },
           "status": { "type": "integer", "minimum": 100 },
           "outcome": { "type": "string", "pattern": "^[a-z_]{2,40}$", "description": "ok, Spring's documented error code, api_unreachable, or unlisted" },
           "durationMs": { "type": "integer", "minimum": 0 }

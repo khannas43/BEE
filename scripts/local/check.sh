@@ -240,6 +240,13 @@ read -r rt_pass rt_fail <<<"$(sed -nE 's/^rating checks: ([0-9]+) passed, ([0-9]
 if [[ -z "${rt_pass:-}" ]]; then check "rating.run" 0 "rating-browser-check did not complete: $(tail -1 <<<"$rt_out")"
 else pass=$((pass + rt_pass)); fail=$((fail + rt_fail)); fi
 
+# ---- first slice step 6: the Director recommends through the BFF and the portal (records runtime director-recommendation pairs)
+dr_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/director-recommendation-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$dr_out"
+read -r dr_pass dr_fail <<<"$(sed -nE 's/^director-recommendation checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$dr_out")"
+if [[ -z "${dr_pass:-}" ]]; then check "director.run" 0 "director-recommendation-browser-check did not complete: $(tail -1 <<<"$dr_out")"
+else pass=$((pass + dr_pass)); fail=$((fail + dr_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

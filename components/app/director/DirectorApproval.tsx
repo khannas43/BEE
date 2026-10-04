@@ -19,6 +19,11 @@ import {
   runDirectorRecommendation,
 } from "@/lib/client/runtimeDirectorRecommendation";
 import {
+  type SecretaryApprovalReceipt,
+  secretaryApprovalSignature,
+  runSecretaryApproval,
+} from "@/lib/client/runtimeSecretaryApproval";
+import {
   type ModelApplication,
   readModelApplication,
   readModelApplicationList,
@@ -28,11 +33,12 @@ import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
 /**
- * First slice step 6: the Program Director reviews the rating and recommends approval (director_review to
- * secretary_approval, or straight to approved where the recommendation is final for the category). PROVISIONAL LOCAL
- * ASSUMPTION on decision D1, chosen by the owner and not by BEE. The rating shown is a local demonstration, never a BEE
- * rating. Spring decides which applications the Director may see (only the director_review stage) and whether a
- * recommendation is allowed; this screen only shows the result.
+ * First slice steps 6 and 7 on one screen, as the matrix lays it out. The Program Director reviews the rating and
+ * recommends approval (director_review to secretary_approval, or straight to approved where the recommendation is final
+ * for the category; PROVISIONAL LOCAL ASSUMPTION on decision D1, chosen by the owner and not by BEE). The Secretary then
+ * gives final approval (secretary_approval to approved, the end of the first slice). Each role sees only its own stage,
+ * and the action offered follows the application's state. The rating shown is a local demonstration, never a BEE rating.
+ * Spring decides what each role may see and whether an action is allowed; this screen only shows the result.
  */
 const ROUTE = "/app/model-label/director-approval";
 const RETURN_TO = ROUTE;
@@ -46,16 +52,18 @@ const loadList = () => readModelApplicationList();
 const loadDetail = (id: string) => readModelApplication(id);
 
 export const DIRECTOR_COPY = {
-  listTitle: "Applications waiting for your recommendation",
+  listTitle: "Applications waiting for your decision",
   loading: "Loading applications…",
   loadingDetail: "Loading application…",
-  empty: "No application is waiting for your recommendation.",
+  empty: "No application is waiting for your decision.",
   provisional: "Provisional local rules, not BEE rules. The rating shown is a local demonstration, not a BEE rating.",
   separation: "Only the Director who took no other part in this application can recommend, and never someone from its own organisation.",
   finalNote: "For some categories the Director's recommendation is final and the application is approved without the Secretary (an owner assumption on decision D1, not a BEE rule). The receipt says which applied.",
   noteLabel: "Note for the record",
   inputRequired: "Write a note of up to 500 characters.",
   noRating: "No rating has been recorded for this application.",
+  secretarySeparation: "Only the Secretary who took no other part in this application can approve it (so not the Director who recommended it), and never someone from its own organisation.",
+  secretaryNote: "Approval is the end of the first slice. Label, QR code and certificate follow in later work packages.",
 } as const;
 
 export function DirectorApproval({ module, screen }: { module: Module; screen: Screen }) {
@@ -63,7 +71,7 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
   const params = useSearchParams();
   const selectedId = params.get("id");
   const revalidation = useRevalidation();
-  const [receipt, setReceipt] = useState<DirectorRecommendationReceipt | null>(null);
+  const [done, setDone] = useState<{ kind: "director"; receipt: DirectorRecommendationReceipt } | { kind: "secretary"; receipt: SecretaryApprovalReceipt } | null>(null);
 
   const list = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
   const detail = gateRead(identity.status, useRuntimeRead(selectedId, loadDetail, revalidation));
@@ -96,8 +104,8 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
           </div>
           {selectedId ? (
             <div className="lg:col-span-2" data-testid="director-detail" data-selected-id={selectedId}>
-              {receipt && receipt.applicationId === selectedId ? (
-                <RecommendedNote receipt={receipt} />
+              {done && done.receipt.applicationId === selectedId ? (
+                done.kind === "director" ? <RecommendedNote receipt={done.receipt} /> : <ApprovedNote receipt={done.receipt} />
               ) : (
                 <ReadPanel
                   title="Application and evidence"
@@ -112,10 +120,14 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
                   }
                 >
                   {(r) => (
-                    <DetailAndRecommend
+                    <DetailAndDecide
                       application={r.application}
-                      onRecommended={(done) => {
-                        setReceipt(done);
+                      onRecommended={(receipt) => {
+                        setDone({ kind: "director", receipt });
+                        revalidation.refresh();
+                      }}
+                      onApproved={(receipt) => {
+                        setDone({ kind: "secretary", receipt });
                         revalidation.refresh();
                       }}
                       onReload={revalidation.refresh}
@@ -198,7 +210,63 @@ function RecommendedNote({ receipt }: { receipt: DirectorRecommendationReceipt }
   );
 }
 
-function DetailAndRecommend({
+function ApprovedNote({ receipt }: { receipt: SecretaryApprovalReceipt }) {
+  return (
+    <div className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="secretary-approve-success">
+      <p className="font-body-md text-body-md">
+        Final approval recorded for <strong>{receipt.reference}</strong>. It is now <strong>{stateLabel(receipt.toState)}</strong>.
+      </p>
+      <p className="font-body-sm text-body-sm text-on-surface-variant mt-space-sm">
+        Version {receipt.version}. This is the end of the first slice; label, QR code and certificate follow in later work packages.
+      </p>
+      <Link href={ROUTE} className="inline-flex mt-space-md text-primary font-label-md" data-testid="secretary-approve-back">
+        Back to the queue
+      </Link>
+    </div>
+  );
+}
+
+function DetailAndDecide({
+  application,
+  onRecommended,
+  onApproved,
+  onReload,
+}: {
+  application: ModelApplication;
+  onRecommended: (receipt: DirectorRecommendationReceipt) => void;
+  onApproved: (receipt: SecretaryApprovalReceipt) => void;
+  onReload: () => void;
+}) {
+  return (
+    <div>
+      <DescriptionList
+        testId="director-detail-fields"
+        rows={[
+          { label: "Reference", value: application.reference, mono: true },
+          { label: "Organisation", value: application.organisation },
+          { label: "Brand", value: application.brandName },
+          { label: "Model number", value: application.modelNumber },
+          { label: "Laboratory", value: application.laboratoryCode ?? "—" },
+          { label: "Test date", value: application.testedOn ?? "—" },
+          { label: "Declared efficiency", value: application.declaredIseer === undefined ? "—" : String(application.declaredIseer) },
+          { label: "Stage", value: stateLabel(application.state) },
+          { label: "Version", value: String(application.version) },
+        ]}
+      />
+      <RatingBlock application={application} />
+      <h3 className="font-label-md text-label-md text-on-surface mt-space-md">Test reports</h3>
+      <ApplicationDocuments key={application.id} applicationId={application.id} />
+      <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-md">{DIRECTOR_COPY.provisional}</p>
+      {application.state === "secretary_approval" ? (
+        <SecretaryActions application={application} onApproved={onApproved} onReload={onReload} />
+      ) : (
+        <DirectorActions application={application} onRecommended={onRecommended} onReload={onReload} />
+      )}
+    </div>
+  );
+}
+
+function DirectorActions({
   application,
   onRecommended,
   onReload,
@@ -223,24 +291,7 @@ function DetailAndRecommend({
   }
 
   return (
-    <div>
-      <DescriptionList
-        testId="director-detail-fields"
-        rows={[
-          { label: "Reference", value: application.reference, mono: true },
-          { label: "Organisation", value: application.organisation },
-          { label: "Brand", value: application.brandName },
-          { label: "Model number", value: application.modelNumber },
-          { label: "Laboratory", value: application.laboratoryCode ?? "—" },
-          { label: "Test date", value: application.testedOn ?? "—" },
-          { label: "Declared efficiency", value: application.declaredIseer === undefined ? "—" : String(application.declaredIseer) },
-          { label: "Version", value: String(application.version) },
-        ]}
-      />
-      <RatingBlock application={application} />
-      <h3 className="font-label-md text-label-md text-on-surface mt-space-md">Test reports</h3>
-      <ApplicationDocuments key={application.id} applicationId={application.id} />
-      <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-md">{DIRECTOR_COPY.provisional}</p>
+    <>
       <p className="font-label-sm text-label-sm text-on-surface-variant mt-1">{DIRECTOR_COPY.separation}</p>
       <CommandPanel
         className="mt-space-sm space-y-space-sm"
@@ -270,7 +321,66 @@ function DetailAndRecommend({
       {inputError ? (
         <p className="text-error font-body-sm mt-space-sm" data-testid="director-recommend-input-error">{inputError}</p>
       ) : null}
-    </div>
+    </>
+  );
+}
+
+function SecretaryActions({
+  application,
+  onApproved,
+  onReload,
+}: {
+  application: ModelApplication;
+  onApproved: (receipt: SecretaryApprovalReceipt) => void;
+  onReload: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [inputError, setInputError] = useState<string | null>(null);
+  const command = useCommand(runSecretaryApproval, secretaryApprovalSignature);
+
+  async function approve() {
+    const text = note.trim();
+    if (!text || text.length > NOTE_MAX) {
+      setInputError(DIRECTOR_COPY.inputRequired);
+      return;
+    }
+    setInputError(null);
+    const result = await command.execute({ id: application.id, version: application.version, note: text });
+    if (result?.ok) onApproved(result.value);
+  }
+
+  return (
+    <>
+      <p className="font-label-sm text-label-sm text-on-surface-variant mt-1">{DIRECTOR_COPY.secretarySeparation}</p>
+      <CommandPanel
+        className="mt-space-sm space-y-space-sm"
+        state={command.state}
+        onRun={() => void approve()}
+        runLabel="Give final approval"
+        busyLabel="Approving…"
+        runTestId="secretary-approve-run"
+        errorTestId="secretary-approve-error"
+        reloadTestId="secretary-approve-reload"
+        onReload={onReload}
+        signInReturnTo={RETURN_TO}
+      >
+        <label className="block font-label-sm text-label-sm text-on-surface-variant">
+          {DIRECTOR_COPY.noteLabel}
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={NOTE_MAX}
+            rows={3}
+            className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+            data-testid="secretary-approve-note"
+          />
+        </label>
+        <p className="font-label-sm text-label-sm text-on-surface-variant">{DIRECTOR_COPY.secretaryNote}</p>
+      </CommandPanel>
+      {inputError ? (
+        <p className="text-error font-body-sm mt-space-sm" data-testid="secretary-approve-input-error">{inputError}</p>
+      ) : null}
+    </>
   );
 }
 

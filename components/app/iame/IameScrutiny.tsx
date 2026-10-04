@@ -1,54 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { Icon } from "@/components/ui/Icon";
-import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
-import { DataTable, type DataTableColumn } from "@/components/app/kit/DataTable";
-import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
-import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
-import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
-import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
-import { ApplicationHistory } from "@/components/app/lifecycle/ApplicationHistory";
-import { ReturnToApplicant, ReturnedNote } from "@/components/app/lifecycle/ReturnToApplicant";
-import { RejectApplication, RejectedNote } from "@/components/app/lifecycle/RejectApplication";
-import type { StageRejectReceipt } from "@/lib/client/runtimeStageReject";
-import type { StageReturnReceipt } from "@/lib/client/runtimeStageReturn";
-import { useSpringIdentity } from "@/components/app/SessionBadge";
-import { gateRead } from "@/lib/client/runtimeHttp";
+import { stageDetailRows } from "@/components/app/lifecycle/stageDetailRows";
+import { StageWorkScreen } from "@/components/app/lifecycle/StageWorkScreen";
 import {
   type IameRecommendationReceipt,
   type IameVerification,
   iameRecommendationSignature,
   runIameRecommendation,
 } from "@/lib/client/runtimeIameRecommendation";
-import {
-  type ModelApplication,
-  readModelApplication,
-  readModelApplicationList,
-  stateLabel,
-} from "@/lib/client/runtimeModelApplications";
-import { runtimeRouteFor } from "@/lib/runtimeRoutes";
+import { type ModelApplication, stateLabel } from "@/lib/client/runtimeModelApplications";
 import { Module, Screen } from "@/lib/screens";
 
-/**
- * First slice step 3: the assigned IAME officer records a verification finding on the uploaded test report and recommends
- * forwarding the application to BEE scrutiny (iame_scrutiny to bee_scrutiny). Spring decides which applications the officer
- * may see (only those assigned at this stage) and whether a recommendation is allowed; this screen only shows the result.
- * Provisional local rules, not BEE rules (decision B8).
- */
 const ROUTE = "/app/model-label/iame-scrutiny";
-const RETURN_TO = ROUTE;
-const LIST_TARGET = "list";
 const NOTE_MAX = 500;
-/** All assigned rows stay visible; paging and filtering here are display only. */
-const TABLE_PAGE_SIZE = 100;
 
-// Stable loaders: useRuntimeRead takes them as effect dependencies.
-const loadList = () => readModelApplicationList();
-const loadDetail = (id: string) => readModelApplication(id);
+/** Live-check test ids for this screen (queue/detail shell ids are built from `testIdPrefix` in StageWorkScreen). */
+export const IAME_TESTID_TEMPLATES = ["iame-open-${a.reference}", "iame-ref-${a.reference}"] as const;
 
 export const IAME_COPY = {
   listTitle: "Applications assigned to you for scrutiny",
@@ -65,139 +35,33 @@ export const IAME_COPY = {
 } as const;
 
 export function IameScrutiny({ module, screen }: { module: Module; screen: Screen }) {
-  const identity = useSpringIdentity();
-  const params = useSearchParams();
-  const selectedId = params.get("id");
-  const revalidation = useRevalidation();
   const [receipt, setReceipt] = useState<IameRecommendationReceipt | null>(null);
-  const [returned, setReturned] = useState<StageReturnReceipt | null>(null);
-  const [rejected, setRejected] = useState<StageRejectReceipt | null>(null);
-
-  const list = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
-  const detail = gateRead(identity.status, useRuntimeRead(selectedId, loadDetail, revalidation));
 
   return (
-    <ScreenChrome
+    <StageWorkScreen
       module={module}
       screen={screen}
+      route={ROUTE}
       subtitle="Record your finding and recommend forwarding"
-      implemented={runtimeRouteFor(ROUTE)?.implemented}
-    >
-      <div className="space-y-space-md" data-testid="iame-scrutiny">
-        <IdentityStrip identity={identity} testId="iame-identity" />
-        <div className={`grid grid-cols-1 gap-space-md ${selectedId ? "lg:grid-cols-5" : ""}`}>
-          <div className={selectedId ? "lg:col-span-3" : ""}>
-            <ReadPanel
-              title={IAME_COPY.listTitle}
-              read={list}
-              loadingText={IAME_COPY.loading}
-              loadingTestId="iame-queue-loading"
-              errorTestId="iame-queue-error"
-              signInReturnTo={RETURN_TO}
-              isEmpty={(r) => r.list.count === 0}
-              emptyText={IAME_COPY.empty}
-              emptyTestId="iame-queue-empty"
-              resultAction={(r) => <span className="font-label-sm text-label-sm text-on-surface-variant">{r.list.count} records</span>}
-            >
-              {(r) => <QueueTable items={r.list.items} selectedId={selectedId} />}
-            </ReadPanel>
-          </div>
-          {selectedId ? (
-            <div className="lg:col-span-2" data-testid="iame-detail" data-selected-id={selectedId}>
-              {rejected && rejected.applicationId === selectedId ? (
-                <RejectedNote receipt={rejected} backHref={ROUTE} testIdPrefix="iame" />
-              ) : returned && returned.applicationId === selectedId ? (
-                <ReturnedNote receipt={returned} backHref={ROUTE} testIdPrefix="iame" />
-              ) : receipt && receipt.applicationId === selectedId ? (
-                <RecommendedNote receipt={receipt} />
-              ) : (
-                <ReadPanel
-                  title="Application and evidence"
-                  read={detail}
-                  loadingText={IAME_COPY.loadingDetail}
-                  errorTestId="iame-detail-error"
-                  signInReturnTo={RETURN_TO}
-                  action={
-                    <Link href={ROUTE} className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1" data-testid="iame-detail-close">
-                      Close <Icon name="close" size={14} />
-                    </Link>
-                  }
-                >
-                  {(r) => (
-                    <DetailAndRecommend
-                      application={r.application}
-                      onRecommended={(done) => {
-                        setReceipt(done);
-                        revalidation.refresh();
-                      }}
-                      onReturned={(done) => {
-                        setReturned(done);
-                        revalidation.refresh();
-                      }}
-                      onRejected={(done) => {
-                        setRejected(done);
-                        revalidation.refresh();
-                      }}
-                      onReload={revalidation.refresh}
-                    />
-                  )}
-                </ReadPanel>
-              )}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </ScreenChrome>
-  );
-}
-
-function QueueTable({ items, selectedId }: { items: ModelApplication[]; selectedId: string | null }) {
-  const columns: DataTableColumn<ModelApplication>[] = [
-    {
-      key: "reference",
-      header: "Reference",
-      sortValue: (a) => a.reference,
-      render: (a) => (
-        <span className="font-mono" data-testid={`iame-ref-${a.reference}`}>
-          {a.reference}
-        </span>
-      ),
-    },
-    { key: "organisation", header: "Organisation", sortValue: (a) => a.organisation, render: (a) => a.organisation },
-    {
-      key: "brand",
-      header: "Brand / Model",
-      sortValue: (a) => `${a.brandName} ${a.modelNumber}`,
-      render: (a) => (
-        <div>
-          <div className="font-semibold text-on-surface">{a.brandName}</div>
-          <div className="font-label-sm text-label-sm text-on-surface-variant">{a.modelNumber}</div>
-        </div>
-      ),
-    },
-    { key: "category", header: "Category", sortValue: (a) => a.category, render: (a) => a.category },
-    {
-      key: "open",
-      header: "",
-      render: (a) => (
-        <Link
-          href={`${ROUTE}?id=${encodeURIComponent(a.id)}`}
-          className={`font-label-sm text-label-sm inline-flex items-center gap-1 ${a.id === selectedId ? "text-on-surface font-semibold" : "text-primary hover:underline"}`}
-          data-testid={`iame-open-${a.reference}`}
-        >
-          {a.id === selectedId ? "Selected" : "Review"} <Icon name="arrow_forward" size={14} />
-        </Link>
-      ),
-    },
-  ];
-  return (
-    <DataTable
-      columns={columns}
-      rows={items}
-      rowKey={(a) => a.id}
-      pageSize={TABLE_PAGE_SIZE}
-      tableTestId="iame-queue-table"
-      filterTestId="iame-queue-filter"
+      screenTestId="iame-scrutiny"
+      testIdPrefix="iame"
+      copy={IAME_COPY}
+      detailFieldsTestId="iame-detail-fields"
+      historyTestIdPrefix="iame-history"
+      detailRows={(application) => stageDetailRows(application)}
+      renderPrimary={(application, helpers) => (
+        <IamePrimaryCommand
+          application={application}
+          onRecommended={(done) => {
+            setReceipt(done);
+            helpers.reload();
+          }}
+          onReload={helpers.reload}
+        />
+      )}
+      renderPrimaryDone={(selectedId) =>
+        receipt && receipt.applicationId === selectedId ? <RecommendedNote receipt={receipt} /> : null
+      }
     />
   );
 }
@@ -218,17 +82,13 @@ function RecommendedNote({ receipt }: { receipt: IameRecommendationReceipt }) {
   );
 }
 
-function DetailAndRecommend({
+function IamePrimaryCommand({
   application,
   onRecommended,
-  onReturned,
-  onRejected,
   onReload,
 }: {
   application: ModelApplication;
   onRecommended: (receipt: IameRecommendationReceipt) => void;
-  onReturned: (receipt: StageReturnReceipt) => void;
-  onRejected: (receipt: StageRejectReceipt) => void;
   onReload: () => void;
 }) {
   const [verification, setVerification] = useState<IameVerification | "">("");
@@ -248,25 +108,7 @@ function DetailAndRecommend({
   }
 
   return (
-    <div>
-      <DescriptionList
-        testId="iame-detail-fields"
-        rows={[
-          { label: "Reference", value: application.reference, mono: true },
-          { label: "Organisation", value: application.organisation },
-          { label: "Brand", value: application.brandName },
-          { label: "Model number", value: application.modelNumber },
-          { label: "Laboratory", value: application.laboratoryCode ?? "—" },
-          { label: "Test date", value: application.testedOn ?? "—" },
-          { label: "Declared efficiency", value: application.declaredIseer === undefined ? "—" : String(application.declaredIseer) },
-          { label: "Version", value: String(application.version) },
-        ]}
-      />
-      <h3 className="font-label-md text-label-md text-on-surface mt-space-md">Test reports</h3>
-      <ApplicationDocuments key={application.id} applicationId={application.id} />
-      <h3 className="font-label-md text-label-md text-on-surface mt-space-md">History</h3>
-      <ApplicationHistory key={application.id} applicationId={application.id} testIdPrefix="iame-history" />
-      <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-md">{IAME_COPY.provisional}</p>
+    <>
       <p className="font-label-sm text-label-sm text-on-surface-variant mt-1">{IAME_COPY.separation}</p>
       <CommandPanel
         className="mt-space-sm space-y-space-sm"
@@ -278,7 +120,7 @@ function DetailAndRecommend({
         errorTestId="iame-recommend-error"
         reloadTestId="iame-recommend-reload"
         onReload={onReload}
-        signInReturnTo={RETURN_TO}
+        signInReturnTo={ROUTE}
       >
         <fieldset className="space-y-1">
           <legend className="font-label-sm text-label-sm text-on-surface-variant">Finding on the test report</legend>
@@ -307,8 +149,6 @@ function DetailAndRecommend({
       {inputError ? (
         <p className="text-error font-body-sm mt-space-sm" data-testid="iame-recommend-input-error">{inputError}</p>
       ) : null}
-      <ReturnToApplicant application={application} testIdPrefix="iame" signInReturnTo={RETURN_TO} onReturned={onReturned} onReload={onReload} />
-      <RejectApplication application={application} testIdPrefix="iame" signInReturnTo={RETURN_TO} onRejected={onRejected} onReload={onReload} />
-    </div>
+    </>
   );
 }

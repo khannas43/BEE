@@ -121,6 +121,14 @@ public class ModelApplicationRepository {
         return n == 1 ? findOwned(id, filingOrganisationId) : Optional.empty();
     }
 
+    /** A returned application is edited without touching its identity; the edit only moves the version. */
+    public Optional<Row> bumpReturned(UUID id, UUID filingOrganisationId, int expectedVersion) {
+        int n = jdbc.update(
+            "UPDATE model_application SET version = version + 1 WHERE id = ? AND organisation_id = ? AND state = 'returned' AND version = ?",
+            id, filingOrganisationId, expectedVersion);
+        return n == 1 ? findOwned(id, filingOrganisationId) : Optional.empty();
+    }
+
     private static String scopePredicate(ReadScope scope, UUID callerId, List<Object> args) {
         List<String> any = new ArrayList<>();
         if (!scope.organisations().isEmpty()) {
@@ -162,7 +170,7 @@ public class ModelApplicationRepository {
                 + "laboratory_code = CASE WHEN ? THEN ? ELSE laboratory_code END, "
                 + "tested_on = CASE WHEN ? THEN ? ELSE tested_on END, "
                 + "declared_iseer = CASE WHEN ? THEN ? ELSE declared_iseer END "
-                + "WHERE id = ? AND organisation_id = ? AND state = 'draft'",
+                + "WHERE id = ? AND organisation_id = ? AND state IN ('draft', 'returned')",
             update.setLaboratory(), update.laboratoryCode(), update.setTestedOn(),
             update.testedOn() == null ? null : java.sql.Date.valueOf(update.testedOn()),
             update.setIseer(), update.declaredIseer(), id, filingOrganisationId);

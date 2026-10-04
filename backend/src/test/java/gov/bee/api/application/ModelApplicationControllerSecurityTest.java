@@ -233,7 +233,7 @@ class ModelApplicationControllerSecurityTest {
         "POST,/api/model-applications/{id}/rating/override,programme",
         "POST,/api/model-applications/{id}/decision,director",
         "POST,/api/model-applications/{id}/decision,secretary",
-        "POST,/api/model-applications/{id}/return,iame",
+        "POST,/api/model-applications/{id}/return/override,iame",
         "POST,/api/model-applications/{id}/reject,reviewer",
         "GET,/api/model-applications/{id}/history,manufacturer",
     })

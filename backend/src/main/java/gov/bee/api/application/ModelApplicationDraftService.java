@@ -152,9 +152,17 @@ public class ModelApplicationDraftService {
             return error(HttpStatus.NOT_FOUND, "not_found");
         }
         ModelApplicationRepository.Row row = existing.get();
-        if (!"draft".equals(row.state())) {
+        boolean returned = "returned".equals(row.state());
+        if (!"draft".equals(row.state()) && !returned) {
             idempotency.abandon(caller.accountId(), "PATCH", ROUTE_PATCH, appId, idempotencyKey);
             return error(HttpStatus.FORBIDDEN, "not_editable");
+        }
+        // A returned application keeps its identity: the applicant may correct the evidence, not the brand, category or model
+        // number it was filed under (decision B7, provisional). Anything else is refused and nothing is written.
+        if (returned && (!row.modelNumber().equals(input.get().modelNumber()) || !row.category().equals(input.get().category())
+            || (input.get().brandId().isPresent() && !input.get().brandId().get().equals(row.brandId())))) {
+            idempotency.abandon(caller.accountId(), "PATCH", ROUTE_PATCH, appId, idempotencyKey);
+            return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
         if (row.version() != input.get().version()) {
             idempotency.abandon(caller.accountId(), "PATCH", ROUTE_PATCH, appId, idempotencyKey);
@@ -175,8 +183,10 @@ public class ModelApplicationDraftService {
             return error(HttpStatus.FORBIDDEN, brandDecision.denial());
         }
         var choice = brandDecision.brand().orElseThrow();
-        Optional<ModelApplicationRepository.Row> updated = applications.updateDraft(appId, filing, input.get().version(),
-            input.get().modelNumber(), input.get().category(), choice.brandId(), choice.principalOrganisationId(), choice.brandName());
+        Optional<ModelApplicationRepository.Row> updated = returned
+            ? applications.bumpReturned(appId, filing, input.get().version())
+            : applications.updateDraft(appId, filing, input.get().version(),
+                input.get().modelNumber(), input.get().category(), choice.brandId(), choice.principalOrganisationId(), choice.brandName());
         if (updated.isEmpty()) {
             idempotency.abandon(caller.accountId(), "PATCH", ROUTE_PATCH, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");

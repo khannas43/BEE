@@ -109,7 +109,7 @@ class RatingDatabaseTest {
         iameRepo = transactional(new IameRecommendationRepository(db));
         reviewerRepo = transactional(new ReviewerForwardRepository(db));
         repo = transactional(new RatingRepository(db));
-        assertEquals(30, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V30");
+        assertEquals(31, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V31");
     }
 
     @AfterAll
@@ -192,7 +192,7 @@ class RatingDatabaseTest {
         assertEquals(PROGRAMME_USER, rec.get("computed_by_account_id"));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage IN ('rating', 'director_review')", Integer.class, id),
             "Directors read the next stage by role, so no assignment is made");
-        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER, REVIEWER_USER, PROGRAMME_USER), repo.actorsAtOtherStages(id));
+        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER, REVIEWER_USER), repo.actorsAtOtherStages(id), "the earlier stages count; Programme's own rating is this stage and does not");
     }
 
     @Test

@@ -22,7 +22,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "मेरे मॉडल आवेदन",
     icon: "view_list",
     navRoles: ["manufacturer", "agency"],
-    implemented: ["List", "View detail", "Edit draft", "Submit draft"],
+    implemented: ["List", "View detail", "Edit draft", "Submit draft", "See why it was returned", "Edit and resubmit"],
   },
   {
     href: "/app/model-label/new-model-application",
@@ -30,7 +30,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "नया मॉडल आवेदन",
     icon: "note_add",
     navRoles: ["manufacturer", "agency"],
-    implemented: ["Create draft", "Edit draft", "Upload test reports", "Submit draft"],
+    implemented: ["Create draft", "Edit draft", "Upload test reports", "Submit draft", "Edit and resubmit a returned application"],
   },
   {
     href: "/app/finance/finance-queue",
@@ -46,7 +46,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "आईएएमई जाँच",
     icon: "fact_check",
     navRoles: ["iame"],
-    implemented: ["List assigned applications", "View evidence and test reports", "Record finding and forward"],
+    implemented: ["List assigned applications", "View evidence and test reports", "Record finding and forward", "Return to the applicant"],
   },
   {
     href: "/app/model-label/bee-scrutiny",
@@ -54,7 +54,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "बीईई जाँच",
     icon: "rule",
     navRoles: ["reviewer"],
-    implemented: ["List assigned applications", "View evidence and test reports", "Forward to rating"],
+    implemented: ["List assigned applications", "View evidence and test reports", "Forward to rating", "Return to the applicant"],
   },
   {
     href: "/app/model-label/rating-calculation",
@@ -70,7 +70,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "अनुमोदन",
     icon: "how_to_reg",
     navRoles: ["director", "secretary"],
-    implemented: ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)"],
+    implemented: ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)", "Return to the applicant"],
   },
 ];
 

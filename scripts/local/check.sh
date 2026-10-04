@@ -254,6 +254,13 @@ read -r sa_pass sa_fail <<<"$(sed -nE 's/^secretary-approval checks: ([0-9]+) pa
 if [[ -z "${sa_pass:-}" ]]; then check "secretary.run" 0 "secretary-approval-browser-check did not complete: $(tail -1 <<<"$sa_out")"
 else pass=$((pass + sa_pass)); fail=$((fail + sa_fail)); fi
 
+# ---- Wave 1: return to the applicant, edit, resubmit (records runtime return and resubmit pairs)
+rw_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/return-resubmit-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$rw_out"
+read -r rw_pass rw_fail <<<"$(sed -nE 's/^return-resubmit checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$rw_out")"
+if [[ -z "${rw_pass:-}" ]]; then check "rework.run" 0 "return-resubmit-browser-check did not complete: $(tail -1 <<<"$rw_out")"
+else pass=$((pass + rw_pass)); fail=$((fail + rw_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

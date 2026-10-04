@@ -11,6 +11,8 @@ import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
+import { ReturnToApplicant, ReturnedNote } from "@/components/app/lifecycle/ReturnToApplicant";
+import type { StageReturnReceipt } from "@/lib/client/runtimeStageReturn";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import {
@@ -65,6 +67,7 @@ export function IameScrutiny({ module, screen }: { module: Module; screen: Scree
   const selectedId = params.get("id");
   const revalidation = useRevalidation();
   const [receipt, setReceipt] = useState<IameRecommendationReceipt | null>(null);
+  const [returned, setReturned] = useState<StageReturnReceipt | null>(null);
 
   const list = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
   const detail = gateRead(identity.status, useRuntimeRead(selectedId, loadDetail, revalidation));
@@ -97,7 +100,9 @@ export function IameScrutiny({ module, screen }: { module: Module; screen: Scree
           </div>
           {selectedId ? (
             <div className="lg:col-span-2" data-testid="iame-detail" data-selected-id={selectedId}>
-              {receipt && receipt.applicationId === selectedId ? (
+              {returned && returned.applicationId === selectedId ? (
+                <ReturnedNote receipt={returned} backHref={ROUTE} testIdPrefix="iame" />
+              ) : receipt && receipt.applicationId === selectedId ? (
                 <RecommendedNote receipt={receipt} />
               ) : (
                 <ReadPanel
@@ -117,6 +122,10 @@ export function IameScrutiny({ module, screen }: { module: Module; screen: Scree
                       application={r.application}
                       onRecommended={(done) => {
                         setReceipt(done);
+                        revalidation.refresh();
+                      }}
+                      onReturned={(done) => {
+                        setReturned(done);
                         revalidation.refresh();
                       }}
                       onReload={revalidation.refresh}
@@ -202,10 +211,12 @@ function RecommendedNote({ receipt }: { receipt: IameRecommendationReceipt }) {
 function DetailAndRecommend({
   application,
   onRecommended,
+  onReturned,
   onReload,
 }: {
   application: ModelApplication;
   onRecommended: (receipt: IameRecommendationReceipt) => void;
+  onReturned: (receipt: StageReturnReceipt) => void;
   onReload: () => void;
 }) {
   const [verification, setVerification] = useState<IameVerification | "">("");
@@ -282,6 +293,7 @@ function DetailAndRecommend({
       {inputError ? (
         <p className="text-error font-body-sm mt-space-sm" data-testid="iame-recommend-input-error">{inputError}</p>
       ) : null}
+      <ReturnToApplicant application={application} testIdPrefix="iame" signInReturnTo={RETURN_TO} onReturned={onReturned} onReload={onReload} />
     </div>
   );
 }

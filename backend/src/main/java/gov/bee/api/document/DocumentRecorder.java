@@ -63,7 +63,7 @@ public class DocumentRecorder {
                            Supplier<Optional<String>> stillAllowed, Function<Recorded, String> responseBody) {
         String state = documents.lockApplicationState(applicationId)
             .orElseThrow(() -> new Denied(HttpStatus.NOT_FOUND, "not_found"));
-        if (!"draft".equals(state)) {
+        if (!"draft".equals(state) && !"returned".equals(state)) {
             throw new Denied(HttpStatus.FORBIDDEN, "not_editable");
         }
         Optional<String> denial = stillAllowed.get();

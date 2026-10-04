@@ -99,7 +99,7 @@ class FeeConfirmationDatabaseTest {
         applications = new ModelApplicationRepository(db);
         submissions = new ModelApplicationSubmitRepository(db, applications);
         repo = transactional(new FeeConfirmationRepository(db));
-        assertEquals(30, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V30");
+        assertEquals(31, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V31");
     }
 
     @AfterAll
@@ -151,7 +151,7 @@ class FeeConfirmationDatabaseTest {
         assertEquals(feeSnapshot(id), fc.get("fee_snapshot_id"));
         assertEquals(FINANCE_USER, fc.get("confirmed_by_account_id"));
         assertEquals(1, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage = 'iame_scrutiny' AND active AND user_id = ?", Integer.class, id, IAME_USER));
-        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER), repo.actorsAtOtherStages(id), "the submitter and the confirmer are both recorded");
+        assertEquals(java.util.Set.of(NOVA_USER), repo.actorsAtOtherStages(id), "the submitter counts; Finance's own step is this stage and does not");
     }
 
     @Test

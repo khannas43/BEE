@@ -44,12 +44,15 @@ public class RatingRepository {
         this.jdbc = jdbc;
     }
 
-    /** Accounts that already acted on this application (it was submitted by one, or earlier steps were done by others). */
+    /**
+     * Accounts that already acted on this application at another stage (it was submitted by one, or earlier steps were done by
+     * others). An earlier action at this same stage does not count, so a person may act again after a return or a re-rating.
+     */
     public Set<UUID> actorsAtOtherStages(UUID applicationId) {
         List<UUID> rows = jdbc.queryForList(
             "SELECT actor_account_id FROM model_application_submission_event WHERE application_id = ? "
-                + "UNION SELECT actor_account_id FROM model_application_transition_event WHERE application_id = ?",
-            UUID.class, applicationId, applicationId);
+                + "UNION SELECT actor_account_id FROM model_application_transition_event WHERE application_id = ? AND from_state <> ?",
+            UUID.class, applicationId, applicationId, FROM_STATE);
         return new HashSet<>(rows);
     }
 

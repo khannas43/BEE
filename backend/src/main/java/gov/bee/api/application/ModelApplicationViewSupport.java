@@ -20,8 +20,16 @@ final class ModelApplicationViewSupport {
     /** The detail read: the view plus the latest rating once there is one (PROVISIONAL LOCAL DEMONSTRATION, never a BEE rating). */
     static Map<String, Object> detailView(ModelApplicationRepository.Row row, ReadScope scope,
                                           Optional<ModelApplicationSubmitRepository.FeeSnapshotRow> fee,
-                                          Optional<ModelApplicationSubmitRepository.RatingRow> rating) {
+                                          Optional<ModelApplicationSubmitRepository.RatingRow> rating,
+                                          Optional<ModelApplicationSubmitRepository.ReturnRow> openReturn) {
         Map<String, Object> m = readView(row, scope, fee);
+        openReturn.ifPresent(r -> {
+            Map<String, Object> v = new java.util.LinkedHashMap<>();
+            v.put("fromState", r.fromState());
+            v.put("reason", r.reason());
+            v.put("returnedAt", r.returnedAt().toString());
+            m.put("returnNote", v);
+        });
         rating.ifPresent(r -> {
             Map<String, Object> v = new java.util.LinkedHashMap<>();
             v.put("ratingVersion", r.ratingVersion());

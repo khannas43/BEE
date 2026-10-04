@@ -99,6 +99,32 @@ public final class SlicePolicy {
         }
     }
 
+    static Decision decisionDeny(String reason) {
+        return Decision.deny(reason);
+    }
+
+    /**
+     * The stage check shared by the forward steps' rules and the return rules: the role with its scope, the source
+     * state, the officer's own assignment where the scope is assigned, and nobody who acted at another stage.
+     */
+    public static Decision checkStage(java.util.Set<String> fromStates, String stage, List<RoleGrant> actors, Caller caller, ApplicationFacts app) {
+        List<RoleGrant> usable = caller.roles().stream().filter(actors::contains).toList();
+        if (usable.isEmpty()) {
+            return Decision.deny("role_not_permitted");
+        }
+        if (!fromStates.contains(app.state())) {
+            return Decision.deny("wrong_stage");
+        }
+        String scope = usable.get(0).scope();
+        if (scope.equals(ASSIGNED) && !app.assignedStagesForCaller().contains(stage)) {
+            return Decision.deny("not_assigned");
+        }
+        if (app.actorsAtOtherStages().contains(caller.accountId())) {
+            return Decision.deny("same_user_other_stage");
+        }
+        return Decision.allow();
+    }
+
     /**
      * P6: the reusable check for one of the seven slice steps. It answers whether the rule
      * would allow the action; no endpoint performs a transition yet (P7), so an allowed

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { useCommand } from "@/components/app/kit/CommandPanel";
+import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
 import { Card, ScreenChrome } from "@/components/app/ScreenScaffold";
 import { orgsText, rolesText, useSpringIdentity } from "@/components/app/SessionBadge";
 import { commandAdvice, type CommandFailure, type CommandResult } from "@/lib/client/runtimeHttp";
@@ -25,6 +25,7 @@ import {
   type SubmissionFee,
 } from "@/lib/client/runtimeModelSubmit";
 import { DraftTestReports } from "@/components/app/lifecycle/DraftTestReports";
+import { type ResubmitApplicationReceipt, resubmitApplicationSignature, runResubmitApplication } from "@/lib/client/runtimeResubmitApplication";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
@@ -122,11 +123,16 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitDone, setSubmitDone] = useState<{ reference: string; id: string; fee: SubmissionFee } | null>(null);
+  // A returned application is edited and resubmitted on this same form (decision B7, provisional).
+  const [appState, setAppState] = useState<"draft" | "returned">("draft");
+  const [returnNote, setReturnNote] = useState<ModelApplication["returnNote"] | null>(null);
+  const [resubmitted, setResubmitted] = useState<ResubmitApplicationReceipt | null>(null);
   const draftSave = useCommand(runDraftSave, draftSaveSignature);
   const submitCommand = useCommand(runSubmit, submitSignature);
 
   const implemented = runtimeRouteFor("/app/model-label/new-model-application")?.implemented;
   const isEdit = !!editId;
+  const returned = appState === "returned";
   const signInReturnTo =
     isEdit && editId
       ? `${DRAFT_FORM_RETURN_TO}?edit=${encodeURIComponent(editId)}`
@@ -158,6 +164,8 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     setReference(application.reference);
     setModelNumber(application.modelNumber);
     setVersion(application.version);
+    setAppState(application.state === "returned" ? "returned" : "draft");
+    setReturnNote(application.returnNote ?? null);
     const bid = application.brandId;
     if (bid) {
       setBrandId(bid);
@@ -184,7 +192,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       setLoadError(r.failure.message);
       return;
     }
-    if (r.application.state !== "draft") {
+    if (r.application.state !== "draft" && r.application.state !== "returned") {
       setLoadError("Only draft applications can be edited.");
       return;
     }
@@ -200,7 +208,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
         setLoadError(r.failure.message);
         return;
       }
-      if (r.application.state !== "draft") {
+      if (r.application.state !== "draft" && r.application.state !== "returned") {
         setLoadError("Only draft applications can be edited.");
         return;
       }
@@ -381,11 +389,34 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     );
   }
 
+  if (resubmitted) {
+    return (
+      <ScreenChrome module={module} screen={screen} subtitle="Resubmitted" implemented={implemented}>
+        <Card>
+          <div data-testid="model-resubmit-success">
+            <p className="font-body-md text-body-md">
+              <strong>{resubmitted.reference}</strong> was resubmitted. It is back at <strong>{stateLabel(resubmitted.toState)}</strong>.
+            </p>
+            {resubmitted.ratingSuperseded ? (
+              <p className="font-body-sm text-body-sm text-on-surface-variant mt-space-sm" data-testid="model-resubmit-superseded">
+                A figure the rating depends on changed, so the earlier rating is replaced and Programme will rate it again before it reaches the approvers.
+              </p>
+            ) : null}
+            <p className="font-body-sm text-body-sm text-on-surface-variant mt-space-sm">Version {resubmitted.version}.</p>
+            <Link href={modelDashboardHref(resubmitted.applicationId)} className="inline-flex mt-space-md text-primary font-label-md" data-testid="model-resubmit-dashboard">
+              View on dashboard
+            </Link>
+          </div>
+        </Card>
+      </ScreenChrome>
+    );
+  }
+
   return (
     <ScreenChrome
       module={module}
       screen={screen}
-      subtitle={isEdit ? "Edit a draft model application" : "Create a draft model application"}
+      subtitle={returned ? "Edit and resubmit a returned application" : isEdit ? "Edit a draft model application" : "Create a draft model application"}
       implemented={implemented}
       actions={
         <Link href={modelDashboardHref()} className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1">
@@ -402,8 +433,17 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
           <>
             {isEdit && reference ? (
               <p className="font-label-sm text-on-surface-variant">
-                Editing <span className="font-mono">{reference}</span> · {stateLabel("draft")} · version {version}
+                Editing <span className="font-mono">{reference}</span> · {stateLabel(appState)} · version {version}
               </p>
+            ) : null}
+            {returned && returnNote ? (
+              <div className="rounded-lg border border-error/40 bg-error/5 p-space-md" data-testid="model-returned-banner">
+                <p className="font-label-md text-label-md text-on-surface">Returned by {stateLabel(returnNote.fromState)}</p>
+                <p className="font-body-sm text-body-sm mt-1" data-testid="model-returned-reason">{returnNote.reason}</p>
+                <p className="font-label-sm text-label-sm text-on-surface-variant mt-1">
+                  Correct the evidence below, save, and resubmit. The brand and the model number cannot change on a returned application.
+                </p>
+              </div>
             ) : null}
             <Card title="Brand and model">
               <div className="space-y-space-md">
@@ -412,7 +452,8 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                   <select
                     value={brandId}
                     onChange={(e) => setBrandId(e.target.value)}
-                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+                    disabled={returned}
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm disabled:opacity-60"
                     data-testid="model-draft-brand"
                   >
                     {legacyUnlinked ? (
@@ -430,7 +471,8 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                   <input
                     value={modelNumber}
                     onChange={(e) => setModelNumber(e.target.value)}
-                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+                    disabled={returned}
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm disabled:opacity-60"
                     data-testid="model-draft-model-number"
                   />
                 </label>
@@ -501,7 +543,16 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
               {saveBusy ? "Saving…" : isEdit ? "Save changes" : "Save draft"}
             </button>
             {isEdit && activeId ? <DraftTestReports applicationId={activeId} /> : null}
-            {isEdit && activeId ? (
+            {returned && activeId ? (
+              <ResubmitPanel
+                application={{ id: activeId, version }}
+                draftDirty={draftDirty}
+                signInReturnTo={signInReturnTo}
+                onResubmitted={setResubmitted}
+                onReload={() => void reloadDraftFromServer()}
+              />
+            ) : null}
+            {isEdit && activeId && !returned ? (
               <>
                 {draftDirty ? (
                   <p className="text-error font-body-sm" data-testid="model-draft-dirty-hint">
@@ -568,6 +619,73 @@ function CommandFailureFollowUp({
         </Link>
       ) : null}
     </>
+  );
+}
+
+function ResubmitPanel({
+  application,
+  draftDirty,
+  signInReturnTo,
+  onResubmitted,
+  onReload,
+}: {
+  application: { id: string; version: number };
+  draftDirty: boolean;
+  signInReturnTo: string;
+  onResubmitted: (receipt: ResubmitApplicationReceipt) => void;
+  onReload: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [inputError, setInputError] = useState<string | null>(null);
+  const command = useCommand(runResubmitApplication, resubmitApplicationSignature);
+
+  async function resubmit() {
+    if (draftDirty) {
+      setInputError("Save your changes before resubmitting.");
+      return;
+    }
+    setInputError(null);
+    const result = await command.execute({ id: application.id, version: application.version, note });
+    if (result?.ok) onResubmitted(result.value);
+  }
+
+  return (
+    <section className="space-y-space-sm" data-testid="model-resubmit">
+      {draftDirty ? (
+        <p className="text-error font-body-sm" data-testid="model-resubmit-dirty-hint">Save your changes before resubmitting.</p>
+      ) : null}
+      <CommandPanel
+        className="space-y-space-sm"
+        state={command.state}
+        onRun={() => void resubmit()}
+        runLabel="Resubmit"
+        busyLabel="Resubmitting…"
+        runTestId="model-resubmit-run"
+        errorTestId="model-resubmit-error"
+        reloadTestId="model-resubmit-reload"
+        disabled={draftDirty}
+        onReload={onReload}
+        signInReturnTo={signInReturnTo}
+      >
+        <label className="block font-label-sm text-label-sm text-on-surface-variant">
+          What did you change? (optional)
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={500}
+            rows={2}
+            className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+            data-testid="model-resubmit-note"
+          />
+        </label>
+        <p className="font-label-sm text-label-sm text-on-surface-variant">
+          The same evidence checks as the first submit apply. The fee is not charged again, and the application goes back to the stage that returned it.
+        </p>
+      </CommandPanel>
+      {inputError ? (
+        <p className="text-error font-body-sm" data-testid="model-resubmit-input-error">{inputError}</p>
+      ) : null}
+    </section>
   );
 }
 

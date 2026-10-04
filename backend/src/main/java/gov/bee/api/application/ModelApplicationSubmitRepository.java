@@ -37,6 +37,19 @@ public class ModelApplicationSubmitRepository {
         return n == null ? 0 : n;
     }
 
+    /** The open return of an application (the latest return that no resubmission has answered). */
+    public record ReturnRow(String fromState, String reason, java.time.Instant returnedAt) {
+    }
+
+    public Optional<ReturnRow> findOpenReturn(UUID applicationId) {
+        return jdbc.query(
+            "SELECT r.returned_from_state, r.reason, r.returned_at FROM model_application_return r "
+                + "LEFT JOIN model_application_resubmission s ON s.return_id = r.id "
+                + "WHERE r.application_id = ? AND s.id IS NULL ORDER BY r.returned_at DESC LIMIT 1",
+            (rs, i) -> new ReturnRow(rs.getString("returned_from_state"), rs.getString("reason"), rs.getTimestamp("returned_at").toInstant()),
+            applicationId).stream().findFirst();
+    }
+
     /** The latest rating record of an application (a local demonstration, never a BEE rating). */
     public record RatingRow(int ratingVersion, String schemeKey, java.math.BigDecimal declaredIseer, java.math.BigDecimal verifiedIseer,
                             int stars, java.time.Instant computedAt) {

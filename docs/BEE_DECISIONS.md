@@ -92,7 +92,7 @@ Each decision below gives what the system does today, the realistic options, a r
 
 ### B7 — Changes after an application is returned
 - **Question.** If scrutiny returns an application to the applicant, may the applicant add or replace documents and edit the form, and until when?
-- **Today.** Documents and edits are allowed on a draft only; the return step is not built yet.
+- **Today.** The recommended default is built (WP07.1g): the applicant may correct the evidence and add reports while the application is returned, never after resubmission, and cannot change the brand or the model number. There is no time limit.
 - **Recommendation.** Allowed while the application is in the returned state, never after resubmission.
 - **If unanswered.** That recommendation will be built.
 

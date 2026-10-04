@@ -193,13 +193,13 @@ function ApplicationTable({ items, selectedId }: { items: ModelApplication[]; se
           >
             {a.id === selectedId ? "Selected" : "View"} <Icon name="arrow_forward" size={14} />
           </Link>
-          {a.state === "draft" ? (
+          {a.state === "draft" || a.state === "returned" ? (
             <Link
               href={modelDraftFormHref(a.id)}
               className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1"
               data-testid={`model-app-edit-${a.reference}`}
             >
-              Edit <Icon name="edit" size={14} />
+              {a.state === "returned" ? "Edit and resubmit" : "Edit"} <Icon name="edit" size={14} />
             </Link>
           ) : null}
         </span>
@@ -266,13 +266,19 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
               tabTestId={(id) => `model-app-detail-tab-${id}`}
               panelTestId={(id) => `model-app-detail-panel-${id}`}
             />
-            {r.application.state === "draft" ? (
+            {r.application.state === "returned" && r.application.returnNote ? (
+              <div className="mt-space-md rounded-lg border border-error/40 bg-error/5 p-space-md" data-testid="model-app-return-note">
+                <p className="font-label-md text-label-md text-on-surface">Returned by {stateLabel(r.application.returnNote.fromState)}</p>
+                <p className="font-body-sm text-body-sm mt-1" data-testid="model-app-return-reason">{r.application.returnNote.reason}</p>
+              </div>
+            ) : null}
+            {r.application.state === "draft" || r.application.state === "returned" ? (
               <Link
                 href={modelDraftFormHref(r.application.id)}
                 className="inline-flex items-center gap-1 mt-space-md px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md"
                 data-testid="model-app-detail-edit"
               >
-                Edit draft <Icon name="edit" size={18} />
+                {r.application.state === "returned" ? "Edit and resubmit" : "Edit draft"} <Icon name="edit" size={18} />
               </Link>
             ) : null}
           </>

@@ -1,6 +1,6 @@
 # Decisions needed from BEE — Standards & Labelling Portal (local build)
 
-**Status:** Request for decisions, prepared 3 October 2026; B14 and B15 added 4 October 2026. **Nothing in this document has been decided by BEE.** It is for the BEE officials who own each rule.
+**Status:** Request for decisions, prepared 3 October 2026; B14 and B15 added 4 October 2026; the owner's assumptions for every decision recorded the same day (not BEE's). **Nothing in this document has been decided by BEE.** It is for the BEE officials who own each rule.
 
 ## Why this is needed
 
@@ -30,6 +30,7 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) One formula per category with dated versions; (b) formula plus thresholds that change by year.
 - **Recommendation.** Provide the formula, the input list and the threshold table for room air conditioners first, with its effective date.
 - **If unanswered.** The rating step cannot be built beyond a clearly labelled demonstration.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The owner has no formula. Do not invent a "standard" star scheme: the rating formula and its threshold table become **configurable data** (effective-dated, versioned, entered in the portal like the fee rules). Until BEE supplies a formula, the local demonstration bands stay and every rating stays labelled "local demonstration, not a BEE rating". Recorded in BL-134.
 
 ### A3 — Standard and edition (M2)
 - **Question.** Which standard and edition applies per category and purpose (for example performance testing), and how does the changeover work?
@@ -37,18 +38,21 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) Standard in force on the **test date**; (b) standard in force on the **submission date**; (c) the applicant chooses within a transition window.
 - **Recommendation.** (a): the standard in force when the test was done.
 - **If unanswered.** The system uses the standard in force on the test date.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** Option (a): the standard in force on the test date. This is what the build does.
 
 ### A4 — Official category list (M1)
 - **Question.** The official list of appliance categories, their codes and names, and when each scheme starts.
 - **Today.** Room air conditioner only.
 - **Recommendation.** The list in a table: code, name, start date.
 - **If unanswered.** Only room air conditioners can be filed.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: the official list as a table (code, name, start date). **No list has been supplied**, so only room air conditioners can be filed until it is.
 
 ### A5 — Which date selects a rule (M7)
 - **Question.** For fee, standard and similar rules, which business date decides which version applies: submission date, fee-confirmation date, or the test date?
 - **Today.** The fee and standard use the submission date. Accreditation and the standard for the test use the **test date**.
 - **Recommendation.** Fee by submission date; standard and laboratory accreditation by test date (as today).
 - **If unanswered.** As today.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: fee by submission date; standard and laboratory accreditation by test date. This is what the build does.
 
 ## B. Rules that shape the workflow
 
@@ -58,6 +62,7 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) Required before submit; (b) required before scrutiny but not before the fee; (c) optional until review.
 - **Recommendation.** (a).
 - **If unanswered.** (a) stays, as a provisional rule.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** Option (a): a test report is required before submit. As built.
 
 ### B2 — Laboratory accreditation
 - **Question.** Must the laboratory be chosen from an accredited-laboratory list, and must it be accredited for the category **on the test date**? Who maintains the list and from what source (M3)? Does a later suspension block an application already submitted?
@@ -65,12 +70,14 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) As today; (b) laboratory typed freely and checked later by a reviewer; (c) accreditation checked at the **review** stage as well as at submit.
 - **Recommendation.** (a), with the authoritative source and the rule for later suspensions stated by BEE.
 - **If unanswered.** (a) stays, on the synthetic list.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** Option (a): as built (laboratory chosen from the accredited list, accredited on the test date). The authoritative source of the list and the rule for a later suspension are **not yet stated**.
 
 ### B3 — Test date rules
 - **Question.** Is the test date required, may it be in the future, and is there a maximum age (for example the test must be within N months of filing)?
 - **Today.** Required; not in the future; **no maximum age**.
 - **Recommendation.** Give the maximum age, if any, as a number of months.
 - **If unanswered.** No maximum age.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation is to state a maximum age in months. **No number has been given**, so there is still no maximum age; give N months, or "none", to close this.
 
 ### B4 — What counts as the same model, and families
 - **Question.** When are two applications the same model, so a second must be refused? Is a **family** (several models sharing one rating) filed as one application or several?
@@ -78,30 +85,35 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) As today; (b) also ignore punctuation; (c) a family record that groups models.
 - **Recommendation.** State the rule, and say whether family applications are in the first release.
 - **If unanswered.** As today; no families.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: as built (same brand and model number, ignoring capitals and surrounding spaces). Whether families are in the first release is **not stated**; they are not built.
 
 ### B5 — Efficiency figure: declared or calculated
 - **Question.** Does the applicant declare the efficiency figure (ISEER), or is it only calculated from the test report? What range and how many decimals are valid?
 - **Today.** The applicant declares it: a positive number up to 99.99 with at most two decimals (placeholders). The rating step, when built, would calculate its own figure and keep both.
 - **Recommendation.** Declared by the applicant and verified by scrutiny; give the valid range and precision.
 - **If unanswered.** The placeholder limits stay.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: the applicant declares the figure and scrutiny verifies it. As built. The valid range and precision are **not stated**; the placeholder limits stay (positive, up to 99.99, two decimals).
 
 ### B6 — Other required documents and file rules
 - **Question.** Besides the test report, which documents are required at submit (for example brand authorisation, licence copies)? Which file types, and what size limit?
 - **Today.** The test report only, **PDF only, 5 MiB**.
 - **Recommendation.** List the required documents per application type.
 - **If unanswered.** As today.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: list the required documents per application type. **No list has been given**; the test report only (PDF, 5 MiB) stays.
 
 ### B7 — Changes after an application is returned
 - **Question.** If scrutiny returns an application to the applicant, may the applicant add or replace documents and edit the form, and until when?
 - **Today.** The recommended default is built (WP07.1g): the applicant may correct the evidence and add reports while the application is returned, never after resubmission, and cannot change the brand or the model number. There is no time limit.
 - **Recommendation.** Allowed while the application is in the returned state, never after resubmission.
 - **If unanswered.** That recommendation will be built.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: editing is allowed while the application is returned, never after resubmission. As built (WP07.1g).
 
 ### B8 — Who verifies a test report, and with what outcomes
 - **Question.** Who checks that a report is genuine and complete, what outcomes exist (for example verified, not verified, query raised), and what happens next?
 - **Today.** Every uploaded report is labelled "pending local verification". The system makes no claim about accreditation, authenticity or malware.
 - **Recommendation.** The IAME scrutiny step records verified or not verified with a note.
 - **If unanswered.** Reports stay "pending verification" through the whole journey.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: the IAME scrutiny step records verified or not verified with a note. As built.
 
 ### B11 — How the fee is confirmed, and who can correct a mistake
 - **Question.** Is the fee confirmed **by hand by Finance** after seeing the payment, or by the applicant uploading proof, or by a payment gateway? Who exactly may confirm? If a confirmation is wrong (wrong reference, wrong date), how is it corrected or reversed, and by whom?
@@ -109,24 +121,28 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) As today, plus a correction step that needs a second Finance approver; (b) applicant uploads proof, Finance verifies it; (c) gateway callback with Finance reconciliation.
 - **Recommendation.** (a) for the first release: manual confirmation, with a defined correction route.
 - **If unanswered.** As today, with no correction route.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** Option (a): manual confirmation by Finance, **plus a correction route that needs a second Finance approver**. The correction route is not built (BL-133).
 
 ### B12 — Amount received
 - **Question.** Must the amount received equal the fee exactly? What about part payments, overpayment, tax, or amounts deducted at source?
 - **Today.** The amount must equal the fee on the application exactly; anything else is refused and nothing changes.
 - **Recommendation.** State the tolerance, if any, and how a difference is recorded.
 - **If unanswered.** Exact match only.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: state a tolerance, if any. **None has been given**, so the exact match stays.
 
 ### B9 — Approval chain (D1) and allocation (D2, D5)
 - **D1.** Is Secretary approval always required, or can the Director's recommendation be final for some categories? **Today:** the build assumes, on the owner's say-so of 4 October 2026 (not BEE's), that the Director's recommendation **can** be final for some categories; which categories is data (`director_final_rule`), and the only rule today (RAC) keeps the Secretary in the chain. **Recommendation:** state the delegation rule, if any.
 - **D2.** Who assigns applications to IAME and Reviewer officers? **Today:** automatic round-robin; no allocator role. **Recommendation:** name the allocating role, or confirm round-robin.
 - **D5.** Is the IAME verifier (note-sheet) a separate step from IAME scrutiny? **Today:** one IAME step. **Recommendation:** say whether a second step exists.
 - **If unanswered.** The defaults stay.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** D1: no delegation rule was given, so the 4 October assumption above stands (the Director's recommendation can be final for categories listed in `director_final_rule`; none today). D2: automatic round-robin, no allocator role. D5: the recommendation, which is as built (one IAME step).
 
 ### B13 — What the applicant may see of the officers' notes (the history)
 - **Question.** The history of an application lists every step with who took it and the note that went with it. May the applicant see the officers' internal notes and findings (for example the IAME finding on the test report, the Reviewer's and the Director's notes, the rating figures), or only the steps and the notes addressed to them (a return or rejection reason, their own resubmission)? May the applicant see an officer's name, or only the role and organisation?
 - **Today.** The build shows the applicant the whole timeline but withholds the officers' internal notes, findings and rating figures (the step says "Internal note, not shown to you") and shows no personal names; an officer who can read the application sees everything. This is a provisional choice, not a BEE rule.
 - **Recommendation.** Keep it: the applicant sees what was addressed to them; the officers' working notes stay internal.
 - **If unanswered.** The provisional rule stays and is labelled.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: keep the built rule (the applicant sees what was addressed to them; the officers' working notes stay internal, no personal names).
 
 ### B14 — Time limits for each stage (SLA)
 - **Question.** How long may an application wait at each stage (fee confirmation, IAME scrutiny, BEE scrutiny, rating, Director, Secretary) before it counts as late, who is told, and who is it escalated to? Do the limits count calendar days or working days, and does the clock stop while an application is returned to the applicant?
@@ -134,6 +150,7 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) One limit for every stage; (b) a limit per stage; (c) a limit per stage and category.
 - **Recommendation.** (b), in working days, with the clock stopped while the application is with the applicant.
 - **If unanswered.** The screens stay as they are: counts, with nothing called late.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: a limit per stage, in working days, with the clock stopped while the application is with the applicant. **No number of days, recipients or escalation target has been given**; the limits become configurable data (BL-128) and until they are set nothing is called late.
 
 ### B15 — Who may see the whole queue of a stage (team queue)
 - **Question.** May a person see every application waiting at their stage, including those assigned to a colleague (for example all applications waiting for IAME scrutiny, not just the ones assigned to this officer)? Which roles, and may they reassign?
@@ -141,11 +158,13 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) As today, no team view; (b) a read-only team view for every stage owner; (c) a team view for a supervisor role only, who may also reassign.
 - **Recommendation.** (c): name the supervisor role and let it reassign; ordinary officers keep seeing only their own work.
 - **If unanswered.** No team queue is built.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: a team view for a supervisor role only, who may also reassign. **The supervisor role is not named yet**; no team queue is built until it is (BL-129, BL-135).
 
 ### B10 — The applicant's model record (D4)
 - **Question.** Should the registration record screen become the applicant's own record of their models?
 - **Today.** Yes, limited to the applicant's organisation.
 - **If unanswered.** As today.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** Yes: the registration record screen becomes the applicant's own record of their models, limited to the applicant's organisation. As built.
 
 ## C. Administration
 
@@ -156,7 +175,7 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Recommendation.** (a) with (c).
 - **If unanswered.** No screen is built for editing rules; the administration screens for fees, standards and formulas stay read-only.
 - **Owner's assumption, 4 October 2026 (not BEE's decision), for fee rules only.** The Administrator may enter a fee rule now; the permission is to be assignable to another role later. Whether a second approver is needed, whether a closing date may be in the past, and how a mistaken entry is withdrawn are still open (the recommendation above stands for them).
-
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** Later the same day, the recommendation (a) with (c): administrators only, **with a second approver**, and a closing date may not be in the past. Together with the earlier note, a fee rule (and later a formula or standard) is entered by the Administrator, **confirmed by a second approver**, with a date that is not in the past; the permission can be assigned to another role later. Recorded in BL-131.
 
 ## Summary of what each unanswered decision costs
 
@@ -178,27 +197,27 @@ Each decision below gives what the system does today, the realistic options, a r
 
 | ID | Your decision (option letter or your own wording) | Source or document | Decided by and date |
 | --- | --- | --- | --- |
-| A1 | | | |
-| A2 | | | |
-| A3 | | | |
-| A4 | | | |
-| A5 | | | |
-| B1 | | | |
-| B2 | | | |
-| B3 | | | |
-| B4 | | | |
-| B5 | | | |
-| B6 | | | |
-| B7 | | | |
-| B8 | | | |
-| B9 (D1, D2, D5) | | | |
-| B11 | | | |
-| B12 | | | |
-| B10 | | | |
-| B13 | | | |
-| B14 | | | |
-| B15 | | | |
-| C1 | | | |
+| A1 | (b) per category and application type; configurable; Administrator now; tax a separate line | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| A2 | Configurable formula and thresholds; demonstration bands until BEE supplies one | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| A3 | (a) standard in force on the test date | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| A4 | Official list as a table; none supplied yet | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| A5 | Fee by submission date; standard and accreditation by test date | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B1 | (a) required before submit | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B2 | (a) as built; source and suspension rule not stated | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B3 | Maximum age recommended; number not given | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B4 | As built; families not in scope until stated | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B5 | Declared, then verified by scrutiny; range not stated | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B6 | List per application type recommended; none given | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B7 | Allowed while returned, never after resubmission | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B8 | IAME records verified or not verified with a note | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B9 (D1, D2, D5) | D1 as the 4 Oct assumption; D2 round-robin; D5 one IAME step | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B11 | (a) manual, plus a correction route with a second Finance approver | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B12 | Tolerance not given; exact match stays | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B10 | Yes, the applicant's own record of their models | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B13 | Keep the built rule | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B14 | Per stage, working days, clock stopped while returned; days not given | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B15 | (c) supervisor role only, may reassign; role not named | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| C1 | (a) with (c): administrators with a second approver, no past dates | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 
 ## References for the engineering team
 

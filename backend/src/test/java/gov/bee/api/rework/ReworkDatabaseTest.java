@@ -70,6 +70,7 @@ class ReworkDatabaseTest {
     static SecretaryApprovalRepository secretaryRepo;
     static StageReturnRepository returns;
     static ResubmitApplicationRepository resub;
+    static StageRejectRepository rejects;
     static int appModelCountBefore;
 
     static String env(String k, String d) {
@@ -122,7 +123,8 @@ class ReworkDatabaseTest {
         secretaryRepo = transactional(new SecretaryApprovalRepository(db));
         returns = transactional(new StageReturnRepository(db));
         resub = transactional(new ResubmitApplicationRepository(db));
-        assertEquals(31, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V31");
+        rejects = transactional(new StageRejectRepository(db));
+        assertEquals(32, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V32");
     }
 
     @AfterAll
@@ -147,14 +149,15 @@ class ReworkDatabaseTest {
         iameRepo.recommend(id, 2, IAME_USER, "iame", "verified", "n");
         if (stage.equals("bee_scrutiny")) return id;
         reviewerRepo.forward(id, 3, REVIEWER_USER, "reviewer", "n");
+        if (stage.equals("rating")) return id;
         ratingRepo.compute(id, 4, PROGRAMME_USER, "programme", "RAC-ISEER-DEMO-1", DECLARED, new BigDecimal("4.62"), 4);
         if (stage.equals("director_review")) return id;
         directorRepo.recommend(id, 5, DIRECTOR_USER, "director", "n", false);
         return id;
     }
 
-    static final Map<String, UUID> OFFICER = Map.of("iame_scrutiny", IAME_USER, "bee_scrutiny", REVIEWER_USER, "director_review", DIRECTOR_USER, "secretary_approval", SECRETARY_USER);
-    static final Map<String, String> ROLE = Map.of("iame_scrutiny", "iame", "bee_scrutiny", "reviewer", "director_review", "director", "secretary_approval", "secretary");
+    static final Map<String, UUID> OFFICER = Map.of("iame_scrutiny", IAME_USER, "bee_scrutiny", REVIEWER_USER, "rating", PROGRAMME_USER, "director_review", DIRECTOR_USER, "secretary_approval", SECRETARY_USER);
+    static final Map<String, String> ROLE = Map.of("iame_scrutiny", "iame", "bee_scrutiny", "reviewer", "rating", "programme", "director_review", "director", "secretary_approval", "secretary");
 
     static int version(UUID id) {
         return owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
@@ -409,5 +412,142 @@ class ReworkDatabaseTest {
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_application WHERE id = ?", Integer.class, id));
         assertEquals(seededAssignments, owner.queryForObject("SELECT count(*) FROM assignment", Integer.class), "seeded assignments are untouched");
         assertFalse(owner.queryForObject("SELECT has_function_privilege('" + env("BEE_RUNTIME_DB_USER", "bee_runtime") + "', '" + MAIN + ".app_disposable_model_cleanup(uuid[])', 'EXECUTE')", Boolean.class));
+    }
+
+    static StageRejectRepository.Result reject(UUID id, String stage) {
+        return rejects.doReject(id, version(id), OFFICER.get(stage), ROLE.get(stage), stage, "The report is for a different model.");
+    }
+
+    @Test
+    void eachStageOwnerIncludingProgrammeCanRejectPermanentlyWithEventRecordAndAssignmentsClosed() {
+        for (String stage : List.of("iame_scrutiny", "bee_scrutiny", "rating", "director_review", "secretary_approval")) {
+            UUID id = at(stage, "RW-REJ-" + stage);
+            int before = version(id);
+            var r = reject(id, stage);
+            assertEquals(StageRejectRepository.Outcome.REJECTED, r.outcome(), stage);
+            assertEquals(before + 1, r.versionAfter(), stage);
+            assertEquals("rejected", state(id), stage);
+            var ev = owner.queryForMap("SELECT from_state, to_state, actor_account_id, actor_role FROM model_application_transition_event WHERE application_id = ? AND action = 'reject'", id);
+            assertEquals(stage, ev.get("from_state"));
+            assertEquals("rejected", ev.get("to_state"));
+            assertEquals(OFFICER.get(stage), ev.get("actor_account_id"));
+            assertEquals(ROLE.get(stage), ev.get("actor_role"));
+            var rec = owner.queryForMap("SELECT rejected_from_state, reason, rejected_by_account_id FROM model_application_rejection WHERE application_id = ?", id);
+            assertEquals(stage, rec.get("rejected_from_state"));
+            assertEquals("The report is for a different model.", rec.get("reason"));
+            assertEquals(OFFICER.get(stage), rec.get("rejected_by_account_id"));
+            assertEquals(0, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND active", Integer.class, id), "nothing is left to do, so no assignment stays open: " + stage);
+        }
+    }
+
+    @Test
+    void rejectedIsTerminalNothingAppliesToItAnyMore() {
+        UUID id = at("iame_scrutiny", "RW-TERMINAL");
+        reject(id, "iame_scrutiny");
+        int v = version(id);
+        assertEquals(StageReturnRepository.Outcome.STALE, returns.doReturn(id, v, IAME_USER, "iame", "iame_scrutiny", "r").outcome(), "cannot be returned");
+        assertEquals(StageRejectRepository.Outcome.STALE, reject(id, "iame_scrutiny").outcome(), "cannot be rejected twice");
+        assertEquals(IameRecommendationRepository.Outcome.STALE, iameRepo.recommend(id, v, IAME_USER, "iame", "verified", "n").outcome(), "cannot move forward");
+        assertTrue(resub.openReturn(id).isEmpty(), "there is nothing to resubmit");
+        assertTrue(applications.bumpReturned(id, NOVA, v).isEmpty(), "and nothing to edit");
+        assertEquals(1, count("model_application_rejection", id));
+    }
+
+    @Test
+    void aReturnedApplicationCannotBeRejectedBecauseNoOneHoldsItsStage() {
+        UUID id = at("director_review", "RW-NOT-RETURNED");
+        giveBack(id, "director_review");
+        assertEquals(StageRejectRepository.Outcome.STALE, rejects.doReject(id, version(id), DIRECTOR_USER, "director", "director_review", "r").outcome());
+        assertEquals("returned", state(id));
+        assertEquals(0, count("model_application_rejection", id));
+    }
+
+    @Test
+    void aRejectionByAStaleVersionOrWrongStateWritesNothing() {
+        UUID id = at("rating", "RW-REJ-STALE");
+        assertEquals(StageRejectRepository.Outcome.STALE, rejects.doReject(id, version(id) - 1, PROGRAMME_USER, "programme", "rating", "r").outcome());
+        assertEquals(StageRejectRepository.Outcome.STALE, rejects.doReject(id, version(id), DIRECTOR_USER, "director", "director_review", "r").outcome(), "it is not in director_review");
+        assertEquals("rating", state(id));
+        assertEquals(0, count("model_application_rejection", id));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage = 'bee_scrutiny'", Integer.class, id), "the earlier assignment record is unchanged");
+    }
+
+    @Test
+    void rejectingFreesTheModelNumberForANewApplication() {
+        UUID id = at("iame_scrutiny", "RW-FREED");
+        UUID brand = NOVA_COOL;
+        assertEquals(true, applications.modelNumberTaken(brand, "RW-FREED", UUID.randomUUID()), "while it is live the number is taken");
+        reject(id, "iame_scrutiny");
+        assertEquals(false, applications.modelNumberTaken(brand, "RW-FREED", UUID.randomUUID()), "once rejected a new application may use it");
+        UUID again = UUID.randomUUID();
+        applications.insertDraft(again, applications.nextReference(), NOVA, NOVA, NOVA_COOL, "Nova Cool", "RAC", "RW-FREED");
+        applications.setEvidence(again, NOVA, new ModelApplicationRepository.EvidenceUpdate(true, "LAB", true, LocalDate.of(2026, 9, 1), true, DECLARED));
+        assertTrue(submissions.submit(again, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("24000.00"), "RAC:new_model", 2, "provisional", "ref", "note").isPresent(),
+            "and the new application can be submitted");
+    }
+
+    @Test
+    void anActorsOwnStageNeverCountsAgainstThemButAnotherStageDoes() {
+        UUID id = at("director_review", "RW-REJ-ACTORS");   // Programme has already rated it
+        assertEquals(false, rejects.actorsAtOtherStages(id, "rating").contains(PROGRAMME_USER), "Programme rejecting at the rating stage: its own rating is the same stage");
+        assertEquals(true, rejects.actorsAtOtherStages(id, "rating").containsAll(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER, REVIEWER_USER)), "the earlier stages count");
+        assertEquals(true, rejects.actorsAtOtherStages(id, "director_review").contains(PROGRAMME_USER), "but Programme cannot also be the Director");
+        assertEquals(false, rejects.actorsAtOtherStages(id, "director_review").contains(DIRECTOR_USER));
+    }
+
+    @Test
+    void theRejectionIsAppendOnlyOnePerApplicationAndRefusesBadValues() {
+        UUID id = at("director_review", "RW-REJ-APPEND");
+        reject(id, "director_review");
+        assertThrows(Exception.class, () -> db.update("UPDATE model_application_rejection SET reason = 'x'"));
+        assertThrows(Exception.class, () -> db.update("DELETE FROM model_application_rejection"));
+        assertThrows(Exception.class, () -> db.execute("TRUNCATE model_application_rejection"));
+        assertThrows(Exception.class, () -> owner.update("DELETE FROM model_application_rejection"), "the owner too");
+        UUID other = at("iame_scrutiny", "RW-REJ-CHECKS");
+        UUID event = owner.queryForObject("SELECT id FROM model_application_transition_event WHERE application_id = ? AND action = 'confirm_fee'", UUID.class, other);
+        String sql = "INSERT INTO model_application_rejection (application_id, transition_event_id, rejected_from_state, reason, rejected_by_account_id) VALUES (?, ?, ?, ?, ?)";
+        assertThrows(Exception.class, () -> owner.update(sql, other, event, "fee_due", "r", IAME_USER), "only the working stages reject");
+        assertThrows(Exception.class, () -> owner.update(sql, other, event, "approved", "r", IAME_USER));
+        assertThrows(Exception.class, () -> owner.update(sql, other, event, "iame_scrutiny", "", IAME_USER), "a reason is required");
+        assertThrows(Exception.class, () -> owner.update(sql, other, event, "iame_scrutiny", "x".repeat(501), IAME_USER), "and is at most 500 characters");
+        assertEquals(0, count("model_application_rejection", other));
+        reject(other, "iame_scrutiny");
+        UUID third = at("bee_scrutiny", "RW-REJ-ONCE");
+        UUID e3 = owner.queryForObject("SELECT id FROM model_application_transition_event WHERE application_id = ? AND action = 'iame_recommend'", UUID.class, third);
+        assertThrows(Exception.class, () -> owner.update(sql, other, e3, "iame_scrutiny", "a second rejection", IAME_USER), "one rejection per application");
+    }
+
+    @Test
+    void twoSimultaneousRejectionsHaveExactlyOneWinner() throws Exception {
+        UUID id = at("rating", "RW-REJ-RACE");
+        int v = version(id);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch go = new CountDownLatch(1);
+        try {
+            List<Future<StageRejectRepository.Outcome>> results = List.of(
+                pool.submit(() -> { go.await(); return rejects.doReject(id, v, PROGRAMME_USER, "programme", "rating", "r").outcome(); }),
+                pool.submit(() -> { go.await(); return rejects.doReject(id, v, PROGRAMME_USER, "programme", "rating", "r").outcome(); }));
+            go.countDown();
+            List<StageRejectRepository.Outcome> outcomes = List.of(results.get(0).get(10, TimeUnit.SECONDS), results.get(1).get(10, TimeUnit.SECONDS));
+            assertEquals(1, outcomes.stream().filter(o -> o == StageRejectRepository.Outcome.REJECTED).count(), outcomes.toString());
+            assertEquals(1, outcomes.stream().filter(o -> o == StageRejectRepository.Outcome.STALE).count(), outcomes.toString());
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(1, count("model_application_rejection", id));
+    }
+
+    @Test
+    void theCleanupAlsoRemovesTheRejection() {
+        UUID id = at("secretary_approval", "RW-REJ-CLEAN");
+        reject(id, "secretary_approval");
+        var maint = new JdbcTemplate(sourceAs(MAIN, env("BEE_MAINT_DB_USER", "bee_local_maint"), env("BEE_MAINT_DB_PASSWORD", "bee-local-maint")));
+        maint.execute(
+            "SELECT set_config('bee.cleanup_schema', '" + MAIN + "', true); "
+                + "INSERT INTO " + MAIN + ".local_disposable_application (application_id) VALUES ('" + id + "'); "
+                + "SELECT " + MAIN + ".app_disposable_model_cleanup(ARRAY['" + id + "']::uuid[])");
+        assertEquals(0, count("model_application_rejection", id));
+        assertEquals(0, count("model_application_transition_event", id));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_application WHERE id = ?", Integer.class, id));
     }
 }

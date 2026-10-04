@@ -184,7 +184,7 @@ async function main() {
     ["bee.director", "POST", `/api/model-applications/${id}/decision`],
     ["bee.secretary", "POST", `/api/model-applications/${id}/decision`],
     ["iame.officer", "POST", `/api/model-applications/${pid}/return/override`],
-    ["iame.officer", "POST", `/api/model-applications/${pid}/reject`],
+    ["iame.officer", "POST", `/api/model-applications/${pid}/reject/override`],
     ["bee.admin", "POST", `/api/model-applications/${id}/decision`],
     ["nova.applicant", "GET", `/api/model-applications/${id}/history`],
   ];

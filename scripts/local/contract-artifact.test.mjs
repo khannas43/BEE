@@ -101,3 +101,26 @@ test("retention is bounded and both layers use the documented limits", () => {
   const config = read("next.config.ts").toString("utf8");
   assert.match(config, /incomingRequests: false/, "Next's own request lines carry raw query strings");
 });
+
+test("no two operations of the same layer share a summary (a cloned operation must say what it does)", () => {
+  // Several operations were once cloned from the fee-confirmation one and kept its summary; the code and the schemas were right,
+  // so nothing failed. The summary is what a reader of the contract sees first, so it must differ per operation.
+  const seen = new Map();
+  for (const { route, method, op, audience } of operations()) {
+    const key = `${audience}: ${op.summary}`;
+    assert.ok(op.summary && op.summary.trim().length > 20, `${method.toUpperCase()} ${route} has no real summary`);
+    assert.equal(seen.has(key), false, `${method.toUpperCase()} ${route} repeats the summary of ${seen.get(key)}: "${op.summary}"`);
+    seen.set(key, `${method.toUpperCase()} ${route}`);
+  }
+});
+
+test("a summary never describes a different transition than the route it documents", () => {
+  const transitions = {
+    "fee-confirmation": "fee_due", "iame-recommendation": "iame_scrutiny", "reviewer-forward": "bee_scrutiny", rating: "rating",
+    "director-recommendation": "director_review", "secretary-approval": "secretary_approval",
+  };
+  for (const { route, op } of operations()) {
+    const name = Object.keys(transitions).find((k) => route.endsWith(`/${k}`));
+    if (name) assert.match(op.summary, new RegExp(`${transitions[name]}`), `${route} summary should name the stage it starts from (${transitions[name]}): "${op.summary}"`);
+  }
+});

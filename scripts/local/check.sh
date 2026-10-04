@@ -261,6 +261,13 @@ read -r rw_pass rw_fail <<<"$(sed -nE 's/^return-resubmit checks: ([0-9]+) passe
 if [[ -z "${rw_pass:-}" ]]; then check "rework.run" 0 "return-resubmit-browser-check did not complete: $(tail -1 <<<"$rw_out")"
 else pass=$((pass + rw_pass)); fail=$((fail + rw_fail)); fi
 
+# ---- Wave 1: permanent rejection by a stage owner (records runtime reject pairs)
+rj_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/reject-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$rj_out"
+read -r rj_pass rj_fail <<<"$(sed -nE 's/^reject checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$rj_out")"
+if [[ -z "${rj_pass:-}" ]]; then check "reject.run" 0 "reject-browser-check did not complete: $(tail -1 <<<"$rj_out")"
+else pass=$((pass + rj_pass)); fail=$((fail + rj_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

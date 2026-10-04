@@ -21,8 +21,16 @@ final class ModelApplicationViewSupport {
     static Map<String, Object> detailView(ModelApplicationRepository.Row row, ReadScope scope,
                                           Optional<ModelApplicationSubmitRepository.FeeSnapshotRow> fee,
                                           Optional<ModelApplicationSubmitRepository.RatingRow> rating,
-                                          Optional<ModelApplicationSubmitRepository.ReturnRow> openReturn) {
+                                          Optional<ModelApplicationSubmitRepository.ReturnRow> openReturn,
+                                          Optional<ModelApplicationSubmitRepository.RejectionRow> rejection) {
         Map<String, Object> m = readView(row, scope, fee);
+        rejection.ifPresent(r -> {
+            Map<String, Object> v = new java.util.LinkedHashMap<>();
+            v.put("fromState", r.fromState());
+            v.put("reason", r.reason());
+            v.put("rejectedAt", r.rejectedAt().toString());
+            m.put("rejection", v);
+        });
         openReturn.ifPresent(r -> {
             Map<String, Object> v = new java.util.LinkedHashMap<>();
             v.put("fromState", r.fromState());

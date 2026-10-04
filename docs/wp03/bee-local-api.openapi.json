@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.14.0",
+    "version": "0.15.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
     "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. Draft create and edit (POST/PATCH on runtime model applications) are operational; submit, fee, transitions and history remain deferred.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
@@ -3817,7 +3817,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Submit draft → fee_due with fee snapshot.",
+        "summary": "Submit draft \u2192 fee_due with fee snapshot.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -4415,7 +4415,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Submit draft → fee_due with fee snapshot.",
+        "summary": "Submit draft \u2192 fee_due with fee snapshot.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -6364,7 +6364,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Confirm that the fee was received (fee_due \u2192 iame_scrutiny), first slice step 2.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -6674,7 +6674,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Confirm that the fee was received (fee_due \u2192 iame_scrutiny), first slice step 2.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -7034,7 +7034,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "IAME officer records a verification finding and recommends forwarding (iame_scrutiny \u2192 bee_scrutiny), first slice step 3. Provisional local rules.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -7337,7 +7337,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "IAME officer records a verification finding and recommends forwarding (iame_scrutiny \u2192 bee_scrutiny), first slice step 3. Provisional local rules.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -7690,7 +7690,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Reviewer verifies the application and forwards it to rating (bee_scrutiny \u2192 rating), first slice step 4. Provisional local rules.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -7986,7 +7986,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Reviewer verifies the application and forwards it to rating (bee_scrutiny \u2192 rating), first slice step 4. Provisional local rules.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -8332,7 +8332,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Programme computes and records the star rating (rating \u2192 director_review), first slice step 5. A provisional local demonstration scheme, not a BEE rating.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -8642,7 +8642,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Programme computes and records the star rating (rating \u2192 director_review), first slice step 5. A provisional local demonstration scheme, not a BEE rating.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -9002,7 +9002,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Program Director reviews the rating and recommends approval (director_review \u2192 secretary_approval, or \u2192 approved where the recommendation is final for the category), first slice step 6. Provisional local assumption on decision D1.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -9298,7 +9298,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Program Director reviews the rating and recommends approval (director_review \u2192 secretary_approval, or \u2192 approved where the recommendation is final for the category), first slice step 6. Provisional local assumption on decision D1.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -9644,7 +9644,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Secretary reviews the rating and gives final approval (secretary_approval \u2192 approved), first slice step 7. Provisional local rules; the end of the first slice's happy path.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -9940,7 +9940,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "Secretary reviews the rating and gives final approval (secretary_approval \u2192 approved), first slice step 7. Provisional local rules; the end of the first slice's happy path.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -10286,7 +10286,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "The owner of a scrutiny or approval stage returns the application to the applicant with a reason (iame_scrutiny, bee_scrutiny, director_review or secretary_approval \u2192 returned). Provisional local rules.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -10582,7 +10582,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "The owner of a scrutiny or approval stage returns the application to the applicant with a reason (iame_scrutiny, bee_scrutiny, director_review or secretary_approval \u2192 returned). Provisional local rules.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -10928,7 +10928,7 @@
             "springBearer": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "The applicant resubmits a returned application after editing it (returned \u2192 the stage that returned it, or rating when a rating input changed after the rating existed). Provisional local rules.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -11273,7 +11273,7 @@
             "portalSession": []
           }
         ],
-        "summary": "Confirm that the fee was received (fee_due → iame_scrutiny), first slice step 2.",
+        "summary": "The applicant resubmits a returned application after editing it (returned \u2192 the stage that returned it, or rating when a rating input changed after the rating existed). Provisional local rules.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -11580,6 +11580,648 @@
               "test_date_invalid",
               "laboratory_not_accredited",
               "standard_not_available"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/model-applications/{id}/reject": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "post": {
+        "operationId": "springStageReject",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [
+          {
+            "springBearer": []
+          }
+        ],
+        "summary": "The owner of a scrutiny, rating or approval stage rejects the application permanently, with a reason (iame_scrutiny, bee_scrutiny, rating, director_review or secretary_approval \u2192 rejected, terminal). Provisional local rules.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageRejectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Application rejected.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "true when replaying a completed idempotent rejection."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRejectReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  },
+                  "segregation_refused": {
+                    "value": {
+                      "error": "segregation_refused",
+                      "message": "A person who acted at another stage of this application, or its own organisation, cannot take this step."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted",
+              "segregation_refused"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "version_conflict": {
+                    "value": {
+                      "error": "version_conflict",
+                      "message": "The record has changed since it was loaded."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  },
+                  "idempotency_in_progress": {
+                    "value": {
+                      "error": "idempotency_in_progress",
+                      "message": "A request with this Idempotency-Key is still in progress."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "version_conflict",
+              "idempotency_key_conflict",
+              "idempotency_in_progress"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/model-applications/{id}/reject": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "post": {
+        "operationId": "runtimeStageReject",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "The owner of a scrutiny, rating or approval stage rejects the application permanently, with a reason (iame_scrutiny, bee_scrutiny, rating, director_review or secretary_approval \u2192 rejected, terminal). Provisional local rules.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageRejectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Application rejected.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "true when replaying a completed idempotent rejection."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRejectReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  },
+                  "segregation_refused": {
+                    "value": {
+                      "error": "segregation_refused",
+                      "message": "A person who acted at another stage of this application, or its own organisation, cannot take this step."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted",
+              "segregation_refused"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "version_conflict": {
+                    "value": {
+                      "error": "version_conflict",
+                      "message": "The record has changed since it was loaded."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  },
+                  "idempotency_in_progress": {
+                    "value": {
+                      "error": "idempotency_in_progress",
+                      "message": "A request with this Idempotency-Key is still in progress."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "version_conflict",
+              "idempotency_key_conflict",
+              "idempotency_in_progress"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required"
             ]
           },
           "502": {
@@ -11962,6 +12604,9 @@
           },
           "returnNote": {
             "$ref": "#/components/schemas/ApplicationReturn"
+          },
+          "rejection": {
+            "$ref": "#/components/schemas/ApplicationRejection"
           }
         }
       },
@@ -13359,6 +14004,103 @@
           }
         },
         "description": "The open return of an application in the returned state, on the detail read only: why it was returned and by which stage."
+      },
+      "StageRejectRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "reason"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The record version the officer saw; a different stored version is 409 version_conflict."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Why the application is rejected, 1 to 500 characters, no control characters. The applicant sees it."
+          }
+        },
+        "description": "Request body of POST /api/model-applications/{id}/reject. Rejection is permanent. Provisional local rules, not BEE rules."
+      },
+      "StageRejectReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "applicationId",
+          "reference",
+          "fromState",
+          "toState",
+          "version",
+          "reason",
+          "rejectedAt"
+        ],
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "fromState": {
+            "enum": [
+              "iame_scrutiny",
+              "bee_scrutiny",
+              "rating",
+              "director_review",
+              "secretary_approval"
+            ]
+          },
+          "toState": {
+            "const": "rejected"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rejectedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "The answer to a rejection. A receipt, not an application view: the officer loses access with the move."
+      },
+      "ApplicationRejection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromState",
+          "reason",
+          "rejectedAt"
+        ],
+        "properties": {
+          "fromState": {
+            "enum": [
+              "iame_scrutiny",
+              "bee_scrutiny",
+              "rating",
+              "director_review",
+              "secretary_approval"
+            ],
+            "description": "The stage that rejected the application."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rejectedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "The rejection of an application in the rejected state, on the detail read only: why, and by which stage. Rejected is terminal."
       }
     }
   },

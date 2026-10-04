@@ -12,6 +12,8 @@ import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
 import { ReturnToApplicant, ReturnedNote } from "@/components/app/lifecycle/ReturnToApplicant";
+import { RejectApplication, RejectedNote } from "@/components/app/lifecycle/RejectApplication";
+import type { StageRejectReceipt } from "@/lib/client/runtimeStageReject";
 import type { StageReturnReceipt } from "@/lib/client/runtimeStageReturn";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { gateRead } from "@/lib/client/runtimeHttp";
@@ -73,7 +75,7 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
   const params = useSearchParams();
   const selectedId = params.get("id");
   const revalidation = useRevalidation();
-  const [done, setDone] = useState<{ kind: "director"; receipt: DirectorRecommendationReceipt } | { kind: "secretary"; receipt: SecretaryApprovalReceipt } | { kind: "returned"; receipt: StageReturnReceipt } | null>(null);
+  const [done, setDone] = useState<{ kind: "director"; receipt: DirectorRecommendationReceipt } | { kind: "secretary"; receipt: SecretaryApprovalReceipt } | { kind: "returned"; receipt: StageReturnReceipt } | { kind: "rejected"; receipt: StageRejectReceipt } | null>(null);
 
   const list = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
   const detail = gateRead(identity.status, useRuntimeRead(selectedId, loadDetail, revalidation));
@@ -109,7 +111,8 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
               {done && done.receipt.applicationId === selectedId ? (
                 done.kind === "director" ? <RecommendedNote receipt={done.receipt} />
                   : done.kind === "secretary" ? <ApprovedNote receipt={done.receipt} />
-                  : <ReturnedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />
+                  : done.kind === "returned" ? <ReturnedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />
+                  : <RejectedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />
               ) : (
                 <ReadPanel
                   title="Application and evidence"
@@ -136,6 +139,10 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
                       }}
                       onReturned={(receipt) => {
                         setDone({ kind: "returned", receipt });
+                        revalidation.refresh();
+                      }}
+                      onRejected={(receipt) => {
+                        setDone({ kind: "rejected", receipt });
                         revalidation.refresh();
                       }}
                       onReload={revalidation.refresh}
@@ -239,12 +246,14 @@ function DetailAndDecide({
   onRecommended,
   onApproved,
   onReturned,
+  onRejected,
   onReload,
 }: {
   application: ModelApplication;
   onRecommended: (receipt: DirectorRecommendationReceipt) => void;
   onApproved: (receipt: SecretaryApprovalReceipt) => void;
   onReturned: (receipt: StageReturnReceipt) => void;
+  onRejected: (receipt: StageRejectReceipt) => void;
   onReload: () => void;
 }) {
   return (
@@ -273,6 +282,7 @@ function DetailAndDecide({
         <DirectorActions application={application} onRecommended={onRecommended} onReload={onReload} />
       )}
       <ReturnToApplicant application={application} testIdPrefix={application.state === "secretary_approval" ? "secretary" : "director"} signInReturnTo={RETURN_TO} onReturned={onReturned} onReload={onReload} />
+      <RejectApplication application={application} testIdPrefix={application.state === "secretary_approval" ? "secretary" : "director"} signInReturnTo={RETURN_TO} onRejected={onRejected} onReload={onReload} />
     </div>
   );
 }

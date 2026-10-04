@@ -11,7 +11,9 @@ import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
+import { RejectApplication, RejectedNote } from "@/components/app/lifecycle/RejectApplication";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
+import type { StageRejectReceipt } from "@/lib/client/runtimeStageReject";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import {
   type RatingReceipt,
@@ -63,6 +65,7 @@ export function ProgrammeRating({ module, screen }: { module: Module; screen: Sc
   const selectedId = params.get("id");
   const revalidation = useRevalidation();
   const [receipt, setReceipt] = useState<RatingReceipt | null>(null);
+  const [rejected, setRejected] = useState<StageRejectReceipt | null>(null);
 
   const list = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
   const detail = gateRead(identity.status, useRuntimeRead(selectedId, loadDetail, revalidation));
@@ -95,7 +98,9 @@ export function ProgrammeRating({ module, screen }: { module: Module; screen: Sc
           </div>
           {selectedId ? (
             <div className="lg:col-span-2" data-testid="programme-detail" data-selected-id={selectedId}>
-              {receipt && receipt.applicationId === selectedId ? (
+              {rejected && rejected.applicationId === selectedId ? (
+                <RejectedNote receipt={rejected} backHref={ROUTE} testIdPrefix="programme" />
+              ) : receipt && receipt.applicationId === selectedId ? (
                 <RatedNote receipt={receipt} />
               ) : (
                 <ReadPanel
@@ -115,6 +120,10 @@ export function ProgrammeRating({ module, screen }: { module: Module; screen: Sc
                       application={r.application}
                       onRated={(done) => {
                         setReceipt(done);
+                        revalidation.refresh();
+                      }}
+                      onRejected={(done) => {
+                        setRejected(done);
                         revalidation.refresh();
                       }}
                       onReload={revalidation.refresh}
@@ -204,10 +213,12 @@ function RatedNote({ receipt }: { receipt: RatingReceipt }) {
 function DetailAndRate({
   application,
   onRated,
+  onRejected,
   onReload,
 }: {
   application: ModelApplication;
   onRated: (receipt: RatingReceipt) => void;
+  onRejected: (receipt: StageRejectReceipt) => void;
   onReload: () => void;
 }) {
   const [figure, setFigure] = useState("");
@@ -271,6 +282,7 @@ function DetailAndRate({
       {inputError ? (
         <p className="text-error font-body-sm mt-space-sm" data-testid="programme-rate-input-error">{inputError}</p>
       ) : null}
+      <RejectApplication application={application} testIdPrefix="programme" signInReturnTo={RETURN_TO} onRejected={onRejected} onReload={onReload} />
     </div>
   );
 }

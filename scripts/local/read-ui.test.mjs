@@ -291,6 +291,7 @@ test("detail href stays on model-dashboard; state labels are humanised", () => {
 test("runtime routes: Spring identity menu for dashboard, draft form and finance queue, not the preview role", async () => {
   const { RUNTIME_ROUTES, runtimeNavFor, runtimeRouteFor } = await import("../../lib/runtimeRoutes.ts");
   assert.deepEqual(RUNTIME_ROUTES.map((r) => r.href), [
+    "/app/administration/fee-rules",
     "/app/workflow/personal-inbox",
     "/app/workflow/my-approvals",
     "/app/workflow/application-review",
@@ -317,7 +318,9 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.deepEqual(runtimeNavFor([{ role: "director", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval"], "the Director gets only the approval screen");
   assert.deepEqual(runtimeNavFor([{ role: "secretary", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval"], "the Secretary gets the same approval screen, for its own stage");
   assert.equal(runtimeNavFor([{ role: "programme", scope: "all" }]).some((r) => r.href === "/app/model-label/director-approval"), false, "Programme never gets the Director entry");
-  for (const roles of [null, [], [{ role: "laboratory", scope: "assigned" }], [{ role: "admin", scope: "all" }], [{ role: "auditor", scope: "all" }]]) {
+  assert.deepEqual(runtimeNavFor([{ role: "admin", scope: "all" }]).map((r) => r.href), ["/app/administration/fee-rules"], "the Administrator gets the fee-rule screen only");
+  assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }]).some((r) => r.href === "/app/administration/fee-rules"), false, "Finance does not get the fee-rule entry");
+  for (const roles of [null, [], [{ role: "laboratory", scope: "assigned" }], [{ role: "auditor", scope: "all" }]]) {
     assert.equal(runtimeNavFor(roles).length, 0, JSON.stringify(roles));
   }
   assert.ok(runtimeRouteFor("/app/model-label/model-dashboard"));
@@ -327,6 +330,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.ok(runtimeRouteFor("/app/model-label/bee-scrutiny"));
   assert.ok(runtimeRouteFor("/app/model-label/rating-calculation"));
   assert.ok(runtimeRouteFor("/app/model-label/director-approval"));
+  assert.ok(runtimeRouteFor("/app/administration/fee-rules"));
   assert.ok(runtimeRouteFor("/app/workflow/personal-inbox"));
   assert.ok(runtimeRouteFor("/app/workflow/my-approvals"));
   for (const p of ["application-review", "workflow-history", "escalation-dashboard"]) {

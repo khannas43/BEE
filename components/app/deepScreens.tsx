@@ -3,6 +3,7 @@
 import { Module, Screen } from "@/lib/screens";
 import { FinanceQueue } from "./finance/FinanceQueue";
 import { IameScrutiny } from "./iame/IameScrutiny";
+import { FeeRules } from "./admin/FeeRules";
 import { MyWork } from "./workflow/MyWork";
 import { ApplicationReviewView, EscalationView, WorkflowHistoryView } from "./workflow/WorkflowViews";
 import { ReviewerScrutiny } from "./reviewer/ReviewerScrutiny";
@@ -75,6 +76,8 @@ export const DEEP_SCREENS: Record<string, DeepComponent> = {
   "qr-verification/certificate-verification": ({ module, screen }) => <VerificationScreen module={module} screen={screen} mode="certificate" />,
 
   // Workflow — driven by the same store
+  "administration/fee-rules": FeeRules,
+
   "workflow/personal-inbox": ({ module, screen }) => <MyWork module={module} screen={screen} kind="inbox" />,
   "workflow/team-queue": ({ module, screen }) => <WorkflowInbox module={module} screen={screen} scope="team" />,
   "workflow/application-review": ApplicationReviewView,

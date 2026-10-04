@@ -87,6 +87,7 @@ function springEvidence(p) {
   if (p.route === "/api/model-applications/{id}/iame-recommendation") return mockMvc("iameRecommendationOperationsDocumentedPairs");
   if (p.route === "/api/model-applications/{id}/reviewer-forward") return mockMvc("reviewerForwardOperationsDocumentedPairs");
   if (p.route === "/api/model-applications/{id}/rating") return mockMvc("ratingOperationsDocumentedPairs");
+  if (p.route === "/api/model-applications/{id}/director-recommendation") return mockMvc("directorRecommendationOperationsDocumentedPairs");
   const documentRoutes = new Set(["/api/model-applications/{id}/documents", "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content"]);
   if (documentRoutes.has(p.route)) return mockMvc("documentOperationsDocumentedPairs");
   if (p.route === "default-deny") return mockMvc(p.code === "unauthenticated" ? "missingOrInvalidTokenIsUnauthenticated" : "everythingElseIsDeniedByDefault");

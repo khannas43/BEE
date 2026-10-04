@@ -5,6 +5,7 @@ import { FinanceQueue } from "./finance/FinanceQueue";
 import { IameScrutiny } from "./iame/IameScrutiny";
 import { ReviewerScrutiny } from "./reviewer/ReviewerScrutiny";
 import { ProgrammeRating } from "./programme/ProgrammeRating";
+import { DirectorApproval } from "./director/DirectorApproval";
 import { ModelDashboard } from "./lifecycle/ModelDashboard";
 import { NewModelApplication } from "./lifecycle/NewModelApplication";
 import { StageScreen, StageVariant } from "./lifecycle/StageScreen";
@@ -47,7 +48,7 @@ export const DEEP_SCREENS: Record<string, DeepComponent> = {
   "model-label/model-payment": ModelPaymentScreen,
   "model-label/iame-scrutiny": IameScrutiny,
   "model-label/bee-scrutiny": ReviewerScrutiny,
-  "model-label/director-approval": stage("approval"),
+  "model-label/director-approval": DirectorApproval,
   "model-label/secretary-approval": stage("approval"),
   "model-label/rating-calculation": ProgrammeRating,
   "model-label/label-preview": LabelPreviewScreen,

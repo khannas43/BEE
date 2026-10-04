@@ -16,4 +16,23 @@ final class ModelApplicationViewSupport {
         fee.ifPresent(s -> m.put("submissionFee", ModelApplicationSubmitService.feeViewFromSnapshot(s)));
         return m;
     }
+
+    /** The detail read: the view plus the latest rating once there is one (PROVISIONAL LOCAL DEMONSTRATION, never a BEE rating). */
+    static Map<String, Object> detailView(ModelApplicationRepository.Row row, ReadScope scope,
+                                          Optional<ModelApplicationSubmitRepository.FeeSnapshotRow> fee,
+                                          Optional<ModelApplicationSubmitRepository.RatingRow> rating) {
+        Map<String, Object> m = readView(row, scope, fee);
+        rating.ifPresent(r -> {
+            Map<String, Object> v = new java.util.LinkedHashMap<>();
+            v.put("ratingVersion", r.ratingVersion());
+            v.put("schemeKey", r.schemeKey());
+            v.put("declaredIseer", r.declaredIseer().toPlainString());
+            v.put("verifiedIseer", r.verifiedIseer().toPlainString());
+            v.put("stars", r.stars());
+            v.put("localDemoRating", true);
+            v.put("computedAt", r.computedAt().toString());
+            m.put("rating", v);
+        });
+        return m;
+    }
 }

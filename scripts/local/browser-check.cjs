@@ -74,7 +74,9 @@ async function launchChrome() {
       try { ws.close(); } catch {}
       proc.kill();
       await Promise.race([exited, sleep(5000)]);
-      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      // Chrome's helper processes can still be writing to the profile after the main process exits. Removing the temp
+      // profile is housekeeping, so it must never fail a check: retry for a while, then leave the folder behind.
+      try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 15, retryDelay: 300 }); } catch { /* leftover temp folder is harmless */ }
     },
   };
 }

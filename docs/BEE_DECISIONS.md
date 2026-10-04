@@ -116,7 +116,7 @@ Each decision below gives what the system does today, the realistic options, a r
 - **If unanswered.** Exact match only.
 
 ### B9 — Approval chain (D1) and allocation (D2, D5)
-- **D1.** Is Secretary approval always required, or can the Director's recommendation be final for some categories? **Today:** always required. **Recommendation:** state the delegation rule, if any.
+- **D1.** Is Secretary approval always required, or can the Director's recommendation be final for some categories? **Today:** the build assumes, on the owner's say-so of 4 October 2026 (not BEE's), that the Director's recommendation **can** be final for some categories; which categories is data (`director_final_rule`), and the only rule today (RAC) keeps the Secretary in the chain. **Recommendation:** state the delegation rule, if any.
 - **D2.** Who assigns applications to IAME and Reviewer officers? **Today:** automatic round-robin; no allocator role. **Recommendation:** name the allocating role, or confirm round-robin.
 - **D5.** Is the IAME verifier (note-sheet) a separate step from IAME scrutiny? **Today:** one IAME step. **Recommendation:** say whether a second step exists.
 - **If unanswered.** The defaults stay.

@@ -37,6 +37,20 @@ public class ModelApplicationSubmitRepository {
         return n == null ? 0 : n;
     }
 
+    /** The latest rating record of an application (a local demonstration, never a BEE rating). */
+    public record RatingRow(int ratingVersion, String schemeKey, java.math.BigDecimal declaredIseer, java.math.BigDecimal verifiedIseer,
+                            int stars, java.time.Instant computedAt) {
+    }
+
+    public Optional<RatingRow> findLatestRating(UUID applicationId) {
+        return jdbc.query(
+            "SELECT rating_version, scheme_key, declared_iseer, verified_iseer, stars, computed_at FROM model_application_rating "
+                + "WHERE application_id = ? ORDER BY rating_version DESC LIMIT 1",
+            (rs, i) -> new RatingRow(rs.getInt("rating_version"), rs.getString("scheme_key"), rs.getBigDecimal("declared_iseer"),
+                rs.getBigDecimal("verified_iseer"), rs.getInt("stars"), rs.getTimestamp("computed_at").toInstant()),
+            applicationId).stream().findFirst();
+    }
+
     public Optional<FeeSnapshotRow> findFeeSnapshot(UUID applicationId) {
         var rows = jdbc.query(
             "SELECT id, amount_inr, currency, fee_rule_key, fee_rule_version, verification_status, source_reference, note, captured_at "

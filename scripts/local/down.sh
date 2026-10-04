@@ -6,4 +6,4 @@ if pid_alive "$WEB_PID"; then kill_tree "$(cat "$WEB_PID")"; log "web stopped"; 
 rm -f "$WEB_PID"
 agents_restore
 stop_api
-if docker info >/dev/null 2>&1; then compose stop >/dev/null 2>&1 || true; log "containers stopped (volume kept)"; fi
+if docker info >/dev/null 2>&1; then compose --profile app stop >/dev/null 2>&1 || true; log "containers stopped (volume kept)"; fi

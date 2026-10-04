@@ -76,8 +76,12 @@ public class SecurityConfig {
     /** Validates signature (Keycloak JWKS, fetched lazily), expiry, issuer and audience. */
     @Bean
     JwtDecoder jwtDecoder(@Value("${bee.security.issuer}") String issuer,
-                          @Value("${bee.security.audience}") String audience) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(issuer + "/protocol/openid-connect/certs").build();
+                          @Value("${bee.security.audience}") String audience,
+                          @Value("${bee.security.jwk-set-uri:}") String jwkSetUri) {
+        // The issuer is the name in the tokens. Where the API cannot reach Keycloak at that address (a container), the keys
+        // are fetched from the address it can reach; the issuer check is unchanged.
+        String keys = jwkSetUri.isBlank() ? issuer + "/protocol/openid-connect/certs" : jwkSetUri;
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(keys).build();
         OAuth2TokenValidator<Jwt> audienceValidator =
             new JwtClaimValidator<List<String>>("aud", aud -> aud != null && aud.contains(audience));
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuer), audienceValidator));

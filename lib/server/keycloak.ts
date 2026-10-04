@@ -46,7 +46,7 @@ async function identityCall(operation: IdentityOperation, correlationId: string,
     writeLogLine({ event: "identity", correlationId, operation, status, outcome, durationMs: Date.now() - start });
   let res: Response;
   try {
-    res = await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    res = await fetch(AUTH.reachable(url), { ...init, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (err) {
     log(0, "unreachable");
     throw err;

@@ -7,6 +7,7 @@
 ```
 cd /Users/sameerkhanna/Documents/Projects/BEE
 npm run local:up        # PostgreSQL and Keycloak in Docker; the Spring API and the Next.js portal as normal processes
+# Prefer everything in Docker? See docs/local/CONTAINERS.md (npm run local:app:up).
 npm run local:seed      # puts the four sample applications and the sample people in place
 npm run local:health    # all four should say UP
 ```

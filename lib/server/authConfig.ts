@@ -12,8 +12,17 @@ const realm = env("BEE_REALM", "bee-local");
 
 const clientSecret = process.env.BEE_WEB_CLIENT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : "bee-local-web-secret");
 
+const issuer = `http://127.0.0.1:${kcPort}/realms/${realm}`;
+const publicBase = new URL(issuer).origin;
+/** Where this server can reach Keycloak when that is not the public address (a container: "http://keycloak:8080"). */
+const internalBase = (process.env.BEE_KC_INTERNAL_URL ?? "").replace(/\/+$/, "");
+
 export const AUTH = {
-  issuer: `http://127.0.0.1:${kcPort}/realms/${realm}`,
+  issuer,
+  /** Maps a Keycloak URL from its public address to the one this server can call. The browser keeps the public one. */
+  reachable(url: string): string {
+    return internalBase && url.startsWith(publicBase) ? internalBase + url.slice(publicBase.length) : url;
+  },
   webOrigin: env("BEE_WEB_ORIGIN", `http://127.0.0.1:${webPort}`),
   clientId: env("BEE_WEB_CLIENT_ID", "bee-web"),
   clientSecret,

@@ -16,6 +16,7 @@
     "local:reset": "bash scripts/local/reset.sh",
     "local:reset:identity": "bash scripts/local/reset-identity.sh",
     "local:check": "bash scripts/local/check.sh",
+    "local:app:up": "bash scripts/local/up-docker.sh",
     "local:down": "bash scripts/local/down.sh",
     "local:destroy": "bash scripts/local/destroy.sh",
     "local:rt1": "bash scripts/local/rt1-proof.sh",

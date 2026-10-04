@@ -53,5 +53,64 @@ services:
     labels:
       bee.local.role: identity
 
+  # The application itself, as containers (profile "app"; docs/local/CONTAINERS.md). The default `local:up` runs the API and
+  # the portal as host processes instead; run one or the other, never both (same ports).
+  api:
+    profiles: ["app"]
+    build:
+      context: ../backend
+    image: bee-local-api
+    container_name: bee-local-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      JAVA_OPTS: ${BEE_API_HEAP}
+      SERVER_ADDRESS: 0.0.0.0
+      BEE_API_PORT: "8090"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${BEE_APP_DB}?currentSchema=app
+      SPRING_DATASOURCE_USERNAME: ${BEE_RUNTIME_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${BEE_RUNTIME_DB_PASSWORD}
+      BEE_FLYWAY_DB_USER: ${BEE_FLYWAY_DB_USER}
+      BEE_FLYWAY_DB_PASSWORD: ${BEE_FLYWAY_DB_PASSWORD}
+      BEE_KC_PORT: ${BEE_KC_PORT}
+      BEE_REALM: ${BEE_REALM}
+      BEE_SECURITY_JWK_SET_URI: http://keycloak:8080/realms/${BEE_REALM}/protocol/openid-connect/certs
+      BEE_LOG_DIR: /logs
+      BEE_DOCUMENTS_STORE: /documents
+    ports:
+      - "127.0.0.1:${BEE_API_PORT}:8090"
+    volumes:
+      - ../.local/logs:/logs
+      - ../.local/documents:/documents
+    labels:
+      bee.local.role: api
+
+  web:
+    profiles: ["app"]
+    build:
+      context: ..
+    image: bee-local-web
+    container_name: bee-local-web
+    depends_on:
+      - api
+    environment:
+      BEE_API_URL: http://api:8090
+      BEE_KC_INTERNAL_URL: http://keycloak:8080
+      BEE_KC_PORT: ${BEE_KC_PORT}
+      BEE_WEB_PORT: ${BEE_WEB_PORT}
+      BEE_REALM: ${BEE_REALM}
+      BEE_WEB_CLIENT_ID: ${BEE_WEB_CLIENT_ID}
+      BEE_WEB_CLIENT_SECRET: ${BEE_WEB_CLIENT_SECRET}
+      BEE_LOG_DIR: /logs
+    ports:
+      - "127.0.0.1:${BEE_WEB_PORT}:${BEE_WEB_PORT}"
+    volumes:
+      - ../.local/logs:/logs
+    labels:
+      bee.local.role: web
+
 volumes:
   pgdata:

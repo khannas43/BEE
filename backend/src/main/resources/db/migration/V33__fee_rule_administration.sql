@@ -18,6 +18,15 @@ INSERT INTO capability_grant (capability, role) VALUES ('fee_rule_manage', 'admi
 
 ALTER TABLE master_fee_rule ADD COLUMN tax_rate_percent numeric(5,2) NOT NULL DEFAULT 0 CHECK (tax_rate_percent BETWEEN 0 AND 100);
 
+-- A successor made by master_supersede() is built from a JSON object, which does not apply column defaults: a successor without a
+-- tax rate would be NULL. An unset tax rate means 0, whichever way the row is written.
+CREATE FUNCTION fee_rule_tax_default() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.tax_rate_percent := coalesce(NEW.tax_rate_percent, 0);
+  RETURN NEW;
+END $$;
+CREATE TRIGGER fee_rule_tax_default BEFORE INSERT ON master_fee_rule FOR EACH ROW EXECUTE FUNCTION fee_rule_tax_default();
+
 CREATE TABLE fee_application_type (
   code   text PRIMARY KEY CHECK (code ~ '^[a-z_]{2,40}$'),
   label  text NOT NULL CHECK (char_length(label) BETWEEN 1 AND 80)

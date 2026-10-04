@@ -1,11 +1,11 @@
 # Current Cursor task
 
-**Holder:** cursor (handed over 2026-10-04).
+**Holder:** claude (no task handed over). Claude fills this file in when it hands the folder to Cursor, and resets it to this text when the task is merged.
 
-- **Brief:** [BRIEF_06_APPROVAL_SCREEN_TEST_IDS.md](BRIEF_06_APPROVAL_SCREEN_TEST_IDS.md)
-- **Branch:** `cursor/approval-test-ids`, already created and checked out by Claude from `main` (which includes the inbox, containers and workflow views, PRs #15 to #17).
-- **Additions or overrides:** none. The brief and this file are the branch's first commit; `main` takes no direct commits.
-- **Acceptance commands:** `npx tsc --noEmit`; `npx eslint` on changed files; `npm run web:test` (167, unchanged); `npm run web:test:ui` (all pass); `npm run build`.
-- **Live checks (you start and stop the runtime: `npm run local:up`, `npm run local:seed`, then `npm run local:down`):** `local:director-recommendation` (65), `local:secretary-approval` (63), `local:return-resubmit` (105), `local:reject` (71), `local:history` (57), `local:inbox` (58). Do not run `local:check`; anything else goes under "Not run".
+When a task is handed over, this file contains:
 
-When finished, run `/bee-handback`.
+- **Brief:** the file in `docs/cursor/` to follow (for example `BRIEF_01_DRAFT_FORM_ON_KIT.md`).
+- **Branch:** `cursor/<task>`, already created and checked out by Claude.
+- **Additions or overrides:** anything that differs from the brief.
+- **Acceptance commands:** the exact commands to run and the results expected.
+- **Live checks:** which, if any, Cursor may run (it starts and stops the runtime itself); everything else goes under "Not run".

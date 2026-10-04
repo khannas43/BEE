@@ -1,6 +1,6 @@
 # Decisions needed from BEE — Standards & Labelling Portal (local build)
 
-**Status:** Request for decisions, prepared 3 October 2026. **Nothing in this document has been decided by BEE.** It is for the BEE officials who own each rule.
+**Status:** Request for decisions, prepared 3 October 2026; B14 and B15 added 4 October 2026. **Nothing in this document has been decided by BEE.** It is for the BEE officials who own each rule.
 
 ## Why this is needed
 
@@ -127,6 +127,20 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Recommendation.** Keep it: the applicant sees what was addressed to them; the officers' working notes stay internal.
 - **If unanswered.** The provisional rule stays and is labelled.
 
+### B14 — Time limits for each stage (SLA)
+- **Question.** How long may an application wait at each stage (fee confirmation, IAME scrutiny, BEE scrutiny, rating, Director, Secretary) before it counts as late, who is told, and who is it escalated to? Do the limits count calendar days or working days, and does the clock stop while an application is returned to the applicant?
+- **Today.** No limits exist. The "SLA and escalations" screen only counts applications per stage and says that no limits are set; the inbox shows no due date, overdue flag or age.
+- **Options.** (a) One limit for every stage; (b) a limit per stage; (c) a limit per stage and category.
+- **Recommendation.** (b), in working days, with the clock stopped while the application is with the applicant.
+- **If unanswered.** The screens stay as they are: counts, with nothing called late.
+
+### B15 — Who may see the whole queue of a stage (team queue)
+- **Question.** May a person see every application waiting at their stage, including those assigned to a colleague (for example all applications waiting for IAME scrutiny, not just the ones assigned to this officer)? Which roles, and may they reassign?
+- **Today.** IAME and Reviewer officers see only the applications assigned to them. Programme, Director and Secretary see every application at their stage. The "Team queue" screen shows prototype data and is not connected.
+- **Options.** (a) As today, no team view; (b) a read-only team view for every stage owner; (c) a team view for a supervisor role only, who may also reassign.
+- **Recommendation.** (c): name the supervisor role and let it reassign; ordinary officers keep seeing only their own work.
+- **If unanswered.** No team queue is built.
+
 ### B10 — The applicant's model record (D4)
 - **Question.** Should the registration record screen become the applicant's own record of their models?
 - **Today.** Yes, limited to the applicant's organisation.
@@ -151,6 +165,8 @@ Each decision below gives what the system does today, the realistic options, a r
 | A5 date rule | As today |
 | B1 to B8 | The local defaults stay and are labelled provisional |
 | B9, B10 | Defaults stay |
+| B14 | No overdue, no ages, no due dates; counts only |
+| B15 | No team queue; each officer sees only their own work |
 | B13 | The applicant sees the timeline and the notes addressed to them, not the officers' internal notes |
 | B11, B12 | Manual confirmation with an exact amount and no correction route |
 | C1 | Rule-editing screens stay read-only |
@@ -177,6 +193,8 @@ Each decision below gives what the system does today, the realistic options, a r
 | B12 | | | |
 | B10 | | | |
 | B13 | | | |
+| B14 | | | |
+| B15 | | | |
 | C1 | | | |
 
 ## References for the engineering team

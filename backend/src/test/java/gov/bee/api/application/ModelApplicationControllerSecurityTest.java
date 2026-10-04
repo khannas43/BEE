@@ -230,7 +230,7 @@ class ModelApplicationControllerSecurityTest {
         "POST,/api/model-applications/{id}/fee/confirm,finance",
         "POST,/api/model-applications/{id}/recommend,iame",
         "POST,/api/model-applications/{id}/recommend,reviewer",
-        "POST,/api/model-applications/{id}/rating,programme",
+        "POST,/api/model-applications/{id}/rating/override,programme",
         "POST,/api/model-applications/{id}/decision,director",
         "POST,/api/model-applications/{id}/decision,secretary",
         "POST,/api/model-applications/{id}/return,iame",

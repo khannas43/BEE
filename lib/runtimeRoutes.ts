@@ -56,6 +56,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     navRoles: ["reviewer"],
     implemented: ["List assigned applications", "View evidence and test reports", "Forward to rating"],
   },
+  {
+    href: "/app/model-label/rating-calculation",
+    en: "Rating calculation",
+    hi: "रेटिंग गणना",
+    icon: "star",
+    navRoles: ["programme"],
+    implemented: ["List applications awaiting a rating", "View evidence and test reports", "Compute and record a provisional local rating"],
+  },
 ];
 
 export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {

@@ -233,6 +233,13 @@ read -r rf_pass rf_fail <<<"$(sed -nE 's/^reviewer-forward checks: ([0-9]+) pass
 if [[ -z "${rf_pass:-}" ]]; then check "reviewer.run" 0 "reviewer-forward-browser-check did not complete: $(tail -1 <<<"$rf_out")"
 else pass=$((pass + rf_pass)); fail=$((fail + rf_fail)); fi
 
+# ---- first slice step 5: Programme computes the provisional rating through the BFF and the portal (records runtime rating pairs)
+rt_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/rating-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$rt_out"
+read -r rt_pass rt_fail <<<"$(sed -nE 's/^rating checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$rt_out")"
+if [[ -z "${rt_pass:-}" ]]; then check "rating.run" 0 "rating-browser-check did not complete: $(tail -1 <<<"$rt_out")"
+else pass=$((pass + rt_pass)); fail=$((fail + rt_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

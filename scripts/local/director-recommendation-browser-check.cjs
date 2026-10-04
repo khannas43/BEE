@@ -225,8 +225,8 @@ async function runDirectorChecks(runLabel, nova, finance, iame, reviewer, progra
 
     // The portal: the Director reviews the rating and recommends.
     await director.goto(`${WEB}/app/model-label/director-approval?id=${encodeURIComponent(A.id)}`);
-    const ready = await director.waitFor(`!!document.querySelector('[data-testid=director-recommend-run]') && !!document.querySelector('[data-testid=director-rating-stars]')`, 20000);
-    const shown = ready ? await director.eval(`({ stars: document.querySelector('[data-testid=director-rating-stars]').textContent, rating: document.querySelector('[data-testid=director-rating]').textContent, inQueue: !!document.querySelector('[data-testid="director-ref-${A.reference}"]'), hasTable: !!document.querySelector('[data-testid=director-queue-table]') })`) : null;
+    const ready = await director.waitFor(`!!document.querySelector('[data-testid=director-recommend-run]') && !!document.querySelector('[data-testid=approval-rating-stars]')`, 20000);
+    const shown = ready ? await director.eval(`({ stars: document.querySelector('[data-testid=approval-rating-stars]').textContent, rating: document.querySelector('[data-testid=approval-rating]').textContent, inQueue: !!document.querySelector('[data-testid="approval-ref-${A.reference}"]'), hasTable: !!document.querySelector('[data-testid=approval-queue-table]') })`) : null;
     check(`${runLabel}.ui.director-sees-rating`, !!shown && /4 stars/.test(shown.stars) && /Declared 4\.50, verified 4\.62/.test(shown.rating) && /not a BEE rating/.test(shown.rating) && shown.inQueue && shown.hasTable, shown ? `${shown.stars.trim()}, labelled provisional` : "form did not load");
     const reportShown = ready && (await director.waitFor(`!!document.querySelector('[data-testid=model-doc-version-1]')`, 12000));
     check(`${runLabel}.ui.report-listed`, !!reportShown, reportShown ? "the uploaded report is listed with its download link" : "no report shown");

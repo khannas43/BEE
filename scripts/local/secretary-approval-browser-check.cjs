@@ -226,8 +226,8 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
 
     // The portal: the Secretary reviews the rating and approves.
     await secretary.goto(`${WEB}/app/model-label/director-approval?id=${encodeURIComponent(A.id)}`);
-    const ready = await secretary.waitFor(`!!document.querySelector('[data-testid=secretary-approve-run]') && !!document.querySelector('[data-testid=director-rating-stars]')`, 20000);
-    const shown = ready ? await secretary.eval(`({ stars: document.querySelector('[data-testid=director-rating-stars]').textContent, rating: document.querySelector('[data-testid=director-rating]').textContent, fields: document.querySelector('[data-testid=director-detail-fields]').textContent, inQueue: !!document.querySelector('[data-testid="director-ref-${A.reference}"]'), directorForm: !!document.querySelector('[data-testid=director-recommend-run]') })`) : null;
+    const ready = await secretary.waitFor(`!!document.querySelector('[data-testid=secretary-approve-run]') && !!document.querySelector('[data-testid=approval-rating-stars]')`, 20000);
+    const shown = ready ? await secretary.eval(`({ stars: document.querySelector('[data-testid=approval-rating-stars]').textContent, rating: document.querySelector('[data-testid=approval-rating]').textContent, fields: document.querySelector('[data-testid=approval-detail-fields]').textContent, inQueue: !!document.querySelector('[data-testid="approval-ref-${A.reference}"]'), directorForm: !!document.querySelector('[data-testid=director-recommend-run]') })`) : null;
     check(`${runLabel}.ui.secretary-sees-rating`, !!shown && /4 stars/.test(shown.stars) && /not a BEE rating/.test(shown.rating) && /secretary approval/i.test(shown.fields) && shown.inQueue && !shown.directorForm, shown ? `${shown.stars.trim()}; only the Secretary's action is offered` : "form did not load");
     if (!ready) return;
     await secretary.eval(`document.querySelector('[data-testid=secretary-approve-run]').click(); true`);

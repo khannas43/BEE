@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.local
+local
+docs
+coverage
+backend/target
+backend/target.nosync
+**/.DS_Store
+.env*

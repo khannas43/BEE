@@ -139,8 +139,10 @@ assert_port_ours() {
   case "$kind" in
     postgres) container_running bee-local-postgres && [[ "$(docker port bee-local-postgres 5432/tcp 2>/dev/null)" == "127.0.0.1:${port}" ]] && return 0 ;;
     keycloak) container_running bee-local-keycloak && [[ "$(docker port bee-local-keycloak 8080/tcp 2>/dev/null)" == "127.0.0.1:${port}" ]] && return 0 ;;
-    api) pid_alive "$API_PID" && descendant_of "$pid" "$(cat "$API_PID")" && return 0 ;;
-    web) pid_alive "$WEB_PID" && descendant_of "$pid" "$(cat "$WEB_PID")" && return 0 ;;
+    api) pid_alive "$API_PID" && descendant_of "$pid" "$(cat "$API_PID")" && return 0
+      [[ "${BEE_APP_MODE:-}" == container ]] && container_running bee-local-api && return 0 ;;
+    web) pid_alive "$WEB_PID" && descendant_of "$pid" "$(cat "$WEB_PID")" && return 0
+      [[ "${BEE_APP_MODE:-}" == container ]] && container_running bee-local-web && return 0 ;;
   esac
   die "port $port ($kind) is already used by $(port_owner_desc "$port"); free it or override BEE_*_PORT" 3
 }

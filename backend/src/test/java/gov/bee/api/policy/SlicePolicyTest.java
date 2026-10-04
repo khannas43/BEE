@@ -225,4 +225,50 @@ class SlicePolicyTest {
             assertThat(java.util.Arrays.stream(SliceAction.values()).map(SliceAction::stage)).as("a return owner is the owner of a forward stage").contains(r.stage());
         }
     }
+
+    /* ---------- the reject rules (FIRST_SLICE.md section 4) ---------- */
+
+    @Test
+    void eachStageOwnerIncludingProgrammeMayRejectFromItsOwnStageOnly() {
+        record Owner(String role, String scope, String state) {
+        }
+        var owners = List.of(new Owner("iame", "assigned", "iame_scrutiny"), new Owner("reviewer", "assigned", "bee_scrutiny"),
+            new Owner("programme", "all", "rating"), new Owner("director", "all", "director_review"), new Owner("secretary", "all", "secretary_approval"));
+        assertThat(StageReject.values()).hasSize(5);
+        for (var o : owners) {
+            assertThat(StageReject.check(caller(o.role(), o.scope()), app(NOVA, o.state(), o.state())).allowed()).as(o.role() + " from " + o.state()).isTrue();
+            for (var other : owners) {
+                if (other != o) {
+                    assertThat(StageReject.check(caller(o.role(), o.scope()), app(NOVA, other.state(), other.state())).allowed())
+                        .as(o.role() + " may not reject from " + other.state()).isFalse();
+                }
+            }
+        }
+    }
+
+    @Test
+    void programmeCanRejectButNotReturnAndNobodyElseRejects() {
+        assertThat(StageReturn.check(caller("programme", "all"), app(NOVA, "rating")).reason()).isEqualTo("role_not_permitted");
+        assertThat(StageReject.check(caller("programme", "all"), app(NOVA, "rating")).allowed()).isTrue();
+        // Finance (fee confirmation) does not reject; the applicant never rejects its own application; the terminal and working states refuse everyone.
+        assertThat(StageReject.check(caller("finance", "all"), app(NOVA, "fee_due")).reason()).isEqualTo("role_not_permitted");
+        assertThat(StageReject.check(caller("manufacturer", "own-org", NOVA), app(NOVA, "iame_scrutiny", "iame_scrutiny")).reason()).isEqualTo("role_not_permitted");
+        for (var state : List.of("draft", "returned", "approved", "rejected")) {
+            assertThat(StageReject.forState(state)).as(state).isEmpty();
+            assertThat(StageReject.check(caller("director", "all"), app(NOVA, state)).reason()).as(state).isEqualTo("role_not_permitted");
+        }
+        for (var role : List.of("admin", "helpdesk", "auditor")) {
+            assertThat(StageReject.check(caller(role, "all"), app(NOVA, "rating")).reason()).as(role).isEqualTo("role_not_permitted");
+        }
+    }
+
+    @Test
+    void anAssignedOfficerMustHoldTheAssignmentToRejectAndAnEarlierStageActorIsRefused() {
+        assertThat(StageReject.check(caller("iame", "assigned"), app(NOVA, "iame_scrutiny")).reason()).isEqualTo("not_assigned");
+        var programme = caller("programme", "all");
+        var actedBefore = new ApplicationFacts(UUID.randomUUID(), NOVA, "rating", Set.of(), Set.of(programme.accountId()), false);
+        assertThat(StageReject.check(programme, actedBefore).reason()).isEqualTo("same_user_other_stage");
+        assertThat(java.util.Arrays.stream(SliceAction.values()).map(SliceAction::stage)).as("every reject stage is a forward stage").contains(
+            java.util.Arrays.stream(StageReject.values()).map(StageReject::stage).toArray(String[]::new));
+    }
 }

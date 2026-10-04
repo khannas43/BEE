@@ -157,6 +157,9 @@ class SpringContractTest {
     gov.bee.api.rework.ResubmitApplicationRepository resubmitRepo;
 
     @MockitoBean
+    gov.bee.api.rework.StageRejectRepository rejectRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -1440,6 +1443,87 @@ class SpringContractTest {
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
         officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
         doThrow(new DataAccessResourceFailureException("down")).when(returnRepo).doReturn(any(), anyInt(), any(), any(), any(), any());
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+    }
+
+    @Test
+    void stageRejectOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/reject";
+        String path = "/api/model-applications/" + NOVA_APP + "/reject";
+        String ok = "{\"version\":3,\"reason\":\"The report is for a different model.\"}";
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("iame"))));
+        var done = new gov.bee.api.rework.StageRejectRepository.Result(gov.bee.api.rework.StageRejectRepository.Outcome.REJECTED, 4, Instant.parse("2026-10-04T10:00:00Z"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(rejectRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of());
+        when(rejectRepo.doReject(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
+
+        // Each stage owner, Programme included, rejects from its own stage, and the receipt names the stage it came from.
+        record Owner(String role, String scope, String state, Set<String> assigned) {
+        }
+        for (var o : List.of(new Owner("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny")), new Owner("reviewer", "assigned", "bee_scrutiny", Set.of("bee_scrutiny")),
+            new Owner("programme", "all", "rating", Set.<String>of()), new Owner("director", "all", "director_review", Set.<String>of()), new Owner("secretary", "all", "secretary_approval", Set.<String>of()))) {
+            officerAccount(o.role(), o.scope(), o.state(), o.assigned());
+            var res = conforms(r, post(path).with(token(o.role())).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+            assertTrue(res.getContentAsString().contains("\"fromState\":\"" + o.state() + "\"") && res.getContentAsString().contains("\"toState\":\"rejected\""), res.getContentAsString());
+        }
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+
+        // Request shape.
+        conforms(r, post(path).with(token("iame")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("The report is for a different model.", "   ")), 422, "validation_failed");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("The report", "The\\nreport")), 422, "validation_failed");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("The report is for a different model.", "x".repeat(501))), 422, "validation_failed");
+
+        // Version, idempotency and replay.
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
+        when(rejectRepo.doReject(any(), anyInt(), any(), any(), any(), any())).thenReturn(
+            new gov.bee.api.rework.StageRejectRepository.Result(gov.bee.api.rework.StageRejectRepository.Outcome.STALE, 0, null));
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
+        when(rejectRepo.doReject(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        String stored = "{\"applicationId\":\"" + NOVA_APP + "\",\"reference\":\"LOCAL-MA-0002\",\"fromState\":\"iame_scrutiny\",\"toState\":\"rejected\",\"version\":4,"
+            + "\"reason\":\"The report is for a different model.\",\"rejectedAt\":\"2026-10-04T10:00:00Z\"}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 4)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(ok))));
+        var replay = conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        // Who may reject: only the owner of the stage the application is in; never the applicant, Finance, another stage's owner or someone without a read scope.
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("auditor", "all");
+        conforms(r, post(path).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        officerAccount("finance", "all", "fee_due", Set.of());
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        officerAccount("director", "all", "secretary_approval", Set.of());
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(NOVA));   // the officer belongs to the applicant's organisation
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+        when(rejectRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of(USER));
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        when(rejectRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of());
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.<String>of());   // not assigned: indistinguishable from an unknown application
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+
+        // Identity denials and outage.
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+        conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 401, "unauthenticated");
+        conforms(r, post(path).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "mfa_required");
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+        doThrow(new DataAccessResourceFailureException("down")).when(rejectRepo).doReject(any(), anyInt(), any(), any(), any(), any());
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 

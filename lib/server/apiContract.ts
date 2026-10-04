@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.14.0";
+export const CONTRACT_VERSION = "0.15.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -190,6 +190,7 @@ export interface ModelApplication {
   submissionFee?: SubmissionFee;
   rating?: ApplicationRating;
   returnNote?: ApplicationReturn;
+  rejection?: ApplicationRejection;
 }
 
 export interface ModelApplicationList {
@@ -261,8 +262,24 @@ export const validateApplicationReturn: Validator<ApplicationReturn> = (body) =>
   return ok ? (b as unknown as ApplicationReturn) : null;
 };
 
+/** The rejection of an application in the rejected state (terminal), on the detail read only. */
+export interface ApplicationRejection {
+  fromState: "iame_scrutiny" | "bee_scrutiny" | "rating" | "director_review" | "secretary_approval";
+  reason: string;
+  rejectedAt: string;
+}
+
+export const validateApplicationRejection: Validator<ApplicationRejection> = (body) => {
+  if (!exactKeys(body, ["fromState", "reason", "rejectedAt"])) return null;
+  const b = body;
+  const ok =
+    ["iame_scrutiny", "bee_scrutiny", "rating", "director_review", "secretary_approval"].includes(b.fromState as string) &&
+    isString(b.reason) && isString(b.rejectedAt) && !Number.isNaN(Date.parse(b.rejectedAt));
+  return ok ? (b as unknown as ApplicationRejection) : null;
+};
+
 export const MODEL_APPLICATION_KEYS = ["id", "reference", "organisation", "brandName", "category", "modelNumber", "state", "version", "readBasis"] as const;
-export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee", "rating", "returnNote"] as const;
+export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee", "rating", "returnNote", "rejection"] as const;
 export const MODEL_APPLICATION_LIST_KEYS = ["items", "count", "authority"] as const;
 const READ_BASIS = /^(own-org|assigned|stage:[a-z_]+)$/;
 const LABORATORY_CODE = /^[A-Z0-9_-]{1,32}$/;
@@ -283,7 +300,8 @@ export const validateModelApplication: Validator<ModelApplication> = (body) => {
     (b.declaredIseer === undefined || (typeof b.declaredIseer === "number" && b.declaredIseer > 0 && b.declaredIseer <= 99.99)) &&
     (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null) &&
     (b.rating === undefined || validateApplicationRating(b.rating) !== null) &&
-    (b.returnNote === undefined || validateApplicationReturn(b.returnNote) !== null);
+    (b.returnNote === undefined || validateApplicationReturn(b.returnNote) !== null) &&
+    (b.rejection === undefined || validateApplicationRejection(b.rejection) !== null);
   return ok ? (b as unknown as ModelApplication) : null;
 };
 

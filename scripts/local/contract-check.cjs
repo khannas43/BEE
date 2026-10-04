@@ -84,6 +84,11 @@ const RESUBMIT_ROUTE = "/api/runtime/model-applications/{id}/resubmit";
 const RESUBMIT_UPSTREAM = {
   POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_returned"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "duplicate_model"], 422: ["validation_failed", "idempotency_key_required", "test_report_required", "declared_efficiency_required", "test_date_invalid", "laboratory_not_accredited", "standard_not_available"], 503: ["service_unavailable"] },
 };
+// Rejection (Wave 1). Keep equal to lib/server/contracts/stage-reject.ts and the artifact.
+const REJECT_ROUTE = "/api/runtime/model-applications/{id}/reject";
+const REJECT_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: WRITE_DENIALS, 503: ["service_unavailable"] },
@@ -476,6 +481,13 @@ async function nextChecks(jar, novaToken) {
   const resubmitAnonOk = resubmitAnon.status === 401 && resubmitAnon.json?.error === "no_session" && e.length === 0;
   contract.record({ route: RESUBMIT_ROUTE, method: "POST", status: resubmitAnon.status, code: resubmitAnon.json?.error ?? "-", ok: resubmitAnonOk });
   check("next.resubmit-no-session", resubmitAnonOk && sameCorr(resubmitAnon), `POST runtime resubmit without cookie: ${resubmitAnon.status} ${resubmitAnon.json?.error}${show(e)}`);
+  const rejectAnon = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/reject`, {
+    method: "POST", correlationId: cid("next-reject-anon-post"), headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123476" }, body: "{}",
+  });
+  e = contract.conforms(doc, REJECT_ROUTE, "POST", rejectAnon);
+  const rejectAnonOk = rejectAnon.status === 401 && rejectAnon.json?.error === "no_session" && e.length === 0;
+  contract.record({ route: REJECT_ROUTE, method: "POST", status: rejectAnon.status, code: rejectAnon.json?.error ?? "-", ok: rejectAnonOk });
+  check("next.reject-no-session", rejectAnonOk && sameCorr(rejectAnon), `POST runtime reject without cookie: ${rejectAnon.status} ${rejectAnon.json?.error}${show(e)}`);
   const docListAnonGet = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, { correlationId: cid("next-doc-anon-get") });
   const docUploadMp = contractUploadMultipart();
   const docListAnonPost = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, {
@@ -618,6 +630,7 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(SECRETARY_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/secretary-approval`, "POST", sessionJar, SECRETARY_UPSTREAM);
     await exerciseStandInPairs(RETURN_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/return`, "POST", sessionJar, RETURN_UPSTREAM);
     await exerciseStandInPairs(RESUBMIT_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/resubmit`, "POST", sessionJar, RESUBMIT_UPSTREAM);
+    await exerciseStandInPairs(REJECT_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/reject`, "POST", sessionJar, REJECT_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(DOC_CONTENT_ROUTE, DOC_CONTENT_URL, "GET", sessionJar, DOC_READ_UPSTREAM);

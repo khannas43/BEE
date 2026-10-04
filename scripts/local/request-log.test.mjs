@@ -41,6 +41,7 @@ before(async () => {
     secretaryApproval: await import("../../app/api/runtime/model-applications/[id]/secretary-approval/route.ts"),
     stageReturn: await import("../../app/api/runtime/model-applications/[id]/return/route.ts"),
     resubmit: await import("../../app/api/runtime/model-applications/[id]/resubmit/route.ts"),
+    stageReject: await import("../../app/api/runtime/model-applications/[id]/reject/route.ts"),
   };
 });
 
@@ -264,6 +265,18 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/resubmit 401 sess
   const res = await routes.resubmit.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/resubmit", "unit-resubmit-post-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123472" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/reject 401 session_expired | Keycloak refusing refresh on rejection", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.stageReject.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/reject", "unit-reject-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123475" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

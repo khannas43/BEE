@@ -234,7 +234,7 @@ class ModelApplicationControllerSecurityTest {
         "POST,/api/model-applications/{id}/decision,director",
         "POST,/api/model-applications/{id}/decision,secretary",
         "POST,/api/model-applications/{id}/return/override,iame",
-        "POST,/api/model-applications/{id}/reject,reviewer",
+        "POST,/api/model-applications/{id}/reject/override,reviewer",
         "GET,/api/model-applications/{id}/history,manufacturer",
     })
     void transitionsAndHistoryAreDeniedByDefault(String method, String path, String role) throws Exception {

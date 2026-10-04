@@ -272,6 +272,12 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
                 <p className="font-body-sm text-body-sm mt-1" data-testid="model-app-return-reason">{r.application.returnNote.reason}</p>
               </div>
             ) : null}
+            {r.application.state === "rejected" && r.application.rejection ? (
+              <div className="mt-space-md rounded-lg border border-error/40 bg-error/5 p-space-md" data-testid="model-app-rejection-note">
+                <p className="font-label-md text-label-md text-on-surface">Rejected by {stateLabel(r.application.rejection.fromState)}. This is final; a new application is needed to try again.</p>
+                <p className="font-body-sm text-body-sm mt-1" data-testid="model-app-rejection-reason">{r.application.rejection.reason}</p>
+              </div>
+            ) : null}
             {r.application.state === "draft" || r.application.state === "returned" ? (
               <Link
                 href={modelDraftFormHref(r.application.id)}

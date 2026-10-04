@@ -61,6 +61,12 @@ export interface ModelApplication {
     reason: string;
     returnedAt: string;
   };
+  /** The rejection, on the detail read once the application is rejected (terminal): why, and by which stage. */
+  rejection?: {
+    fromState: "iame_scrutiny" | "bee_scrutiny" | "rating" | "director_review" | "secretary_approval";
+    reason: string;
+    rejectedAt: string;
+  };
 }
 
 export interface ModelApplicationList {

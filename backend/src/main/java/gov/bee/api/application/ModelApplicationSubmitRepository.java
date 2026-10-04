@@ -50,6 +50,17 @@ public class ModelApplicationSubmitRepository {
             applicationId).stream().findFirst();
     }
 
+    /** The permanent rejection of an application (one per application; rejected is terminal). */
+    public record RejectionRow(String fromState, String reason, java.time.Instant rejectedAt) {
+    }
+
+    public Optional<RejectionRow> findRejection(UUID applicationId) {
+        return jdbc.query(
+            "SELECT rejected_from_state, reason, rejected_at FROM model_application_rejection WHERE application_id = ?",
+            (rs, i) -> new RejectionRow(rs.getString("rejected_from_state"), rs.getString("reason"), rs.getTimestamp("rejected_at").toInstant()),
+            applicationId).stream().findFirst();
+    }
+
     /** The latest rating record of an application (a local demonstration, never a BEE rating). */
     public record RatingRow(int ratingVersion, String schemeKey, java.math.BigDecimal declaredIseer, java.math.BigDecimal verifiedIseer,
                             int stars, java.time.Instant computedAt) {

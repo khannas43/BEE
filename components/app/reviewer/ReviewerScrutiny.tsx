@@ -12,6 +12,8 @@ import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
 import { ReturnToApplicant, ReturnedNote } from "@/components/app/lifecycle/ReturnToApplicant";
+import { RejectApplication, RejectedNote } from "@/components/app/lifecycle/RejectApplication";
+import type { StageRejectReceipt } from "@/lib/client/runtimeStageReject";
 import type { StageReturnReceipt } from "@/lib/client/runtimeStageReturn";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { gateRead } from "@/lib/client/runtimeHttp";
@@ -64,6 +66,7 @@ export function ReviewerScrutiny({ module, screen }: { module: Module; screen: S
   const revalidation = useRevalidation();
   const [receipt, setReceipt] = useState<ReviewerForwardReceipt | null>(null);
   const [returned, setReturned] = useState<StageReturnReceipt | null>(null);
+  const [rejected, setRejected] = useState<StageRejectReceipt | null>(null);
 
   const list = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
   const detail = gateRead(identity.status, useRuntimeRead(selectedId, loadDetail, revalidation));
@@ -96,7 +99,9 @@ export function ReviewerScrutiny({ module, screen }: { module: Module; screen: S
           </div>
           {selectedId ? (
             <div className="lg:col-span-2" data-testid="reviewer-detail" data-selected-id={selectedId}>
-              {returned && returned.applicationId === selectedId ? (
+              {rejected && rejected.applicationId === selectedId ? (
+                <RejectedNote receipt={rejected} backHref={ROUTE} testIdPrefix="reviewer" />
+              ) : returned && returned.applicationId === selectedId ? (
                 <ReturnedNote receipt={returned} backHref={ROUTE} testIdPrefix="reviewer" />
               ) : receipt && receipt.applicationId === selectedId ? (
                 <ForwardedNote receipt={receipt} />
@@ -122,6 +127,10 @@ export function ReviewerScrutiny({ module, screen }: { module: Module; screen: S
                       }}
                       onReturned={(done) => {
                         setReturned(done);
+                        revalidation.refresh();
+                      }}
+                      onRejected={(done) => {
+                        setRejected(done);
                         revalidation.refresh();
                       }}
                       onReload={revalidation.refresh}
@@ -208,11 +217,13 @@ function DetailAndForward({
   application,
   onForwarded,
   onReturned,
+  onRejected,
   onReload,
 }: {
   application: ModelApplication;
   onForwarded: (receipt: ReviewerForwardReceipt) => void;
   onReturned: (receipt: StageReturnReceipt) => void;
+  onRejected: (receipt: StageRejectReceipt) => void;
   onReload: () => void;
 }) {
   const [note, setNote] = useState("");
@@ -278,6 +289,7 @@ function DetailAndForward({
         <p className="text-error font-body-sm mt-space-sm" data-testid="reviewer-forward-input-error">{inputError}</p>
       ) : null}
       <ReturnToApplicant application={application} testIdPrefix="reviewer" signInReturnTo={RETURN_TO} onReturned={onReturned} onReload={onReload} />
+      <RejectApplication application={application} testIdPrefix="reviewer" signInReturnTo={RETURN_TO} onRejected={onRejected} onReload={onReload} />
     </div>
   );
 }

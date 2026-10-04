@@ -22,7 +22,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "मेरे मॉडल आवेदन",
     icon: "view_list",
     navRoles: ["manufacturer", "agency"],
-    implemented: ["List", "View detail", "Edit draft", "Submit draft", "See why it was returned", "Edit and resubmit"],
+    implemented: ["List", "View detail", "Edit draft", "Submit draft", "See why it was returned", "Edit and resubmit", "See why it was rejected"],
   },
   {
     href: "/app/model-label/new-model-application",
@@ -46,7 +46,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "आईएएमई जाँच",
     icon: "fact_check",
     navRoles: ["iame"],
-    implemented: ["List assigned applications", "View evidence and test reports", "Record finding and forward", "Return to the applicant"],
+    implemented: ["List assigned applications", "View evidence and test reports", "Record finding and forward", "Return to the applicant", "Reject permanently"],
   },
   {
     href: "/app/model-label/bee-scrutiny",
@@ -54,7 +54,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "बीईई जाँच",
     icon: "rule",
     navRoles: ["reviewer"],
-    implemented: ["List assigned applications", "View evidence and test reports", "Forward to rating", "Return to the applicant"],
+    implemented: ["List assigned applications", "View evidence and test reports", "Forward to rating", "Return to the applicant", "Reject permanently"],
   },
   {
     href: "/app/model-label/rating-calculation",
@@ -62,7 +62,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "रेटिंग गणना",
     icon: "star",
     navRoles: ["programme"],
-    implemented: ["List applications awaiting a rating", "View evidence and test reports", "Compute and record a provisional local rating"],
+    implemented: ["List applications awaiting a rating", "View evidence and test reports", "Compute and record a provisional local rating", "Reject permanently"],
   },
   {
     href: "/app/model-label/director-approval",
@@ -70,7 +70,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "अनुमोदन",
     icon: "how_to_reg",
     navRoles: ["director", "secretary"],
-    implemented: ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)", "Return to the applicant"],
+    implemented: ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)", "Return to the applicant", "Reject permanently"],
   },
 ];
 

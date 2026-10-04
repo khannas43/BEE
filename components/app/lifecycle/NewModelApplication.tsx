@@ -2,18 +2,28 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
+import { useCommand } from "@/components/app/kit/CommandPanel";
 import { Card, ScreenChrome } from "@/components/app/ScreenScaffold";
 import { orgsText, rolesText, useSpringIdentity } from "@/components/app/SessionBadge";
+import { commandAdvice, type CommandFailure, type CommandResult } from "@/lib/client/runtimeHttp";
 import {
   createModelApplicationDraft,
-  DraftIdempotencyGate,
   modelDraftFormHref,
   patchModelApplicationDraft,
+  type DraftApplication,
+  type DraftSaveResult,
 } from "@/lib/client/runtimeModelDrafts";
-import { modelDashboardHref, readModelApplication, stateLabel } from "@/lib/client/runtimeModelApplications";
-import { previewModelApplicationSubmit, submitModelApplicationDraft, type SubmitPreview, type SubmissionFee } from "@/lib/client/runtimeModelSubmit";
+import { modelDashboardHref, readModelApplication, stateLabel, type ModelApplication } from "@/lib/client/runtimeModelApplications";
+import {
+  previewModelApplicationSubmit,
+  submitModelApplicationDraft,
+  type ExpectedFeeSubmit,
+  type SubmitPreview,
+  type SubmittedApplication,
+  type SubmissionFee,
+} from "@/lib/client/runtimeModelSubmit";
 import { DraftTestReports } from "@/components/app/lifecycle/DraftTestReports";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
@@ -58,6 +68,37 @@ function evidenceBody(e: Evidence, iseer: number | null, isEdit: boolean) {
   };
 }
 
+type DraftSavePayload =
+  | { mode: "create"; body: Parameters<typeof createModelApplicationDraft>[0] }
+  | { mode: "patch"; editId: string; body: Parameters<typeof patchModelApplicationDraft>[1] };
+
+const runDraftSave = async (payload: DraftSavePayload, key: string): Promise<CommandResult<DraftApplication>> => {
+  const r: DraftSaveResult =
+    payload.mode === "create"
+      ? await createModelApplicationDraft(payload.body, key)
+      : await patchModelApplicationDraft(payload.editId, payload.body, key);
+  return r.ok
+    ? { ok: true, value: r.application, replayed: r.replayed ?? false }
+    : { ok: false, failure: r.failure, replayed: r.replayed ?? false };
+};
+
+const draftSaveSignature = (payload: DraftSavePayload) =>
+  payload.mode === "patch" ? { ...payload.body, editId: payload.editId } : payload.body;
+
+type SubmitCommandPayload = { appId: string; version: number; expectedFee: ExpectedFeeSubmit };
+type SubmitCommandValue = { application: SubmittedApplication; submissionFee: SubmissionFee };
+
+const runSubmit = async (payload: SubmitCommandPayload, key: string): Promise<CommandResult<SubmitCommandValue>> => {
+  const r = await submitModelApplicationDraft(payload.appId, payload.version, payload.expectedFee, key);
+  return r.ok
+    ? { ok: true, value: { application: r.application, submissionFee: r.submissionFee }, replayed: r.replayed ?? false }
+    : { ok: false, failure: r.failure, replayed: r.replayed ?? false };
+};
+
+const submitSignature = (payload: SubmitCommandPayload) => payload;
+
+const DRAFT_FORM_RETURN_TO = "/app/model-label/new-model-application";
+
 /** WP05.1b–c: create, edit and submit a draft through the BFF (provisional local-demo fee only). */
 export function NewModelApplication({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
@@ -72,7 +113,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ reference: string; id: string } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [legacyUnlinked, setLegacyUnlinked] = useState(false);
   const [persistedDraft, setPersistedDraft] = useState<{ modelNumber: string; brandId: string; evidence: Evidence } | null>(null);
   const [laboratories, setLaboratories] = useState<Laboratory[]>([]);
@@ -81,11 +122,19 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitDone, setSubmitDone] = useState<{ reference: string; id: string; fee: SubmissionFee } | null>(null);
-  const idemGate = useRef(new DraftIdempotencyGate());
-  const submitIdem = useRef<string | null>(null);
+  const draftSave = useCommand(runDraftSave, draftSaveSignature);
+  const submitCommand = useCommand(runSubmit, submitSignature);
 
   const implemented = runtimeRouteFor("/app/model-label/new-model-application")?.implemented;
   const isEdit = !!editId;
+  const signInReturnTo =
+    isEdit && editId
+      ? `${DRAFT_FORM_RETURN_TO}?edit=${encodeURIComponent(editId)}`
+      : DRAFT_FORM_RETURN_TO;
+  const saveBusy = draftSave.state.phase === "busy";
+  const submitBusy = submitCommand.state.phase === "busy";
+  const draftCommandFailure = draftSave.state.phase === "failed" ? draftSave.state.failure : null;
+  const submitCommandFailure = submitCommand.state.phase === "failed" ? submitCommand.state.failure : null;
 
   useEffect(() => {
     if (identity.status !== "signed-in") return;
@@ -94,13 +143,53 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       .then((b) => {
         if (Array.isArray(b.items)) {
           setBrands(b.items);
+          if (!editId && b.items.length) {
+            setBrandId((cur) => cur || b.items[0].brandId);
+          }
         }
         if (Array.isArray(b.laboratories)) {
           setLaboratories(b.laboratories);
         }
       })
       .catch(() => setError("Could not load eligible brands."));
-  }, [identity.status]);
+  }, [identity.status, editId]);
+
+  const applyLoadedDraft = useCallback((application: ModelApplication) => {
+    setReference(application.reference);
+    setModelNumber(application.modelNumber);
+    setVersion(application.version);
+    const bid = application.brandId;
+    if (bid) {
+      setBrandId(bid);
+      setLegacyUnlinked(false);
+    } else {
+      setLegacyUnlinked(true);
+      setBrandId("");
+    }
+    const loaded: Evidence = {
+      laboratoryCode: application.laboratoryCode ?? "",
+      testedOn: application.testedOn ?? "",
+      declaredIseer: application.declaredIseer === undefined ? "" : String(application.declaredIseer),
+    };
+    setEvidence(loaded);
+    setPersistedDraft({ modelNumber: application.modelNumber, brandId: bid ?? "", evidence: loaded });
+  }, []);
+
+  const reloadDraftFromServer = useCallback(async () => {
+    if (!editId) return;
+    draftSave.reset();
+    setError(null);
+    const r = await readModelApplication(editId);
+    if (!r.ok) {
+      setLoadError(r.failure.message);
+      return;
+    }
+    if (r.application.state !== "draft") {
+      setLoadError("Only draft applications can be edited.");
+      return;
+    }
+    applyLoadedDraft(r.application);
+  }, [applyLoadedDraft, draftSave, editId]);
 
   useEffect(() => {
     if (!editId || identity.status !== "signed-in") return;
@@ -115,34 +204,12 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
         setLoadError("Only draft applications can be edited.");
         return;
       }
-      setReference(r.application.reference);
-      setModelNumber(r.application.modelNumber);
-      setVersion(r.application.version);
-      const bid = (r.application as { brandId?: string }).brandId;
-      if (bid) {
-        setBrandId(bid);
-        setLegacyUnlinked(false);
-      } else {
-        setLegacyUnlinked(true);
-        setBrandId("");
-      }
-      const loaded: Evidence = {
-        laboratoryCode: r.application.laboratoryCode ?? "",
-        testedOn: r.application.testedOn ?? "",
-        declaredIseer: r.application.declaredIseer === undefined ? "" : String(r.application.declaredIseer),
-      };
-      setEvidence(loaded);
-      setPersistedDraft({ modelNumber: r.application.modelNumber, brandId: bid ?? "", evidence: loaded });
+      applyLoadedDraft(r.application);
     });
     return () => {
       live = false;
     };
-  }, [editId, identity.status]);
-
-  useEffect(() => {
-    if (isEdit || brandId || !brands.length) return;
-    setBrandId(brands[0].brandId);
-  }, [brands, brandId, isEdit]);
+  }, [applyLoadedDraft, editId, identity.status]);
 
   const createPayload = useMemo(
     () => {
@@ -158,7 +225,6 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       setError(ISEER_MESSAGE);
       return;
     }
-    setLoading(true);
     setError(null);
     const patchBody = {
       version,
@@ -167,19 +233,16 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       ...(brandId ? { brandId } : {}),
       ...evidenceBody(evidence, iseer.value, true),
     };
-    const key = idemGate.current.keyFor(isEdit ? { ...patchBody, editId } : createPayload);
-    const res = isEdit && editId
-      ? await patchModelApplicationDraft(editId, patchBody, key)
-      : await createModelApplicationDraft(createPayload, key);
-    setLoading(false);
-    if (!res.ok) {
-      setError(res.failure.message);
-      return;
-    }
-    idemGate.current.clear();
-    const nextVersion = res.application.version as number;
-    setVersion(nextVersion);
-    setSaved({ reference: String(res.application.reference), id: String(res.application.id) });
+    const payload: DraftSavePayload =
+      isEdit && editId ? { mode: "patch", editId, body: patchBody } : { mode: "create", body: createPayload };
+    const res = await draftSave.execute(payload);
+    if (!res?.ok) return;
+    // A save changes the version, so any open submit preview is stale: close it and review again.
+    setSubmitOpen(false);
+    setSubmitPreview(null);
+    submitCommand.reset();
+    setVersion(res.value.version as number);
+    setSaved({ reference: String(res.value.reference), id: String(res.value.id) });
     if (isEdit) {
       setPersistedDraft({ modelNumber: modelNumber.trim(), brandId, evidence });
     }
@@ -194,13 +257,8 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       evidence.testedOn !== persistedDraft.evidence.testedOn ||
       evidence.declaredIseer.trim() !== persistedDraft.evidence.declaredIseer.trim());
 
-  useEffect(() => {
-    if (draftDirty && submitOpen) {
-      setSubmitOpen(false);
-      setSubmitPreview(null);
-      setSubmitError("Save your changes before reviewing submit.");
-    }
-  }, [draftDirty, submitOpen]);
+  const showSubmitConfirm = submitOpen && !draftDirty;
+  const draftErrorDisplay = error ?? draftCommandFailure?.message ?? null;
 
   async function openSubmitConfirm(appId: string) {
     if (draftDirty) {
@@ -208,9 +266,25 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       return;
     }
     setSubmitError(null);
-    setLoading(true);
+    submitCommand.reset();
+    setPreviewLoading(true);
     const prev = await previewModelApplicationSubmit(appId);
-    setLoading(false);
+    setPreviewLoading(false);
+    if (!prev.ok) {
+      setSubmitError(prev.failure.message);
+      return;
+    }
+    setSubmitPreview(prev.preview);
+    setSubmitOpen(true);
+  }
+
+  async function reloadSubmitContext(appId: string) {
+    submitCommand.reset();
+    setSubmitError(null);
+    if (editId) await reloadDraftFromServer();
+    setPreviewLoading(true);
+    const prev = await previewModelApplicationSubmit(appId);
+    setPreviewLoading(false);
     if (!prev.ok) {
       setSubmitError(prev.failure.message);
       return;
@@ -220,38 +294,25 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   }
 
   async function confirmSubmit(appId: string) {
-    if (!submitPreview) return;
+    if (!submitPreview?.submissionFee) return;
     if (draftDirty) {
-      setSubmitOpen(false);
-      setSubmitPreview(null);
       setSubmitError("Save your changes before reviewing submit.");
       return;
     }
-    setLoading(true);
     setSubmitError(null);
-    if (!submitIdem.current) submitIdem.current = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
-    if (!submitPreview.submissionFee) {
-      setLoading(false);
-      return;
-    }
-    const res = await submitModelApplicationDraft(
+    const res = await submitCommand.execute({
       appId,
-      submitPreview.version,
-      {
+      version: submitPreview.version,
+      expectedFee: {
         amountInr: submitPreview.submissionFee.amountInr,
         feeRuleKey: submitPreview.submissionFee.feeRuleKey,
         feeRuleVersion: submitPreview.submissionFee.feeRuleVersion,
       },
-      submitIdem.current,
-    );
-    setLoading(false);
-    if (!res.ok) {
-      setSubmitError(res.failure.message);
-      return;
-    }
-    submitIdem.current = null;
+    });
+    if (!res?.ok) return;
     setSubmitOpen(false);
-    setSubmitDone({ reference: res.application.reference, id: res.application.id, fee: res.submissionFee });
+    setSubmitPreview(null);
+    setSubmitDone({ reference: res.value.application.reference, id: res.value.application.id, fee: res.value.submissionFee });
   }
 
   const activeId = editId ?? saved?.id ?? null;
@@ -289,12 +350,12 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
           <div className="flex flex-col gap-space-sm mt-space-md">
             <button
               type="button"
-              disabled={loading}
+              disabled={previewLoading || submitBusy}
               className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
               data-testid="model-draft-submit"
               onClick={() => openSubmitConfirm(saved.id)}
             >
-              {loading ? "Loading…" : "Review submit and provisional fee"}
+              {previewLoading ? "Loading…" : "Review submit and provisional fee"}
             </button>
             <Link href={modelDraftFormHref(saved.id)} className="text-center text-primary font-label-md">
               Edit draft first
@@ -303,12 +364,15 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
               View on dashboard
             </Link>
           </div>
-          {submitOpen && submitPreview ? (
+          {showSubmitConfirm && submitPreview ? (
             <SubmitConfirmCard
               preview={submitPreview}
-              loading={loading}
+              loading={previewLoading || submitBusy}
               error={submitError}
-              onCancel={() => { setSubmitOpen(false); setSubmitError(null); }}
+              commandFailure={submitCommandFailure}
+              signInReturnTo={signInReturnTo}
+              onReload={() => void reloadSubmitContext(saved.id)}
+              onCancel={() => { setSubmitOpen(false); setSubmitError(null); submitCommand.reset(); }}
               onConfirm={() => confirmSubmit(saved.id)}
             />
           ) : null}
@@ -415,19 +479,26 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                 </label>
               </div>
             </Card>
-            {error && (
-              <p className="text-error font-body-sm" data-testid="model-draft-error">
-                {error}
-              </p>
-            )}
+            {draftErrorDisplay ? (
+              <div data-testid="model-draft-error">
+                <p className="text-error font-body-sm">{draftErrorDisplay}</p>
+                {draftCommandFailure ? (
+                  <CommandFailureFollowUp
+                    failure={draftCommandFailure}
+                    signInReturnTo={signInReturnTo}
+                    onReload={editId ? () => void reloadDraftFromServer() : undefined}
+                  />
+                ) : null}
+              </div>
+            ) : null}
             <button
               type="button"
-              disabled={loading || !modelNumber.trim() || (isEdit && !editId) || (!isEdit && !brandId)}
-              onClick={saveDraft}
+              disabled={saveBusy || !modelNumber.trim() || (isEdit && !editId) || (!isEdit && !brandId)}
+              onClick={() => void saveDraft()}
               className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
               data-testid="model-draft-save"
             >
-              {loading ? "Saving…" : isEdit ? "Save changes" : "Save draft"}
+              {saveBusy ? "Saving…" : isEdit ? "Save changes" : "Save draft"}
             </button>
             {isEdit && activeId ? <DraftTestReports applicationId={activeId} /> : null}
             {isEdit && activeId ? (
@@ -442,22 +513,25 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                 ) : null}
                 <button
                   type="button"
-                  disabled={loading || draftDirty}
-                  onClick={() => openSubmitConfirm(activeId)}
+                  disabled={previewLoading || submitBusy || draftDirty}
+                  onClick={() => void openSubmitConfirm(activeId)}
                   className="w-full border border-primary text-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
                   data-testid="model-draft-submit"
                 >
-                  {loading && submitOpen ? "Loading…" : "Review submit and provisional fee"}
+                  {previewLoading && submitOpen ? "Loading…" : "Review submit and provisional fee"}
                 </button>
               </>
             ) : null}
-            {submitOpen && submitPreview && activeId ? (
+            {showSubmitConfirm && submitPreview && activeId ? (
               <SubmitConfirmCard
                 preview={submitPreview}
-                loading={loading}
+                loading={previewLoading || submitBusy}
                 error={submitError}
-                onCancel={() => { setSubmitOpen(false); setSubmitError(null); }}
-                onConfirm={() => confirmSubmit(activeId)}
+                commandFailure={submitCommandFailure}
+                signInReturnTo={signInReturnTo}
+                onReload={() => void reloadSubmitContext(activeId)}
+                onCancel={() => { setSubmitOpen(false); setSubmitError(null); submitCommand.reset(); }}
+                onConfirm={() => void confirmSubmit(activeId)}
               />
             ) : null}
             <p className="font-label-sm text-on-surface-variant text-center">
@@ -470,16 +544,49 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   );
 }
 
+function CommandFailureFollowUp({
+  failure,
+  signInReturnTo,
+  onReload,
+}: {
+  failure: CommandFailure;
+  signInReturnTo: string;
+  onReload?: () => void;
+}) {
+  const advice = commandAdvice(failure);
+  return (
+    <>
+      {advice.retryable ? <p className="font-label-sm text-on-surface-variant mt-1">Nothing was lost. You can try again.</p> : null}
+      {advice.reload && onReload ? (
+        <button type="button" onClick={onReload} className="mt-1 text-primary font-label-md hover:underline">
+          Reload the latest version
+        </button>
+      ) : null}
+      {advice.signIn ? (
+        <Link href={`/api/auth/login?returnTo=${signInReturnTo}`} className="mt-1 inline-block text-primary font-label-md hover:underline">
+          Sign in
+        </Link>
+      ) : null}
+    </>
+  );
+}
+
 function SubmitConfirmCard({
   preview,
   loading,
   error,
+  commandFailure,
+  signInReturnTo,
+  onReload,
   onCancel,
   onConfirm,
 }: {
   preview: SubmitPreview;
   loading: boolean;
   error: string | null;
+  commandFailure: CommandFailure | null;
+  signInReturnTo: string;
+  onReload: () => void;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -517,6 +624,12 @@ function SubmitConfirmCard({
         </div>
       )}
       {error ? <p className="text-error font-body-sm mt-space-sm">{error}</p> : null}
+      {commandFailure ? (
+        <div className="mt-space-sm">
+          <p className="text-error font-body-sm">{commandFailure.message}</p>
+          <CommandFailureFollowUp failure={commandFailure} signInReturnTo={signInReturnTo} onReload={onReload} />
+        </div>
+      ) : null}
       <div className="flex gap-space-sm mt-space-md">
         <button type="button" className="flex-1 py-2 rounded-lg border border-outline font-label-md" onClick={onCancel} disabled={loading}>
           Cancel

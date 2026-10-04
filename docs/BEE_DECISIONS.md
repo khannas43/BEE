@@ -22,6 +22,7 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) One flat fee per category; (b) a fee that depends on application type (new model, renewal, family); (c) different fees by applicant type.
 - **Recommendation.** Give the amount, tax treatment and effective date per category and application type in one table.
 - **If unanswered.** The ₹24,000 stays and stays labelled provisional.
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** (1) Option (b): the fee depends on category and application type. (2) Fee rules are **configurable in the portal** by an authorised user, each with an effective-from date: a new rule takes over from that date and the previous one ends on it. (3) Who may enter or change a fee rule: **the Administrator now; the permission is to be assignable to another role later** (so it is a permission, not a fixed role). (4) **Tax is a separate line**, not part of the fee amount. Still open: the tax rate or rule itself, the category and application-type combinations, and the amounts. Recorded in BL-131 and BL-132; the build has not started.
 
 ### A2 — Approved star-rating formula and version (D3 / M5)
 - **Question.** Which rating formula, which version and which inputs apply per category, and how a new version takes effect.
@@ -154,6 +155,8 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) Administrators only, with a second approver; (b) Programme only; (c) closing dates may not be in the past.
 - **Recommendation.** (a) with (c).
 - **If unanswered.** No screen is built for editing rules; the administration screens for fees, standards and formulas stay read-only.
+- **Owner's assumption, 4 October 2026 (not BEE's decision), for fee rules only.** The Administrator may enter a fee rule now; the permission is to be assignable to another role later. Whether a second approver is needed, whether a closing date may be in the past, and how a mistaken entry is withdrawn are still open (the recommendation above stands for them).
+
 
 ## Summary of what each unanswered decision costs
 

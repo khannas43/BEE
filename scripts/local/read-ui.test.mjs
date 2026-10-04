@@ -295,6 +295,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
     "/app/model-label/new-model-application",
     "/app/finance/finance-queue",
     "/app/model-label/iame-scrutiny",
+    "/app/model-label/bee-scrutiny",
   ]);
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).length, 2);
   assert.equal(runtimeNavFor([{ role: "agency", scope: "own-org" }]).length, 2);
@@ -302,6 +303,8 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/finance/finance-queue"), false, "an applicant never gets the Finance entry");
   assert.deepEqual(runtimeNavFor([{ role: "iame", scope: "assigned" }]).map((r) => r.href), ["/app/model-label/iame-scrutiny"], "IAME gets only its scrutiny screen");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }]).some((r) => r.href === "/app/model-label/iame-scrutiny"), false, "Finance never gets the IAME entry");
+  assert.deepEqual(runtimeNavFor([{ role: "reviewer", scope: "assigned" }]).map((r) => r.href), ["/app/model-label/bee-scrutiny"], "the Reviewer gets only BEE scrutiny");
+  assert.equal(runtimeNavFor([{ role: "iame", scope: "assigned" }]).some((r) => r.href === "/app/model-label/bee-scrutiny"), false, "IAME never gets the Reviewer entry");
   for (const roles of [null, [], [{ role: "laboratory", scope: "assigned" }], [{ role: "secretary", scope: "all" }]]) {
     assert.equal(runtimeNavFor(roles).length, 0, JSON.stringify(roles));
   }
@@ -309,6 +312,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.ok(runtimeRouteFor("/app/model-label/new-model-application"));
   assert.ok(runtimeRouteFor("/app/finance/finance-queue"));
   assert.ok(runtimeRouteFor("/app/model-label/iame-scrutiny"));
+  assert.ok(runtimeRouteFor("/app/model-label/bee-scrutiny"));
   for (const p of ["/app/registrations/record", "/app", "/app/model-label/model-dashboard/x"]) {
     assert.equal(runtimeRouteFor(p), undefined, p);
   }
@@ -316,6 +320,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.deepEqual([...runtimeRouteFor("/app/model-label/new-model-application").implemented], ["Create draft", "Edit draft", "Upload test reports", "Submit draft"]);
   assert.deepEqual([...runtimeRouteFor("/app/finance/finance-queue").implemented], ["List fee-due applications", "View fee and evidence", "Confirm fee received"]);
   assert.deepEqual([...runtimeRouteFor("/app/model-label/iame-scrutiny").implemented], ["List assigned applications", "View evidence and test reports", "Record finding and forward"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/bee-scrutiny").implemented], ["List assigned applications", "View evidence and test reports", "Forward to rating"]);
 });
 
 test("draft idempotency gate reuses a key until cleared or the payload changes", async () => {

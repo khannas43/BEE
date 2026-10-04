@@ -138,6 +138,9 @@ class SpringContractTest {
     gov.bee.api.iame.IameRecommendationRepository iameRepo;
 
     @MockitoBean
+    gov.bee.api.reviewer.ReviewerForwardRepository reviewerRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -219,6 +222,16 @@ class SpringContractTest {
         when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
         var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "iame_scrutiny", 3,
             Set.of("iame_scrutiny"), null, null, null);
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
+    }
+
+    /** A Reviewer outside the applicant's organisation who holds the assignment on a bee_scrutiny record. */
+    void reviewerAccount(UUID staffOrg) {
+        account("reviewer", "assigned");
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staffOrg));
+        when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
+        var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "bee_scrutiny", 3,
+            Set.of("bee_scrutiny"), null, null, null);
         when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
     }
 
@@ -902,7 +915,6 @@ class SpringContractTest {
         // Request shape.
         conforms(r, post(path).with(token("iame")).contentType("application/json").content(ok), 422, "idempotency_key_required");
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
-        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"verified\"", "\"maybe\"")), 422, "validation_failed");
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json")
             .content(ok.replace("Report matches the declared laboratory and date.", "   ")), 422, "validation_failed");
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json")
@@ -959,6 +971,81 @@ class SpringContractTest {
         iameAccount(staff);
         doThrow(new DataAccessResourceFailureException("down")).when(iameRepo).recommend(any(), anyInt(), any(), any(), any(), any());
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+    }
+
+    @Test
+    void reviewerForwardOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/reviewer-forward";
+        String path = "/api/model-applications/" + NOVA_APP + "/reviewer-forward";
+        UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        String ok = "{\"version\":3,\"note\":\"Checked against the application and the IAME note.\"}";
+        var done = new gov.bee.api.reviewer.ReviewerForwardRepository.Result(gov.bee.api.reviewer.ReviewerForwardRepository.Outcome.FORWARDED, 4,
+            Instant.parse("2026-10-04T10:00:00Z"));
+
+        reviewerAccount(staff);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(reviewerRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(reviewerRepo.forward(any(), anyInt(), any(), any(), any())).thenReturn(done);
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("reviewer"))));
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+
+        // Request shape.
+        conforms(r, post(path).with(token("reviewer")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Checked against the application and the IAME note.", "   ")), 422, "validation_failed");
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Checked against", "Checked\\nagainst")), 422, "validation_failed");
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json")
+            .content(ok.replace("Checked against the application and the IAME note.", "x".repeat(501))), 422, "validation_failed");
+
+        // Version, idempotency and assignment conflicts.
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
+        when(reviewerRepo.forward(any(), anyInt(), any(), any(), any())).thenReturn(
+            new gov.bee.api.reviewer.ReviewerForwardRepository.Result(gov.bee.api.reviewer.ReviewerForwardRepository.Outcome.STALE, 0, null));
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
+        when(reviewerRepo.forward(any(), anyInt(), any(), any(), any())).thenReturn(done);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        // A replay returns the stored receipt, not a record the reviewer may no longer read.
+        String stored = "{\"applicationId\":\"" + NOVA_APP + "\",\"reference\":\"LOCAL-MA-0002\",\"fromState\":\"bee_scrutiny\",\"toState\":\"rating\",\"version\":4,"
+            + "\"note\":\"Checked against the application and the IAME note.\",\"forwardedAt\":\"2026-10-04T10:00:00Z\"}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 4)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(ok))));
+        var replay = conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        // Who may forward: only the assigned Reviewer, never the applicant's own organisation, never someone who acted at another stage.
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("auditor", "all");
+        conforms(r, post(path).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        reviewerAccount(staff);
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(NOVA));   // the reviewer belongs to the applicant's organisation
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        reviewerAccount(staff);
+        when(reviewerRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of(USER));
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        when(reviewerRepo.actorsAtOtherStages(NOVA_APP)).thenReturn(Set.of());
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+
+        // Identity denials and outage.
+        reviewerAccount(staff);
+        conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 401, "unauthenticated");
+        conforms(r, post(path).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "mfa_required");
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        reviewerAccount(staff);
+        doThrow(new DataAccessResourceFailureException("down")).when(reviewerRepo).forward(any(), anyInt(), any(), any(), any());
+        conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 
     @Test

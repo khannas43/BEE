@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import gov.bee.api.application.ModelApplicationRepository;
 import gov.bee.api.application.ModelApplicationSubmitRepository;
 import gov.bee.api.finance.FeeConfirmationRepository;
+import gov.bee.api.history.HistoryRepository;
 import gov.bee.api.iame.IameRecommendationRepository;
 import gov.bee.api.director.DirectorRecommendationRepository;
 import gov.bee.api.secretary.SecretaryApprovalRepository;
@@ -71,6 +72,7 @@ class ReworkDatabaseTest {
     static StageReturnRepository returns;
     static ResubmitApplicationRepository resub;
     static StageRejectRepository rejects;
+    static HistoryRepository history;
     static int appModelCountBefore;
 
     static String env(String k, String d) {
@@ -124,6 +126,7 @@ class ReworkDatabaseTest {
         returns = transactional(new StageReturnRepository(db));
         resub = transactional(new ResubmitApplicationRepository(db));
         rejects = transactional(new StageRejectRepository(db));
+        history = new HistoryRepository(db);
         assertEquals(32, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V32");
     }
 
@@ -549,5 +552,82 @@ class ReworkDatabaseTest {
         assertEquals(0, count("model_application_rejection", id));
         assertEquals(0, count("model_application_transition_event", id));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_application WHERE id = ?", Integer.class, id));
+    }
+
+    @Test
+    void theHistoryJoinsEachStepToItsOwnRecordInOrderWithWhoTookIt() {
+        UUID id = at("secretary_approval", "RW-HIST");
+        giveBack(id, "secretary_approval");
+        resubmit(id);
+        secretaryRepo.approve(id, version(id), SECRETARY_USER, "secretary", "Approved after the correction.");
+        var rows = history.events(id);
+        assertEquals(List.of("submit", "confirm_fee", "iame_recommend", "reviewer_forward", "compute_rating", "director_recommend", "return", "resubmit", "secretary_approve"),
+            rows.stream().map(HistoryRepository.Row::action).toList(), "every step in order, the submission first");
+        assertEquals(List.of("draft", "fee_due", "iame_scrutiny", "bee_scrutiny", "rating", "director_review", "secretary_approval", "returned", "secretary_approval"),
+            rows.stream().map(HistoryRepository.Row::fromState).toList());
+        assertEquals(List.of("fee_due", "iame_scrutiny", "bee_scrutiny", "rating", "director_review", "secretary_approval", "returned", "secretary_approval", "approved"),
+            rows.stream().map(HistoryRepository.Row::toState).toList());
+        for (int i = 1; i < rows.size(); i++) {
+            assertTrue(!rows.get(i).at().isBefore(rows.get(i - 1).at()), "time never goes backwards");
+        }
+        var byAction = rows.stream().collect(java.util.stream.Collectors.toMap(HistoryRepository.Row::action, r -> r));
+        assertEquals("manufacturer", byAction.get("submit").actorRole());
+        assertEquals("finance", byAction.get("confirm_fee").actorRole());
+        assertEquals(owner.queryForObject("SELECT display_name FROM user_account WHERE id = ?", String.class, FINANCE_USER), byAction.get("confirm_fee").actorName(), "the actor's display name");
+        assertTrue(byAction.get("confirm_fee").actorOrganisation() != null, "and the organisation they belong to");
+        assertTrue(byAction.get("confirm_fee").receiptReference().startsWith("UTR-"), "the fee step carries its receipt");
+        assertEquals(0, new BigDecimal("24000.00").compareTo(byAction.get("confirm_fee").feeAmount()));
+        assertEquals("verified", byAction.get("iame_recommend").iameVerification());
+        assertEquals("n", byAction.get("iame_recommend").iameNote());
+        assertEquals(4, byAction.get("compute_rating").stars());
+        assertEquals(1, byAction.get("compute_rating").ratingVersion());
+        assertEquals(0, new BigDecimal("4.62").compareTo(byAction.get("compute_rating").verifiedIseer()));
+        assertEquals(false, byAction.get("director_recommend").directorFinal());
+        assertEquals("The report does not match the application.", byAction.get("return").returnReason(), "the reason of the return");
+        assertEquals(false, byAction.get("resubmit").ratingSuperseded());
+        assertEquals("Approved after the correction.", byAction.get("secretary_approve").secretaryNote());
+        // A step carries only its own record: nothing leaks across steps.
+        assertEquals(null, byAction.get("confirm_fee").iameNote());
+        assertEquals(null, byAction.get("return").secretaryNote());
+        assertEquals(null, byAction.get("secretary_approve").returnReason());
+    }
+
+    @Test
+    void aRedoneRatingShowsBothRatingsEachWithItsOwnFigures() {
+        UUID id = at("director_review", "RW-HIST-RATING");
+        giveBack(id, "director_review");
+        owner.update("UPDATE model_application SET declared_iseer = 4.80 WHERE id = ?", id);
+        resubmit(id);
+        ratingRepo.compute(id, version(id), PROGRAMME_USER, "programme", "RAC-ISEER-DEMO-1", new BigDecimal("4.80"), new BigDecimal("4.85"), 4);
+        var ratings = history.events(id).stream().filter(r -> r.action().equals("compute_rating")).toList();
+        assertEquals(2, ratings.size());
+        assertEquals(List.of(1, 2), ratings.stream().map(HistoryRepository.Row::ratingVersion).toList());
+        assertEquals(0, new BigDecimal("4.62").compareTo(ratings.get(0).verifiedIseer()));
+        assertEquals(0, new BigDecimal("4.85").compareTo(ratings.get(1).verifiedIseer()));
+        var resub = history.events(id).stream().filter(r -> r.action().equals("resubmit")).findFirst().orElseThrow();
+        assertEquals(true, resub.ratingSuperseded(), "and the resubmission says the rating was replaced");
+        assertEquals("rating", resub.toState());
+    }
+
+    @Test
+    void aRejectedApplicationsHistoryEndsInTheRejectionWithItsReason() {
+        UUID id = at("rating", "RW-HIST-REJECT");
+        reject(id, "rating");
+        var rows = history.events(id);
+        var last = rows.get(rows.size() - 1);
+        assertEquals("reject", last.action());
+        assertEquals("rating", last.fromState());
+        assertEquals("rejected", last.toState());
+        assertEquals("programme", last.actorRole());
+        assertEquals("The report is for a different model.", last.rejectReason());
+    }
+
+    @Test
+    void theHistoryOfOneApplicationNeverIncludesAnotherAndAnUnknownOneIsEmpty() {
+        UUID a = at("iame_scrutiny", "RW-HIST-A");
+        UUID b = at("bee_scrutiny", "RW-HIST-B");
+        assertEquals(2, history.events(a).size());
+        assertEquals(3, history.events(b).size());
+        assertEquals(List.of(), history.events(UUID.randomUUID()));
     }
 }

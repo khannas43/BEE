@@ -63,8 +63,14 @@ async function launchChrome() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bee-browser-check-"));
   const proc = spawn(CHROME, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${dir}`, "--no-first-run", "--no-default-browser-check", "--disable-gpu", "--window-size=1440,1000", "about:blank"], { stdio: "ignore" });
   const portFile = path.join(dir, "DevToolsActivePort");
-  for (let i = 0; i < 100 && !fs.existsSync(portFile); i++) await sleep(100);
-  const [port, wsPath] = fs.readFileSync(portFile, "utf8").trim().split("\n");
+  // Chrome writes the port and the DevTools path to this file as two separate lines, so the file existing is not enough: a read
+  // between the two writes gives a port and no path, and a malformed URL. Wait until both lines are there (up to 20 s on a busy machine).
+  let port, wsPath;
+  for (let i = 0; i < 200 && !(port && wsPath); i++) {
+    try { [port, wsPath] = fs.readFileSync(portFile, "utf8").trim().split("\n"); } catch { /* not written yet */ }
+    if (!(port && wsPath)) await sleep(100);
+  }
+  if (!(port && wsPath)) throw new Error(`Chrome did not report its DevTools address within 20 s (${portFile})`);
   const ws = new WebSocket(`ws://127.0.0.1:${port}${wsPath}`);
   await new Promise((res, rej) => { ws.addEventListener("open", res, { once: true }); ws.addEventListener("error", rej, { once: true }); });
   const exited = new Promise((r) => proc.once("exit", r));

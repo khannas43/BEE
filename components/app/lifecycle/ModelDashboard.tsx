@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Card, ScreenChrome } from "@/components/app/ScreenScaffold";
 import { DataTable, type DataTableColumn } from "@/components/app/kit/DataTable";
 import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
+import { ApplicationHistory } from "@/components/app/lifecycle/ApplicationHistory";
 import { RecordTabs } from "@/components/app/kit/RecordTabs";
 import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
@@ -27,11 +28,12 @@ import { Module, Screen } from "@/lib/screens";
 
 const DETAIL_TAB_DETAILS = "details";
 const DETAIL_TAB_DOCUMENTS = "documents";
+const DETAIL_TAB_HISTORY = "history";
 /** Large page size keeps every scoped row visible for the live read-ui check (client-side paging only). */
 const APPLICATION_TABLE_PAGE_SIZE = 100;
 
 function detailTabFromParam(raw: string | null): string {
-  return raw === DETAIL_TAB_DOCUMENTS ? DETAIL_TAB_DOCUMENTS : DETAIL_TAB_DETAILS;
+  return raw === DETAIL_TAB_DOCUMENTS || raw === DETAIL_TAB_HISTORY ? raw : DETAIL_TAB_DETAILS;
 }
 
 function modelDashboardHrefWithTab(id: string, tab: string): string {
@@ -258,6 +260,11 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
                   id: DETAIL_TAB_DOCUMENTS,
                   label: "Documents",
                   render: () => <ApplicationDocuments key={r.application.id} applicationId={r.application.id} />,
+                },
+                {
+                  id: DETAIL_TAB_HISTORY,
+                  label: "History",
+                  render: () => <ApplicationHistory key={r.application.id} applicationId={r.application.id} testIdPrefix="model-app-history" />,
                 },
               ]}
               activeTabId={activeTab}

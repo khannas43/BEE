@@ -42,6 +42,7 @@ before(async () => {
     stageReturn: await import("../../app/api/runtime/model-applications/[id]/return/route.ts"),
     resubmit: await import("../../app/api/runtime/model-applications/[id]/resubmit/route.ts"),
     stageReject: await import("../../app/api/runtime/model-applications/[id]/reject/route.ts"),
+    history: await import("../../app/api/runtime/model-applications/[id]/history/route.ts"),
   };
 });
 
@@ -279,6 +280,14 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/reject 401 sessio
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123475" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/model-applications/{id}/history 401 session_expired | Keycloak refusing refresh on history", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.history.GET(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/history", "unit-history-refresh-refused", cookie), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);
   assert.equal((await res.json()).error, "session_expired");
 });

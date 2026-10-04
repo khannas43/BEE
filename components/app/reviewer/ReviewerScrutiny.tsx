@@ -11,6 +11,7 @@ import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
+import { ApplicationHistory } from "@/components/app/lifecycle/ApplicationHistory";
 import { ReturnToApplicant, ReturnedNote } from "@/components/app/lifecycle/ReturnToApplicant";
 import { RejectApplication, RejectedNote } from "@/components/app/lifecycle/RejectApplication";
 import type { StageRejectReceipt } from "@/lib/client/runtimeStageReject";
@@ -258,6 +259,8 @@ function DetailAndForward({
       />
       <h3 className="font-label-md text-label-md text-on-surface mt-space-md">Test reports</h3>
       <ApplicationDocuments key={application.id} applicationId={application.id} />
+      <h3 className="font-label-md text-label-md text-on-surface mt-space-md">History</h3>
+      <ApplicationHistory key={application.id} applicationId={application.id} testIdPrefix="reviewer-history" />
       <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-md">{REVIEWER_COPY.provisional}</p>
       <p className="font-label-sm text-label-sm text-on-surface-variant mt-1">{REVIEWER_COPY.separation}</p>
       <CommandPanel

@@ -237,6 +237,10 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       isEdit && editId ? { mode: "patch", editId, body: patchBody } : { mode: "create", body: createPayload };
     const res = await draftSave.execute(payload);
     if (!res?.ok) return;
+    // A save changes the version, so any open submit preview is stale: close it and review again.
+    setSubmitOpen(false);
+    setSubmitPreview(null);
+    submitCommand.reset();
     setVersion(res.value.version as number);
     setSaved({ reference: String(res.value.reference), id: String(res.value.id) });
     if (isEdit) {

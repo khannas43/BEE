@@ -293,6 +293,9 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.deepEqual(RUNTIME_ROUTES.map((r) => r.href), [
     "/app/workflow/personal-inbox",
     "/app/workflow/my-approvals",
+    "/app/workflow/application-review",
+    "/app/workflow/workflow-history",
+    "/app/workflow/escalation-dashboard",
     "/app/model-label/model-dashboard",
     "/app/model-label/new-model-application",
     "/app/finance/finance-queue",
@@ -326,6 +329,10 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.ok(runtimeRouteFor("/app/model-label/director-approval"));
   assert.ok(runtimeRouteFor("/app/workflow/personal-inbox"));
   assert.ok(runtimeRouteFor("/app/workflow/my-approvals"));
+  for (const p of ["application-review", "workflow-history", "escalation-dashboard"]) {
+    assert.ok(runtimeRouteFor(`/app/workflow/${p}`), p);
+    assert.equal(runtimeNavFor([{ role: "director", scope: "all" }]).some((r) => r.href.endsWith(p)), false, `${p} is reached by link, not by a menu entry`);
+  }
   for (const p of ["/app/registrations/record", "/app", "/app/model-label/model-dashboard/x"]) {
     assert.equal(runtimeRouteFor(p), undefined, p);
   }

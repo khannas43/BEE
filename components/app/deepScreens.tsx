@@ -4,6 +4,7 @@ import { Module, Screen } from "@/lib/screens";
 import { FinanceQueue } from "./finance/FinanceQueue";
 import { IameScrutiny } from "./iame/IameScrutiny";
 import { MyWork } from "./workflow/MyWork";
+import { ApplicationReviewView, EscalationView, WorkflowHistoryView } from "./workflow/WorkflowViews";
 import { ReviewerScrutiny } from "./reviewer/ReviewerScrutiny";
 import { ProgrammeRating } from "./programme/ProgrammeRating";
 import { DirectorApproval } from "./director/DirectorApproval";
@@ -12,7 +13,7 @@ import { NewModelApplication } from "./lifecycle/NewModelApplication";
 import { StageScreen, StageVariant } from "./lifecycle/StageScreen";
 import { ModelPaymentScreen } from "./lifecycle/PaymentScreens";
 import { ApplicationDetailScreen, DetailVariant, FamilyModels } from "./lifecycle/ModelDetailScreens";
-import { ApplicationReview, EscalationDashboard, WorkflowHistory, WorkflowInbox } from "./lifecycle/WorkflowScreens";
+import { WorkflowInbox } from "./lifecycle/WorkflowScreens";
 import {
   QRBatchRequest,
   QRBatchStatus,
@@ -76,9 +77,9 @@ export const DEEP_SCREENS: Record<string, DeepComponent> = {
   // Workflow — driven by the same store
   "workflow/personal-inbox": ({ module, screen }) => <MyWork module={module} screen={screen} kind="inbox" />,
   "workflow/team-queue": ({ module, screen }) => <WorkflowInbox module={module} screen={screen} scope="team" />,
-  "workflow/application-review": ApplicationReview,
-  "workflow/escalation-dashboard": EscalationDashboard,
-  "workflow/workflow-history": WorkflowHistory,
+  "workflow/application-review": ApplicationReviewView,
+  "workflow/escalation-dashboard": EscalationView,
+  "workflow/workflow-history": WorkflowHistoryView,
 
   // MIS & AI — the five committed use cases + governance, each bespoke
   "mis-ai/risk-scoring": ComplianceRiskScoring,

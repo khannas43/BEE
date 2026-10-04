@@ -33,6 +33,9 @@ REVOKE ALL ON FUNCTION app.app_disposable_model_cleanup(uuid[]) FROM ${BEE_RUNTI
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO ${BEE_RUNTIME_DB_USER};
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app FROM ${BEE_RUNTIME_DB_USER};
 REVOKE CREATE ON SCHEMA app FROM ${BEE_RUNTIME_DB_USER};
+GRANT EXECUTE ON FUNCTION app.fee_rule_decide(uuid, uuid, text, text) TO ${BEE_RUNTIME_DB_USER};
+REVOKE UPDATE, DELETE, TRUNCATE ON app.fee_rule_proposal FROM ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.capability_grant, app.fee_application_type FROM ${BEE_RUNTIME_DB_USER};
 REVOKE EXECUTE ON FUNCTION app.master_supersede(text, text, integer, date, text, text, text, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.master_supersede(text, text, integer, date, text, text, text, jsonb) TO bee_app;
 SQL

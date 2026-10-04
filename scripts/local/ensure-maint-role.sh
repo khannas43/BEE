@@ -31,6 +31,13 @@ GRANT SELECT, REFERENCES ON app.local_disposable_application TO ${BEE_MAINT_DB_U
 SQL
 fi
 
+if psql_super -d bee_app -c "SELECT to_regclass('app.fee_rule_proposal') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT SELECT, DELETE ON app.fee_rule_proposal TO ${BEE_MAINT_DB_USER};
+GRANT SELECT, INSERT, DELETE ON app.capability_grant, app.fee_application_type TO ${BEE_MAINT_DB_USER};
+SQL
+fi
+
 if psql_super -d bee_app -c "SELECT to_regclass('app.model_application_document') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 GRANT SELECT, DELETE ON app.model_application_document, app.model_application_document_version TO ${BEE_MAINT_DB_USER};

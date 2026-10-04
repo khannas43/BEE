@@ -325,13 +325,13 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   for (const p of ["/app/registrations/record", "/app", "/app/model-label/model-dashboard/x"]) {
     assert.equal(runtimeRouteFor(p), undefined, p);
   }
-  assert.deepEqual([...runtimeRouteFor("/app/model-label/model-dashboard").implemented], ["List", "View detail", "Edit draft", "Submit draft"]);
-  assert.deepEqual([...runtimeRouteFor("/app/model-label/new-model-application").implemented], ["Create draft", "Edit draft", "Upload test reports", "Submit draft"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/model-dashboard").implemented], ["List", "View detail", "Edit draft", "Submit draft", "See why it was returned", "Edit and resubmit"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/new-model-application").implemented], ["Create draft", "Edit draft", "Upload test reports", "Submit draft", "Edit and resubmit a returned application"]);
   assert.deepEqual([...runtimeRouteFor("/app/finance/finance-queue").implemented], ["List fee-due applications", "View fee and evidence", "Confirm fee received"]);
-  assert.deepEqual([...runtimeRouteFor("/app/model-label/iame-scrutiny").implemented], ["List assigned applications", "View evidence and test reports", "Record finding and forward"]);
-  assert.deepEqual([...runtimeRouteFor("/app/model-label/bee-scrutiny").implemented], ["List assigned applications", "View evidence and test reports", "Forward to rating"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/iame-scrutiny").implemented], ["List assigned applications", "View evidence and test reports", "Record finding and forward", "Return to the applicant"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/bee-scrutiny").implemented], ["List assigned applications", "View evidence and test reports", "Forward to rating", "Return to the applicant"]);
   assert.deepEqual([...runtimeRouteFor("/app/model-label/rating-calculation").implemented], ["List applications awaiting a rating", "View evidence and test reports", "Compute and record a provisional local rating"]);
-  assert.deepEqual([...runtimeRouteFor("/app/model-label/director-approval").implemented], ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)"]);
+  assert.deepEqual([...runtimeRouteFor("/app/model-label/director-approval").implemented], ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)", "Return to the applicant"]);
 });
 
 test("draft idempotency gate reuses a key until cleared or the payload changes", async () => {

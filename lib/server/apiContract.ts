@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.12.0";
+export const CONTRACT_VERSION = "0.14.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -36,6 +36,7 @@ export const ERROR_MESSAGES = {
   segregation_refused: "A person who acted at another stage of this application, or its own organisation, cannot take this step.",
   amount_mismatch: "The amount received does not match the fee due.",
   assignee_unavailable: "No officer is available to take the next stage.",
+  not_returned: "Only a returned application can be resubmitted.",
   rating_below_threshold: "The verified efficiency is below the lowest star band, so no rating can be assigned.",
   test_report_required: "A test report must be uploaded before the application can be submitted.",
   declared_efficiency_required: "The declared efficiency figure is required before the application can be submitted.",
@@ -188,6 +189,7 @@ export interface ModelApplication {
   declaredIseer?: number;
   submissionFee?: SubmissionFee;
   rating?: ApplicationRating;
+  returnNote?: ApplicationReturn;
 }
 
 export interface ModelApplicationList {
@@ -243,8 +245,24 @@ export const validateApplicationRating: Validator<ApplicationRating> = (body) =>
   return ok ? (b as unknown as ApplicationRating) : null;
 };
 
+/** The open return of an application in the returned state, on the detail read only. */
+export interface ApplicationReturn {
+  fromState: "iame_scrutiny" | "bee_scrutiny" | "director_review" | "secretary_approval";
+  reason: string;
+  returnedAt: string;
+}
+
+export const validateApplicationReturn: Validator<ApplicationReturn> = (body) => {
+  if (!exactKeys(body, ["fromState", "reason", "returnedAt"])) return null;
+  const b = body;
+  const ok =
+    ["iame_scrutiny", "bee_scrutiny", "director_review", "secretary_approval"].includes(b.fromState as string) &&
+    isString(b.reason) && isString(b.returnedAt) && !Number.isNaN(Date.parse(b.returnedAt));
+  return ok ? (b as unknown as ApplicationReturn) : null;
+};
+
 export const MODEL_APPLICATION_KEYS = ["id", "reference", "organisation", "brandName", "category", "modelNumber", "state", "version", "readBasis"] as const;
-export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee", "rating"] as const;
+export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee", "rating", "returnNote"] as const;
 export const MODEL_APPLICATION_LIST_KEYS = ["items", "count", "authority"] as const;
 const READ_BASIS = /^(own-org|assigned|stage:[a-z_]+)$/;
 const LABORATORY_CODE = /^[A-Z0-9_-]{1,32}$/;
@@ -264,7 +282,8 @@ export const validateModelApplication: Validator<ModelApplication> = (body) => {
     (b.testedOn === undefined || (isString(b.testedOn) && ISO_DATE.test(b.testedOn))) &&
     (b.declaredIseer === undefined || (typeof b.declaredIseer === "number" && b.declaredIseer > 0 && b.declaredIseer <= 99.99)) &&
     (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null) &&
-    (b.rating === undefined || validateApplicationRating(b.rating) !== null);
+    (b.rating === undefined || validateApplicationRating(b.rating) !== null) &&
+    (b.returnNote === undefined || validateApplicationReturn(b.returnNote) !== null);
   return ok ? (b as unknown as ModelApplication) : null;
 };
 

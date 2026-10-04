@@ -151,6 +151,12 @@ class SpringContractTest {
     gov.bee.api.secretary.SecretaryApprovalRepository secretaryRepo;
 
     @MockitoBean
+    gov.bee.api.rework.StageReturnRepository returnRepo;
+
+    @MockitoBean
+    gov.bee.api.rework.ResubmitApplicationRepository resubmitRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -272,6 +278,23 @@ class SpringContractTest {
         when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
         var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "secretary_approval", 6,
             Set.of(), null, null, null, "LAB", java.time.LocalDate.of(2026, 9, 1), new BigDecimal("4.50"));
+        when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
+    }
+
+    /** An application in the returned state with complete evidence, as the applicant sees it. */
+    static ModelApplicationRepository.Row returnedRow(int version) {
+        var d = draftRow(NOVA_APP, "NC-RAC-18F", version);
+        return new ModelApplicationRepository.Row(d.id(), d.reference(), d.organisationId(), d.organisationCode(), d.brandName(), d.category(), d.modelNumber(),
+            "returned", version, Set.of(), NOVA, NOVA_COOL, "NOVA", d.laboratoryCode(), d.testedOn(), d.declaredIseer());
+    }
+
+    /** An officer outside the applicant's organisation who can read the application in the given state. */
+    void officerAccount(String role, String scope, String state, Set<String> assigned) {
+        account(role, scope);
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(UUID.fromString("00000000-0000-4000-b000-0000000000aa")));
+        when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
+        var row = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", state, 3,
+            assigned, null, null, null, "LAB", TESTED_ON, new BigDecimal("4.50"));
         when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(row));
     }
 
@@ -1335,6 +1358,202 @@ class SpringContractTest {
         programmeAccount(staff);
         doThrow(new DataAccessResourceFailureException("down")).when(ratingRepo).compute(any(), anyInt(), any(), any(), any(), any(), any(), anyInt());
         conforms(r, post(path).with(token("programme")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+    }
+
+    @Test
+    void stageReturnOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/return";
+        String path = "/api/model-applications/" + NOVA_APP + "/return";
+        String ok = "{\"version\":3,\"reason\":\"The laboratory name on the report does not match.\"}";
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("iame"))));
+        var done = new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.RETURNED, 4, Instant.parse("2026-10-04T10:00:00Z"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(returnRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of());
+        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
+
+        // Each stage owner returns from its own stage, and the receipt names the stage it came from.
+        record Owner(String role, String scope, String state, Set<String> assigned) {
+        }
+        for (var o : List.of(new Owner("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny")), new Owner("reviewer", "assigned", "bee_scrutiny", Set.of("bee_scrutiny")),
+            new Owner("director", "all", "director_review", Set.<String>of()), new Owner("secretary", "all", "secretary_approval", Set.<String>of()))) {
+            officerAccount(o.role(), o.scope(), o.state(), o.assigned());
+            var res = conforms(r, post(path).with(token(o.role())).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+            assertTrue(res.getContentAsString().contains("\"fromState\":\"" + o.state() + "\"") && res.getContentAsString().contains("\"toState\":\"returned\""), res.getContentAsString());
+        }
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+
+        // Request shape.
+        conforms(r, post(path).with(token("iame")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("The laboratory name on the report does not match.", "   ")), 422, "validation_failed");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("The laboratory", "The\\nlaboratory")), 422, "validation_failed");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("The laboratory name on the report does not match.", "x".repeat(501))), 422, "validation_failed");
+
+        // Version, idempotency and replay.
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
+        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(
+            new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.STALE, 0, null));
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
+        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        String stored = "{\"applicationId\":\"" + NOVA_APP + "\",\"reference\":\"LOCAL-MA-0002\",\"fromState\":\"iame_scrutiny\",\"toState\":\"returned\",\"version\":4,"
+            + "\"reason\":\"The laboratory name on the report does not match.\",\"returnedAt\":\"2026-10-04T10:00:00Z\"}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 4)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(ok))));
+        var replay = conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        // Who may return: only the owner of the stage the application is in; never the applicant, Programme, Finance or someone without a read scope.
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("auditor", "all");
+        conforms(r, post(path).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        officerAccount("programme", "all", "rating", Set.of());
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        officerAccount("finance", "all", "fee_due", Set.of());
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        officerAccount("director", "all", "secretary_approval", Set.of());
+        conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(NOVA));   // the officer belongs to the applicant's organisation
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+        when(returnRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of(USER));
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        when(returnRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of());
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.<String>of());   // not assigned: indistinguishable from an unknown application
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+
+        // Identity denials and outage.
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+        conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 401, "unauthenticated");
+        conforms(r, post(path).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "mfa_required");
+        account("manufacturer", "own-org");
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
+        doThrow(new DataAccessResourceFailureException("down")).when(returnRepo).doReturn(any(), anyInt(), any(), any(), any(), any());
+        conforms(r, post(path).with(token("iame")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+    }
+
+    @Test
+    void resubmitApplicationOperationsDocumentedPairs() throws Exception {
+        String r = "/api/model-applications/{id}/resubmit";
+        String path = "/api/model-applications/" + NOVA_APP + "/resubmit";
+        String ok = "{\"version\":5,\"note\":\"Corrected the laboratory name.\"}";
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
+        var done = new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.RESUBMITTED, 6, Instant.parse("2026-10-04T10:00:00Z"));
+        var openIame = new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "iame_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1);
+
+        account("manufacturer", "own-org");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        when(masters.category(any(), any())).thenReturn(Optional.of(new Masters.Category(feeVersion(), "RAC", "Room AC")));
+        when(masters.standard(any(), any(), any())).thenReturn(Optional.of(new Masters.Standard(feeVersion(), "RAC", "performance_test", "IS 1391", "t", "1")));
+        when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        when(applications.laboratoryExists("LAB")).thenReturn(true);
+        when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
+        when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(openIame));
+        when(resubmitRepo.ratingInputsChanged(any(), any())).thenReturn(false);
+        when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(done);
+
+        // Back to the stage that returned it; and through rating again when a rating input changed after the rating existed.
+        var back = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertTrue(back.getContentAsString().contains("\"toState\":\"iame_scrutiny\"") && back.getContentAsString().contains("\"ratingSuperseded\":false"), back.getContentAsString());
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":5}"), 200, null);
+        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "director_review", new BigDecimal("4.50"), "LAB", TESTED_ON, 1)));
+        var unchanged = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertTrue(unchanged.getContentAsString().contains("\"toState\":\"director_review\"") && unchanged.getContentAsString().contains("\"ratingSuperseded\":false"), unchanged.getContentAsString());
+        when(resubmitRepo.ratingInputsChanged(any(), any())).thenReturn(true);
+        var superseded = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertTrue(superseded.getContentAsString().contains("\"toState\":\"rating\"") && superseded.getContentAsString().contains("\"ratingSuperseded\":true"), superseded.getContentAsString());
+        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "bee_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1)));
+        var early = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertTrue(early.getContentAsString().contains("\"toState\":\"bee_scrutiny\"") && early.getContentAsString().contains("\"ratingSuperseded\":false"), "before the rating exists nothing is superseded: " + early.getContentAsString());
+        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(openIame));
+
+        // Request shape.
+        conforms(r, post(path).with(token("manufacturer")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":5,\"note\":5}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":5,\"note\":\"   \"}"), 422, "validation_failed");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":5,\"note\":\"" + "x".repeat(501) + "\"}"), 422, "validation_failed");
+
+        // Only a returned application, only by its filer, at the version they saw.
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 5)));
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "not_returned");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 404, "not_found");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":5", "\"version\":4")), 409, "version_conflict");
+        when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(
+            new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.STALE, 0, null));
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
+        when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(done);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        String stored = "{\"applicationId\":\"" + NOVA_APP + "\",\"reference\":\"LOCAL-MA-0002\",\"fromState\":\"returned\",\"toState\":\"iame_scrutiny\",\"version\":6,"
+            + "\"ratingSuperseded\":false,\"resubmittedAt\":\"2026-10-04T10:00:00Z\"}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 6)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(ok))));
+        var replay = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        // The brand must still be the filer's, and the same evidence gates as the first submit apply to the edited application.
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "brand_not_permitted");
+        when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
+        when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "test_report_required");
+        when(documentRepo.findByApplicationAndKind(NOVA_APP, "test_report")).thenReturn(Optional.of(reportDoc()));
+        var incomplete = returnedRow(5);
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(new ModelApplicationRepository.Row(incomplete.id(), incomplete.reference(), incomplete.organisationId(), incomplete.organisationCode(),
+            incomplete.brandName(), incomplete.category(), incomplete.modelNumber(), "returned", 5, Set.of(), NOVA, NOVA_COOL, "NOVA", "LAB", TESTED_ON, null)));
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "declared_efficiency_required");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(new ModelApplicationRepository.Row(incomplete.id(), incomplete.reference(), incomplete.organisationId(), incomplete.organisationCode(),
+            incomplete.brandName(), incomplete.category(), incomplete.modelNumber(), "returned", 5, Set.of(), NOVA, NOVA_COOL, "NOVA", "LAB", null, new BigDecimal("4.50"))));
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "test_date_invalid");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
+        when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "laboratory_not_accredited");
+        when(masters.labAccreditation(any(), any(), any())).thenReturn(Optional.of(activeLab()));
+        when(masters.standard(any(), any(), eq(TESTED_ON))).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "standard_not_available");
+        when(masters.standard(any(), any(), any())).thenReturn(Optional.of(standardV2()));
+        when(applications.modelNumberTaken(any(), any(), any())).thenReturn(true);
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "duplicate_model");
+        when(applications.modelNumberTaken(any(), any(), any())).thenReturn(false);
+
+        // Who: only a filer.
+        account("auditor", "all");
+        conforms(r, post(path).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_write_scope");
+        account("manufacturer", "own-org");
+
+        // Identity denials and outage.
+        conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 401, "unauthenticated");
+        conforms(r, post(path).with(pwdOnly).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "mfa_required");
+        account("finance", "all");
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        account("manufacturer", "own-org");
+        when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
+        doThrow(new DataAccessResourceFailureException("down")).when(resubmitRepo).openReturn(any());
+        conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 
     @Test

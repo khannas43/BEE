@@ -117,7 +117,7 @@ class SecretaryApprovalDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         repo = transactional(new SecretaryApprovalRepository(db));
-        assertEquals(30, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V30");
+        assertEquals(31, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V31");
     }
 
     @AfterAll
@@ -175,8 +175,8 @@ class SecretaryApprovalDatabaseTest {
         assertEquals("Rating reviewed; approved.", rec.get("note"));
         assertEquals(SECRETARY_USER, rec.get("approved_by_account_id"));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND active", Integer.class, id));
-        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER, REVIEWER_USER, PROGRAMME_USER, DIRECTOR_USER, SECRETARY_USER), repo.actorsAtOtherStages(id),
-            "every officer of the chain is recorded, so none of them can also approve");
+        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER, REVIEWER_USER, PROGRAMME_USER, DIRECTOR_USER), repo.actorsAtOtherStages(id),
+            "every earlier stage counts, so none of those officers can also approve; the Secretary's own step is this stage and does not");
     }
 
     @Test

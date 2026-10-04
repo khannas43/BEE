@@ -33,6 +33,7 @@ public final class ApiErrors {
         Map.entry("segregation_refused", "A person who acted at another stage of this application, or its own organisation, cannot take this step."),
         Map.entry("amount_mismatch", "The amount received does not match the fee due."),
         Map.entry("assignee_unavailable", "No officer is available to take the next stage."),
+        Map.entry("not_returned", "Only a returned application can be resubmitted."),
         Map.entry("rating_below_threshold", "The verified efficiency is below the lowest star band, so no rating can be assigned."),
         Map.entry("test_report_required", "A test report must be uploaded before the application can be submitted."),
         Map.entry("declared_efficiency_required", "The declared efficiency figure is required before the application can be submitted."),

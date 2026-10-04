@@ -172,7 +172,7 @@ public class DocumentService {
             return replay.get();
         }
         ModelApplicationRepository.Row row = existing.get();
-        if (!"draft".equals(row.state())) {
+        if (!"draft".equals(row.state()) && !"returned".equals(row.state())) {
             return error(HttpStatus.FORBIDDEN, "not_editable");
         }
         Optional<String> brandDeny = brandDenial(caller, row);

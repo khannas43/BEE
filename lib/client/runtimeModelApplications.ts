@@ -55,6 +55,12 @@ export interface ModelApplication {
     localDemoRating: true;
     computedAt: string;
   };
+  /** The open return, on the detail read while the application is in the returned state: why, and from which stage. */
+  returnNote?: {
+    fromState: "iame_scrutiny" | "bee_scrutiny" | "director_review" | "secretary_approval";
+    reason: string;
+    returnedAt: string;
+  };
 }
 
 export interface ModelApplicationList {

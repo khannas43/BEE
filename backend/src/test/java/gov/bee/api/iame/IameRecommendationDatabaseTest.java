@@ -102,7 +102,7 @@ class IameRecommendationDatabaseTest {
         submissions = new ModelApplicationSubmitRepository(db, applications);
         feeRepo = transactional(new FeeConfirmationRepository(db));
         repo = transactional(new IameRecommendationRepository(db));
-        assertEquals(30, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V30");
+        assertEquals(31, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V31");
     }
 
     @AfterAll
@@ -155,7 +155,7 @@ class IameRecommendationDatabaseTest {
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage = 'iame_scrutiny' AND active", Integer.class, id),
             "the officer's own assignment is closed");
         assertEquals(1, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage = 'bee_scrutiny' AND active AND user_id = ?", Integer.class, id, REVIEWER_USER));
-        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER), repo.actorsAtOtherStages(id), "the submitter, Finance and the officer are all recorded");
+        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER), repo.actorsAtOtherStages(id), "the submitter and Finance count; the officer's own step is this stage and does not");
     }
 
     @Test

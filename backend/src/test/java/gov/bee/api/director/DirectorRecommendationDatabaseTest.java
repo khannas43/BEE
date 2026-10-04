@@ -113,7 +113,7 @@ class DirectorRecommendationDatabaseTest {
         reviewerRepo = transactional(new ReviewerForwardRepository(db));
         ratingRepo = transactional(new RatingRepository(db));
         repo = transactional(new DirectorRecommendationRepository(db));
-        assertEquals(30, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V30");
+        assertEquals(31, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V31");
     }
 
     @AfterAll
@@ -193,7 +193,7 @@ class DirectorRecommendationDatabaseTest {
         assertEquals(false, rec.get("director_final"));
         assertEquals("secretary_approval", rec.get("resulting_state"));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND active", Integer.class, id), "the Secretary reads the stage by role");
-        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER, REVIEWER_USER, PROGRAMME_USER, DIRECTOR_USER), repo.actorsAtOtherStages(id));
+        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER, REVIEWER_USER, PROGRAMME_USER), repo.actorsAtOtherStages(id), "the earlier stages count; the Director's own step is this stage and does not");
     }
 
     @Test

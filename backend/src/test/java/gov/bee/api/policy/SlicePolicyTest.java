@@ -172,4 +172,57 @@ class SlicePolicyTest {
             assertThat(SlicePolicy.check(a, caller(role, "all", NOVA), app(NOVA, a.stage(), a.stage())).reason()).isEqualTo("not_a_slice_role");
         }
     }
+
+    /* ---------- the return rules (FIRST_SLICE.md section 4) ---------- */
+
+    @Test
+    void eachStageOwnerMayReturnFromItsOwnStageOnly() {
+        record Owner(String role, String scope, String state) {
+        }
+        var owners = List.of(new Owner("iame", "assigned", "iame_scrutiny"), new Owner("reviewer", "assigned", "bee_scrutiny"),
+            new Owner("director", "all", "director_review"), new Owner("secretary", "all", "secretary_approval"));
+        assertThat(StageReturn.values()).hasSize(4);
+        for (var o : owners) {
+            assertThat(StageReturn.check(caller(o.role(), o.scope()), app(NOVA, o.state(), o.state())).allowed()).as(o.role() + " from " + o.state()).isTrue();
+            for (var other : owners) {
+                if (other != o) {
+                    assertThat(StageReturn.check(caller(o.role(), o.scope()), app(NOVA, other.state(), other.state())).allowed())
+                        .as(o.role() + " may not return from " + other.state()).isFalse();
+                }
+            }
+        }
+    }
+
+    @Test
+    void noOneElseReturnsAndTheStagesWithoutAReturnRuleRefuseEveryone() {
+        // Finance (fee) and Programme (rating) have no return; the applicant never returns its own application.
+        assertThat(StageReturn.check(caller("finance", "all"), app(NOVA, "fee_due")).reason()).isEqualTo("role_not_permitted");
+        assertThat(StageReturn.check(caller("programme", "all"), app(NOVA, "rating")).reason()).isEqualTo("role_not_permitted");
+        for (var state : List.of("draft", "returned", "approved", "rejected")) {
+            assertThat(StageReturn.forState(state)).as(state).isEmpty();
+            assertThat(StageReturn.check(caller("director", "all"), app(NOVA, state)).reason()).as(state).isEqualTo("role_not_permitted");
+        }
+        assertThat(StageReturn.check(caller("manufacturer", "own-org", NOVA), app(NOVA, "iame_scrutiny", "iame_scrutiny")).reason()).isEqualTo("role_not_permitted");
+        for (var role : List.of("admin", "helpdesk", "auditor")) {
+            assertThat(StageReturn.check(caller(role, "all"), app(NOVA, "director_review")).reason()).as(role).isEqualTo("role_not_permitted");
+        }
+    }
+
+    @Test
+    void anAssignedOfficerMustHoldTheAssignmentAndAnyoneWhoActedAtAnotherStageIsRefused() {
+        assertThat(StageReturn.check(caller("iame", "assigned"), app(NOVA, "iame_scrutiny")).reason()).isEqualTo("not_assigned");
+        assertThat(StageReturn.check(caller("reviewer", "assigned"), app(NOVA, "bee_scrutiny", "iame_scrutiny")).reason()).isEqualTo("not_assigned");
+        var director = caller("director", "all");
+        var actedBefore = new ApplicationFacts(UUID.randomUUID(), NOVA, "director_review", Set.of(), Set.of(director.accountId()), false);
+        assertThat(StageReturn.check(director, actedBefore).reason()).isEqualTo("same_user_other_stage");
+        assertThat(StageReturn.check(caller("director", "all"), app(NOVA, "director_review")).allowed()).isTrue();
+    }
+
+    @Test
+    void theReturnRulesAreSeparateFromTheSevenForwardSteps() {
+        assertThat(SliceAction.values()).as("the forward steps stay exactly seven").hasSize(7);
+        for (var r : StageReturn.values()) {
+            assertThat(java.util.Arrays.stream(SliceAction.values()).map(SliceAction::stage)).as("a return owner is the owner of a forward stage").contains(r.stage());
+        }
+    }
 }

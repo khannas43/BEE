@@ -39,6 +39,8 @@ before(async () => {
     rating: await import("../../app/api/runtime/model-applications/[id]/rating/route.ts"),
     directorRecommendation: await import("../../app/api/runtime/model-applications/[id]/director-recommendation/route.ts"),
     secretaryApproval: await import("../../app/api/runtime/model-applications/[id]/secretary-approval/route.ts"),
+    stageReturn: await import("../../app/api/runtime/model-applications/[id]/return/route.ts"),
+    resubmit: await import("../../app/api/runtime/model-applications/[id]/resubmit/route.ts"),
   };
 });
 
@@ -238,6 +240,30 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/secretary-approva
   const res = await routes.secretaryApproval.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/secretary-approval", "unit-secretary-post-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123469" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/return 401 session_expired | Keycloak refusing refresh on stage return", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.stageReturn.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/return", "unit-return-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123471" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/model-applications/{id}/resubmit 401 session_expired | Keycloak refusing refresh on resubmission", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.resubmit.POST(req("/api/runtime/model-applications/00000000-0000-4000-c000-000000000002/resubmit", "unit-resubmit-post-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123472" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

@@ -105,7 +105,7 @@ class ReviewerForwardDatabaseTest {
         feeRepo = transactional(new FeeConfirmationRepository(db));
         iameRepo = transactional(new IameRecommendationRepository(db));
         repo = transactional(new ReviewerForwardRepository(db));
-        assertEquals(30, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V30");
+        assertEquals(31, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V31");
     }
 
     @AfterAll
@@ -160,7 +160,7 @@ class ReviewerForwardDatabaseTest {
             "the reviewer's own assignment is closed");
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage = 'rating'", Integer.class, id),
             "Programme reads the rating stage by role, so no assignment is made");
-        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER, REVIEWER_USER), repo.actorsAtOtherStages(id));
+        assertEquals(java.util.Set.of(NOVA_USER, FINANCE_USER, IAME_USER), repo.actorsAtOtherStages(id), "the submitter, Finance and the IAME officer count; the Reviewer's own step is this stage and does not");
     }
 
     @Test

@@ -1,23 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { Icon } from "@/components/ui/Icon";
-import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
-import { DataTable, type DataTableColumn } from "@/components/app/kit/DataTable";
-import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
-import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
-import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
-import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
-import { ApplicationHistory } from "@/components/app/lifecycle/ApplicationHistory";
-import { ReturnToApplicant, ReturnedNote } from "@/components/app/lifecycle/ReturnToApplicant";
-import { RejectApplication, RejectedNote } from "@/components/app/lifecycle/RejectApplication";
+import { ReturnedNote } from "@/components/app/lifecycle/ReturnToApplicant";
+import { RejectedNote } from "@/components/app/lifecycle/RejectApplication";
+import { stageDetailRows } from "@/components/app/lifecycle/stageDetailRows";
+import { StageWorkScreen } from "@/components/app/lifecycle/StageWorkScreen";
 import type { StageRejectReceipt } from "@/lib/client/runtimeStageReject";
 import type { StageReturnReceipt } from "@/lib/client/runtimeStageReturn";
-import { useSpringIdentity } from "@/components/app/SessionBadge";
-import { gateRead } from "@/lib/client/runtimeHttp";
 import {
   type DirectorRecommendationReceipt,
   directorRecommendationSignature,
@@ -28,33 +19,13 @@ import {
   secretaryApprovalSignature,
   runSecretaryApproval,
 } from "@/lib/client/runtimeSecretaryApproval";
-import {
-  type ModelApplication,
-  readModelApplication,
-  readModelApplicationList,
-  stateLabel,
-} from "@/lib/client/runtimeModelApplications";
-import { runtimeRouteFor } from "@/lib/runtimeRoutes";
+import { type ModelApplication, stateLabel } from "@/lib/client/runtimeModelApplications";
 import { Module, Screen } from "@/lib/screens";
 
-/**
- * First slice steps 6 and 7 on one screen, as the matrix lays it out. The Program Director reviews the rating and
- * recommends approval (director_review to secretary_approval, or straight to approved where the recommendation is final
- * for the category; PROVISIONAL LOCAL ASSUMPTION on decision D1, chosen by the owner and not by BEE). The Secretary then
- * gives final approval (secretary_approval to approved, the end of the first slice). Each role sees only its own stage,
- * and the action offered follows the application's state. The rating shown is a local demonstration, never a BEE rating.
- * Spring decides what each role may see and whether an action is allowed; this screen only shows the result.
- */
 const ROUTE = "/app/model-label/director-approval";
-const RETURN_TO = ROUTE;
-const LIST_TARGET = "list";
 const NOTE_MAX = 500;
-/** All assigned rows stay visible; paging and filtering here are display only. */
-const TABLE_PAGE_SIZE = 100;
 
-// Stable loaders: useRuntimeRead takes them as effect dependencies.
-const loadList = () => readModelApplicationList();
-const loadDetail = (id: string) => readModelApplication(id);
+export const DIRECTOR_TESTID_TEMPLATES = ["director-open-${a.reference}", "director-ref-${a.reference}"] as const;
 
 export const DIRECTOR_COPY = {
   listTitle: "Applications waiting for your decision",
@@ -71,141 +42,61 @@ export const DIRECTOR_COPY = {
   secretaryNote: "Approval is the end of the first slice. Label, QR code and certificate follow in later work packages.",
 } as const;
 
-export function DirectorApproval({ module, screen }: { module: Module; screen: Screen }) {
-  const identity = useSpringIdentity();
-  const params = useSearchParams();
-  const selectedId = params.get("id");
-  const revalidation = useRevalidation();
-  const [done, setDone] = useState<{ kind: "director"; receipt: DirectorRecommendationReceipt } | { kind: "secretary"; receipt: SecretaryApprovalReceipt } | { kind: "returned"; receipt: StageReturnReceipt } | { kind: "rejected"; receipt: StageRejectReceipt } | null>(null);
+type DoneState =
+  | { kind: "director"; receipt: DirectorRecommendationReceipt }
+  | { kind: "secretary"; receipt: SecretaryApprovalReceipt }
+  | { kind: "returned"; receipt: StageReturnReceipt }
+  | { kind: "rejected"; receipt: StageRejectReceipt };
 
-  const list = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
-  const detail = gateRead(identity.status, useRuntimeRead(selectedId, loadDetail, revalidation));
+export function DirectorApproval({ module, screen }: { module: Module; screen: Screen }) {
+  const [done, setDone] = useState<DoneState | null>(null);
 
   return (
-    <ScreenChrome
+    <StageWorkScreen
       module={module}
       screen={screen}
+      route={ROUTE}
       subtitle="Review the rating and recommend approval"
-      implemented={runtimeRouteFor(ROUTE)?.implemented}
-    >
-      <div className="space-y-space-md" data-testid="director-scrutiny">
-        <IdentityStrip identity={identity} testId="director-identity" />
-        <div className={`grid grid-cols-1 gap-space-md ${selectedId ? "lg:grid-cols-5" : ""}`}>
-          <div className={selectedId ? "lg:col-span-3" : ""}>
-            <ReadPanel
-              title={DIRECTOR_COPY.listTitle}
-              read={list}
-              loadingText={DIRECTOR_COPY.loading}
-              loadingTestId="director-queue-loading"
-              errorTestId="director-queue-error"
-              signInReturnTo={RETURN_TO}
-              isEmpty={(r) => r.list.count === 0}
-              emptyText={DIRECTOR_COPY.empty}
-              emptyTestId="director-queue-empty"
-              resultAction={(r) => <span className="font-label-sm text-label-sm text-on-surface-variant">{r.list.count} records</span>}
-            >
-              {(r) => <QueueTable items={r.list.items} selectedId={selectedId} />}
-            </ReadPanel>
-          </div>
-          {selectedId ? (
-            <div className="lg:col-span-2" data-testid="director-detail" data-selected-id={selectedId}>
-              {done && done.receipt.applicationId === selectedId ? (
-                done.kind === "director" ? <RecommendedNote receipt={done.receipt} />
-                  : done.kind === "secretary" ? <ApprovedNote receipt={done.receipt} />
-                  : done.kind === "returned" ? <ReturnedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />
-                  : <RejectedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />
-              ) : (
-                <ReadPanel
-                  title="Application and evidence"
-                  read={detail}
-                  loadingText={DIRECTOR_COPY.loadingDetail}
-                  errorTestId="director-detail-error"
-                  signInReturnTo={RETURN_TO}
-                  action={
-                    <Link href={ROUTE} className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1" data-testid="director-detail-close">
-                      Close <Icon name="close" size={14} />
-                    </Link>
-                  }
-                >
-                  {(r) => (
-                    <DetailAndDecide
-                      application={r.application}
-                      onRecommended={(receipt) => {
-                        setDone({ kind: "director", receipt });
-                        revalidation.refresh();
-                      }}
-                      onApproved={(receipt) => {
-                        setDone({ kind: "secretary", receipt });
-                        revalidation.refresh();
-                      }}
-                      onReturned={(receipt) => {
-                        setDone({ kind: "returned", receipt });
-                        revalidation.refresh();
-                      }}
-                      onRejected={(receipt) => {
-                        setDone({ kind: "rejected", receipt });
-                        revalidation.refresh();
-                      }}
-                      onReload={revalidation.refresh}
-                    />
-                  )}
-                </ReadPanel>
-              )}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </ScreenChrome>
-  );
-}
-
-function QueueTable({ items, selectedId }: { items: ModelApplication[]; selectedId: string | null }) {
-  const columns: DataTableColumn<ModelApplication>[] = [
-    {
-      key: "reference",
-      header: "Reference",
-      sortValue: (a) => a.reference,
-      render: (a) => (
-        <span className="font-mono" data-testid={`director-ref-${a.reference}`}>
-          {a.reference}
-        </span>
-      ),
-    },
-    { key: "organisation", header: "Organisation", sortValue: (a) => a.organisation, render: (a) => a.organisation },
-    {
-      key: "brand",
-      header: "Brand / Model",
-      sortValue: (a) => `${a.brandName} ${a.modelNumber}`,
-      render: (a) => (
-        <div>
-          <div className="font-semibold text-on-surface">{a.brandName}</div>
-          <div className="font-label-sm text-label-sm text-on-surface-variant">{a.modelNumber}</div>
-        </div>
-      ),
-    },
-    { key: "category", header: "Category", sortValue: (a) => a.category, render: (a) => a.category },
-    {
-      key: "open",
-      header: "",
-      render: (a) => (
-        <Link
-          href={`${ROUTE}?id=${encodeURIComponent(a.id)}`}
-          className={`font-label-sm text-label-sm inline-flex items-center gap-1 ${a.id === selectedId ? "text-on-surface font-semibold" : "text-primary hover:underline"}`}
-          data-testid={`director-open-${a.reference}`}
-        >
-          {a.id === selectedId ? "Selected" : "Review"} <Icon name="arrow_forward" size={14} />
-        </Link>
-      ),
-    },
-  ];
-  return (
-    <DataTable
-      columns={columns}
-      rows={items}
-      rowKey={(a) => a.id}
-      pageSize={TABLE_PAGE_SIZE}
-      tableTestId="director-queue-table"
-      filterTestId="director-queue-filter"
+      screenTestId="director-scrutiny"
+      testIdPrefix="director"
+      copy={DIRECTOR_COPY}
+      detailFieldsTestId="director-detail-fields"
+      historyTestIdPrefix="director-history"
+      returnRejectTestIdPrefix={(application) =>
+        application.state === "secretary_approval" ? "secretary" : "director"
+      }
+      detailRows={(application) => stageDetailRows(application, { includeStage: true })}
+      renderExtraDetail={(application) => <RatingBlock application={application} />}
+      renderPrimary={(application, helpers) =>
+        application.state === "secretary_approval" ? (
+          <SecretaryPrimaryCommand
+            application={application}
+            onApproved={(receipt) => {
+              setDone({ kind: "secretary", receipt });
+              helpers.reload();
+            }}
+            onReload={helpers.reload}
+          />
+        ) : (
+          <DirectorPrimaryCommand
+            application={application}
+            onRecommended={(receipt) => {
+              setDone({ kind: "director", receipt });
+              helpers.reload();
+            }}
+            onReload={helpers.reload}
+          />
+        )
+      }
+      onReturned={(receipt) => setDone({ kind: "returned", receipt })}
+      onRejected={(receipt) => setDone({ kind: "rejected", receipt })}
+      renderDetailAside={(selectedId) => {
+        if (!done || done.receipt.applicationId !== selectedId) return undefined;
+        if (done.kind === "director") return <RecommendedNote receipt={done.receipt} />;
+        if (done.kind === "secretary") return <ApprovedNote receipt={done.receipt} />;
+        if (done.kind === "returned") return <ReturnedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />;
+        return <RejectedNote receipt={done.receipt} backHref={ROUTE} testIdPrefix="director" />;
+      }}
     />
   );
 }
@@ -242,55 +133,7 @@ function ApprovedNote({ receipt }: { receipt: SecretaryApprovalReceipt }) {
   );
 }
 
-function DetailAndDecide({
-  application,
-  onRecommended,
-  onApproved,
-  onReturned,
-  onRejected,
-  onReload,
-}: {
-  application: ModelApplication;
-  onRecommended: (receipt: DirectorRecommendationReceipt) => void;
-  onApproved: (receipt: SecretaryApprovalReceipt) => void;
-  onReturned: (receipt: StageReturnReceipt) => void;
-  onRejected: (receipt: StageRejectReceipt) => void;
-  onReload: () => void;
-}) {
-  return (
-    <div>
-      <DescriptionList
-        testId="director-detail-fields"
-        rows={[
-          { label: "Reference", value: application.reference, mono: true },
-          { label: "Organisation", value: application.organisation },
-          { label: "Brand", value: application.brandName },
-          { label: "Model number", value: application.modelNumber },
-          { label: "Laboratory", value: application.laboratoryCode ?? "—" },
-          { label: "Test date", value: application.testedOn ?? "—" },
-          { label: "Declared efficiency", value: application.declaredIseer === undefined ? "—" : String(application.declaredIseer) },
-          { label: "Stage", value: stateLabel(application.state) },
-          { label: "Version", value: String(application.version) },
-        ]}
-      />
-      <RatingBlock application={application} />
-      <h3 className="font-label-md text-label-md text-on-surface mt-space-md">Test reports</h3>
-      <ApplicationDocuments key={application.id} applicationId={application.id} />
-      <h3 className="font-label-md text-label-md text-on-surface mt-space-md">History</h3>
-      <ApplicationHistory key={application.id} applicationId={application.id} testIdPrefix="director-history" />
-      <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-md">{DIRECTOR_COPY.provisional}</p>
-      {application.state === "secretary_approval" ? (
-        <SecretaryActions application={application} onApproved={onApproved} onReload={onReload} />
-      ) : (
-        <DirectorActions application={application} onRecommended={onRecommended} onReload={onReload} />
-      )}
-      <ReturnToApplicant application={application} testIdPrefix={application.state === "secretary_approval" ? "secretary" : "director"} signInReturnTo={RETURN_TO} onReturned={onReturned} onReload={onReload} />
-      <RejectApplication application={application} testIdPrefix={application.state === "secretary_approval" ? "secretary" : "director"} signInReturnTo={RETURN_TO} onRejected={onRejected} onReload={onReload} />
-    </div>
-  );
-}
-
-function DirectorActions({
+function DirectorPrimaryCommand({
   application,
   onRecommended,
   onReload,
@@ -327,7 +170,7 @@ function DirectorActions({
         errorTestId="director-recommend-error"
         reloadTestId="director-recommend-reload"
         onReload={onReload}
-        signInReturnTo={RETURN_TO}
+        signInReturnTo={ROUTE}
       >
         <label className="block font-label-sm text-label-sm text-on-surface-variant">
           {DIRECTOR_COPY.noteLabel}
@@ -349,7 +192,7 @@ function DirectorActions({
   );
 }
 
-function SecretaryActions({
+function SecretaryPrimaryCommand({
   application,
   onApproved,
   onReload,
@@ -386,7 +229,7 @@ function SecretaryActions({
         errorTestId="secretary-approve-error"
         reloadTestId="secretary-approve-reload"
         onReload={onReload}
-        signInReturnTo={RETURN_TO}
+        signInReturnTo={ROUTE}
       >
         <label className="block font-label-sm text-label-sm text-on-surface-variant">
           {DIRECTOR_COPY.noteLabel}

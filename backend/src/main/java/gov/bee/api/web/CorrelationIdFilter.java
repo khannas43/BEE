@@ -67,6 +67,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             return "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
         }
         if (path.matches("/api/model-applications/[^/]+/fee-confirmation")) return "/api/model-applications/{id}/fee-confirmation";
+        if (path.matches("/api/model-applications/[^/]+/iame-recommendation")) return "/api/model-applications/{id}/iame-recommendation";
         if (path.endsWith("/history") && path.startsWith("/api/model-applications/")) return "/api/model-applications/{id}/history";
         if (DETAIL.matcher(path).matches()) return "/api/model-applications/{id}";
         if (HEALTH_GROUP.matcher(path).matches()) return "/actuator/health/{group}";

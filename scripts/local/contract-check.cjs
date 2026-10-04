@@ -50,6 +50,11 @@ const FEE_ROUTE = "/api/runtime/model-applications/{id}/fee-confirmation";
 const FEE_UPSTREAM = {
   POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "assignee_unavailable"], 422: ["validation_failed", "idempotency_key_required", "amount_mismatch"], 503: ["service_unavailable"] },
 };
+// First slice step 3 (the IAME officer recommends). Keep equal to lib/server/contracts/iame-recommendation.ts and the artifact.
+const IAME_ROUTE = "/api/runtime/model-applications/{id}/iame-recommendation";
+const IAME_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress", "assignee_unavailable"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: WRITE_DENIALS, 503: ["service_unavailable"] },
@@ -393,6 +398,13 @@ async function nextChecks(jar, novaToken) {
   const feeNoSessOk = feeAnon.status === 401 && feeAnon.json?.error === "no_session" && e.length === 0;
   contract.record({ route: FEE_R, method: "POST", status: feeAnon.status, code: feeAnon.json?.error ?? "-", ok: feeNoSessOk });
   check("next.fee-confirmation-no-session", feeNoSessOk && sameCorr(feeAnon), `POST runtime fee-confirmation without cookie: ${feeAnon.status} ${feeAnon.json?.error}${show(e)}`);
+  const iameAnon = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/iame-recommendation`, {
+    method: "POST", correlationId: cid("next-iame-anon-post"), headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123462" }, body: "{}",
+  });
+  e = contract.conforms(doc, IAME_ROUTE, "POST", iameAnon);
+  const iameNoSessOk = iameAnon.status === 401 && iameAnon.json?.error === "no_session" && e.length === 0;
+  contract.record({ route: IAME_ROUTE, method: "POST", status: iameAnon.status, code: iameAnon.json?.error ?? "-", ok: iameNoSessOk });
+  check("next.iame-recommendation-no-session", iameNoSessOk && sameCorr(iameAnon), `POST runtime iame-recommendation without cookie: ${iameAnon.status} ${iameAnon.json?.error}${show(e)}`);
   const docListAnonGet = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, { correlationId: cid("next-doc-anon-get") });
   const docUploadMp = contractUploadMultipart();
   const docListAnonPost = await call(`${WEB}/api/runtime/model-applications/${NOVA_APP}/documents`, {
@@ -528,6 +540,7 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(SUBMIT_ROUTE, SUBMIT_URL, "GET", sessionJar);
     await exerciseStandInPairs(SUBMIT_ROUTE, SUBMIT_URL, "POST", sessionJar);
     await exerciseStandInPairs(FEE_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/fee-confirmation`, "POST", sessionJar, FEE_UPSTREAM);
+    await exerciseStandInPairs(IAME_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/iame-recommendation`, "POST", sessionJar, IAME_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(DOC_CONTENT_ROUTE, DOC_CONTENT_URL, "GET", sessionJar, DOC_READ_UPSTREAM);

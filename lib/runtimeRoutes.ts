@@ -40,6 +40,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     navRoles: ["finance"],
     implemented: ["List fee-due applications", "View fee and evidence", "Confirm fee received"],
   },
+  {
+    href: "/app/model-label/iame-scrutiny",
+    en: "IAME scrutiny",
+    hi: "आईएएमई जाँच",
+    icon: "fact_check",
+    navRoles: ["iame"],
+    implemented: ["List assigned applications", "View evidence and test reports", "Record finding and forward"],
+  },
 ];
 
 export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {

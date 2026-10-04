@@ -219,6 +219,13 @@ read -r fc_pass fc_fail <<<"$(sed -nE 's/^fee-confirmation checks: ([0-9]+) pass
 if [[ -z "${fc_pass:-}" ]]; then check "fee.run" 0 "fee-confirmation-browser-check did not complete: $(tail -1 <<<"$fc_out")"
 else pass=$((pass + fc_pass)); fail=$((fail + fc_fail)); fi
 
+# ---- first slice step 3: the assigned IAME officer recommends through the BFF and the portal (records runtime iame-recommendation pairs)
+ir_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/iame-recommendation-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$ir_out"
+read -r ir_pass ir_fail <<<"$(sed -nE 's/^iame-recommendation checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$ir_out")"
+if [[ -z "${ir_pass:-}" ]]; then check "iame.run" 0 "iame-recommendation-browser-check did not complete: $(tail -1 <<<"$ir_out")"
+else pass=$((pass + ir_pass)); fail=$((fail + ir_fail)); fi
+
 # ---- WP06.1a document intake through BFF (records runtime document pairs for contract coverage)
 mdoc_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/model-documents-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mdoc_out"

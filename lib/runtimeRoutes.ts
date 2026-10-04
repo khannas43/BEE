@@ -17,6 +17,14 @@ export interface RuntimeRoute {
 
 export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   {
+    href: "/app/administration/fee-rules",
+    en: "Fee rules",
+    hi: "शुल्क नियम",
+    icon: "request_quote",
+    navRoles: ["admin"],
+    implemented: ["See every fee rule and its dates", "Propose a rule from a date", "Approve or reject a colleague's proposal", "Withdraw your own proposal"],
+  },
+  {
     href: "/app/workflow/personal-inbox",
     en: "My work",
     hi: "मेरा कार्य",

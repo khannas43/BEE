@@ -46,6 +46,9 @@ before(async () => {
     feeRules: await import("../../app/api/runtime/fee-rules/route.ts"),
     feeProposals: await import("../../app/api/runtime/fee-rules/proposals/route.ts"),
     feeDecision: await import("../../app/api/runtime/fee-rules/proposals/[id]/decision/route.ts"),
+    schemes: await import("../../app/api/runtime/rating-schemes/route.ts"),
+    schemeProposals: await import("../../app/api/runtime/rating-schemes/proposals/route.ts"),
+    schemeDecision: await import("../../app/api/runtime/rating-schemes/proposals/[id]/decision/route.ts"),
   };
 });
 
@@ -313,6 +316,38 @@ test("unit-evidence: POST /api/runtime/fee-rules/proposals/{id}/decision 401 ses
   const res = await routes.feeDecision.POST(req("/api/runtime/fee-rules/proposals/00000000-0000-4000-c000-000000000002/decision", "unit-fee-decision-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123479" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/rating-schemes 401 session_expired | Keycloak refusing refresh on rating schemes", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.schemes.GET(req("/api/runtime/rating-schemes", "unit-schemes-refresh-refused", cookie));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/rating-schemes/proposals 401 session_expired | Keycloak refusing refresh on a rating-scheme proposal", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.schemeProposals.POST(req("/api/runtime/rating-schemes/proposals", "unit-scheme-proposal-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123480" },
+    body: "{}",
+  }));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/rating-schemes/proposals/{id}/decision 401 session_expired | Keycloak refusing refresh on a rating-scheme decision", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.schemeDecision.POST(req("/api/runtime/rating-schemes/proposals/00000000-0000-4000-c000-000000000002/decision", "unit-scheme-decision-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123481" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

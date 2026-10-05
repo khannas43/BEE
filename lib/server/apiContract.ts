@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.18.0";
+export const CONTRACT_VERSION = "0.19.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */

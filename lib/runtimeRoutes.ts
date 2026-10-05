@@ -25,6 +25,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["See every fee rule and its dates", "Propose a rule from a date", "Approve or reject a colleague's proposal", "Withdraw your own proposal"],
   },
   {
+    href: "/app/administration/rating-formula",
+    en: "Rating schemes",
+    hi: "रेटिंग योजना",
+    icon: "star",
+    navRoles: ["admin"],
+    implemented: ["See every rating scheme and when it starts", "Propose a scheme from a date", "Approve or reject a colleague's proposal", "Withdraw your own proposal"],
+  },
+  {
     href: "/app/workflow/personal-inbox",
     en: "My work",
     hi: "मेरा कार्य",

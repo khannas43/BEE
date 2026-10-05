@@ -101,6 +101,13 @@ const FEE_PROPOSAL_UPSTREAM = {
 const FEE_DECISION_UPSTREAM = {
   POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "effective_date_passed", "rule_conflict", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
 };
+// Rating-scheme administration. Keep equal to lib/server/contracts/rating-schemes.ts and the artifact.
+const SCHEMES_ROUTE = "/api/runtime/rating-schemes";
+const SCHEME_PROPOSAL_ROUTE = "/api/runtime/rating-schemes/proposals";
+const SCHEME_DECISION_ROUTE = "/api/runtime/rating-schemes/proposals/{id}/decision";
+const SCHEMES_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: FEE_DENIALS, 503: ["service_unavailable"] } };
+const SCHEME_PROPOSAL_UPSTREAM = FEE_PROPOSAL_UPSTREAM;
+const SCHEME_DECISION_UPSTREAM = FEE_DECISION_UPSTREAM;
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: WRITE_DENIALS, 503: ["service_unavailable"] },
@@ -504,6 +511,9 @@ async function nextChecks(jar, novaToken) {
     [FEE_RULES_ROUTE, "/api/runtime/fee-rules", "GET", "fee-rules-anon-get", undefined],
     [FEE_PROPOSAL_ROUTE, "/api/runtime/fee-rules/proposals", "POST", "fee-proposal-anon-post", "{}"],
     [FEE_DECISION_ROUTE, `/api/runtime/fee-rules/proposals/${NOVA_APP}/decision`, "POST", "fee-decision-anon-post", "{}"],
+    [SCHEMES_ROUTE, "/api/runtime/rating-schemes", "GET", "schemes-anon-get", undefined],
+    [SCHEME_PROPOSAL_ROUTE, "/api/runtime/rating-schemes/proposals", "POST", "scheme-proposal-anon-post", "{}"],
+    [SCHEME_DECISION_ROUTE, `/api/runtime/rating-schemes/proposals/${NOVA_APP}/decision`, "POST", "scheme-decision-anon-post", "{}"],
   ]) {
     const r = await call(`${WEB}${path}`, { method, correlationId: cid(`next-${tag}`), ...(body ? { headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123477" }, body } : {}) });
     e = contract.conforms(doc, route, method, r);
@@ -662,6 +672,9 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(FEE_RULES_ROUTE, "/api/runtime/fee-rules", "GET", sessionJar, FEE_RULES_UPSTREAM);
     await exerciseStandInPairs(FEE_PROPOSAL_ROUTE, "/api/runtime/fee-rules/proposals", "POST", sessionJar, FEE_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(FEE_DECISION_ROUTE, `/api/runtime/fee-rules/proposals/${NOVA_APP}/decision`, "POST", sessionJar, FEE_DECISION_UPSTREAM);
+    await exerciseStandInPairs(SCHEMES_ROUTE, "/api/runtime/rating-schemes", "GET", sessionJar, SCHEMES_UPSTREAM);
+    await exerciseStandInPairs(SCHEME_PROPOSAL_ROUTE, "/api/runtime/rating-schemes/proposals", "POST", sessionJar, SCHEME_PROPOSAL_UPSTREAM);
+    await exerciseStandInPairs(SCHEME_DECISION_ROUTE, `/api/runtime/rating-schemes/proposals/${NOVA_APP}/decision`, "POST", sessionJar, SCHEME_DECISION_UPSTREAM);
     await exerciseStandInPairs("/api/runtime/model-applications/{id}/history", `/api/runtime/model-applications/${NOVA_APP}/history`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);

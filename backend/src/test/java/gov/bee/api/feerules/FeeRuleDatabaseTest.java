@@ -3,6 +3,7 @@ package gov.bee.api.feerules;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import gov.bee.api.feerules.FeeRuleRepository.NewProposal;
@@ -74,7 +75,7 @@ class FeeRuleDatabaseTest {
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         repo = new FeeRuleRepository(db);
         masters = new MasterDataRepository(db);
-        assertEquals(34, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V34");
+        assertEquals(35, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V35");
     }
 
     @AfterAll
@@ -208,11 +209,15 @@ class FeeRuleDatabaseTest {
     }
 
     @Test
-    void theRuntimeLoginCannotEditOrDeleteARuleAndAnOverlappingDirectInsertIsRefused() {
-        org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> db.update(
+    void theRuntimeLoginCannotWriteARuleDirectlyNotEvenOneThatDoesNotOverlap() {
+        // No overlap: a brand-new application type. Only the missing privilege stops it, so a fee rule can start only through the decision function.
+        assertThrows(Exception.class, () -> db.update(
+            "INSERT INTO master_fee_rule (rule_key, version, effective_from, source_reference, verification_status, note, category_code, application_type, amount_inr) "
+                + "VALUES ('RAC:sneaky', 1, DATE '2090-01-01', 's', 'provisional', 'n', 'RAC', 'sneaky', 1)"));
+        assertThrows(Exception.class, () -> db.update(
             "INSERT INTO master_fee_rule (rule_key, version, effective_from, source_reference, verification_status, note, category_code, application_type, amount_inr) "
                 + "VALUES ('RAC:new_model', 99, DATE '2030-01-01', 's', 'provisional', 'n', 'RAC', 'new_model', 1)"));
-        org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> db.update("UPDATE master_fee_rule SET amount_inr = 1"));
-        org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> db.update("DELETE FROM master_fee_rule"));
+        assertThrows(Exception.class, () -> db.update("UPDATE master_fee_rule SET amount_inr = 1"));
+        assertThrows(Exception.class, () -> db.update("DELETE FROM master_fee_rule"));
     }
 }

@@ -22,6 +22,7 @@
             "type": "string",
             "enum": [
               "/actuator/health", "/actuator/health/{group}", "/api/me", "/api/model-applications", "/api/model-applications/eligible-brands", "/api/model-applications/{id}", "/api/fee-rules", "/api/fee-rules/proposals", "/api/fee-rules/proposals/{id}/decision",
+              "/api/rating-schemes", "/api/rating-schemes/proposals", "/api/rating-schemes/proposals/{id}/decision",
               "/api/model-applications/{id}/history", "/api/model-applications/{id}/submit", "unmapped",
               "/api/model-applications/{id}/documents", "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",
               "/api/model-applications/{id}/fee-confirmation",
@@ -29,6 +30,7 @@
               "/api/runtime/health", "/api/runtime/me", "/api/runtime/model-applications", "/api/runtime/model-applications/eligible-brands",               "/api/runtime/model-applications/{id}", "/api/runtime/model-applications/{id}/submit",
               "/api/runtime/model-applications/{id}/documents", "/api/runtime/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",
               "/api/runtime/fee-rules", "/api/runtime/fee-rules/proposals", "/api/runtime/fee-rules/proposals/{id}/decision",
+              "/api/runtime/rating-schemes", "/api/runtime/rating-schemes/proposals", "/api/runtime/rating-schemes/proposals/{id}/decision",
               "/api/runtime/model-applications/{id}/history",
               "/api/runtime/model-applications/{id}/fee-confirmation",
               "/api/runtime/model-applications/{id}/iame-recommendation",
@@ -67,6 +69,7 @@
           "route": { "type": "string", "enum": ["/actuator/health", "/api/me", "/api/model-applications", "/api/model-applications/eligible-brands", "/api/model-applications/{id}", "/api/model-applications/{id}/submit",
             "/api/model-applications/{id}/documents", "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content",
             "/api/fee-rules", "/api/fee-rules/proposals", "/api/fee-rules/proposals/{id}/decision",
+              "/api/rating-schemes", "/api/rating-schemes/proposals", "/api/rating-schemes/proposals/{id}/decision",
               "/api/model-applications/{id}/history",
             "/api/model-applications/{id}/fee-confirmation",
             "/api/model-applications/{id}/iame-recommendation",

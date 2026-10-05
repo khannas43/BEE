@@ -166,6 +166,9 @@ class SpringContractTest {
     gov.bee.api.feerules.FeeRuleRepository feeRulesRepo;
 
     @MockitoBean
+    gov.bee.api.ratingschemes.RatingSchemeRepository schemesRepo;
+
+    @MockitoBean
     LocalSha256FileStore documentStore;
 
     static final UUID DOC_ID = UUID.fromString("00000000-0000-4000-e000-000000000001");
@@ -1562,6 +1565,119 @@ class SpringContractTest {
         return new gov.bee.api.feerules.FeeRuleRepository.Proposal(PROPOSAL_ID, "RAC", "new_model", new java.math.BigDecimal("26000.00"), new java.math.BigDecimal("18.00"),
             java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).plusDays(10), "Circular 2026/14", "Revised fee", proposer, "Proposer Name", Instant.parse("2026-10-04T10:00:00Z"), state,
             pending ? null : "Decider Name", pending ? null : Instant.parse("2026-10-04T11:00:00Z"), null, state.equals("approved") ? 3 : null);
+    }
+
+    static gov.bee.api.ratingschemes.RatingSchemeRepository.Proposal schemeProposal(String state, UUID proposer) {
+        boolean pending = state.equals("pending");
+        return new gov.bee.api.ratingschemes.RatingSchemeRepository.Proposal(PROPOSAL_ID, "RAC", java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).plusDays(10),
+            List.of(new BigDecimal("3.00"), new BigDecimal("3.40"), new BigDecimal("3.90"), new BigDecimal("4.40"), new BigDecimal("4.90")), "Circular 2026/14", "Revised scheme",
+            proposer, "Proposer Name", Instant.parse("2026-10-04T10:00:00Z"), state, pending ? null : "Decider Name", pending ? null : Instant.parse("2026-10-04T11:00:00Z"), null,
+            state.equals("approved") ? "RAC-ISEER-2" : null);
+    }
+
+    @Test
+    void ratingSchemeOperationsDocumentedPairs() throws Exception {
+        String list = "/api/rating-schemes";
+        String propose = "/api/rating-schemes/proposals";
+        String decide = "/api/rating-schemes/proposals/{id}/decision";
+        String decidePath = "/api/rating-schemes/proposals/" + PROPOSAL_ID + "/decision";
+        String when10 = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).plusDays(10).toString();
+        String ok = "{\"categoryCode\":\"RAC\",\"effectiveFrom\":\"" + when10 + "\",\"minIseer\":[\"3.00\",\"3.40\",\"3.90\",\"4.40\",\"4.90\"],"
+            + "\"sourceReference\":\"Circular 2026/14\",\"reason\":\"Revised scheme\"}";
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("admin"))));
+        UUID other = UUID.fromString("00000000-0000-4000-a000-0000000000aa");
+        account("admin", "all");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(schemesRepo.rolesHolding("rating_scheme_manage")).thenReturn(Set.of("admin"));
+        when(schemesRepo.categoriesOn(any())).thenReturn(List.of(new gov.bee.api.ratingschemes.RatingSchemeRepository.Category("RAC", "Room air conditioner")));
+        when(schemesRepo.categoryAppliesOn(org.mockito.ArgumentMatchers.eq("RAC"), any())).thenReturn(true);
+        when(schemesRepo.schemes()).thenReturn(List.of(new gov.bee.api.ratingschemes.RatingSchemeRepository.Scheme("RAC-ISEER-DEMO-1", "RAC", java.time.LocalDate.of(2026, 1, 1),
+            List.of(new gov.bee.api.ratingschemes.RatingSchemeRepository.Band(1, new BigDecimal("3.30")), new gov.bee.api.ratingschemes.RatingSchemeRepository.Band(2, new BigDecimal("3.50")),
+                new gov.bee.api.ratingschemes.RatingSchemeRepository.Band(3, new BigDecimal("4.00")), new gov.bee.api.ratingschemes.RatingSchemeRepository.Band(4, new BigDecimal("4.50")),
+                new gov.bee.api.ratingschemes.RatingSchemeRepository.Band(5, new BigDecimal("5.00"))), "Local seed", "Placeholder band")));
+        when(schemesRepo.pending()).thenReturn(List.of(schemeProposal("pending", other)));
+        when(schemesRepo.recentDecided(anyInt())).thenReturn(List.of(schemeProposal("approved", other)));
+        when(schemesRepo.insert(any(), any())).thenReturn(schemeProposal("pending", USER));
+        when(schemesRepo.proposal(PROPOSAL_ID)).thenReturn(Optional.of(schemeProposal("pending", other)));
+        when(schemesRepo.decide(any(), any(), any(), any())).thenReturn(new gov.bee.api.ratingschemes.RatingSchemeRepository.Decided(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.DONE, "approved", "RAC-ISEER-2"));
+
+        var read = conforms(list, get(list).with(token("admin")), 200, null);
+        assertTrue(read.getContentAsString().contains("\"schemeKey\":\"RAC-ISEER-DEMO-1\"") && read.getContentAsString().contains("\"inForce\":true") && read.getContentAsString().contains("\"proposedByYou\":false"), read.getContentAsString());
+        account("manufacturer", "own-org");
+        conforms(list, get(list).with(token("manufacturer")), 403, "role_not_permitted");
+        account("admin", "all");
+
+        var created = conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 201, null);
+        assertTrue(created.getContentAsString().contains("\"state\":\"pending\"") && created.getContentAsString().contains("\"proposedByYou\":true"), created.getContentAsString());
+        conforms(propose, post(propose).with(token("admin")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"3.40\"", "\"3.00\"")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace(",\"4.90\"", "")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"3.90\"", "\"3.905\"")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace(when10, "2020-01-01")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("Revised scheme", "line\\nbreak")), 422, "validation_failed");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 201, "{}", 0)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        account("manufacturer", "own-org");
+        conforms(propose, post(propose).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("admin", "all");
+
+        when(schemesRepo.proposal(PROPOSAL_ID)).thenReturn(Optional.of(schemeProposal("approved", other)));
+        var approved = conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"decision\":\"approve\"}"), 200, null);
+        assertTrue(approved.getContentAsString().contains("\"state\":\"approved\"") && approved.getContentAsString().contains("\"appliedScheme\":\"RAC-ISEER-2\""), approved.getContentAsString());
+        String go = "{\"decision\":\"approve\"}";
+        when(schemesRepo.proposal(PROPOSAL_ID)).thenReturn(Optional.of(schemeProposal("pending", other)));
+        record Refusal(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome outcome, int status, String code) {
+        }
+        for (var r : List.of(new Refusal(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.SAME_PERSON, 403, "segregation_refused"), new Refusal(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.ONLY_PROPOSER, 403, "role_not_permitted"),
+            new Refusal(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.NOT_PERMITTED, 403, "role_not_permitted"), new Refusal(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.NOT_PENDING, 409, "proposal_not_pending"),
+            new Refusal(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.DATE_PASSED, 409, "effective_date_passed"), new Refusal(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.RULE_CONFLICT, 409, "rule_conflict"), new Refusal(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.NOT_FOUND, 404, "not_found"))) {
+            when(schemesRepo.decide(any(), any(), any(), any())).thenReturn(new gov.bee.api.ratingschemes.RatingSchemeRepository.Decided(r.outcome(), null, null));
+            conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), r.status(), r.code());
+        }
+        when(schemesRepo.decide(any(), any(), any(), any())).thenReturn(new gov.bee.api.ratingschemes.RatingSchemeRepository.Decided(gov.bee.api.ratingschemes.RatingSchemeRepository.Outcome.DONE, "approved", "RAC-ISEER-2"));
+        conforms(decide, post("/api/rating-schemes/proposals/" + UUID.randomUUID() + "/decision").with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 404, "not_found");
+        conforms(decide, post(decidePath).with(token("admin")).contentType("application/json").content(go), 422, "idempotency_key_required");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"decision\":\"delete\"}"), 422, "validation_failed");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"decision\":\"reject\",\"note\":\"" + "x".repeat(501) + "\"}"), 422, "validation_failed");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 409, "idempotency_key_conflict");
+        String stored = "{\"id\":\"" + PROPOSAL_ID + "\",\"categoryCode\":\"RAC\",\"effectiveFrom\":\"" + when10 + "\",\"minIseer\":[\"3.00\",\"3.40\",\"3.90\",\"4.40\",\"4.90\"],"
+            + "\"sourceReference\":\"Circular 2026/14\",\"reason\":\"Revised scheme\",\"state\":\"pending\",\"proposedBy\":\"Proposer Name\",\"proposedByYou\":false,"
+            + "\"proposedAt\":\"2026-10-04T10:00:00Z\",\"decidedBy\":null,\"decidedAt\":null,\"decisionNote\":null,\"appliedScheme\":null}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(go))));
+        var replay = conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        for (String[] r : new String[][] {{list, "GET"}, {propose, "POST"}, {decide, "POST"}}) {
+            String path = r[0].equals(decide) ? decidePath : r[0];
+            var req = r[1].equals("GET") ? get(path) : post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(r[0].equals(propose) ? ok : go);
+            conforms(r[0], req, 401, "unauthenticated");
+            var req2 = r[1].equals("GET") ? get(path) : post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(r[0].equals(propose) ? ok : go);
+            conforms(r[0], req2.with(pwdOnly), 403, "mfa_required");
+        }
+        account("manufacturer", "own-org");
+        conforms(list, get(list).with(token("admin")), 403, "no_effective_role");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(list, get(list).with(token("admin")), 403, "no_active_account");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 403, "no_active_account");
+        account("admin", "all");
+        when(schemesRepo.rolesHolding("rating_scheme_manage")).thenThrow(new DataAccessResourceFailureException("down"));
+        conforms(list, get(list).with(token("admin")), 503, "service_unavailable");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(go), 503, "service_unavailable");
     }
 
     @Test

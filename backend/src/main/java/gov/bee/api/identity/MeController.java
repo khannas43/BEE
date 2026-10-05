@@ -55,6 +55,8 @@ public class MeController {
         body.put("displayName", account.get().displayName());
         body.put("authority", "spring-database");
         body.put("effectiveRoles", effective.stream().map(g -> Map.of("role", g.role(), "scope", g.scope())).toList());
+        // The permissions this person's roles hold. The menu uses it to offer a screen; Spring still decides every action.
+        body.put("capabilities", identity.capabilities(effective.stream().map(g -> g.role()).distinct().toList()));
         body.put("organisations", identity.activeMemberships(account.get().id()).stream()
             .map(m -> Map.of("code", m.code(), "kind", m.kind(), "name", m.legalName())).toList());
         body.put("activeAssignments", identity.activeAssignments(account.get().id()));

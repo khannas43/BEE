@@ -55,6 +55,14 @@ async function open(page, route, readyTestId) {
   return present(page, readyTestId, 30000);
 }
 
+
+/** The runtime menu entries a person sees on a fresh page load (the identity, with its permissions, is read once per load). */
+async function menuOf(page) {
+  await page.goto(`${WEB}/app`);
+  await present(page, "runtime-nav", 30000);
+  return page.eval(`[...document.querySelectorAll('[data-testid^="runtime-nav-"]')].map((e) => e.getAttribute("data-testid").replace("runtime-nav-", ""))`);
+}
+
 const nextDate = () => sqlApp(`SELECT (coalesce(max(effective_from), DATE '2100-01-01') + 1)::text FROM app.master_fee_rule WHERE rule_key = '${PROBE}'`);
 const proposalRow = (id) => sqlApp(`SELECT state || '|' || coalesce(applied_version::text, '') || '|' || coalesce(decision_note, '') FROM app.fee_rule_proposal WHERE id = '${id}'`);
 const baseline = () => sqlApp(`SELECT
@@ -74,6 +82,12 @@ async function runChecks(run, P, who) {
   const twinIds = Object.values(PERSONA).map((u) => `'${ids.accountId(u)}'`).join(",");
   sqlMaint(`INSERT INTO app.fee_application_type (code, label) VALUES ('live_check', 'Live check') ON CONFLICT DO NOTHING; INSERT INTO app.capability_grant (capability, role) VALUES ('fee_rule_manage', 'finance') ON CONFLICT DO NOTHING`);
   try {
+    // 0. The menu follows the permission, not the role: Finance is offered the screen only because its role holds the permission now.
+    const adminMenu = await menuOf(P.admin), financeMenu = await menuOf(P.finance), novaMenu = await menuOf(P.nova);
+    check(`${run}.menu.admin-has-both-admin-screens`, adminMenu.includes("fee-rules") && adminMenu.includes("rating-formula"), adminMenu.join(","));
+    check(`${run}.menu.finance-gets-fee-rules-once-granted`, financeMenu.includes("fee-rules") && !financeMenu.includes("rating-formula"), financeMenu.join(","));
+    check(`${run}.menu.applicant-has-neither`, !novaMenu.includes("fee-rules") && !novaMenu.includes("rating-formula"), novaMenu.join(","));
+
     // 1. Someone without the permission sees and does nothing.
     let r = await api(P.nova, "GET", PATHS.read, null, null);
     check(`${run}.applicant.cannot-read`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
@@ -191,6 +205,8 @@ async function runChecks(run, P, who) {
     check(`${run}.finance.refused-once-the-permission-is-removed`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
     r = await api(P.finance, "GET", PATHS.read, null, null);
     check(`${run}.finance.cannot-read-once-removed`, r.status === 403, `${r.status}`);
+    const goneMenu = await menuOf(P.finance);
+    check(`${run}.menu.finance-loses-the-entry-once-removed`, !goneMenu.includes("fee-rules"), goneMenu.join(","));
     await api(P.admin, "POST", PATHS.decide(m.body.id), { decision: "withdraw" }, key());
 
     // 9. Nothing an application uses has moved.

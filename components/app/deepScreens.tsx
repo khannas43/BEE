@@ -3,6 +3,7 @@
 import { Module, Screen } from "@/lib/screens";
 import { FinanceQueue } from "./finance/FinanceQueue";
 import { IameScrutiny } from "./iame/IameScrutiny";
+import { FeeCorrections } from "./admin/FeeCorrections";
 import { FeeRules } from "./admin/FeeRules";
 import { RatingFormulas } from "./admin/RatingFormulas";
 import { MyWork } from "./workflow/MyWork";
@@ -124,6 +125,7 @@ export const DEEP_SCREENS: Record<string, DeepComponent> = {
 
   // Workflow — driven by the same store
   "administration/fee-rules": FeeRules,
+  "finance/receipt": FeeCorrections,
   "administration/rating-formula": RatingFormulas,
 
   "workflow/personal-inbox": DeepPersonalInbox,

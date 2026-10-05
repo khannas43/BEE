@@ -12,7 +12,8 @@ export type AdminProposal = {
   proposedBy: string;
   decidedBy?: string | null;
   decisionNote?: string | null;
-  sourceReference: string;
+  /** Fee rules and rating schemes cite a source; a correction to a fee confirmation has only a reason. */
+  sourceReference?: string;
   reason: string;
 };
 
@@ -71,7 +72,7 @@ export function ProposalList<T extends AdminProposal>({
             >
               <p className="font-body-sm text-body-sm">{renderSummary(p)}</p>
               <p className="font-label-sm text-label-sm text-on-surface-variant">
-                Source: {p.sourceReference} · Reason: {p.reason} · Proposed by {p.proposedByYou ? "you" : p.proposedBy}
+                {p.sourceReference ? `Source: ${p.sourceReference} · ` : ""}Reason: {p.reason} · Proposed by {p.proposedByYou ? "you" : p.proposedBy}
                 {formatDecidedSuffix(p)}
               </p>
               {decidable ? (

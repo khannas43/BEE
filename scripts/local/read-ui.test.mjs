@@ -292,6 +292,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   const { RUNTIME_ROUTES, runtimeNavFor, runtimeRouteFor } = await import("../../lib/runtimeRoutes.ts");
   assert.deepEqual(RUNTIME_ROUTES.map((r) => r.href), [
     "/app/administration/fee-rules",
+    "/app/finance/receipt",
     "/app/administration/rating-formula",
     "/app/workflow/personal-inbox",
     "/app/workflow/my-approvals",
@@ -323,6 +324,8 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.deepEqual(runtimeNavFor([{ role: "admin", scope: "all" }], ["fee_rule_manage", "rating_scheme_manage"]).map((r) => r.href), ["/app/administration/fee-rules", "/app/administration/rating-formula"], "the Administrator, who holds both permissions, gets both screens");
   assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_rule_manage"]).map((r) => r.href), ["/app/administration/fee-rules", "/app/workflow/personal-inbox", "/app/finance/finance-queue"], "a role given the permission later gets the entry, in menu order, beside its own entries");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }], ["rating_scheme_manage"]).some((r) => r.href === "/app/administration/fee-rules"), false, "one permission does not bring the other screen");
+  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_confirmation_correct"]).map((r) => r.href), ["/app/finance/receipt", "/app/workflow/personal-inbox", "/app/finance/finance-queue"], "Finance, which holds the correction permission, gets the receipts screen");
+  assert.equal(runtimeNavFor([{ role: "admin", scope: "all" }], ["fee_rule_manage", "rating_scheme_manage"]).some((r) => r.href === "/app/finance/receipt"), false, "the Administrator does not hold the correction permission");
   assert.deepEqual(runtimeNavFor([{ role: "laboratory", scope: "assigned" }], ["fee_rule_manage"]).map((r) => r.href), ["/app/administration/fee-rules"], "the permission alone is enough for the entry; no other entry comes with it");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }]).some((r) => r.href === "/app/administration/fee-rules"), false, "Finance does not get the fee-rule entry without the permission");
   for (const roles of [null, [], [{ role: "laboratory", scope: "assigned" }], [{ role: "auditor", scope: "all" }]]) {
@@ -337,6 +340,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.ok(runtimeRouteFor("/app/model-label/director-approval"));
   assert.ok(runtimeRouteFor("/app/administration/fee-rules"));
   assert.ok(runtimeRouteFor("/app/administration/rating-formula"));
+  assert.ok(runtimeRouteFor("/app/finance/receipt"));
   assert.ok(runtimeRouteFor("/app/workflow/personal-inbox"));
   assert.ok(runtimeRouteFor("/app/workflow/my-approvals"));
   for (const p of ["application-review", "workflow-history", "escalation-dashboard"]) {

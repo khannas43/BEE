@@ -28,6 +28,15 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["See every fee rule and its dates", "Propose a rule from a date", "Approve or reject a colleague's proposal", "Withdraw your own proposal"],
   },
   {
+    href: "/app/finance/receipt",
+    en: "Fee receipts",
+    hi: "शुल्क रसीदें",
+    icon: "receipt_long",
+    navRoles: [],
+    navCapabilities: ["fee_confirmation_correct"],
+    implemented: ["See the fee confirmations and any correction", "Propose a correction to a receipt reference or date", "Approve or reject a colleague's correction", "Withdraw your own correction"],
+  },
+  {
     href: "/app/administration/rating-formula",
     en: "Rating schemes",
     hi: "रेटिंग योजना",

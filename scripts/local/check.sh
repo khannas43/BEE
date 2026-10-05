@@ -289,6 +289,13 @@ read -r rs_pass rs_fail <<<"$(sed -nE 's/^rating-schemes checks: ([0-9]+) passed
 if [[ -z "${rs_pass:-}" ]]; then check "ratingschemes.run" 0 "rating-schemes-browser-check did not complete: $(tail -1 <<<"$rs_out")"
 else pass=$((pass + rs_pass)); fail=$((fail + rs_fail)); fi
 
+# ---- Wave 2: fee-confirmation corrections (records the runtime fee-correction pairs)
+fcx_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/fee-corrections-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$fcx_out"
+read -r fcx_pass fcx_fail <<<"$(sed -nE 's/^fee-corrections checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$fcx_out")"
+if [[ -z "${fcx_pass:-}" ]]; then check "feecorrections.run" 0 "fee-corrections-browser-check did not complete: $(tail -1 <<<"$fcx_out")"
+else pass=$((pass + fcx_pass)); fail=$((fail + fcx_fail)); fi
+
 # ---- Wave 1: the inbox and My approvals (read-only; no contract pairs)
 ib_out="$(node "$ROOT/scripts/local/inbox-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$ib_out"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "@/components/public/usePrefersReducedMotion";
 import Link from "next/link";
 import Image from "next/image";
 import { Icon } from "@/components/ui/Icon";
@@ -9,18 +10,16 @@ import { SectionHeader } from "./SectionHeader";
 
 /* Animated count-up that runs once when scrolled into view. */
 function CountUp({ to, decimals = 0, prefix = "", suffix = "" }: { to: number; decimals?: number; prefix?: string; suffix?: string }) {
+  const prefersReducedMotion = usePrefersReducedMotion();
   const [val, setVal] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   const done = useRef(false);
+  const displayVal = prefersReducedMotion ? to : val;
 
   useEffect(() => {
+    if (prefersReducedMotion) return;
     const el = ref.current;
     if (!el) return;
-    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) {
-      setVal(to);
-      return;
-    }
     const obs = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && !done.current) {
         done.current = true;
@@ -37,12 +36,12 @@ function CountUp({ to, decimals = 0, prefix = "", suffix = "" }: { to: number; d
     }, { threshold: 0.4 });
     obs.observe(el);
     return () => obs.disconnect();
-  }, [to]);
+  }, [to, prefersReducedMotion]);
 
   return (
     <span ref={ref}>
       {prefix}
-      {val.toLocaleString("en-IN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+      {displayVal.toLocaleString("en-IN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
       {suffix}
     </span>
   );

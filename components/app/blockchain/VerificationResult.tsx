@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { Stars } from "@/components/ui/Stars";
-import { VerifyScenario, maskHash, maskTx, shortHash, SIM_LABEL_TEXT } from "@/lib/mock/certificate";
+import { VerifyScenario, maskHash, maskTx, SIM_LABEL_TEXT } from "@/lib/mock/certificate";
 
 /* ================================================================== *
  * Shared verification result with ledger proof (sections 9 & 11).

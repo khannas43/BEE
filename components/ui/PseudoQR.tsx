@@ -17,7 +17,6 @@ export function PseudoQR({ value, size = 88 }: { value: string; size?: number })
   // force finder-pattern corners on
   const finder = (r: number, c: number) => (r < 3 && c < 3) || (r < 3 && c >= n - 3) || (r >= n - 3 && c < 3);
 
-  const cell = size / n;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${n} ${n}`} className="rounded" aria-hidden="true">
       <rect width={n} height={n} fill="#ffffff" />

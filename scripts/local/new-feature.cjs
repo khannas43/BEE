@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Scaffolds a new model-application COMMAND (a POST on /api/model-applications/{id}/<segment>) and registers it
  * everywhere a route has to be registered. Nothing it generates can act until a developer implements it: the Spring

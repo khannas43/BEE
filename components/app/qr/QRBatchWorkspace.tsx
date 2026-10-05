@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { PseudoQR } from "@/components/ui/PseudoQR";
-import { Card, Status, OK, WARN, BAD } from "@/components/app/ScreenScaffold";
+import { Card, Status, OK, WARN } from "@/components/app/ScreenScaffold";
 
 /* ================================================================== *
  * QR Batch Workspace (Phase 3) — combines QR generation, status, file

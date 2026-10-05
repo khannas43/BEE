@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Proves local:check leaves a person's own authenticator alone. Stands in for a person
  * enrolling Nova and PixelCert on their phone: the "phone" is a separate store,

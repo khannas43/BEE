@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, startTransition, useCallback, useContext, useEffect, useState } from "react";
 import { Lang, translate } from "@/lib/i18n";
 
 const KEY = "bee-lang";
@@ -23,12 +23,14 @@ export function LangProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>("en");
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(KEY) as Lang | null;
-      if (saved === "hi" || saved === "en") setLangState(saved);
-    } catch {
-      /* ignore */
-    }
+    startTransition(() => {
+      try {
+        const saved = localStorage.getItem(KEY) as Lang | null;
+        if (saved === "hi" || saved === "en") setLangState(saved);
+      } catch {
+        /* ignore */
+      }
+    });
   }, []);
 
   const setLang = useCallback((l: Lang) => {

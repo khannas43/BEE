@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, startTransition, useContext, useEffect, useState } from "react";
 
 const KEY = "bee-a11y";
 
@@ -33,12 +33,14 @@ export function A11yProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<A11yState>(DEFAULT);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) setState({ ...DEFAULT, ...JSON.parse(raw) });
-    } catch {
-      /* ignore */
-    }
+    startTransition(() => {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) setState({ ...DEFAULT, ...JSON.parse(raw) });
+      } catch {
+        /* ignore */
+      }
+    });
   }, []);
 
   // Apply effects to the document.

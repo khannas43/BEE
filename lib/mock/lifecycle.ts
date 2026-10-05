@@ -110,7 +110,7 @@ export function computeStars(iseer: number): number {
   return 1;
 }
 
-export function feeForCategory(_category: string): number {
+export function feeForCategory(): number {
   return 24000;
 }
 

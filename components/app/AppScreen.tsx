@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { Module, Screen } from "@/lib/screens";
 import { ScreenScaffold } from "./ScreenScaffold";
-import { getDeepScreen } from "./deepScreens";
+import { DEEP_SCREENS } from "./deepScreens";
 
 /**
  * Renders a rich, interlinked implementation when one exists for this
@@ -11,7 +11,7 @@ import { getDeepScreen } from "./deepScreens";
  * because deep screens may read search params (?id=) for the selected item.
  */
 export function AppScreen({ module, screen }: { module: Module; screen: Screen }) {
-  const Deep = getDeepScreen(module.id, screen.id);
+  const Deep = DEEP_SCREENS[`${module.id}/${screen.id}`];
   if (Deep) {
     return (
       <Suspense fallback={<div className="p-space-lg font-body-md text-body-md text-on-surface-variant">Loading…</div>}>

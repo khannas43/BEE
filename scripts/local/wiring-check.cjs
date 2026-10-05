@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Route wiring check. The OpenAPI artifact is the source of truth for which routes exist; this verifies each one is
  * registered everywhere a route has to be, so a missed registry fails here with the file named, not later as a 401, an

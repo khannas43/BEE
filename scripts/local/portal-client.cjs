@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Browser-like client for the local portal checks: per-host cookies, no redirect
  * following, every portal response recorded for leak scans, and real Keycloak TOTP

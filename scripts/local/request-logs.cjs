@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * WP03.3: reads the structured request logs written during a live check
  * ($BEE_LOG_DIR/api-requests.jsonl from Spring, web-requests.jsonl from Next.js) and checks

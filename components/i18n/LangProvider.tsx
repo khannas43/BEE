@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, startTransition, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useMemo } from "react";
+import { useStoredValue, writeStoredValue } from "@/lib/client/useStoredValue";
 import { Lang, translate } from "@/lib/i18n";
 
 const KEY = "bee-lang";
@@ -19,24 +20,17 @@ const Ctx = createContext<LangCtx>({
   t: (k) => translate(k, "en"),
 });
 
-export function LangProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("en");
+function langFromStored(stored: string | null): Lang {
+  return stored === "hi" || stored === "en" ? stored : "en";
+}
 
-  useEffect(() => {
-    startTransition(() => {
-      try {
-        const saved = localStorage.getItem(KEY) as Lang | null;
-        if (saved === "hi" || saved === "en") setLangState(saved);
-      } catch {
-        /* ignore */
-      }
-    });
-  }, []);
+export function LangProvider({ children }: { children: React.ReactNode }) {
+  const stored = useStoredValue(KEY);
+  const lang = useMemo(() => langFromStored(stored), [stored]);
 
   const setLang = useCallback((l: Lang) => {
-    setLangState(l);
+    writeStoredValue(KEY, l);
     try {
-      localStorage.setItem(KEY, l);
       document.documentElement.lang = l;
     } catch {
       /* ignore */

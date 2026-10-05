@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, startTransition, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useStoredValue, writeStoredValue } from "@/lib/client/useStoredValue";
 
 const KEY = "bee-a11y";
 
@@ -29,19 +30,25 @@ const Ctx = createContext<A11yCtx>({
   reset: () => {},
 });
 
-export function A11yProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<A11yState>(DEFAULT);
+function mergeStoredA11y(raw: string | null): A11yState {
+  if (!raw) return DEFAULT;
+  try {
+    return { ...DEFAULT, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT;
+  }
+}
 
-  useEffect(() => {
-    startTransition(() => {
-      try {
-        const raw = localStorage.getItem(KEY);
-        if (raw) setState({ ...DEFAULT, ...JSON.parse(raw) });
-      } catch {
-        /* ignore */
-      }
-    });
-  }, []);
+export function A11yProvider({ children }: { children: React.ReactNode }) {
+  const stored = useStoredValue(KEY);
+  const storedState = useMemo(() => mergeStoredA11y(stored), [stored]);
+  const [state, setState] = useState(storedState);
+  const [lastStored, setLastStored] = useState(stored);
+
+  if (stored !== lastStored) {
+    setLastStored(stored);
+    setState(storedState);
+  }
 
   // Apply effects to the document.
   useEffect(() => {
@@ -53,11 +60,7 @@ export function A11yProvider({ children }: { children: React.ReactNode }) {
     }
     root.classList.toggle("a11y-contrast", state.contrast);
     root.classList.toggle("a11y-readable", state.readable);
-    try {
-      localStorage.setItem(KEY, JSON.stringify(state));
-    } catch {
-      /* ignore */
-    }
+    writeStoredValue(KEY, JSON.stringify(state));
   }, [state]);
 
   const clamp = (n: number) => Math.min(1.4, Math.max(0.9, Math.round(n * 100) / 100));

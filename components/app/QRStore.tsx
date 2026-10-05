@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, startTransition, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { useClientStorageReady, useStoredValue, writeStoredValue } from "@/lib/client/useStoredValue";
 import {
   QRBatch,
   SEED_BATCHES,
@@ -74,33 +75,33 @@ interface Ctx {
 
 const QRCtx = createContext<Ctx | null>(null);
 
+function batchesFromStored(raw: string | null): QRBatch[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as QRBatch[];
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export function QRProvider({ children }: { children: React.ReactNode }) {
   const { apps } = useLifecycle();
+  const stored = useStoredValue(KEY);
+  const ready = useClientStorageReady();
   const [batches, dispatch] = useReducer(reducer, SEED_BATCHES);
-  const [ready, setReady] = useState(false);
+  const [lastStored, setLastStored] = useState<string | null | undefined>(undefined);
 
-  useEffect(() => {
-    startTransition(() => {
-      try {
-        const raw = localStorage.getItem(KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as QRBatch[];
-          if (Array.isArray(parsed)) dispatch({ type: "HYDRATE", batches: parsed });
-        }
-      } catch {
-        /* ignore */
-      }
-      setReady(true);
-    });
-  }, []);
+  if (stored !== lastStored) {
+    setLastStored(stored);
+    const hydrated = batchesFromStored(stored);
+    if (hydrated) dispatch({ type: "HYDRATE", batches: hydrated });
+  }
 
   useEffect(() => {
     if (!ready) return;
-    try {
-      localStorage.setItem(KEY, JSON.stringify(batches));
-    } catch {
-      /* ignore */
-    }
+    writeStoredValue(KEY, JSON.stringify(batches));
   }, [batches, ready]);
 
   const value = useMemo<Ctx>(() => ({

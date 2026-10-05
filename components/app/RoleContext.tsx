@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, startTransition, useContext, useEffect, useState } from "react";
-import { RoleKey, roleByKey } from "@/lib/roles";
+import { createContext, useContext, useMemo } from "react";
+import { useClientStorageReady, useStoredValue, writeStoredValue } from "@/lib/client/useStoredValue";
+import { RoleKey, ROLE_ORDER, roleByKey } from "@/lib/roles";
 
 const KEY = "bee-role";
 
@@ -25,6 +26,11 @@ export function previewRoleOf(r: RoleKey) {
   return { ...base, name: base.name + PREVIEW_SUFFIX, short: base.short + PREVIEW_SUFFIX };
 }
 
+function roleFromStored(stored: string | null): RoleKey {
+  if (!stored || !ROLE_PREVIEW_ENABLED) return "admin";
+  return ROLE_ORDER.includes(stored as RoleKey) ? (stored as RoleKey) : "admin";
+}
+
 interface RoleCtx {
   role: RoleKey;
   setRole: (r: RoleKey) => void;
@@ -34,29 +40,13 @@ interface RoleCtx {
 const Ctx = createContext<RoleCtx>({ role: "admin", setRole: () => {}, ready: false });
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = useState<RoleKey>("admin");
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    startTransition(() => {
-      try {
-        const saved = ROLE_PREVIEW_ENABLED ? (localStorage.getItem(KEY) as RoleKey | null) : null;
-        if (saved) setRoleState(saved);
-      } catch {
-        /* ignore */
-      }
-      setReady(true);
-    });
-  }, []);
+  const stored = useStoredValue(KEY);
+  const ready = useClientStorageReady();
+  const role = useMemo(() => roleFromStored(stored), [stored]);
 
   const setRole = (r: RoleKey) => {
     if (!ROLE_PREVIEW_ENABLED) return;
-    setRoleState(r);
-    try {
-      localStorage.setItem(KEY, r);
-    } catch {
-      /* ignore */
-    }
+    writeStoredValue(KEY, r);
   };
 
   return <Ctx.Provider value={{ role, setRole, ready }}>{children}</Ctx.Provider>;
@@ -69,9 +59,5 @@ export function useRole() {
 /** Helper for the login page's preview picker to set role before navigating. */
 export function persistRole(r: RoleKey) {
   if (!ROLE_PREVIEW_ENABLED) return;
-  try {
-    localStorage.setItem(KEY, r);
-  } catch {
-    /* ignore */
-  }
+  writeStoredValue(KEY, r);
 }

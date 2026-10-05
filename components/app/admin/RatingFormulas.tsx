@@ -45,16 +45,6 @@ export const RATING_FORMULA_COPY = {
 const FIGURE = /^\d{1,2}(\.\d{1,2})?$/;
 const bandsText = (bands: { stars: number; minIseer: string }[]) => bands.map((b) => `${b.stars}★ ${b.minIseer}`).join(" · ");
 
-function schemeProposalDecisionTestIds(p: RatingSchemeProposal) {
-  return (
-    <>
-      <span data-testid={`scheme-note-${p.id}`} hidden />
-      <span data-testid={`scheme-own-${p.id}`} hidden />
-    </>
-  );
-}
-void schemeProposalDecisionTestIds;
-
 function schemeDecidedSuffix(p: RatingSchemeProposal): string {
   return p.state !== "pending"
     ? ` · ${p.state}${p.decidedBy ? ` by ${p.decidedBy}` : ""}${p.appliedScheme ? ` (scheme ${p.appliedScheme})` : ""}${p.decisionNote ? ` · ${p.decisionNote}` : ""}`
@@ -69,6 +59,22 @@ export function RatingFormulas({ module, screen }: { module: Module; screen: Scr
   const decided = (p: RatingSchemeProposal) => {
     setNotice(p);
     revalidation.refresh();
+  };
+
+  const listProps = {
+    onDone: decided,
+    onReload: revalidation.refresh,
+    commandPrefix: "scheme",
+    signInReturnTo: ROUTE,
+    runDecide: runDecideScheme,
+    decideSignature: decideSchemeSignature,
+    approveLabel: "Approve and start the scheme",
+    renderSummary: (p: RatingSchemeProposal) => (
+      <>
+        <strong>{p.categoryCode}</strong> · from {p.effectiveFrom} · {bandsText(p.minIseer.map((m, i) => ({ stars: i + 1, minIseer: m })))}
+      </>
+    ),
+    formatDecidedSuffix: schemeDecidedSuffix,
   };
 
   return (
@@ -101,43 +107,8 @@ export function RatingFormulas({ module, screen }: { module: Module; screen: Scr
         {read && read.ok ? (
           <>
             <ProposeForm admin={read.admin} onDone={revalidation.refresh} />
-            <ProposalList
-              title="Waiting for a second person"
-              testId="schemes-pending"
-              proposals={read.admin.pending}
-              onDone={decided}
-              onReload={revalidation.refresh}
-              decidable
-              commandPrefix="scheme"
-              signInReturnTo={ROUTE}
-              runDecide={runDecideScheme}
-              decideSignature={decideSchemeSignature}
-              approveLabel="Approve and start the scheme"
-              renderSummary={(p) => (
-                <>
-                  <strong>{p.categoryCode}</strong> · from {p.effectiveFrom} · {bandsText(p.minIseer.map((m, i) => ({ stars: i + 1, minIseer: m })))}
-                </>
-              )}
-              formatDecidedSuffix={schemeDecidedSuffix}
-            />
-            <ProposalList
-              title="Recently decided"
-              testId="schemes-decided"
-              proposals={read.admin.decided}
-              onDone={decided}
-              onReload={revalidation.refresh}
-              commandPrefix="scheme"
-              signInReturnTo={ROUTE}
-              runDecide={runDecideScheme}
-              decideSignature={decideSchemeSignature}
-              approveLabel="Approve and start the scheme"
-              renderSummary={(p) => (
-                <>
-                  <strong>{p.categoryCode}</strong> · from {p.effectiveFrom} · {bandsText(p.minIseer.map((m, i) => ({ stars: i + 1, minIseer: m })))}
-                </>
-              )}
-              formatDecidedSuffix={schemeDecidedSuffix}
-            />
+            <ProposalList title="Waiting for a second person" testId="schemes-pending" proposals={read.admin.pending} decidable {...listProps} />
+            <ProposalList title="Recently decided" testId="schemes-decided" proposals={read.admin.decided} {...listProps} />
           </>
         ) : null}
       </div>

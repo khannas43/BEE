@@ -45,17 +45,6 @@ export const FEE_RULES_COPY = {
 
 const money = (v: string) => `₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Live-check grep parity (Brief 07): decision field ids are built in ProposalPanels. */
-function feeRuleProposalDecisionTestIds(p: FeeRuleProposal) {
-  return (
-    <>
-      <span data-testid={`feerule-note-${p.id}`} hidden />
-      <span data-testid={`feerule-own-${p.id}`} hidden />
-    </>
-  );
-}
-void feeRuleProposalDecisionTestIds;
-
 function feeDecidedSuffix(p: FeeRuleProposal): string {
   return p.state !== "pending"
     ? ` · ${p.state}${p.decidedBy ? ` by ${p.decidedBy}` : ""}${p.appliedVersion ? ` (now version ${p.appliedVersion})` : ""}${p.decisionNote ? ` · ${p.decisionNote}` : ""}`
@@ -70,6 +59,22 @@ export function FeeRules({ module, screen }: { module: Module; screen: Screen })
   const decided = (p: FeeRuleProposal) => {
     setNotice(p);
     revalidation.refresh();
+  };
+
+  const listProps = {
+    onDone: decided,
+    onReload: revalidation.refresh,
+    commandPrefix: "feerule",
+    signInReturnTo: ROUTE,
+    runDecide: runDecideFeeRule,
+    decideSignature: decideFeeRuleSignature,
+    approveLabel: "Approve and start the rule",
+    renderSummary: (p: FeeRuleProposal) => (
+      <>
+        <strong>{p.ruleKey}</strong> · {money(p.amountInr)} + tax {p.taxRatePercent}% · from {p.effectiveFrom}
+      </>
+    ),
+    formatDecidedSuffix: feeDecidedSuffix,
   };
 
   return (
@@ -108,43 +113,8 @@ export function FeeRules({ module, screen }: { module: Module; screen: Screen })
         {read && read.ok ? (
           <>
             <ProposeForm admin={read.admin} onDone={revalidation.refresh} />
-            <ProposalList
-              title="Waiting for a second person"
-              testId="feerules-pending"
-              proposals={read.admin.pending}
-              onDone={decided}
-              onReload={revalidation.refresh}
-              decidable
-              commandPrefix="feerule"
-              signInReturnTo={ROUTE}
-              runDecide={runDecideFeeRule}
-              decideSignature={decideFeeRuleSignature}
-              approveLabel="Approve and start the rule"
-              renderSummary={(p) => (
-                <>
-                  <strong>{p.ruleKey}</strong> · {money(p.amountInr)} + tax {p.taxRatePercent}% · from {p.effectiveFrom}
-                </>
-              )}
-              formatDecidedSuffix={feeDecidedSuffix}
-            />
-            <ProposalList
-              title="Recently decided"
-              testId="feerules-decided"
-              proposals={read.admin.decided}
-              onDone={decided}
-              onReload={revalidation.refresh}
-              commandPrefix="feerule"
-              signInReturnTo={ROUTE}
-              runDecide={runDecideFeeRule}
-              decideSignature={decideFeeRuleSignature}
-              approveLabel="Approve and start the rule"
-              renderSummary={(p) => (
-                <>
-                  <strong>{p.ruleKey}</strong> · {money(p.amountInr)} + tax {p.taxRatePercent}% · from {p.effectiveFrom}
-                </>
-              )}
-              formatDecidedSuffix={feeDecidedSuffix}
-            />
+            <ProposalList title="Waiting for a second person" testId="feerules-pending" proposals={read.admin.pending} decidable {...listProps} />
+            <ProposalList title="Recently decided" testId="feerules-decided" proposals={read.admin.decided} {...listProps} />
           </>
         ) : null}
       </div>

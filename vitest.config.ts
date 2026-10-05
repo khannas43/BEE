@@ -13,7 +13,16 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    include: ["components/app/kit/__tests__/**/*.test.tsx", "components/app/lifecycle/__tests__/**/*.test.tsx", "components/app/workflow/__tests__/**/*.test.{ts,tsx}", "components/app/admin/__tests__/**/*.test.tsx"],
+    include: [
+      "components/app/kit/__tests__/**/*.test.tsx",
+      "components/app/lifecycle/__tests__/**/*.test.tsx",
+      "components/app/workflow/__tests__/**/*.test.{ts,tsx}",
+      "components/app/admin/__tests__/**/*.test.tsx",
+      "components/app/__tests__/**/*.test.tsx",
+      "components/i18n/__tests__/**/*.test.tsx",
+      "components/public/__tests__/**/*.test.tsx",
+      "lib/client/__tests__/**/*.test.tsx",
+    ],
     setupFiles: ["components/app/kit/__tests__/setup.ts"],
   },
 });

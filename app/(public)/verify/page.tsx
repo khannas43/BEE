@@ -1,6 +1,7 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { useStoredValue } from "@/lib/client/useStoredValue";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Icon } from "@/components/ui/Icon";
@@ -49,57 +50,68 @@ function fromAppliance(a: Appliance): VerifyScenario {
   };
 }
 
+const LIFECYCLE_KEY = "bee-lifecycle-v1";
+
+function dynamicAppliancesFromStored(raw: string | null): Appliance[] {
+  if (!raw) return [];
+  try {
+    const life = JSON.parse(raw);
+    return life
+      .filter((a: { stage: string; regId?: string }) => a.stage === "active" && a.regId)
+      .map(
+        (a: { brand: string; model: string; regId: string; rating?: number; declaredIseer: number; capacityW: number }): Appliance => ({
+          regId: a.regId,
+          brand: a.brand,
+          model: a.model,
+          category: "Room ACs",
+          stars: a.rating ?? 5,
+          iseer: a.declaredIseer,
+          annualKwh: Math.round((a.capacityW / (a.declaredIseer || 5)) * 1600 / 1000),
+          capacityW: a.capacityW,
+          validFrom: "Jan 2026",
+          validTo: "Dec 2028",
+          features: [],
+        }),
+      );
+  } catch {
+    return [];
+  }
+}
+
+function lookupScenario(q: string, dynamic: Appliance[]): VerifyScenario | null {
+  const norm = q.trim().toLowerCase();
+  if (!norm) return null;
+  if (norm === PRIMARY_CERT.regId.toLowerCase()) return scenarioFromStore();
+  const sc = VERIFY_SCENARIOS.find((s) => s.regId.toLowerCase() === norm && s.id !== "revoked" && s.id !== "ledger-down");
+  if (sc) return sc;
+  const all = [...APPLIANCES, ...dynamic];
+  const a = all.find((x) => x.regId.toLowerCase() === norm);
+  if (a) return fromAppliance(a);
+  const pending = pendingScenarioForReg(norm);
+  if (pending) return pending;
+  return { id: "not-found", label: "Not found", regId: q };
+}
+
 function VerifyInner() {
   const params = useSearchParams();
   const [query, setQuery] = useState(params.get("reg") ?? "");
-  const [scenario, setScenario] = useState<VerifyScenario | null>(null);
+  const [picked, setPicked] = useState<VerifyScenario | null | undefined>(undefined);
 
-  const [dynamic, setDynamic] = useState<Appliance[]>([]);
+  const lifecycleRaw = useStoredValue(LIFECYCLE_KEY);
+  const dynamic = useMemo(() => dynamicAppliancesFromStored(lifecycleRaw), [lifecycleRaw]);
 
-  const resolve = useCallback((q: string) => {
-    const norm = q.trim().toLowerCase();
-    if (!norm) { setScenario(null); return; }
-    // the live demo certificate reflects the shared store (amend / revoke / ledger status)
-    if (norm === PRIMARY_CERT.regId.toLowerCase()) { setScenario(scenarioFromStore()); return; }
-    // other reg ids → static demonstration scenarios
-    const sc = VERIFY_SCENARIOS.find((s) => s.regId.toLowerCase() === norm && s.id !== "revoked" && s.id !== "ledger-down");
-    if (sc) { setScenario(sc); return; }
-    // appliance / dynamic model match → synthesise an active result
-    const all = [...APPLIANCES, ...dynamic];
-    const a = all.find((x) => x.regId.toLowerCase() === norm);
-    if (a) { setScenario(fromAppliance(a)); return; }
-    // registration exists but its certificate is not yet anchored → pending
-    // (same reconciliation fixture the monitoring view reads), never "not found"
-    const pending = pendingScenarioForReg(norm);
-    if (pending) { setScenario(pending); return; }
-    setScenario({ id: "not-found", label: "Not found", regId: q });
-  }, [dynamic]);
+  const urlReg = params.get("reg");
+  const fromUrl = useMemo(() => (urlReg ? lookupScenario(urlReg, dynamic) : null), [urlReg, dynamic]);
+  const scenario = picked !== undefined ? picked : fromUrl;
 
-  useEffect(() => {
-    startTransition(() => {
-      try {
-        const life = JSON.parse(localStorage.getItem("bee-lifecycle-v1") || "[]");
-        setDynamic(
-          life
-            .filter((a: { stage: string; regId?: string }) => a.stage === "active" && a.regId)
-            .map((a: { brand: string; model: string; regId: string; rating?: number; declaredIseer: number; capacityW: number }): Appliance => ({
-              regId: a.regId, brand: a.brand, model: a.model, category: "Room ACs", stars: a.rating ?? 5,
-              iseer: a.declaredIseer, annualKwh: Math.round((a.capacityW / (a.declaredIseer || 5)) * 1600 / 1000),
-              capacityW: a.capacityW, validFrom: "Jan 2026", validTo: "Dec 2028", features: [],
-            })),
-        );
-      } catch {
-        /* ignore */
-      }
-    });
-  }, []);
+  function resolve(q: string) {
+    setPicked(lookupScenario(q, dynamic));
+  }
 
-  useEffect(() => {
-    const reg = params.get("reg");
-    if (reg) startTransition(() => resolve(reg));
-  }, [params, resolve]);
-
-  function pickScenario(s: VerifyScenario) { setQuery(s.regId); setScenario(s); }
+  function pickScenario(s: VerifyScenario) {
+    setQuery(s.regId);
+    setPicked(s);
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-gutter py-space-2xl">

@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, startTransition, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { useClientStorageReady, useStoredValue, writeStoredValue } from "@/lib/client/useStoredValue";
 import {
   ModelApplication,
   SEED_APPLICATIONS,
@@ -145,35 +146,34 @@ interface Ctx {
 
 const LifecycleCtx = createContext<Ctx | null>(null);
 
+function appsFromStored(raw: string | null): ModelApplication[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as ModelApplication[];
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export function LifecycleProvider({ children }: { children: React.ReactNode }) {
+  const stored = useStoredValue(KEY);
+  const ready = useClientStorageReady();
   const [apps, dispatch] = useReducer(reducer, SEED_APPLICATIONS);
-  const [ready, setReady] = useState(false);
+  const [lastStored, setLastStored] = useState<string | null | undefined>(undefined);
 
-  // Hydrate from localStorage after mount.
-  useEffect(() => {
-    startTransition(() => {
-      try {
-        const raw = localStorage.getItem(KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as ModelApplication[];
-          if (Array.isArray(parsed) && parsed.length) dispatch({ type: "HYDRATE", apps: parsed });
-        }
-      } catch {
-        /* ignore */
-      }
-      setReady(true);
-    });
-  }, []);
+  if (stored !== lastStored) {
+    setLastStored(stored);
+    const hydrated = appsFromStored(stored);
+    if (hydrated) dispatch({ type: "HYDRATE", apps: hydrated });
+  }
 
-  // Persist on change — but only after hydration, so the initial SEED render
-  // never clobbers previously-saved state.
+  // Persist on change — but only after the client store is active, so the seed
+  // render never clobbers previously-saved state.
   useEffect(() => {
     if (!ready) return;
-    try {
-      localStorage.setItem(KEY, JSON.stringify(apps));
-    } catch {
-      /* ignore */
-    }
+    writeStoredValue(KEY, JSON.stringify(apps));
   }, [apps, ready]);
 
   const value = useMemo<Ctx>(() => {

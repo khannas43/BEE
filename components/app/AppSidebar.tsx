@@ -21,9 +21,10 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   // Which category the current route belongs to (for auto-open + highlight)
   const activeCat = categoryForPath(pathname)?.id ?? categories[0]?.id ?? null;
-  const [toggle, setToggle] = useState<{ path: string; open: string | null } | null>(null);
-  const open = toggle?.path === pathname ? toggle.open : activeCat;
-  const setOpen = (next: string | null) => setToggle({ path: pathname, open: next });
+  // The category the current route belongs to opens by itself; a manual toggle is kept until the route moves to another category.
+  const [toggle, setToggle] = useState<{ cat: string | null; open: string | null } | null>(null);
+  const open = toggle?.cat === activeCat ? toggle.open : activeCat;
+  const setOpen = (next: string | null) => setToggle({ cat: activeCat, open: next });
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light">

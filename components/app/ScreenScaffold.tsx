@@ -203,8 +203,7 @@ function ActionBar({ codes }: { codes: string[] }) {
 /* ------------------------------------------------------------------ *
  * Archetype bodies
  * ------------------------------------------------------------------ */
-function DashboardBody({ screen }: { screen: Screen }) {
-  void screen;
+function DashboardBody() {
   return (
     <div className="space-y-space-md">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-space-md">
@@ -328,8 +327,7 @@ function FormBody({ screen }: { screen: Screen }) {
   );
 }
 
-function DetailBody({ screen }: { screen: Screen }) {
-  void screen;
+function DetailBody() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md">
       <div className="lg:col-span-2 space-y-space-md">
@@ -397,7 +395,7 @@ function ApprovalBody({ screen }: { screen: Screen }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md">
       <div className="lg:col-span-2">
-        <DetailBody screen={screen} />
+        <DetailBody />
       </div>
       <div className="space-y-space-md">
         <Card title="Decision">
@@ -440,8 +438,7 @@ function ConfigBody({ screen }: { screen: Screen }) {
   );
 }
 
-function WizardBody({ screen }: { screen: Screen }) {
-  void screen;
+function WizardBody() {
   return (
     <div className="space-y-space-md">
       <Card>
@@ -502,8 +499,7 @@ function LedgerBody({ screen }: { screen: Screen }) {
   );
 }
 
-function InboxBody({ screen }: { screen: Screen }) {
-  void screen;
+function InboxBody() {
   return (
     <div className="space-y-space-md">
       <div className="flex items-center gap-space-sm">
@@ -527,8 +523,7 @@ function InboxBody({ screen }: { screen: Screen }) {
   );
 }
 
-function UploadBody({ screen }: { screen: Screen }) {
-  void screen;
+function UploadBody() {
   return (
     <div className="space-y-space-md">
       <Card title="Upload data file">
@@ -558,8 +553,7 @@ function UploadBody({ screen }: { screen: Screen }) {
   );
 }
 
-function VerifyBody({ screen }: { screen: Screen }) {
-  void screen;
+function VerifyBody() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md">
       <Card title="Lookup">

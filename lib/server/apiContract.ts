@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.20.0";
+export const CONTRACT_VERSION = "0.21.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -38,6 +38,7 @@ export const ERROR_MESSAGES = {
   assignee_unavailable: "No officer is available to take the next stage.",
   not_returned: "Only a returned application can be resubmitted.",
   rating_below_threshold: "The verified efficiency is below the lowest star band, so no rating can be assigned.",
+  correction_already_pending: "A correction for this receipt is already waiting for a decision.",
   proposal_not_pending: "This proposal has already been decided or withdrawn.",
   effective_date_passed: "The date this rule was to start has passed; propose it again with a later date.",
   rule_conflict: "This rule cannot start on that date because of the rules already in place.",

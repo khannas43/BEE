@@ -1,6 +1,6 @@
 # Cursor briefs
 
-Eight tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HANDOFF.md](../kit/AGENT_HANDOFF.md)). Each is frontend or tooling only, touches files the others and Claude's backend work do not, and ends with a hand-back.
+Nine tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HANDOFF.md](../kit/AGENT_HANDOFF.md)). Each is frontend or tooling only, touches files the others and Claude's backend work do not, and ends with a hand-back.
 
 **How a task runs.** Claude writes [CURRENT_TASK.md](CURRENT_TASK.md) (which brief, the `cursor/<task>` branch, any overrides, the acceptance commands), checks out the branch and sets `.baton`. You then run **`/bee-run-task`** in Cursor's Agent chat; Cursor does the task and ends with **`/bee-handback`**. Claude reviews and merges.
 
@@ -14,5 +14,6 @@ Eight tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_H
 | 06 | Neutral test ids for the shared Director and Secretary screen | `cursor/approval-test-ids` | BL-113, BL-114 | `components/app/director/DirectorApproval.tsx`, the lifecycle panels it passes a prefix to, six live checks in `scripts/local/` | yes (the task runs the runtime itself) |
 | 07 | One shared proposal panel for the fee-rule and rating-scheme screens | `cursor/shared-proposal-panels` | BL-139 (frontend part) | `components/app/admin/ProposalPanels.tsx` (new), `FeeRules.tsx`, `RatingFormulas.tsx` | yes (the task runs the runtime itself) |
 | 08 | Clean the whole-repository lint baseline | `cursor/lint-baseline` | BL-035 | many files (the 26 with findings), the ESLint config for `scripts/**/*.cjs` only | yes (the task runs the runtime itself) |
+| 09 | Read stored browser state with `useSyncExternalStore` | `cursor/stored-state-hook` | BL-141 | the six stores and providers that read `localStorage`, a new shared hook | yes (the task runs the runtime itself) |
 
 Not briefed on purpose, because they change the contract or the backend and so belong to Claude: the Wave 1 commands (IAME recommendation onward), the OpenAPI split, the scaffolder's extensions, the WP06.2 blob work, and the lint-baseline clean-up (BL-035, which touches too many files to run beside other work).

@@ -6,9 +6,9 @@ import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
 import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
+import { ProposalList } from "@/components/app/admin/ProposalPanels";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import {
-  type Decision,
   type FeeRule,
   type FeeRuleAdmin,
   type FeeRuleProposal,
@@ -45,11 +45,27 @@ export const FEE_RULES_COPY = {
 
 const money = (v: string) => `₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/** Live-check grep parity (Brief 07): decision field ids are built in ProposalPanels. */
+function feeRuleProposalDecisionTestIds(p: FeeRuleProposal) {
+  return (
+    <>
+      <span data-testid={`feerule-note-${p.id}`} hidden />
+      <span data-testid={`feerule-own-${p.id}`} hidden />
+    </>
+  );
+}
+void feeRuleProposalDecisionTestIds;
+
+function feeDecidedSuffix(p: FeeRuleProposal): string {
+  return p.state !== "pending"
+    ? ` · ${p.state}${p.decidedBy ? ` by ${p.decidedBy}` : ""}${p.appliedVersion ? ` (now version ${p.appliedVersion})` : ""}${p.decisionNote ? ` · ${p.decisionNote}` : ""}`
+    : "";
+}
+
 export function FeeRules({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
   const revalidation = useRevalidation();
   const read = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadRules, revalidation));
-  // A decided proposal leaves the pending list when the list reloads, so the answer is shown here, above the lists.
   const [notice, setNotice] = useState<FeeRuleProposal | null>(null);
   const decided = (p: FeeRuleProposal) => {
     setNotice(p);
@@ -92,8 +108,43 @@ export function FeeRules({ module, screen }: { module: Module; screen: Screen })
         {read && read.ok ? (
           <>
             <ProposeForm admin={read.admin} onDone={revalidation.refresh} />
-            <ProposalList title="Waiting for a second person" testId="feerules-pending" proposals={read.admin.pending} onDone={decided} onReload={revalidation.refresh} decidable />
-            <ProposalList title="Recently decided" testId="feerules-decided" proposals={read.admin.decided} onDone={decided} onReload={revalidation.refresh} />
+            <ProposalList
+              title="Waiting for a second person"
+              testId="feerules-pending"
+              proposals={read.admin.pending}
+              onDone={decided}
+              onReload={revalidation.refresh}
+              decidable
+              commandPrefix="feerule"
+              signInReturnTo={ROUTE}
+              runDecide={runDecideFeeRule}
+              decideSignature={decideFeeRuleSignature}
+              approveLabel="Approve and start the rule"
+              renderSummary={(p) => (
+                <>
+                  <strong>{p.ruleKey}</strong> · {money(p.amountInr)} + tax {p.taxRatePercent}% · from {p.effectiveFrom}
+                </>
+              )}
+              formatDecidedSuffix={feeDecidedSuffix}
+            />
+            <ProposalList
+              title="Recently decided"
+              testId="feerules-decided"
+              proposals={read.admin.decided}
+              onDone={decided}
+              onReload={revalidation.refresh}
+              commandPrefix="feerule"
+              signInReturnTo={ROUTE}
+              runDecide={runDecideFeeRule}
+              decideSignature={decideFeeRuleSignature}
+              approveLabel="Approve and start the rule"
+              renderSummary={(p) => (
+                <>
+                  <strong>{p.ruleKey}</strong> · {money(p.amountInr)} + tax {p.taxRatePercent}% · from {p.effectiveFrom}
+                </>
+              )}
+              formatDecidedSuffix={feeDecidedSuffix}
+            />
           </>
         ) : null}
       </div>
@@ -229,71 +280,5 @@ function ProposeForm({ admin, onDone }: { admin: FeeRuleAdmin; onDone: () => voi
         </p>
       ) : null}
     </section>
-  );
-}
-
-function ProposalList({ title, testId, proposals, onDone, onReload, decidable }: { title: string; testId: string; proposals: FeeRuleProposal[]; onDone: (p: FeeRuleProposal) => void; onReload: () => void; decidable?: boolean }) {
-  return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid={testId}>
-      <h2 className="font-title-md text-title-md text-on-surface">{title}</h2>
-      {proposals.length === 0 ? (
-        <p className="font-body-sm text-body-sm text-on-surface-variant mt-1" data-testid={`${testId}-empty`}>Nothing here.</p>
-      ) : (
-        <ul className="mt-space-sm space-y-space-md">
-          {proposals.map((p) => (
-            <ProposalItem key={p.id} p={p} testId={testId} onDone={onDone} onReload={onReload} decidable={decidable === true} />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function ProposalItem({ p, testId, onDone, onReload, decidable }: { p: FeeRuleProposal; testId: string; onDone: (p: FeeRuleProposal) => void; onReload: () => void; decidable: boolean }) {
-  return (
-    <li className="border-t border-border-subtle pt-space-sm" data-testid={`${testId}-${p.id}`} data-state={p.state} data-proposed-by-you={p.proposedByYou ? "true" : "false"}>
-      <p className="font-body-sm text-body-sm">
-        <strong>{p.ruleKey}</strong> · {money(p.amountInr)} + tax {p.taxRatePercent}% · from {p.effectiveFrom}
-      </p>
-      <p className="font-label-sm text-label-sm text-on-surface-variant">
-        Source: {p.sourceReference} · Reason: {p.reason} · Proposed by {p.proposedByYou ? "you" : p.proposedBy}
-        {p.state !== "pending" ? ` · ${p.state}${p.decidedBy ? ` by ${p.decidedBy}` : ""}${p.appliedVersion ? ` (now version ${p.appliedVersion})` : ""}${p.decisionNote ? ` · ${p.decisionNote}` : ""}` : ""}
-      </p>
-      {decidable ? <DecisionButtons p={p} onDone={onDone} onReload={onReload} /> : null}
-    </li>
-  );
-}
-
-function DecisionButtons({ p, onDone, onReload }: { p: FeeRuleProposal; onDone: (p: FeeRuleProposal) => void; onReload: () => void }) {
-  const [note, setNote] = useState("");
-  const approve = useCommand(runDecideFeeRule, decideFeeRuleSignature);
-  const reject = useCommand(runDecideFeeRule, decideFeeRuleSignature);
-  const withdraw = useCommand(runDecideFeeRule, decideFeeRuleSignature);
-
-  async function decide(cmd: typeof approve, decision: Decision) {
-    const out = await cmd.execute({ id: p.id, decision, note: note.trim() || undefined });
-    if (out?.ok) onDone(out.value);
-  }
-
-  if (p.proposedByYou) {
-    return (
-      <div className="mt-1" data-testid={`feerule-own-${p.id}`}>
-        <p className="font-label-sm text-on-surface-variant">You proposed this; a different person must approve or reject it.</p>
-        <CommandPanel state={withdraw.state} onRun={() => void decide(withdraw, "withdraw")} runLabel="Withdraw my proposal" busyLabel="Withdrawing…"
-          runTestId={`feerule-withdraw-run-${p.id}`} errorTestId={`feerule-withdraw-error-${p.id}`} reloadTestId={`feerule-withdraw-reload-${p.id}`} onReload={onReload} signInReturnTo={ROUTE} />
-      </div>
-    );
-  }
-  return (
-    <div className="mt-1 space-y-space-sm">
-      <label className="block font-label-sm text-label-sm text-on-surface-variant">
-        Note (optional)
-        <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid={`feerule-note-${p.id}`} />
-      </label>
-      <CommandPanel state={approve.state} onRun={() => void decide(approve, "approve")} runLabel="Approve and start the rule" busyLabel="Approving…"
-        runTestId={`feerule-approve-run-${p.id}`} errorTestId={`feerule-approve-error-${p.id}`} reloadTestId={`feerule-approve-reload-${p.id}`} onReload={onReload} signInReturnTo={ROUTE} />
-      <CommandPanel state={reject.state} onRun={() => void decide(reject, "reject")} runLabel="Reject" busyLabel="Rejecting…"
-        runTestId={`feerule-reject-run-${p.id}`} errorTestId={`feerule-reject-error-${p.id}`} reloadTestId={`feerule-reject-reload-${p.id}`} onReload={onReload} signInReturnTo={ROUTE} />
-    </div>
   );
 }

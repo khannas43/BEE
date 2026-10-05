@@ -90,7 +90,7 @@ export function FinanceQueue({ module, screen }: { module: Module; screen: Scree
                       <div className="font-semibold text-on-surface">{a.brandName}</div>
                       <div className="font-label-sm text-label-sm text-on-surface-variant">{a.modelNumber}</div>
                     </div>,
-                    a.submissionFee ? `₹${Number(a.submissionFee.amountInr).toLocaleString("en-IN")}` : "—",
+                    a.submissionFee ? `₹${Number(a.submissionFee.totalInr).toLocaleString("en-IN")}` : "—",
                     <Link
                       key="open"
                       href={`${ROUTE}?id=${encodeURIComponent(a.id)}`}
@@ -169,7 +169,7 @@ function DetailAndConfirm({
   const fee = application.submissionFee;
   const [receiptReference, setReceiptReference] = useState("");
   const [receivedOn, setReceivedOn] = useState("");
-  const [amountInr, setAmountInr] = useState(fee?.amountInr ?? "");
+  const [amountInr, setAmountInr] = useState(fee?.totalInr ?? "");
   const [inputError, setInputError] = useState<string | null>(null);
   const command = useCommand(runFeeConfirmation, feeConfirmationSignature);
 
@@ -192,7 +192,9 @@ function DetailAndConfirm({
           { label: "Organisation", value: application.organisation },
           { label: "Brand", value: application.brandName },
           { label: "Model number", value: application.modelNumber },
-          { label: "Fee due", value: fee ? `₹${Number(fee.amountInr).toLocaleString("en-IN")} ${fee.currency}` : "—" },
+          { label: "Fee due", value: fee ? `₹${Number(fee.totalInr).toLocaleString("en-IN")} ${fee.currency}` : "—" },
+          { label: "Fee before tax", value: fee ? `₹${Number(fee.amountInr).toLocaleString("en-IN")}` : "—" },
+          { label: "Tax", value: fee ? (Number(fee.taxInr) === 0 ? "none set" : `₹${Number(fee.taxInr).toLocaleString("en-IN")} (${Number(fee.taxRatePercent)}%)`) : "—" },
           { label: "Fee rule", value: fee ? `${fee.feeRuleKey} v${fee.feeRuleVersion} (${fee.verificationStatus})${fee.localDemoFee ? ", not a BEE-approved fee" : ""}` : "—" },
           { label: "Laboratory", value: application.laboratoryCode ?? "—" },
           { label: "Test date", value: application.testedOn ?? "—" },

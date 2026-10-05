@@ -135,7 +135,7 @@ public class ModelApplicationSubmitService {
         }
         String actorRole = actorRole(caller);
         Optional<ModelApplicationSubmitRepository.SubmissionResult> done = submissions.submit(appId, filing, version.get(),
-            caller.accountId(), actorRole, fee.amountInr(), fv.ruleKey(), fv.version(), fv.verification().name().toLowerCase(),
+            caller.accountId(), actorRole, fee.amountInr(), fee.taxRatePercent(), fv.ruleKey(), fv.version(), fv.verification().name().toLowerCase(),
             fv.sourceReference(), fv.note());
         if (done.isEmpty()) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, appId, idempotencyKey);
@@ -293,6 +293,9 @@ public class ModelApplicationSubmitService {
         MasterVersion v = fee.version();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("amountInr", fee.amountInr().toPlainString());
+        m.put("taxRatePercent", fee.taxRatePercent().setScale(2).toPlainString());
+        m.put("taxInr", fee.taxInr().toPlainString());
+        m.put("totalInr", fee.totalInr().toPlainString());
         m.put("currency", "INR");
         m.put("feeRuleKey", v.ruleKey());
         m.put("feeRuleVersion", v.version());
@@ -308,6 +311,9 @@ public class ModelApplicationSubmitService {
     static Map<String, Object> feeViewFromSnapshot(ModelApplicationSubmitRepository.FeeSnapshotRow snap) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("amountInr", snap.amountInr().toPlainString());
+        m.put("taxRatePercent", snap.taxRatePercent().setScale(2).toPlainString());
+        m.put("taxInr", snap.taxInr().toPlainString());
+        m.put("totalInr", snap.totalInr().toPlainString());
         m.put("currency", snap.currency());
         m.put("feeRuleKey", snap.feeRuleKey());
         m.put("feeRuleVersion", snap.feeRuleVersion());

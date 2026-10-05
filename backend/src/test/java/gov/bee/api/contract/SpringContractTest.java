@@ -683,7 +683,7 @@ class SpringContractTest {
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
         var feeSnap = new ModelApplicationSubmitRepository.FeeSnapshotRow(UUID.randomUUID(), new BigDecimal("24000.00"), "INR", "RAC:new_model", 2,
             "provisional", "ref", "note", java.time.Instant.now());
-        when(submissions.submit(any(), any(), anyInt(), any(), any(), any(), any(), anyInt(), any(), any(), any()))
+        when(submissions.submit(any(), any(), anyInt(), any(), any(), any(), any(), any(), anyInt(), any(), any(), any()))
             .thenReturn(Optional.of(new ModelApplicationSubmitRepository.SubmissionResult(
                 new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-9999", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "fee_due", 1,
                     Set.of(), NOVA, NOVA_COOL, "NOVA"),
@@ -761,7 +761,7 @@ class SpringContractTest {
         when(applications.modelNumberTaken(any(), any(), any())).thenReturn(true);
         conforms(gatePost, post(submitPath).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 409, "duplicate_model");
         when(applications.modelNumberTaken(any(), any(), any())).thenReturn(false);
-        doThrow(new DataAccessResourceFailureException("down")).when(submissions).submit(any(), any(), anyInt(), any(), any(), any(), any(), anyInt(), any(), any(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(submissions).submit(any(), any(), anyInt(), any(), any(), any(), any(), any(), anyInt(), any(), any(), any());
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(draftRow(NOVA_APP, "NC-RAC-18F", 0)));
         when(brandAuth.brandOwnedBy(NOVA_COOL, NOVA)).thenReturn(Optional.of(novaCoolBrand()));
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
@@ -926,6 +926,15 @@ class SpringContractTest {
         conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("2026-10-02", "2999-01-01")), 422, "validation_failed");
         conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("UTR-1234", "bad;ref")), 422, "validation_failed");
         conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("24000.00", "23999.00")), 422, "amount_mismatch");
+
+        // A fee with a separate tax line is received in full: the fee alone is not enough, the fee plus its tax is exact.
+        var taxed = new ModelApplicationSubmitRepository.FeeSnapshotRow(UUID.randomUUID(), new BigDecimal("24000.00"), "INR", "RAC:new_model", 3,
+            "provisional", "ref", "note", java.time.Instant.now(), new BigDecimal("18.00"), new BigDecimal("4320.00"), new BigDecimal("28320.00"));
+        when(submissions.findFeeSnapshot(NOVA_APP)).thenReturn(Optional.of(taxed));
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "amount_mismatch");
+        var paid = conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("24000.00", "28320.00")), 200, null);
+        assertTrue(paid.getContentAsString().contains("\"amountInr\":\"28320.00\""), paid.getContentAsString());
+        when(submissions.findFeeSnapshot(NOVA_APP)).thenReturn(Optional.of(feeSnap));
 
         // Version, idempotency and assignment conflicts.
         conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");

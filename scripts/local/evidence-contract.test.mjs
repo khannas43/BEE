@@ -35,7 +35,7 @@ test("a model application may carry the evidence fields, and malformed ones are 
 });
 
 test("a submitted application carries the same optional evidence fields", () => {
-  const fee = { amountInr: "24000.00", currency: "INR", feeRuleKey: "RAC:new_model", feeRuleVersion: 2, verificationStatus: "provisional", localDemoFee: true, label: "x" };
+  const fee = { amountInr: "24000.00", taxRatePercent: "0.00", taxInr: "0.00", totalInr: "24000.00", currency: "INR", feeRuleKey: "RAC:new_model", feeRuleVersion: 2, verificationStatus: "provisional", localDemoFee: true, label: "x" };
   const body = { ...APP, state: "fee_due", laboratoryCode: "LAB", testedOn: "2026-09-01", declaredIseer: 4.5, submissionFee: fee };
   assert.notEqual(validateModelApplicationSubmitted(body), null);
 });

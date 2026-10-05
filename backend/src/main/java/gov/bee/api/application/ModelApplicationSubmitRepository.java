@@ -13,7 +13,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class ModelApplicationSubmitRepository {
 
     public record FeeSnapshotRow(UUID id, BigDecimal amountInr, String currency, String feeRuleKey, int feeRuleVersion,
-                                 String verificationStatus, String sourceReference, String note, Instant capturedAt) {
+                                 String verificationStatus, String sourceReference, String note, Instant capturedAt,
+                                 BigDecimal taxRatePercent, BigDecimal taxInr, BigDecimal totalInr) {
+        /** A snapshot with no tax line: tax 0, total equal to the amount. */
+        public FeeSnapshotRow(UUID id, BigDecimal amountInr, String currency, String feeRuleKey, int feeRuleVersion,
+                              String verificationStatus, String sourceReference, String note, Instant capturedAt) {
+            this(id, amountInr, currency, feeRuleKey, feeRuleVersion, verificationStatus, sourceReference, note, capturedAt,
+                BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2), amountInr);
+        }
+    }
+
+    private static final String SNAPSHOT_COLUMNS =
+        "id, amount_inr, currency, fee_rule_key, fee_rule_version, verification_status, source_reference, note, captured_at, tax_rate_percent, tax_inr, total_inr";
+
+    private static FeeSnapshotRow snapshot(java.sql.ResultSet rs, int i) throws java.sql.SQLException {
+        return new FeeSnapshotRow(rs.getObject("id", UUID.class), rs.getBigDecimal("amount_inr"), rs.getString("currency"),
+            rs.getString("fee_rule_key"), rs.getInt("fee_rule_version"), rs.getString("verification_status"),
+            rs.getString("source_reference"), rs.getString("note"), rs.getTimestamp("captured_at").toInstant(),
+            rs.getBigDecimal("tax_rate_percent"), rs.getBigDecimal("tax_inr"), rs.getBigDecimal("total_inr"));
     }
 
     public record SubmissionResult(ModelApplicationRepository.Row application, UUID eventId, FeeSnapshotRow fee) {
@@ -76,13 +93,7 @@ public class ModelApplicationSubmitRepository {
     }
 
     public Optional<FeeSnapshotRow> findFeeSnapshot(UUID applicationId) {
-        var rows = jdbc.query(
-            "SELECT id, amount_inr, currency, fee_rule_key, fee_rule_version, verification_status, source_reference, note, captured_at "
-                + "FROM model_application_fee_snapshot WHERE application_id = ?",
-            (rs, i) -> new FeeSnapshotRow(rs.getObject("id", UUID.class), rs.getBigDecimal("amount_inr"), rs.getString("currency"),
-                rs.getString("fee_rule_key"), rs.getInt("fee_rule_version"), rs.getString("verification_status"),
-                rs.getString("source_reference"), rs.getString("note"), rs.getTimestamp("captured_at").toInstant()),
-            applicationId);
+        var rows = jdbc.query("SELECT " + SNAPSHOT_COLUMNS + " FROM model_application_fee_snapshot WHERE application_id = ?", ModelApplicationSubmitRepository::snapshot, applicationId);
         return rows.stream().findFirst();
     }
 
@@ -95,9 +106,17 @@ public class ModelApplicationSubmitRepository {
             accreditationRuleKey, accreditationVersion, standardRuleKey, standardVersion, applicationId, filingOrganisationId);
     }
 
-    @Transactional
+    /** Submits with no tax line (rate 0). */
     public Optional<SubmissionResult> submit(UUID applicationId, UUID filingOrganisationId, int expectedVersion,
                                              UUID actorAccountId, String actorRole, BigDecimal amountInr, String feeRuleKey,
+                                             int feeRuleVersion, String verificationStatus, String sourceReference, String note) {
+        return submit(applicationId, filingOrganisationId, expectedVersion, actorAccountId, actorRole, amountInr, BigDecimal.ZERO, feeRuleKey,
+            feeRuleVersion, verificationStatus, sourceReference, note);
+    }
+
+    @Transactional
+    public Optional<SubmissionResult> submit(UUID applicationId, UUID filingOrganisationId, int expectedVersion,
+                                             UUID actorAccountId, String actorRole, BigDecimal amountInr, BigDecimal taxRatePercent, String feeRuleKey,
                                              int feeRuleVersion, String verificationStatus, String sourceReference, String note) {
         int updated = jdbc.update(
             "UPDATE model_application SET state = 'fee_due', version = version + 1 "
@@ -116,9 +135,9 @@ public class ModelApplicationSubmitRepository {
         }
         UUID feeId = UUID.randomUUID();
         int fees = jdbc.update(
-            "INSERT INTO model_application_fee_snapshot (id, application_id, submission_event_id, amount_inr, currency, fee_rule_key, fee_rule_version, verification_status, source_reference, note) "
-                + "VALUES (?, ?, ?, ?, 'INR', ?, ?, ?, ?, ?)",
-            feeId, applicationId, eventId, amountInr, feeRuleKey, feeRuleVersion, verificationStatus, sourceReference, note);
+            "INSERT INTO model_application_fee_snapshot (id, application_id, submission_event_id, amount_inr, tax_rate_percent, currency, fee_rule_key, fee_rule_version, verification_status, source_reference, note) "
+                + "VALUES (?, ?, ?, ?, ?, 'INR', ?, ?, ?, ?, ?)",
+            feeId, applicationId, eventId, amountInr, taxRatePercent, feeRuleKey, feeRuleVersion, verificationStatus, sourceReference, note);
         if (fees != 1) {
             throw new IllegalStateException("fee snapshot not written");
         }
@@ -126,13 +145,7 @@ public class ModelApplicationSubmitRepository {
         if (row.isEmpty()) {
             return Optional.empty();
         }
-        FeeSnapshotRow fee = jdbc.queryForObject(
-            "SELECT id, amount_inr, currency, fee_rule_key, fee_rule_version, verification_status, source_reference, note, captured_at "
-                + "FROM model_application_fee_snapshot WHERE application_id = ?",
-            (rs, i) -> new FeeSnapshotRow(rs.getObject("id", UUID.class), rs.getBigDecimal("amount_inr"), rs.getString("currency"),
-                rs.getString("fee_rule_key"), rs.getInt("fee_rule_version"), rs.getString("verification_status"),
-                rs.getString("source_reference"), rs.getString("note"), rs.getTimestamp("captured_at").toInstant()),
-            applicationId);
+        FeeSnapshotRow fee = jdbc.queryForObject("SELECT " + SNAPSHOT_COLUMNS + " FROM model_application_fee_snapshot WHERE application_id = ?", ModelApplicationSubmitRepository::snapshot, applicationId);
         return Optional.of(new SubmissionResult(row.get(), eventId, fee));
     }
 }

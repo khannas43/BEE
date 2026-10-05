@@ -206,7 +206,7 @@ test("draft create and edit send JSON with the key and report replays and refusa
 
 test("submit preview is a kit read and submit a kit command with the fee snapshot", async () => {
   const realFetch = globalThis.fetch;
-  const fee = { amountInr: "24000.00", currency: "INR", feeRuleKey: "RAC:new_model", feeRuleVersion: 2, verificationStatus: "provisional", localDemoFee: true, label: "x" };
+  const fee = { amountInr: "24000.00", taxRatePercent: "0.00", taxInr: "0.00", totalInr: "24000.00", currency: "INR", feeRuleKey: "RAC:new_model", feeRuleVersion: 2, verificationStatus: "provisional", localDemoFee: true, label: "x" };
   try {
     globalThis.fetch = async () => json(200, { ready: false, version: 3, intakeNote: "n", evidenceGates: [] });
     const preview = await previewModelApplicationSubmit(APP.id);

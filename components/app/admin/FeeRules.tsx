@@ -37,7 +37,7 @@ export const FEE_RULES_COPY = {
   title: "Fee rules",
   loading: "Loading fee rules…",
   notPermitted: "Only a person who holds the fee-rule permission can see or change fee rules.",
-  taxNote: "Tax is a separate line. It is recorded here and shown with the rule; it is not yet added to the fee an applicant pays.",
+  taxNote: "Tax is a separate line: the rate is added on top of the fee, rounded to the paisa, and the applicant and Finance see the fee, the tax and the total. A rate of 0 means no tax is set.",
   twoPeople: "A new rule starts only after a different person approves it, and never from a date in the past. An application keeps the fee it was given when it was submitted.",
   provisional: "Provisional local rules: no fee here has been confirmed by BEE.",
   inputRequired: "Choose the category and type, enter the fee as a number with up to two decimals, the tax rate between 0 and 100, a start date from today, and the source and reason.",

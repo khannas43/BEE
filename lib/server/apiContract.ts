@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.17.0";
+export const CONTRACT_VERSION = "0.18.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -203,7 +203,12 @@ export interface ModelApplicationList {
 }
 
 export interface SubmissionFee {
+  /** The fee before tax. */
   amountInr: string;
+  /** The separate tax line: the rate in percent, the tax, and the whole fee due (fee plus tax). */
+  taxRatePercent: string;
+  taxInr: string;
+  totalInr: string;
   currency: string;
   feeRuleKey: string;
   feeRuleVersion: number;
@@ -213,14 +218,15 @@ export interface SubmissionFee {
   sourceReference?: string;
 }
 
-const SUBMISSION_FEE_KEYS = ["amountInr", "currency", "feeRuleKey", "feeRuleVersion", "verificationStatus", "localDemoFee", "label"] as const;
+const SUBMISSION_FEE_KEYS = ["amountInr", "taxRatePercent", "taxInr", "totalInr", "currency", "feeRuleKey", "feeRuleVersion", "verificationStatus", "localDemoFee", "label"] as const;
 const SUBMISSION_FEE_OPTIONAL = ["sourceReference"] as const;
 
 export const validateSubmissionFee: Validator<SubmissionFee> = (body) => {
   if (!exactKeys(body, SUBMISSION_FEE_KEYS, SUBMISSION_FEE_OPTIONAL)) return null;
   const b = body;
   const ok =
-    isString(b.amountInr) && isString(b.currency) && b.currency === "INR" &&
+    isString(b.amountInr) && isString(b.taxRatePercent) && /^\d{1,3}\.\d{2}$/.test(b.taxRatePercent) && isString(b.taxInr) && /^\d+\.\d{2}$/.test(b.taxInr) &&
+    isString(b.totalInr) && /^\d+\.\d{2}$/.test(b.totalInr) && isString(b.currency) && b.currency === "INR" &&
     isString(b.feeRuleKey) && Number.isInteger(b.feeRuleVersion) && (b.feeRuleVersion as number) >= 1 &&
     isString(b.verificationStatus) && typeof b.localDemoFee === "boolean" && isString(b.label) &&
     (b.sourceReference === undefined || isString(b.sourceReference));

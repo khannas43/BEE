@@ -65,7 +65,7 @@ public class MasterDataRepository {
     }
 
     public Optional<FeeRule> feeRule(String category, String applicationType, LocalDate at) {
-        return one(Table.FEE_RULE, "category_code, application_type, amount_inr", category + ":" + applicationType, at, this::fee);
+        return one(Table.FEE_RULE, "category_code, application_type, amount_inr, tax_rate_percent", category + ":" + applicationType, at, this::fee);
     }
 
     public Optional<RatingFormula> ratingFormula(String category, LocalDate at) {
@@ -122,7 +122,7 @@ public class MasterDataRepository {
     }
 
     private FeeRule fee(ResultSet rs, int i) throws SQLException {
-        return new FeeRule(shared(rs), rs.getString("category_code"), rs.getString("application_type"), rs.getBigDecimal("amount_inr"));
+        return new FeeRule(shared(rs), rs.getString("category_code"), rs.getString("application_type"), rs.getBigDecimal("amount_inr"), rs.getBigDecimal("tax_rate_percent"));
     }
 
     private RatingFormula formula(ResultSet rs, int i) throws SQLException {

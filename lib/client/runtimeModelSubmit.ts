@@ -5,7 +5,12 @@
 import { type CommandFailure, type ReadFailure, runtimeCommand, runtimeRead, newIdempotencyKey } from "@/lib/client/runtimeHttp";
 
 export type SubmissionFee = {
+  /** The fee before tax. */
   amountInr: string;
+  /** The separate tax line, and the whole fee due (fee plus tax). */
+  taxRatePercent: string;
+  taxInr: string;
+  totalInr: string;
   currency: string;
   feeRuleKey: string;
   feeRuleVersion: number;

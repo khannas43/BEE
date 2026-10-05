@@ -37,7 +37,12 @@ export interface ModelApplication {
   declaredIseer?: number;
   /** The provisional fee captured at submit; present once the application has been submitted. */
   submissionFee?: {
+    /** The fee before tax. */
     amountInr: string;
+    /** The separate tax line, and the whole fee due (fee plus tax). */
+    taxRatePercent: string;
+    taxInr: string;
+    totalInr: string;
     currency: string;
     label: string;
     feeRuleKey: string;
@@ -143,4 +148,10 @@ export function modelDashboardHref(id?: string | null): string {
 
 export function stateLabel(state: string): string {
   return state.replaceAll("_", " ");
+}
+
+/** The fee in words: the amount alone when there is no tax, otherwise the amount, the separate tax line and the total. */
+export function feeText(fee: { amountInr: string; taxRatePercent: string; taxInr: string; totalInr: string }): string {
+  const rupees = (v: string) => `₹${Number(v).toLocaleString("en-IN")}`;
+  return Number(fee.taxInr) === 0 ? rupees(fee.totalInr) : `${rupees(fee.amountInr)} + tax ${rupees(fee.taxInr)} (${Number(fee.taxRatePercent)}%) = ${rupees(fee.totalInr)}`;
 }

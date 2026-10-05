@@ -15,7 +15,7 @@ import {
   type DraftApplication,
   type DraftSaveResult,
 } from "@/lib/client/runtimeModelDrafts";
-import { modelDashboardHref, readModelApplication, stateLabel, type ModelApplication } from "@/lib/client/runtimeModelApplications";
+import { feeText, modelDashboardHref, readModelApplication, stateLabel, type ModelApplication } from "@/lib/client/runtimeModelApplications";
 import {
   previewModelApplicationSubmit,
   submitModelApplicationDraft,
@@ -333,7 +333,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             Application <strong>{submitDone.reference}</strong> is now <strong>{stateLabel("fee_due")}</strong>.
           </p>
           <p className="font-body-sm text-on-surface-variant mt-space-sm">
-            {submitDone.fee.label}: ₹{Number(submitDone.fee.amountInr).toLocaleString("en-IN")} ({submitDone.fee.feeRuleKey} v{submitDone.fee.feeRuleVersion}).
+            {submitDone.fee.label}: {feeText(submitDone.fee)} ({submitDone.fee.feeRuleKey} v{submitDone.fee.feeRuleVersion}).
             {submitDone.fee.localDemoFee ? " This amount is for local demo only and is not a BEE-approved fee." : ""}
           </p>
           <p className="font-label-sm text-on-surface-variant mt-space-sm">
@@ -733,7 +733,7 @@ function SubmitConfirmCard({
           <p>
             <span className="font-semibold">{preview.submissionFee.label}</span>
             {" · "}
-            ₹{Number(preview.submissionFee.amountInr).toLocaleString("en-IN")} {preview.submissionFee.currency}
+            {feeText(preview.submissionFee)} {preview.submissionFee.currency}
           </p>
           <p className="text-on-surface-variant">
             Rule {preview.submissionFee.feeRuleKey} v{preview.submissionFee.feeRuleVersion} ({preview.submissionFee.verificationStatus}).

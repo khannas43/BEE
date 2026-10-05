@@ -1,6 +1,6 @@
 # Cursor briefs
 
-Six tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HANDOFF.md](../kit/AGENT_HANDOFF.md)). Each is frontend or tooling only, touches files the others and Claude's backend work do not, and ends with a hand-back.
+Seven tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HANDOFF.md](../kit/AGENT_HANDOFF.md)). Each is frontend or tooling only, touches files the others and Claude's backend work do not, and ends with a hand-back.
 
 **How a task runs.** Claude writes [CURRENT_TASK.md](CURRENT_TASK.md) (which brief, the `cursor/<task>` branch, any overrides, the acceptance commands), checks out the branch and sets `.baton`. You then run **`/bee-run-task`** in Cursor's Agent chat; Cursor does the task and ends with **`/bee-handback`**. Claude reviews and merges.
 
@@ -12,5 +12,6 @@ Six tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HAN
 | 04 | `local:check` preflight, stale lock and a steadier memory gate | `cursor/check-tooling` | BL-030, BL-031, BL-032, BL-095 | `scripts/local/check.sh`, `lib.sh`, `health.sh` | yes (the task runs the runtime itself) |
 | 05 | One shared stage screen for the four officer screens | `cursor/shared-stage-screen` | BL-110 | `components/app/lifecycle/StageWorkScreen.tsx` (new), the IAME, Reviewer, Programme and Director screens | yes (the task runs the runtime itself) |
 | 06 | Neutral test ids for the shared Director and Secretary screen | `cursor/approval-test-ids` | BL-113, BL-114 | `components/app/director/DirectorApproval.tsx`, the lifecycle panels it passes a prefix to, six live checks in `scripts/local/` | yes (the task runs the runtime itself) |
+| 07 | One shared proposal panel for the fee-rule and rating-scheme screens | `cursor/shared-proposal-panels` | BL-139 (frontend part) | `components/app/admin/ProposalPanels.tsx` (new), `FeeRules.tsx`, `RatingFormulas.tsx` | yes (the task runs the runtime itself) |
 
 Not briefed on purpose, because they change the contract or the backend and so belong to Claude: the Wave 1 commands (IAME recommendation onward), the OpenAPI split, the scaffolder's extensions, the WP06.2 blob work, and the lint-baseline clean-up (BL-035, which touches too many files to run beside other work).

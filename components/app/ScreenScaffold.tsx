@@ -391,7 +391,7 @@ function DetailBody() {
   );
 }
 
-function ApprovalBody({ screen }: { screen: Screen }) {
+function ApprovalBody() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md">
       <div className="lg:col-span-2">

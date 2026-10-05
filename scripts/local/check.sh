@@ -375,6 +375,11 @@ jq -nc \
   '{postgres_mb:$pg,keycloak_mb:$kc,api_mb:$api,web_mb:$web,total_mb:$total,postgres_samples:$pg_samples,keycloak_samples:$kc_samples,api_samples:$api_samples,web_samples:$web_samples,total_samples:$total_samples}' \
   > "$RUN_DIR/memory.json"
 
+# ---- whole-repository lint (BL-035): zero problems, so a new finding is never lost in a baseline
+lint_out="$(cd "$ROOT" && npx eslint . --max-warnings 0 2>&1)" && lint_rc=0 || lint_rc=$?
+lint_sum="$(grep -E '^✖ [0-9]+ problems?' <<<"$lint_out" | head -1)"
+check "repo.lint-clean" "$(ok test "$lint_rc" = 0)" "eslint . reports ${lint_sum:-0 problems}"
+
 # ---- AGENTS.md preserved
 agents_same=1
 if [[ -f "$RUN_DIR/AGENTS.md.snapshot" ]]; then cmp -s "$RUN_DIR/AGENTS.md.snapshot" "$ROOT/AGENTS.md" || agents_same=0; fi

@@ -45,7 +45,6 @@ DECLARE
   holds   boolean;
   v_key   text;
   v_n     integer;
-  v_last  date;
 BEGIN
   IF p_decision NOT IN ('approve', 'reject', 'withdraw') THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'validation_failed';
@@ -96,9 +95,10 @@ BEGIN
     RETURN QUERY SELECT 'rule_conflict'::text, NULL::text;
     RETURN;
   END IF;
-  -- The scheme in force is the one with the latest start; a new one must start strictly after every scheme already there.
-  SELECT max(b.effective_from), count(DISTINCT b.scheme_key) INTO v_last, v_n FROM rating_demo_band b WHERE b.category_code = p.category_code;
-  IF v_last IS NOT NULL AND p.effective_from <= v_last THEN
+  -- Schemes form a timeline by start date: the one in force is the one with the latest start on or before the day. Two schemes of
+  -- one category may not start on the same day, or it would be ambiguous which applies.
+  SELECT count(DISTINCT b.scheme_key) INTO v_n FROM rating_demo_band b WHERE b.category_code = p.category_code;
+  IF EXISTS (SELECT 1 FROM rating_demo_band b WHERE b.category_code = p.category_code AND b.effective_from = p.effective_from) THEN
     RETURN QUERY SELECT 'rule_conflict'::text, NULL::text;
     RETURN;
   END IF;

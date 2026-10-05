@@ -127,12 +127,19 @@ class RatingSchemeDatabaseTest {
             assertEquals(List.of(new BigDecimal("3.00"), new BigDecimal("3.40"), new BigDecimal("3.90"), new BigDecimal("4.40"), new BigDecimal("4.90")),
                 after.stream().map(RatingRepository.Band::minIseer).toList());
             assertEquals("approved", repo.proposal(p.id()).orElseThrow().state());
-            // A scheme must start strictly after every scheme already there, or it would be ambiguous which is in force.
+            // Two schemes of one category may not start on the same day, or it would be ambiguous which is in force.
             var same = repo.insert(ADMIN_USER, scheme(from, "3.10", "3.50", "4.00", "4.50", "5.00"));
             assertEquals(Outcome.RULE_CONFLICT, repo.decide(same.id(), FINANCE_USER, "approve", null).outcome());
             assertEquals("pending", repo.proposal(same.id()).orElseThrow().state(), "a refused decision changes nothing");
-            var earlier = repo.insert(ADMIN_USER, scheme(TODAY.plusDays(5), "3.10", "3.50", "4.00", "4.50", "5.00"));
-            assertEquals(Outcome.RULE_CONFLICT, repo.decide(earlier.id(), FINANCE_USER, "approve", null).outcome());
+            // A scheme that starts earlier than one already queued is a point on the timeline: it applies until the queued one starts.
+            LocalDate earlierDate = TODAY.plusDays(5);
+            var earlier = repo.insert(ADMIN_USER, scheme(earlierDate, "3.10", "3.50", "4.00", "4.50", "5.00"));
+            var earlierDone = repo.decide(earlier.id(), FINANCE_USER, "approve", null);
+            assertEquals(Outcome.DONE, earlierDone.outcome());
+            assertEquals(earlierDone.appliedScheme(), ratings.bandsInForce("RAC", earlierDate).get(0).schemeKey());
+            assertEquals(earlierDone.appliedScheme(), ratings.bandsInForce("RAC", from.minusDays(1)).get(0).schemeKey());
+            assertEquals(done.appliedScheme(), ratings.bandsInForce("RAC", from).get(0).schemeKey(), "the later scheme takes over on its own date");
+            repo.decide(same.id(), ADMIN_USER, "withdraw", null);
         } finally {
             revokeFinance();
         }

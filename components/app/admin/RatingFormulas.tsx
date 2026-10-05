@@ -37,7 +37,7 @@ export const RATING_FORMULA_COPY = {
   title: "Rating schemes",
   loading: "Loading rating schemes…",
   how: "A scheme says the lowest efficiency figure that earns each star. The scheme with the latest start date on or before the day a rating is computed applies; earlier ratings keep the scheme they were computed with.",
-  twoPeople: "A new scheme starts only after a different person approves it, and never from a date in the past.",
+  twoPeople: "A new scheme starts only after a different person approves it, never from a date in the past, and never on a day another scheme of the category starts.",
   provisional: "Local demonstration: nothing entered here is a BEE-approved formula, and every rating computed from it says so.",
   inputRequired: "Choose the category, a start date from today, five efficiency figures with up to two decimals (each higher than the one before), and the source and reason.",
 } as const;

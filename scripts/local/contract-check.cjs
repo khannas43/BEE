@@ -108,6 +108,17 @@ const SCHEME_DECISION_ROUTE = "/api/runtime/rating-schemes/proposals/{id}/decisi
 const SCHEMES_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: FEE_DENIALS, 503: ["service_unavailable"] } };
 const SCHEME_PROPOSAL_UPSTREAM = FEE_PROPOSAL_UPSTREAM;
 const SCHEME_DECISION_UPSTREAM = FEE_DECISION_UPSTREAM;
+// Fee-confirmation corrections. Keep equal to lib/server/contracts/fee-corrections.ts and the artifact.
+const CORRECTIONS_ROUTE = "/api/runtime/fee-corrections";
+const CORRECTION_PROPOSAL_ROUTE = "/api/runtime/fee-corrections/proposals";
+const CORRECTION_DECISION_ROUTE = "/api/runtime/fee-corrections/proposals/{id}/decision";
+const CORRECTIONS_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: FEE_DENIALS, 503: ["service_unavailable"] } };
+const CORRECTION_PROPOSAL_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["correction_already_pending", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
+const CORRECTION_DECISION_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: WRITE_DENIALS, 503: ["service_unavailable"] },
@@ -514,6 +525,9 @@ async function nextChecks(jar, novaToken) {
     [SCHEMES_ROUTE, "/api/runtime/rating-schemes", "GET", "schemes-anon-get", undefined],
     [SCHEME_PROPOSAL_ROUTE, "/api/runtime/rating-schemes/proposals", "POST", "scheme-proposal-anon-post", "{}"],
     [SCHEME_DECISION_ROUTE, `/api/runtime/rating-schemes/proposals/${NOVA_APP}/decision`, "POST", "scheme-decision-anon-post", "{}"],
+    [CORRECTIONS_ROUTE, "/api/runtime/fee-corrections", "GET", "corrections-anon-get", undefined],
+    [CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", "correction-proposal-anon-post", "{}"],
+    [CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", "correction-decision-anon-post", "{}"],
   ]) {
     const r = await call(`${WEB}${path}`, { method, correlationId: cid(`next-${tag}`), ...(body ? { headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123477" }, body } : {}) });
     e = contract.conforms(doc, route, method, r);
@@ -675,6 +689,9 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(SCHEMES_ROUTE, "/api/runtime/rating-schemes", "GET", sessionJar, SCHEMES_UPSTREAM);
     await exerciseStandInPairs(SCHEME_PROPOSAL_ROUTE, "/api/runtime/rating-schemes/proposals", "POST", sessionJar, SCHEME_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(SCHEME_DECISION_ROUTE, `/api/runtime/rating-schemes/proposals/${NOVA_APP}/decision`, "POST", sessionJar, SCHEME_DECISION_UPSTREAM);
+    await exerciseStandInPairs(CORRECTIONS_ROUTE, "/api/runtime/fee-corrections", "GET", sessionJar, CORRECTIONS_UPSTREAM);
+    await exerciseStandInPairs(CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", sessionJar, CORRECTION_PROPOSAL_UPSTREAM);
+    await exerciseStandInPairs(CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", sessionJar, CORRECTION_DECISION_UPSTREAM);
     await exerciseStandInPairs("/api/runtime/model-applications/{id}/history", `/api/runtime/model-applications/${NOVA_APP}/history`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);

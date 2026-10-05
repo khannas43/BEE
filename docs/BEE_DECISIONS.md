@@ -123,7 +123,8 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Options.** (a) As today, plus a correction step that needs a second Finance approver; (b) applicant uploads proof, Finance verifies it; (c) gateway callback with Finance reconciliation.
 - **Recommendation.** (a) for the first release: manual confirmation, with a defined correction route.
 - **If unanswered.** As today, with no correction route.
-- **Owner's assumption, 4 October 2026 (not BEE's decision).** Option (a): manual confirmation by Finance, **plus a correction route that needs a second Finance approver**. The correction route is not built (BL-133).
+- **Owner's assumption, 4 October 2026 (not BEE's decision).** Option (a): manual confirmation by Finance, **plus a correction route that needs a second Finance approver**. The correction route is built in WP08.1e (BL-133): see below.
+- **Built (WP08.1e, 5 October 2026).** A *correction* fixes the **receipt reference** or the **date received** of a fee confirmation; the amount must still equal the fee due, so it is not corrected. A person whose role holds the `fee_confirmation_correct` permission (Finance now; assignable to another role) proposes the right values with a reason; a **different** holder approves or rejects; the proposer may withdraw. Neither may belong to the paying organisation or have acted at another stage of the application (the same separation as the confirmation itself). One correction waits at a time per confirmation. The original confirmation is **never edited**: the values in effect are the latest approved correction, and the history shows both. **Not modelled:** reversing a confirmation (moving the application back to "fee due"), which would need a decision about work already started at scrutiny.
 
 ### B12 — Amount received
 - **Question.** Must the amount received equal the fee exactly? What about part payments, overpayment, tax, or amounts deducted at source?

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.20.0",
+    "version": "0.21.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
     "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. The draft routes, submit, every stage command (fee confirmation to the Secretary's approval, return, resubmit and reject) and the history read are operational; anything not listed is denied.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
@@ -15875,6 +15875,1638 @@
           }
         }
       }
+    },
+    "/api/fee-corrections": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "get": {
+        "operationId": "springFeeCorrections",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [
+          {
+            "springBearer": []
+          }
+        ],
+        "summary": "The recent fee confirmations (with the receipt reference and date received now in effect, and any correction) and the corrections waiting for a second person. Only a person who holds the fee-confirmation-correction permission may read it. Provisional local rules.",
+        "description": "Readable under the same scope rule as the application itself; out-of-scope, unknown and malformed IDs are one 404 not_found. Every document is pending_local_verification: the local store makes no claim of laboratory accreditation, malware clearance or BEE approval.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The fee confirmations and corrections.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeCorrectionAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/fee-corrections": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "get": {
+        "operationId": "runtimeFeeCorrections",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "The recent fee confirmations (with the receipt reference and date received now in effect, and any correction) and the corrections waiting for a second person. Only a person who holds the fee-confirmation-correction permission may read it. Provisional local rules.",
+        "description": "Next.js calls Spring GET /api/model-applications/{id}/documents with the session's access token and this request's correlation ID. A 200 passes only if it matches DocumentList exactly at every depth; otherwise 502.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The fee confirmations and corrections.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeCorrectionAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/fee-corrections/proposals": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "post": {
+        "operationId": "springFeeCorrectionProposal",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [
+          {
+            "springBearer": []
+          }
+        ],
+        "summary": "Propose a correction to the receipt reference or the date received of a fee confirmation, with a reason. The confirmation itself is never changed; the correction takes effect only when a different person who holds the permission approves it, and neither may belong to the paying organisation or have acted at another stage of the application. Provisional local rules.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeeCorrectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correction proposed; nothing changes until it is approved.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "true when replaying a completed idempotent proposal."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeCorrectionProposal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  },
+                  "segregation_refused": {
+                    "value": {
+                      "error": "segregation_refused",
+                      "message": "A person who acted at another stage of this application, or its own organisation, cannot take this step."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted",
+              "segregation_refused"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "correction_already_pending": {
+                    "value": {
+                      "error": "correction_already_pending",
+                      "message": "A correction for this receipt is already waiting for a decision."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  },
+                  "idempotency_in_progress": {
+                    "value": {
+                      "error": "idempotency_in_progress",
+                      "message": "A request with this Idempotency-Key is still in progress."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "correction_already_pending",
+              "idempotency_key_conflict",
+              "idempotency_in_progress"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/fee-corrections/proposals": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "post": {
+        "operationId": "runtimeFeeCorrectionProposal",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "Propose a correction to the receipt reference or the date received of a fee confirmation, with a reason. The confirmation itself is never changed; the correction takes effect only when a different person who holds the permission approves it, and neither may belong to the paying organisation or have acted at another stage of the application. Provisional local rules.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeeCorrectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correction proposed; nothing changes until it is approved.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "true when replaying a completed idempotent proposal."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeCorrectionProposal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  },
+                  "segregation_refused": {
+                    "value": {
+                      "error": "segregation_refused",
+                      "message": "A person who acted at another stage of this application, or its own organisation, cannot take this step."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted",
+              "segregation_refused"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "correction_already_pending": {
+                    "value": {
+                      "error": "correction_already_pending",
+                      "message": "A correction for this receipt is already waiting for a decision."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  },
+                  "idempotency_in_progress": {
+                    "value": {
+                      "error": "idempotency_in_progress",
+                      "message": "A request with this Idempotency-Key is still in progress."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "correction_already_pending",
+              "idempotency_key_conflict",
+              "idempotency_in_progress"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/fee-corrections/proposals/{id}/decision": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "post": {
+        "operationId": "springFeeCorrectionDecision",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [
+          {
+            "springBearer": []
+          }
+        ],
+        "summary": "Approve, reject or withdraw a pending fee-confirmation correction. A different person must approve or reject; only the proposer may withdraw. Provisional local rules.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The proposal id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeeCorrectionDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision recorded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "true when replaying a completed idempotent decision."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeCorrectionProposal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  },
+                  "segregation_refused": {
+                    "value": {
+                      "error": "segregation_refused",
+                      "message": "A person who acted at another stage of this application, or its own organisation, cannot take this step."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted",
+              "segregation_refused"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "proposal_not_pending": {
+                    "value": {
+                      "error": "proposal_not_pending",
+                      "message": "This proposal has already been decided or withdrawn."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  },
+                  "idempotency_in_progress": {
+                    "value": {
+                      "error": "idempotency_in_progress",
+                      "message": "A request with this Idempotency-Key is still in progress."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "proposal_not_pending",
+              "idempotency_key_conflict",
+              "idempotency_in_progress"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/fee-corrections/proposals/{id}/decision": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "post": {
+        "operationId": "runtimeFeeCorrectionDecision",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "Approve, reject or withdraw a pending fee-confirmation correction. A different person must approve or reject; only the proposer may withdraw. Provisional local rules.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The proposal id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeeCorrectionDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision recorded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "true when replaying a completed idempotent decision."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeCorrectionProposal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  },
+                  "segregation_refused": {
+                    "value": {
+                      "error": "segregation_refused",
+                      "message": "A person who acted at another stage of this application, or its own organisation, cannot take this step."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted",
+              "segregation_refused"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "proposal_not_pending": {
+                    "value": {
+                      "error": "proposal_not_pending",
+                      "message": "This proposal has already been decided or withdrawn."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  },
+                  "idempotency_in_progress": {
+                    "value": {
+                      "error": "idempotency_in_progress",
+                      "message": "A request with this Idempotency-Key is still in progress."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "proposal_not_pending",
+              "idempotency_key_conflict",
+              "idempotency_in_progress"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
     }
   },
   "components": {
@@ -15986,7 +17618,8 @@
               "not_returned",
               "proposal_not_pending",
               "effective_date_passed",
-              "rule_conflict"
+              "rule_conflict",
+              "correction_already_pending"
             ]
           },
           "message": {
@@ -18461,6 +20094,285 @@
             "maxLength": 500
           }
         }
+      },
+      "FeeCorrectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "applicationId",
+          "receiptReference",
+          "receivedOn",
+          "reason"
+        ],
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The application whose fee confirmation is corrected."
+          },
+          "receiptReference": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9 ./_-]{0,63}$",
+            "description": "The right receipt reference (the confirmation's own rule)."
+          },
+          "receivedOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "The right date the money was received, not after today (India date)."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "FeeCorrectionDecisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision"
+        ],
+        "properties": {
+          "decision": {
+            "enum": [
+              "approve",
+              "reject",
+              "withdraw"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "FeeConfirmationCorrection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "receiptReference",
+          "receivedOn",
+          "approvedBy",
+          "approvedAt"
+        ],
+        "properties": {
+          "receiptReference": {
+            "type": "string"
+          },
+          "receivedOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "approvedBy": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FeeConfirmationRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "applicationId",
+          "reference",
+          "brandName",
+          "modelNumber",
+          "state",
+          "receiptReference",
+          "receivedOn",
+          "amountInr",
+          "confirmedBy",
+          "confirmedAt",
+          "correction",
+          "pendingProposalId"
+        ],
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "brandName": {
+            "type": "string"
+          },
+          "modelNumber": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "receiptReference": {
+            "type": "string",
+            "description": "As Finance first confirmed it; never changed."
+          },
+          "receivedOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "As Finance first confirmed it; never changed."
+          },
+          "amountInr": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$"
+          },
+          "confirmedBy": {
+            "type": "string"
+          },
+          "confirmedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "correction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FeeConfirmationCorrection"
+              }
+            ],
+            "description": "The latest approved correction, whose values are the ones in effect; null when none."
+          },
+          "pendingProposalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The correction waiting for a decision, if any."
+          }
+        }
+      },
+      "FeeCorrectionProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "applicationId",
+          "reference",
+          "previousReceiptReference",
+          "previousReceivedOn",
+          "receiptReference",
+          "receivedOn",
+          "reason",
+          "state",
+          "proposedBy",
+          "proposedByYou",
+          "proposedAt",
+          "decidedBy",
+          "decidedAt",
+          "decisionNote"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "applicationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "previousReceiptReference": {
+            "type": "string"
+          },
+          "previousReceivedOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "receiptReference": {
+            "type": "string"
+          },
+          "receivedOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ]
+          },
+          "proposedBy": {
+            "type": "string"
+          },
+          "proposedByYou": {
+            "type": "boolean",
+            "description": "True when the caller proposed it; the caller then cannot approve or reject it."
+          },
+          "proposedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decidedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decidedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "decisionNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "FeeCorrectionAdmin": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "today",
+          "confirmations",
+          "pending",
+          "decided"
+        ],
+        "properties": {
+          "today": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "confirmations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeeConfirmationRow"
+            },
+            "description": "The fifty most recent fee confirmations, newest first."
+          },
+          "pending": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeeCorrectionProposal"
+            }
+          },
+          "decided": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeeCorrectionProposal"
+            },
+            "description": "The twenty most recently decided corrections."
+          }
+        },
+        "description": "Provisional local rules (the owner's assumption B11, not BEE's decision). Readable only by a person who holds the fee_confirmation_correct permission."
       }
     }
   },
@@ -18722,6 +20634,12 @@
       "layer": "spring",
       "message": "This rule cannot start on that date because of the rules already in place.",
       "when": "POST fee-rule decision (approve) when the date overlaps or precedes a version already in place."
+    },
+    "correction_already_pending": {
+      "status": 409,
+      "layer": "spring",
+      "message": "A correction for this receipt is already waiting for a decision.",
+      "when": "POST fee-correction proposal when the confirmation already has a pending correction."
     }
   },
   "x-bee-status-semantics": {

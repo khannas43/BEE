@@ -39,6 +39,15 @@ public class IdentityRepository {
             (rs, i) -> new RoleGrant(rs.getString("role"), rs.getString("scope")), userId);
     }
 
+    /** The permissions the given roles hold (capability_grant), sorted: what a screen may offer, never what an action is allowed. */
+    public List<String> capabilities(java.util.Collection<String> roles) {
+        if (roles.isEmpty()) {
+            return List.of();
+        }
+        String marks = String.join(", ", java.util.Collections.nCopies(roles.size(), "?"));
+        return jdbc.queryForList("SELECT DISTINCT capability FROM capability_grant WHERE role IN (" + marks + ") ORDER BY capability", String.class, roles.toArray());
+    }
+
     public List<Membership> activeMemberships(UUID userId) {
         return jdbc.query(
             "SELECT o.code, o.kind, o.legal_name FROM organisation_membership m JOIN organisation o ON o.id = m.organisation_id "

@@ -390,6 +390,17 @@ class SpringContractTest {
     }
 
     @Test
+    void meListsThePermissionsTheRolesHoldAndNothingElse() throws Exception {
+        account("admin", "all");
+        when(identity.capabilities(List.of("admin"))).thenReturn(List.of("fee_rule_manage", "rating_scheme_manage"));
+        var res = conforms(ME, get(ME).with(token("admin")), 200, null);
+        assertTrue(res.getContentAsString().contains("\"capabilities\":[\"fee_rule_manage\",\"rating_scheme_manage\"]"), res.getContentAsString());
+        account("manufacturer", "own-org");
+        var plain = conforms(ME, get(ME).with(token("manufacturer")), 200, null);
+        assertTrue(plain.getContentAsString().contains("\"capabilities\":[]"), plain.getContentAsString());
+    }
+
+    @Test
     void healthUpAndDownMatchSpringHealth() throws Exception {
         conforms("/actuator/health", get("/actuator/health"), 200, null);
         HEALTH_DOWN.set(true);

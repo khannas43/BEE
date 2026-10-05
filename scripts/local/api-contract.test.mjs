@@ -28,7 +28,7 @@ test("error bodies are exactly code and fixed message", () => {
 const SUBJECT = "3d6f0a8e-0000-4000-a000-000000000001";
 const ME = {
   subject: SUBJECT, username: "nova.applicant", displayName: "Nova", authority: "spring-database",
-  effectiveRoles: [{ role: "manufacturer", scope: "own-org" }], organisations: [{ code: "NOVA", kind: "manufacturer", name: "Nova" }],
+  effectiveRoles: [{ role: "manufacturer", scope: "own-org" }], capabilities: [], organisations: [{ code: "NOVA", kind: "manufacturer", name: "Nova" }],
   activeAssignments: 0, tokenRoles: ["manufacturer"], authMethods: ["pwd", "otp"], ignoredTokenClaims: { organisation: "PixelCert Agency" },
 };
 const SECRET = "planted-secret-7f3a9c";
@@ -60,7 +60,7 @@ test("malformed 200 bodies are a fixed 502", () => {
   const noSubject = { ...ME };
   delete noSubject.subject;
   for (const body of [null, "text", [], {}, noSubject, { ...ME, subject: "not-a-uuid" }, { ...ME, authority: "keycloak" }, { ...ME, effectiveRoles: [] },
-    { ...ME, activeAssignments: -1 }, { ...ME, activeAssignments: 1.5 }, { ...ME, tokenRoles: [1] }, { ...ME, authMethods: null }, { ...ME, ignoredTokenClaims: { organisation: 7 } }]) {
+    { ...ME, activeAssignments: -1 }, { ...ME, activeAssignments: 1.5 }, { ...ME, tokenRoles: [1] }, { ...ME, capabilities: [1] }, { ...ME, capabilities: "fee_rule_manage" }, { ...ME, authMethods: null }, { ...ME, ignoredTokenClaims: { organisation: 7 } }]) {
     assert.deepEqual(fromUpstream(200, body, SPRING_ME), { ok: false, status: 502, body: errorBody("invalid_api_response") }, JSON.stringify(body));
   }
 });

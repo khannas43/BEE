@@ -204,6 +204,22 @@ class FeeRuleDatabaseTest {
     }
 
     @Test
+    void theMenuLearnsThePermissionsFromTheRolesThatHoldThem() {
+        var identity = new gov.bee.api.identity.IdentityRepository(db);
+        assertEquals(java.util.List.of("fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin")));
+        assertEquals(java.util.List.of(), identity.capabilities(java.util.List.of("finance")), "Finance holds none until a permission is given to it");
+        assertEquals(java.util.List.of(), identity.capabilities(java.util.List.of()));
+        grantFinance();
+        try {
+            assertEquals(java.util.List.of("fee_rule_manage"), identity.capabilities(java.util.List.of("finance", "reviewer")));
+            assertEquals(java.util.List.of("fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin", "finance")), "each permission once");
+        } finally {
+            revokeFinance();
+        }
+        assertEquals(java.util.List.of(), identity.capabilities(java.util.List.of("finance")));
+    }
+
+    @Test
     void anUnknownProposalIsNotFound() {
         assertEquals(Outcome.NOT_FOUND, repo.decide(UUID.randomUUID(), ADMIN_USER, "approve", null).outcome());
     }

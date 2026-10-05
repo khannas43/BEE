@@ -6,6 +6,8 @@ import { Icon } from "@/components/ui/Icon";
 export interface SpringIdentity {
   displayName: string;
   effectiveRoles: { role: string; scope: string }[];
+  /** The permissions the roles hold; the menu offers a screen by it. Spring still decides every action. */
+  capabilities?: string[];
   organisations: { code: string }[];
 }
 

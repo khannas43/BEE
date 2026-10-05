@@ -11,6 +11,8 @@ export interface RuntimeRoute {
   icon: string;
   /** Spring roles (from /api/runtime/me) that get the menu entry. A navigation hint only. */
   navRoles: readonly string[];
+  /** Permissions (from /api/runtime/me) that also get the menu entry, whatever the role: a role given the permission later sees the screen. */
+  navCapabilities?: readonly string[];
   /** What the screen actually does today, shown instead of preview access chips. */
   implemented: readonly string[];
 }
@@ -21,7 +23,8 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Fee rules",
     hi: "शुल्क नियम",
     icon: "request_quote",
-    navRoles: ["admin"],
+    navRoles: [],
+    navCapabilities: ["fee_rule_manage"],
     implemented: ["See every fee rule and its dates", "Propose a rule from a date", "Approve or reject a colleague's proposal", "Withdraw your own proposal"],
   },
   {
@@ -29,7 +32,8 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Rating schemes",
     hi: "रेटिंग योजना",
     icon: "star",
-    navRoles: ["admin"],
+    navRoles: [],
+    navCapabilities: ["rating_scheme_manage"],
     implemented: ["See every rating scheme and when it starts", "Propose a scheme from a date", "Approve or reject a colleague's proposal", "Withdraw your own proposal"],
   },
   {
@@ -134,8 +138,13 @@ export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {
   return RUNTIME_ROUTES.find((r) => r.href === pathname);
 }
 
-/** Menu entries for a Spring identity; empty for no identity or no matching role. */
-export function runtimeNavFor(roles: readonly { role: string }[] | null | undefined): RuntimeRoute[] {
+/** Menu entries for a Spring identity: by role, or by a permission the roles hold; empty for no identity or no match. */
+export function runtimeNavFor(
+  roles: readonly { role: string }[] | null | undefined,
+  capabilities: readonly string[] = [],
+): RuntimeRoute[] {
   if (!roles?.length) return [];
-  return RUNTIME_ROUTES.filter((r) => roles.some((g) => r.navRoles.includes(g.role)));
+  return RUNTIME_ROUTES.filter(
+    (r) => roles.some((g) => r.navRoles.includes(g.role)) || (r.navCapabilities ?? []).some((c) => capabilities.includes(c)),
+  );
 }

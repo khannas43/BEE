@@ -17,7 +17,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const categories = categoriesForRole(role);
   const identity = useSpringIdentity();
-  const runtimeNav = runtimeNavFor(identity.status === "signed-in" ? identity.me.effectiveRoles : null);
+  const runtimeNav = runtimeNavFor(identity.status === "signed-in" ? identity.me.effectiveRoles : null, identity.status === "signed-in" ? identity.me.capabilities ?? [] : []);
 
   // Which category the current route belongs to (for auto-open + highlight)
   const activeCat = categoryForPath(pathname)?.id ?? categories[0]?.id ?? null;

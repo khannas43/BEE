@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.19.0";
+export const CONTRACT_VERSION = "0.20.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -98,6 +98,8 @@ export interface Me {
   displayName: string;
   authority: "spring-database";
   effectiveRoles: { role: string; scope: string }[];
+  /** The permissions the effective roles hold. The menu uses it to offer a screen; Spring still decides every action. */
+  capabilities: string[];
   organisations: { code: string; kind: string; name: string }[];
   activeAssignments: number;
   tokenRoles: string[];
@@ -118,7 +120,7 @@ export function exactKeys(v: unknown, required: readonly string[], optional: rea
 const arrayOf = (v: unknown, item: (x: unknown) => boolean, minItems = 0) => Array.isArray(v) && v.length >= minItems && v.every(item);
 const record = (keys: readonly string[]) => (x: unknown) => exactKeys(x, keys) && keys.every((k) => isString(x[k]));
 
-export const ME_REQUIRED = ["subject", "username", "displayName", "authority", "effectiveRoles", "organisations", "activeAssignments", "tokenRoles", "authMethods"] as const;
+export const ME_REQUIRED = ["subject", "username", "displayName", "authority", "effectiveRoles", "capabilities", "organisations", "activeAssignments", "tokenRoles", "authMethods"] as const;
 export const ME_OPTIONAL = ["ignoredTokenClaims"] as const;
 
 /** The contract's Me schema, strictly: a field the contract does not document is a fault. */
@@ -130,6 +132,7 @@ export const validateMe: Validator<Me> = (body) => {
     isString(b.username) && isString(b.displayName) &&
     b.authority === "spring-database" &&
     arrayOf(b.effectiveRoles, record(["role", "scope"]), 1) &&
+    arrayOf(b.capabilities, isString) &&
     arrayOf(b.organisations, record(["code", "kind", "name"])) &&
     Number.isInteger(b.activeAssignments) && (b.activeAssignments as number) >= 0 &&
     arrayOf(b.tokenRoles, isString) &&

@@ -1,11 +1,11 @@
 # Current Cursor task
 
-**Holder:** cursor (handed over 2026-10-05).
+**Holder:** claude (no task handed over). Claude fills this file in when it hands the folder to Cursor, and resets it to this text when the task is merged.
 
-- **Brief:** [BRIEF_07_SHARED_PROPOSAL_PANELS.md](BRIEF_07_SHARED_PROPOSAL_PANELS.md)
-- **Branch:** `cursor/shared-proposal-panels`, already created and checked out by Claude from `main` (which includes fee-rule administration, tax, rating schemes and the permission-driven menu, PRs #21 to #24).
-- **Additions or overrides:** none. The brief and this file are the branch's first commit; `main` takes no direct commits.
-- **Acceptance commands:** `npx tsc --noEmit`; `npx eslint` on changed files; `npm run web:test` (183, unchanged); `npm run web:test:ui` (44, plus yours); `npm run build`.
-- **Live checks (you start and stop the runtime: `npm run local:up`, `npm run local:seed`, then `npm run local:down`):** `npm run local:fee-rules` (80) and `npm run local:rating-schemes` (78). Do not run `local:check`; anything else goes under "Not run".
+When a task is handed over, this file contains:
 
-When finished, run `/bee-handback`.
+- **Brief:** the file in `docs/cursor/` to follow (for example `BRIEF_01_DRAFT_FORM_ON_KIT.md`).
+- **Branch:** `cursor/<task>`, already created and checked out by Claude.
+- **Additions or overrides:** anything that differs from the brief.
+- **Acceptance commands:** the exact commands to run and the results expected.
+- **Live checks:** which, if any, Cursor may run (it starts and stops the runtime itself); everything else goes under "Not run".

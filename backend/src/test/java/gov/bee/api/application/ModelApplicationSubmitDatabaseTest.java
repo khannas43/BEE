@@ -123,6 +123,32 @@ class ModelApplicationSubmitDatabaseTest {
     }
 
     @Test
+    void theTaxLineIsDerivedByTheDatabaseFromTheRateAndMatchesTheJavaRounding() {
+        record Case(String model, String amount, String rate, String tax, String total) {
+        }
+        // Half up to the paisa, and a rate of zero leaves the total equal to the fee.
+        for (var c : java.util.List.of(new Case("NC-TAX-0", "24000.00", "0", "0.00", "24000.00"), new Case("NC-TAX-18", "24000.00", "18", "4320.00", "28320.00"),
+            new Case("NC-TAX-RND", "24999.99", "5.5", "1375.00", "26374.99"), new Case("NC-TAX-HALF", "0.50", "1", "0.01", "0.51"))) {
+            UUID id = insertDraft(c.model());
+            var done = submissions.submit(id, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal(c.amount()), new BigDecimal(c.rate()), "RAC:new_model", 2,
+                "provisional", "ref", "note");
+            assertTrue(done.isPresent(), c.model());
+            var fee = submissions.findFeeSnapshot(id).orElseThrow();
+            assertEquals(new BigDecimal(c.amount()), fee.amountInr(), c.model());
+            assertEquals(new BigDecimal(c.tax()), fee.taxInr(), c.model());
+            assertEquals(new BigDecimal(c.total()), fee.totalInr(), c.model());
+            // The portal's own arithmetic gives the same figure the database stored.
+            var rule = new gov.bee.api.masters.Masters.FeeRule(null, "RAC", "new_model", new BigDecimal(c.amount()), new BigDecimal(c.rate()));
+            assertEquals(fee.taxInr(), rule.taxInr(), c.model());
+            assertEquals(fee.totalInr(), rule.totalInr(), c.model());
+        }
+        // A snapshot cannot name a tax rate above 100.
+        UUID over = insertDraft("NC-TAX-OVER");
+        org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> submissions.submit(over, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("100.00"),
+            new BigDecimal("100.01"), "RAC:new_model", 2, "provisional", "ref", "note"));
+    }
+
+    @Test
     void staleVersionDoesNotPartiallyTransition() {
         UUID id = insertDraft("NC-SUB-STALE");
         assertTrue(submissions.submit(id, NOVA, 99, NOVA_USER, "manufacturer", new BigDecimal("24000"), "RAC:new_model", 2,

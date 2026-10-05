@@ -95,7 +95,8 @@ public class FeeConfirmationService {
         if (fee.isEmpty()) {
             return error(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error");
         }
-        if (input.get().amount().compareTo(fee.get().amountInr()) != 0) {
+        // What is received must equal the whole fee due: the amount plus its separate tax line (decision B12: exact match).
+        if (input.get().amount().compareTo(fee.get().totalInr()) != 0) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "amount_mismatch");
         }
         if (row.version() != input.get().version()) {
@@ -104,7 +105,7 @@ public class FeeConfirmationService {
         if (!idempotency.begin(caller.accountId(), "POST", ROUTE, appId, idempotencyKey, DraftRequestSupport.bodyHash(body))) {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
-        var done = repository.confirm(appId, row.version(), caller.accountId(), "finance", fee.get().id(), fee.get().amountInr(),
+        var done = repository.confirm(appId, row.version(), caller.accountId(), "finance", fee.get().id(), fee.get().totalInr(),
             input.get().receipt(), input.get().receivedOn());
         if (done.outcome() != FeeConfirmationRepository.Outcome.CONFIRMED) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
@@ -119,7 +120,7 @@ public class FeeConfirmationService {
         receipt.put("toState", FeeConfirmationRepository.TO_STATE);
         receipt.put("version", done.versionAfter());
         receipt.put("receiptReference", input.get().receipt());
-        receipt.put("amountInr", fee.get().amountInr().setScale(2).toPlainString());
+        receipt.put("amountInr", fee.get().totalInr().setScale(2).toPlainString());
         receipt.put("receivedOn", input.get().receivedOn().toString());
         receipt.put("confirmedAt", done.confirmedAt().toString());
         idempotency.complete(caller.accountId(), "POST", ROUTE, appId, idempotencyKey, 200, writeJson(receipt), done.versionAfter());

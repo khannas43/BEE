@@ -22,7 +22,20 @@ public final class Masters {
     }
 
     /** A fee amount. Not a BEE-approved fee unless {@code version().beeVerified()}; none is today. */
-    public record FeeRule(MasterVersion version, String categoryCode, String applicationType, BigDecimal amountInr) {
+    public record FeeRule(MasterVersion version, String categoryCode, String applicationType, BigDecimal amountInr, BigDecimal taxRatePercent) {
+        /** A fee rule with no tax line (rate 0), as every rule was before the tax line existed. */
+        public FeeRule(MasterVersion version, String categoryCode, String applicationType, BigDecimal amountInr) {
+            this(version, categoryCode, applicationType, amountInr, BigDecimal.ZERO.setScale(2));
+        }
+
+        /** Tax = amount x rate / 100, rounded half up to the paisa. The database derives the same figure for the snapshot. */
+        public BigDecimal taxInr() {
+            return amountInr.multiply(taxRatePercent).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        }
+
+        public BigDecimal totalInr() {
+            return amountInr.add(taxInr());
+        }
     }
 
     /**

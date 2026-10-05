@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.17.0",
+    "version": "0.18.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
     "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. The draft routes, submit, every stage command (fee confirmation to the Secretary's approval, return, resubmit and reject) and the history read are operational; anything not listed is denied.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
@@ -14968,11 +14968,30 @@
           "feeRuleVersion",
           "verificationStatus",
           "localDemoFee",
-          "label"
+          "label",
+          "taxRatePercent",
+          "taxInr",
+          "totalInr"
         ],
         "properties": {
           "amountInr": {
-            "type": "string"
+            "type": "string",
+            "description": "The fee before tax, in rupees."
+          },
+          "taxRatePercent": {
+            "type": "string",
+            "pattern": "^\\d{1,3}\\.\\d{2}$",
+            "description": "The separate tax line's rate in percent, from the fee rule version the application was submitted under. 0.00 where none is set."
+          },
+          "taxInr": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "Tax = fee x rate / 100, rounded half up to the paisa."
+          },
+          "totalInr": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "The whole fee due: the fee plus its tax. This is what Finance confirms received."
           },
           "currency": {
             "const": "INR"
@@ -15389,7 +15408,7 @@
           "amountInr": {
             "type": "string",
             "pattern": "^\\d{1,12}(\\.\\d{1,2})?$",
-            "description": "Amount received in rupees; must equal the fee snapshot's amount exactly (422 amount_mismatch)."
+            "description": "Amount received in rupees; must equal the whole fee due (fee plus its separate tax line, totalInr of the submission fee) exactly (422 amount_mismatch)."
           }
         },
         "description": "Request body of POST /api/model-applications/{id}/fee-confirmation (first slice step 2). Provisional local rules, not BEE rules."
@@ -15430,7 +15449,8 @@
             "type": "string"
           },
           "amountInr": {
-            "type": "string"
+            "type": "string",
+            "description": "The amount received, equal to the whole fee due (fee plus tax)."
           },
           "receivedOn": {
             "type": "string",

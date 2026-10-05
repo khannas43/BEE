@@ -38,6 +38,14 @@ GRANT EXECUTE ON FUNCTION app.master_supersede(text, text, integer, date, text, 
 SQL
 fi
 
+if psql_super -d bee_app -c "SELECT to_regclass('app.fee_correction_proposal') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.fee_correction_decide(uuid, uuid, text, text) TO ${BEE_RUNTIME_DB_USER};
+GRANT EXECUTE ON FUNCTION app.fee_correction_segregated(uuid, uuid) TO ${BEE_RUNTIME_DB_USER};
+REVOKE UPDATE, DELETE, TRUNCATE ON app.fee_correction_proposal FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+
 if psql_super -d bee_app -c "SELECT to_regclass('app.rating_scheme_proposal') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 GRANT EXECUTE ON FUNCTION app.rating_scheme_decide(uuid, uuid, text, text) TO ${BEE_RUNTIME_DB_USER};

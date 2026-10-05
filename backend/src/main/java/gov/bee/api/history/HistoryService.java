@@ -103,6 +103,14 @@ public class HistoryService {
                     facts.add(fact("Receipt reference", e.receiptReference()));
                     facts.add(fact("Amount received", "₹" + plain(e.feeAmount())));
                     facts.add(fact("Received on", String.valueOf(e.receivedOn())));
+                    // A correction never rewrites the confirmation; it is shown beside it. The applicant sees the right values, not who approved.
+                    if (e.correctedReceiptReference() != null) {
+                        facts.add(fact("Corrected receipt reference", e.correctedReceiptReference()));
+                        facts.add(fact("Corrected received on", String.valueOf(e.correctedReceivedOn())));
+                        if (!applicant) {
+                            facts.add(fact("Correction approved by", e.correctionApprovedBy()));
+                        }
+                    }
                 }
                 case "iame_recommend" -> facts.add(fact("Finding on the test report", "verified".equals(e.iameVerification()) ? "Verified" : "Not verified"));
                 case "compute_rating" -> {

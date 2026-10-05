@@ -23,7 +23,19 @@ public class HistoryRepository {
                       String iameVerification, String iameNote, String reviewerNote,
                       Integer ratingVersion, Integer stars, BigDecimal declaredIseer, BigDecimal verifiedIseer, String schemeKey,
                       String directorNote, Boolean directorFinal, String secretaryNote,
-                      String returnReason, String resubmitNote, Boolean ratingSuperseded, String rejectReason) {
+                      String returnReason, String resubmitNote, Boolean ratingSuperseded, String rejectReason,
+                      String correctedReceiptReference, Date correctedReceivedOn, String correctionApprovedBy) {
+        /** A row with no fee correction. */
+        public Row(Instant at, String action, String fromState, String toState, String actorRole, String actorName, String actorOrganisation,
+                   String receiptReference, BigDecimal feeAmount, Date receivedOn,
+                   String iameVerification, String iameNote, String reviewerNote,
+                   Integer ratingVersion, Integer stars, BigDecimal declaredIseer, BigDecimal verifiedIseer, String schemeKey,
+                   String directorNote, Boolean directorFinal, String secretaryNote,
+                   String returnReason, String resubmitNote, Boolean ratingSuperseded, String rejectReason) {
+            this(at, action, fromState, toState, actorRole, actorName, actorOrganisation, receiptReference, feeAmount, receivedOn, iameVerification, iameNote,
+                reviewerNote, ratingVersion, stars, declaredIseer, verifiedIseer, schemeKey, directorNote, directorFinal, secretaryNote, returnReason, resubmitNote,
+                ratingSuperseded, rejectReason, null, null, null);
+        }
     }
 
     private final JdbcTemplate jdbc;
@@ -41,7 +53,8 @@ public class HistoryRepository {
                 + "ir.verification, ir.note AS iame_note, rf.note AS reviewer_note, "
                 + "rt.rating_version, rt.stars, rt.declared_iseer, rt.verified_iseer, rt.scheme_key, "
                 + "dr.note AS director_note, dr.director_final, sa.note AS secretary_note, "
-                + "rn.reason AS return_reason, rs.note AS resubmit_note, rs.rating_superseded, rj.reason AS reject_reason "
+                + "rn.reason AS return_reason, rs.note AS resubmit_note, rs.rating_superseded, rj.reason AS reject_reason, "
+                + "cr.receipt_reference AS corrected_receipt, cr.received_on AS corrected_on, cu.display_name AS corrected_by "
                 + "FROM ("
                 + "  SELECT id, occurred_at, 'submit' AS action, from_state, to_state, actor_account_id, actor_role, 0 AS seq "
                 + "  FROM model_application_submission_event WHERE application_id = ? "
@@ -51,6 +64,8 @@ public class HistoryRepository {
                 + ") e "
                 + "JOIN user_account u ON u.id = e.actor_account_id "
                 + "LEFT JOIN model_application_fee_confirmation fc ON fc.transition_event_id = e.id "
+                + "LEFT JOIN LATERAL (SELECT p.* FROM fee_correction_proposal p WHERE p.fee_confirmation_id = fc.id AND p.state = 'approved' ORDER BY p.decided_at DESC LIMIT 1) cr ON true "
+                + "LEFT JOIN user_account cu ON cu.id = cr.decided_by "
                 + "LEFT JOIN model_application_iame_recommendation ir ON ir.transition_event_id = e.id "
                 + "LEFT JOIN model_application_reviewer_forward rf ON rf.transition_event_id = e.id "
                 + "LEFT JOIN model_application_rating rt ON rt.transition_event_id = e.id "
@@ -66,7 +81,8 @@ public class HistoryRepository {
                 rs.getString("verification"), rs.getString("iame_note"), rs.getString("reviewer_note"),
                 (Integer) rs.getObject("rating_version"), (Integer) rs.getObject("stars"), rs.getBigDecimal("declared_iseer"), rs.getBigDecimal("verified_iseer"),
                 rs.getString("scheme_key"), rs.getString("director_note"), (Boolean) rs.getObject("director_final"), rs.getString("secretary_note"),
-                rs.getString("return_reason"), rs.getString("resubmit_note"), (Boolean) rs.getObject("rating_superseded"), rs.getString("reject_reason")),
+                rs.getString("return_reason"), rs.getString("resubmit_note"), (Boolean) rs.getObject("rating_superseded"), rs.getString("reject_reason"),
+                rs.getString("corrected_receipt"), rs.getDate("corrected_on"), rs.getString("corrected_by")),
             applicationId, applicationId);
     }
 }

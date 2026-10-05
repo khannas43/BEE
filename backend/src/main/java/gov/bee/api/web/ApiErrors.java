@@ -41,6 +41,7 @@ public final class ApiErrors {
         Map.entry("laboratory_not_accredited", "The laboratory must hold an active accreditation for this category on the test date."),
         Map.entry("standard_not_available", "No applicable standard is in force on the test date."),
         Map.entry("duplicate_model", "Another application already holds this brand and model number."),
+        Map.entry("correction_already_pending", "A correction for this receipt is already waiting for a decision."),
         Map.entry("proposal_not_pending", "This proposal has already been decided or withdrawn."),
         Map.entry("effective_date_passed", "The date this rule was to start has passed; propose it again with a later date."),
         Map.entry("rule_conflict", "This rule cannot start on that date because of the rules already in place."),

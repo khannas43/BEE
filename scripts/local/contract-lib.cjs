@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * WP03.1: loads docs/wp03/bee-local-api.openapi.json and checks values against it with a
  * small, strict JSON Schema subset (the keywords the artifact uses; an unknown keyword is

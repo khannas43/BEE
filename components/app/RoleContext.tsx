@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, startTransition, useContext, useEffect, useState } from "react";
 import { RoleKey, roleByKey } from "@/lib/roles";
 
 const KEY = "bee-role";
@@ -38,13 +38,15 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = ROLE_PREVIEW_ENABLED ? (localStorage.getItem(KEY) as RoleKey | null) : null;
-      if (saved) setRoleState(saved);
-    } catch {
-      /* ignore */
-    }
-    setReady(true);
+    startTransition(() => {
+      try {
+        const saved = ROLE_PREVIEW_ENABLED ? (localStorage.getItem(KEY) as RoleKey | null) : null;
+        if (saved) setRoleState(saved);
+      } catch {
+        /* ignore */
+      }
+      setReady(true);
+    });
   }, []);
 
   const setRole = (r: RoleKey) => {

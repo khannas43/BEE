@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Icon } from "@/components/ui/Icon";
@@ -55,24 +55,8 @@ function VerifyInner() {
   const [scenario, setScenario] = useState<VerifyScenario | null>(null);
 
   const [dynamic, setDynamic] = useState<Appliance[]>([]);
-  useEffect(() => {
-    try {
-      const life = JSON.parse(localStorage.getItem("bee-lifecycle-v1") || "[]");
-      setDynamic(
-        life
-          .filter((a: { stage: string; regId?: string }) => a.stage === "active" && a.regId)
-          .map((a: { brand: string; model: string; regId: string; rating?: number; declaredIseer: number; capacityW: number }): Appliance => ({
-            regId: a.regId, brand: a.brand, model: a.model, category: "Room ACs", stars: a.rating ?? 5,
-            iseer: a.declaredIseer, annualKwh: Math.round((a.capacityW / (a.declaredIseer || 5)) * 1600 / 1000),
-            capacityW: a.capacityW, validFrom: "Jan 2026", validTo: "Dec 2028", features: [],
-          }))
-      );
-    } catch { /* ignore */ }
-    if (params.get("reg")) resolve(params.get("reg") as string);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  function resolve(q: string) {
+  const resolve = useCallback((q: string) => {
     const norm = q.trim().toLowerCase();
     if (!norm) { setScenario(null); return; }
     // the live demo certificate reflects the shared store (amend / revoke / ledger status)
@@ -89,7 +73,31 @@ function VerifyInner() {
     const pending = pendingScenarioForReg(norm);
     if (pending) { setScenario(pending); return; }
     setScenario({ id: "not-found", label: "Not found", regId: q });
-  }
+  }, [dynamic]);
+
+  useEffect(() => {
+    startTransition(() => {
+      try {
+        const life = JSON.parse(localStorage.getItem("bee-lifecycle-v1") || "[]");
+        setDynamic(
+          life
+            .filter((a: { stage: string; regId?: string }) => a.stage === "active" && a.regId)
+            .map((a: { brand: string; model: string; regId: string; rating?: number; declaredIseer: number; capacityW: number }): Appliance => ({
+              regId: a.regId, brand: a.brand, model: a.model, category: "Room ACs", stars: a.rating ?? 5,
+              iseer: a.declaredIseer, annualKwh: Math.round((a.capacityW / (a.declaredIseer || 5)) * 1600 / 1000),
+              capacityW: a.capacityW, validFrom: "Jan 2026", validTo: "Dec 2028", features: [],
+            })),
+        );
+      } catch {
+        /* ignore */
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    const reg = params.get("reg");
+    if (reg) startTransition(() => resolve(reg));
+  }, [params, resolve]);
 
   function pickScenario(s: VerifyScenario) { setQuery(s.regId); setScenario(s); }
 

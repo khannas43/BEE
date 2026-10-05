@@ -39,8 +39,6 @@ export interface Module {
  * Permission patterns (Annex A.1). Order: admin, programme, reviewer,
  * director, secretary, finance, helpdesk, auditor.
  * ------------------------------------------------------------------ */
-type Cells = [string, string, string, string, string, string, string, string];
-
 const P = {
   IDENT_V: ["V", "V", "V", "V", "V", "—", "—", "—"],
   ROLE_ASSIGN: ["G/A", "G/A", "G/A", "V", "V", "—", "—", "—"],

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { Stars } from "@/components/ui/Stars";
 import { Module, Screen } from "@/lib/screens";
 import { Card, ScreenChrome, Status, OK, WARN, BAD } from "@/components/app/ScreenScaffold";
 import { ADVISORY_TEXT, AI_MODELS, AIModelState, modelLabel } from "@/lib/mock/certificate";
@@ -43,7 +42,7 @@ export interface AIUseCase {
 }
 
 /** Build a use case, deriving version/state/lastRun from the shared fixture. */
-function useCase(u: Omit<AIUseCase, "lastRun" | "model" | "state" | "status">): AIUseCase {
+function buildAIUseCase(u: Omit<AIUseCase, "lastRun" | "model" | "state" | "status">): AIUseCase {
   const m = AI_MODELS[u.modelKey];
   return {
     ...u,
@@ -55,11 +54,11 @@ function useCase(u: Omit<AIUseCase, "lastRun" | "model" | "state" | "status">): 
 }
 
 export const AI_USECASES: AIUseCase[] = [
-  useCase({ id: "risk", href: "/app/mis-ai/risk-scoring", icon: "target", title: "Compliance Risk Scoring", purpose: "Prioritise manufacturers and models for enforcement attention.", recordsAnalysed: 1284, exceptions: 37, awaitingReview: 12, modelKey: "risk-rank" }),
-  useCase({ id: "anomaly", href: "/app/mis-ai/production-anomaly", icon: "readiness_score", title: "Production Anomaly Detection", purpose: "Identify suspicious or statistically unusual production submissions.", recordsAnalysed: 9640, exceptions: 54, awaitingReview: 21, modelKey: "anomaly-iforest" }),
-  useCase({ id: "document", href: "/app/mis-ai/extraction-review", icon: "document_scanner", title: "Document Intelligence", purpose: "Compare uploaded certificates and reports with entered data.", recordsAnalysed: 2170, exceptions: 88, awaitingReview: 30, modelKey: "doc-extract" }),
-  useCase({ id: "helpdesk", href: "/app/mis-ai/chatbot-review", icon: "smart_toy", title: "Helpdesk Assistant", purpose: "Answer common questions and assist ticket routing.", recordsAnalysed: 5312, exceptions: 19, awaitingReview: 7, modelKey: "assist-rag" }),
-  useCase({ id: "trends", href: "/app/mis-ai/rating-trends", icon: "trending_up", title: "Star-Rating Trend Analytics", purpose: "Support policy and star-threshold revision decisions.", recordsAnalysed: 41200, exceptions: 0, awaitingReview: 0, modelKey: "trend-stats" }),
+  buildAIUseCase({ id: "risk", href: "/app/mis-ai/risk-scoring", icon: "target", title: "Compliance Risk Scoring", purpose: "Prioritise manufacturers and models for enforcement attention.", recordsAnalysed: 1284, exceptions: 37, awaitingReview: 12, modelKey: "risk-rank" }),
+  buildAIUseCase({ id: "anomaly", href: "/app/mis-ai/production-anomaly", icon: "readiness_score", title: "Production Anomaly Detection", purpose: "Identify suspicious or statistically unusual production submissions.", recordsAnalysed: 9640, exceptions: 54, awaitingReview: 21, modelKey: "anomaly-iforest" }),
+  buildAIUseCase({ id: "document", href: "/app/mis-ai/extraction-review", icon: "document_scanner", title: "Document Intelligence", purpose: "Compare uploaded certificates and reports with entered data.", recordsAnalysed: 2170, exceptions: 88, awaitingReview: 30, modelKey: "doc-extract" }),
+  buildAIUseCase({ id: "helpdesk", href: "/app/mis-ai/chatbot-review", icon: "smart_toy", title: "Helpdesk Assistant", purpose: "Answer common questions and assist ticket routing.", recordsAnalysed: 5312, exceptions: 19, awaitingReview: 7, modelKey: "assist-rag" }),
+  buildAIUseCase({ id: "trends", href: "/app/mis-ai/rating-trends", icon: "trending_up", title: "Star-Rating Trend Analytics", purpose: "Support policy and star-threshold revision decisions.", recordsAnalysed: 41200, exceptions: 0, awaitingReview: 0, modelKey: "trend-stats" }),
 ];
 
 export const HEALTH_META: Record<ModelHealth, { label: string; tone: string; icon: string }> = {
@@ -1004,7 +1003,7 @@ export function StarRatingTrends({ module, screen }: { module: Module; screen: S
             ))}
           </div>
           <div className="flex items-center gap-space-sm mt-space-sm font-label-sm text-label-sm text-on-surface-variant">
-            <span className="inline-flex items-center gap-1"><span className="w-3 h-0.5 bg-error inline-block" /> Threshold revision (Q3'25)</span>
+            <span className="inline-flex items-center gap-1"><span className="w-3 h-0.5 bg-error inline-block" /> Threshold revision (Q3&apos;25)</span>
           </div>
         </Card>
       </div>

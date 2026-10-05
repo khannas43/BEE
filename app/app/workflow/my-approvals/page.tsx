@@ -4,8 +4,8 @@ import { moduleById, screenById } from "@/lib/screens";
 
 /** A standalone route: it borrows the Personal inbox entry for the screen frame and is named for itself. */
 export default function MyApprovalsPage() {
-  const module = moduleById("workflow");
+  const workflowModule = moduleById("workflow");
   const inbox = screenById("workflow", "personal-inbox");
-  if (!module || !inbox) notFound();
-  return <MyWork module={module} screen={{ ...inbox, id: "my-approvals", name: "My approvals" }} kind="approvals" />;
+  if (!workflowModule || !inbox) notFound();
+  return <MyWork module={workflowModule} screen={{ ...inbox, id: "my-approvals", name: "My approvals" }} kind="approvals" />;
 }

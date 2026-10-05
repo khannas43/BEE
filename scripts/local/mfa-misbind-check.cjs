@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * WP02.3 defence-in-depth check, NOT part of local:check: for a few seconds it rebinds
  * the whole bee-local realm to Keycloak's built-in conditional flows, under which a user

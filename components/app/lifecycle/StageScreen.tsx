@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Stars } from "@/components/ui/Stars";
-import { Card, ScreenChrome, Status, OK, WARN } from "@/components/app/ScreenScaffold";
+import { Card, ScreenChrome, Status, WARN } from "@/components/app/ScreenScaffold";
 import { useLifecycle } from "@/components/app/LifecycleStore";
 import { useRole } from "@/components/app/RoleContext";
 import { Module, Screen } from "@/lib/screens";
-import { ModelApplication, Stage, STAGE_META, computeStars } from "@/lib/mock/lifecycle";
+import { ModelApplication, Stage, computeStars } from "@/lib/mock/lifecycle";
 import { ApplicationSummary, StageBadge, StageStepper, Timeline, useActor } from "./shared";
 
 export type StageVariant = "fee" | "iame" | "bee" | "approval" | "rating" | "label";

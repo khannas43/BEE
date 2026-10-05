@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Disposable test identities, so local checks never sign in as, enroll, or log out the
  * 16 seeded users. Each twin copies one seeded persona: in Keycloak a new user

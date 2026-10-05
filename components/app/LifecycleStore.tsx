@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { createContext, startTransition, useContext, useEffect, useMemo, useReducer, useState } from "react";
 import {
   ModelApplication,
   SEED_APPLICATIONS,
@@ -74,7 +74,7 @@ function reducer(state: ModelApplication[], action: Action): ModelApplication[] 
         returned: false,
         createdAt: now(),
         updatedAt: now(),
-        fee: feeForCategory(d.category),
+        fee: feeForCategory(),
         feePaid: false,
         labelGenerated: false,
         findings: [{ text: "Awaiting fee confirmation", ok: false }],
@@ -151,16 +151,18 @@ export function LifecycleProvider({ children }: { children: React.ReactNode }) {
 
   // Hydrate from localStorage after mount.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as ModelApplication[];
-        if (Array.isArray(parsed) && parsed.length) dispatch({ type: "HYDRATE", apps: parsed });
+    startTransition(() => {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as ModelApplication[];
+          if (Array.isArray(parsed) && parsed.length) dispatch({ type: "HYDRATE", apps: parsed });
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
-    }
-    setReady(true);
+      setReady(true);
+    });
   }, []);
 
   // Persist on change — but only after hydration, so the initial SEED render

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { createContext, startTransition, useContext, useEffect, useMemo, useReducer, useState } from "react";
 import {
   QRBatch,
   SEED_BATCHES,
@@ -80,16 +80,18 @@ export function QRProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as QRBatch[];
-        if (Array.isArray(parsed)) dispatch({ type: "HYDRATE", batches: parsed });
+    startTransition(() => {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as QRBatch[];
+          if (Array.isArray(parsed)) dispatch({ type: "HYDRATE", batches: parsed });
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
-    }
-    setReady(true);
+      setReady(true);
+    });
   }, []);
 
   useEffect(() => {

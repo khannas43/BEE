@@ -128,15 +128,17 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
 
 function Donut({ segments }: { segments: { label: string; value: number; color: string }[] }) {
   const total = segments.reduce((s, x) => s + x.value, 0);
-  let acc = 0;
   const stops = segments
-    .map((s) => {
-      const start = (acc / total) * 100;
-      acc += s.value;
-      const end = (acc / total) * 100;
-      return `${s.color} ${start}% ${end}%`;
-    })
-    .join(", ");
+    .reduce<{ parts: string[]; acc: number }>(
+      (state, s) => {
+        const start = (state.acc / total) * 100;
+        const acc = state.acc + s.value;
+        const end = (acc / total) * 100;
+        return { parts: [...state.parts, `${s.color} ${start}% ${end}%`], acc };
+      },
+      { parts: [], acc: 0 },
+    )
+    .parts.join(", ");
   return (
     <div className="flex items-center gap-space-lg">
       <div className="w-32 h-32 rounded-full shrink-0" style={{ background: `conic-gradient(${stops})` }}>
@@ -201,7 +203,7 @@ function ActionBar({ codes }: { codes: string[] }) {
 /* ------------------------------------------------------------------ *
  * Archetype bodies
  * ------------------------------------------------------------------ */
-function DashboardBody({ screen }: { screen: Screen }) {
+function DashboardBody() {
   return (
     <div className="space-y-space-md">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-space-md">
@@ -325,7 +327,7 @@ function FormBody({ screen }: { screen: Screen }) {
   );
 }
 
-function DetailBody({ screen }: { screen: Screen }) {
+function DetailBody() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md">
       <div className="lg:col-span-2 space-y-space-md">
@@ -389,11 +391,11 @@ function DetailBody({ screen }: { screen: Screen }) {
   );
 }
 
-function ApprovalBody({ screen }: { screen: Screen }) {
+function ApprovalBody() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md">
       <div className="lg:col-span-2">
-        <DetailBody screen={screen} />
+        <DetailBody />
       </div>
       <div className="space-y-space-md">
         <Card title="Decision">
@@ -436,7 +438,7 @@ function ConfigBody({ screen }: { screen: Screen }) {
   );
 }
 
-function WizardBody({ screen }: { screen: Screen }) {
+function WizardBody() {
   return (
     <div className="space-y-space-md">
       <Card>
@@ -497,7 +499,7 @@ function LedgerBody({ screen }: { screen: Screen }) {
   );
 }
 
-function InboxBody({ screen }: { screen: Screen }) {
+function InboxBody() {
   return (
     <div className="space-y-space-md">
       <div className="flex items-center gap-space-sm">
@@ -521,7 +523,7 @@ function InboxBody({ screen }: { screen: Screen }) {
   );
 }
 
-function UploadBody({ screen }: { screen: Screen }) {
+function UploadBody() {
   return (
     <div className="space-y-space-md">
       <Card title="Upload data file">
@@ -551,7 +553,7 @@ function UploadBody({ screen }: { screen: Screen }) {
   );
 }
 
-function VerifyBody({ screen }: { screen: Screen }) {
+function VerifyBody() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md">
       <Card title="Lookup">

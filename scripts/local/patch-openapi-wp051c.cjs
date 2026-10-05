@@ -12,7 +12,6 @@ doc.info.description = doc.info.description.replace(
   "Draft create, edit and submit (draft → fee_due with a provisional local-demo fee snapshot) are operational on the routes documented here.",
 );
 
-const err = doc.components.schemas.Error;
 doc["x-bee-error-codes"].not_submittable = {
   status: 403,
   layer: "spring",

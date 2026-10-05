@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Emblem } from "@/components/chrome/Emblem";
 import { categoriesForRole, categoryForPath } from "@/lib/categories";
@@ -21,14 +21,10 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   // Which category the current route belongs to (for auto-open + highlight)
   const activeCat = categoryForPath(pathname)?.id ?? categories[0]?.id ?? null;
-  const [open, setOpen] = useState<string | null>(activeCat);
-
-  // Auto-open the category the current route belongs to (sidebar persists
-  // across navigations, so re-open on route change; manual toggles are kept
-  // between navigations).
-  useEffect(() => {
-    if (activeCat) setOpen(activeCat);
-  }, [activeCat]);
+  // The category the current route belongs to opens by itself; a manual toggle is kept until the route moves to another category.
+  const [toggle, setToggle] = useState<{ cat: string | null; open: string | null } | null>(null);
+  const open = toggle?.cat === activeCat ? toggle.open : activeCat;
+  const setOpen = (next: string | null) => setToggle({ cat: activeCat, open: next });
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light">

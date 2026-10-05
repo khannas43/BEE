@@ -14,8 +14,8 @@ export default async function ScreenPage({
   params: Promise<{ module: string; screen: string }>;
 }) {
   const { module: moduleId, screen: screenId } = await params;
-  const module = moduleById(moduleId);
+  const appModule = moduleById(moduleId);
   const screen = screenById(moduleId, screenId);
-  if (!module || !screen) notFound();
-  return <AppScreen module={module} screen={screen} />;
+  if (!appModule || !screen) notFound();
+  return <AppScreen module={appModule} screen={screen} />;
 }

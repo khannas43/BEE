@@ -71,11 +71,6 @@ function stubFetch(handler) {
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 /** A session whose access token is inside the refresh leeway, so the next read refreshes it. */
 const nearExpiry = () => session.createSession("00000000-0000-4000-a000-000000000001", "nova.applicant", { access_token: `access-${SECRET}`, refresh_token: `refresh-${SECRET}`, expires_in: 1, refresh_expires_in: 0 }, ["pwd", "otp"]).cookie;
-const calls = [
-  ["/api/runtime/me", (r) => routes.me.GET(r)],
-  ["/api/runtime/model-applications", (r) => routes.list.GET(r)],
-  ["/api/runtime/model-applications/{id}", (r) => routes.detail.GET(r, { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) })],
-];
 const path = (route) => route.replace("{id}", "00000000-0000-4000-c000-000000000002");
 
 test("unit-evidence: GET /api/auth/login 303 identity_unavailable | Keycloak unreachable at sign-in start", async () => {

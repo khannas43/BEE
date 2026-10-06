@@ -52,6 +52,9 @@ before(async () => {
     corrections: await import("../../app/api/runtime/fee-corrections/route.ts"),
     correctionProposals: await import("../../app/api/runtime/fee-corrections/proposals/route.ts"),
     correctionDecision: await import("../../app/api/runtime/fee-corrections/proposals/[id]/decision/route.ts"),
+    notifications: await import("../../app/api/runtime/notifications/route.ts"),
+    notificationRead: await import("../../app/api/runtime/notifications/[id]/read/route.ts"),
+    notificationReadAll: await import("../../app/api/runtime/notifications/read-all/route.ts"),
   };
 });
 
@@ -212,6 +215,28 @@ test("unit-evidence: POST /api/runtime/model-applications/{id}/reviewer-forward 
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123463" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/notifications 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const res = await routes.notifications.GET(req("/api/runtime/notifications", "unit-notifications-refresh-refused", nearExpiry()));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/notifications/{id}/read 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const id = "00000000-0000-4000-a000-0000000000b1";
+  const res = await routes.notificationRead.POST(req(`/api/runtime/notifications/${id}/read`, "unit-notification-read-refresh-refused", nearExpiry(), { method: "POST" }), { params: Promise.resolve({ id }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/notifications/read-all 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const res = await routes.notificationReadAll.POST(req("/api/runtime/notifications/read-all", "unit-notification-read-all-refresh-refused", nearExpiry(), { method: "POST" }));
   assert.equal(res.status, 401);
   assert.equal((await res.json()).error, "session_expired");
 });

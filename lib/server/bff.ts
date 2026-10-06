@@ -48,6 +48,26 @@ export async function sessionWrite<T>(
   return isErrorCode(error) ? setOutcome(res, error) : res;
 }
 
+/**
+ * A signed-in write that takes no Idempotency-Key and no body: marking a notification read, which never goes back, so repeating it changes
+ * nothing. Every other write still goes through sessionWrite and requires the key.
+ */
+export async function sessionAction<T>(request: NextRequest, springPath: string, op: { errors: UpstreamErrors; validate: Validator<T> }) {
+  const correlationId = correlationIdOf(request);
+  const cookie = sessionCookieOf(request);
+  const active = await activeSession(cookie, correlationId);
+  if (!active.ok) {
+    const res = errorResponse(active.reason, active.reason === "identity_unavailable" ? 503 : 401, correlationId);
+    if (cookie && active.reason !== "identity_unavailable") clearSessionCookie(res);
+    return res;
+  }
+  const api = await callBeeApi(springPath, { correlationId, accessToken: active.session.accessToken, method: "POST" });
+  const out = fromUpstream(api.status, api.body, op);
+  const res = jsonResponse(out.body, out.status, correlationId);
+  const error = (out.body as { error?: unknown } | null)?.error;
+  return isErrorCode(error) ? setOutcome(res, error) : res;
+}
+
 export async function sessionRead<T>(request: NextRequest, springPath: string, op: { errors: UpstreamErrors; validate: Validator<T> }) {
   const correlationId = correlationIdOf(request);
   const cookie = sessionCookieOf(request);

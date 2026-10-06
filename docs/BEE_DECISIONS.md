@@ -172,6 +172,9 @@ Each decision below gives what the system does today, the realistic options, a r
 ### D9 — The label and the certificate document
 - **Owner's assumption, 5 October 2026 (not BEE's decision).** The certificate and the label are a printable web page with a QR image (the browser's Print gives a PDF); a server-made PDF can follow. The label is a simple design clearly marked "local demonstration", showing stars, efficiency figure, brand and model, registration ID, QR and validity. It shows no annual-energy figure (there is no rule for it). BEE's official artwork is not available.
 
+### D10 — How the applicant is told what happened to an application
+- **Owner's assumption, 6 October 2026 (not BEE's decision).** The applicant is told **in the portal only**: no email, SMS or WhatsApp (they need a provider, templates and retry rules that BEE has not set). Four events notify: the application is **returned**, **rejected**, has its **fee due**, or is **approved** (certificate issued). Internal steps do not (the applicant already sees them in the history). A notification goes to **everyone in the application's own organisation**, which is exactly who may read the application. The text holds only what the applicant may already read (a return or rejection reason, the fee, the registration ID and validity); it never names an officer. Nothing is sent for events before this was built.
+
 ### B10 — The applicant's model record (D4)
 - **Question.** Should the registration record screen become the applicant's own record of their models?
 - **Today.** Yes, limited to the applicant's organisation.
@@ -202,6 +205,7 @@ Each decision below gives what the system does today, the realistic options, a r
 | B14 | No overdue, no ages, no due dates; counts only |
 | B15 | No team queue; each officer sees only their own work |
 | D7, D8, D9 | Registration ID, validity, the public page's fields and the label are the owner's defaults, labelled as not BEE's |
+| D10 | Applicant notifications are in-portal only, for four events, to the whole organisation |
 | B13 | The applicant sees the timeline and the notes addressed to them, not the officers' internal notes |
 | B11, B12 | Manual confirmation with an exact amount and no correction route |
 | C1 | Rule-editing screens stay read-only |

@@ -117,7 +117,7 @@ class SecretaryApprovalDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         repo = transactional(new SecretaryApprovalRepository(db));
-        assertEquals(38, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V38");
+        assertEquals(39, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V39");
     }
 
     @AfterAll
@@ -252,6 +252,43 @@ class SecretaryApprovalDatabaseTest {
         assertEquals(1, db.queryForObject("SELECT count(*) FROM public_certificate WHERE registration_id = ?", Integer.class, reg));
         assertEquals(0, db.queryForObject("SELECT count(*) FROM public_certificate WHERE registration_id = 'BEE/RAC/2026/00000'", Integer.class));
         assertThrows(Exception.class, () -> db.update("UPDATE public_certificate SET stars = 1 WHERE registration_id = ?", reg), "read-only");
+    }
+
+    // ---- WP10.1a: the approval notifies the applicant's organisation; reading a notification is the recipient's alone ----
+    @Test
+    void anApprovalNotifiesTheOrganisationAndOnlyTheRecipientMarksTheirOwnReadOnce() {
+        UUID id = inSecretaryApproval("SA-NOTE");
+        approve(id, 6);
+        String reg = owner.queryForObject("SELECT registration_id FROM certificate WHERE application_id = ?", String.class, id);
+        var rows = owner.queryForList("SELECT id, recipient_account_id, message FROM notification WHERE application_id = ? AND kind = 'approved'", id);
+        assertFalse(rows.isEmpty(), "the approval notifies");
+        assertTrue(((String) rows.get(0).get("message")).contains("was approved. Certificate " + reg + " is valid from "), (String) rows.get(0).get("message"));
+        UUID mine = (UUID) rows.get(0).get("id");
+        UUID recipient = (UUID) rows.get(0).get("recipient_account_id");
+        UUID stranger = UUID.fromString("00000000-0000-4000-a000-000000000003");
+        assertEquals(0, db.queryForObject("SELECT notification_mark_read(?, ?)", Integer.class, stranger, mine), "another person's id changes nothing");
+        assertEquals(1, db.queryForObject("SELECT notification_mark_read(?, ?)", Integer.class, recipient, mine));
+        assertEquals(0, db.queryForObject("SELECT notification_mark_read(?, ?)", Integer.class, recipient, mine), "it is marked once");
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM notification WHERE id = ? AND read_at IS NOT NULL", Integer.class, mine));
+        int others = owner.queryForObject("SELECT count(*) FROM notification WHERE recipient_account_id = ? AND read_at IS NULL", Integer.class, recipient);
+        assertEquals(others, db.queryForObject("SELECT notification_mark_all_read(?)", Integer.class, recipient));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM notification WHERE recipient_account_id = ? AND read_at IS NULL", Integer.class, recipient));
+    }
+
+    @Test
+    void aNotificationNeverChangesExceptItsReadMarkAndTheRuntimeLoginCannotWriteTheTable() {
+        UUID id = inSecretaryApproval("SA-NOTE-GUARD");
+        approve(id, 6);
+        UUID row = owner.queryForObject("SELECT id FROM notification WHERE application_id = ? LIMIT 1", UUID.class, id);
+        assertThrows(Exception.class, () -> owner.update("UPDATE notification SET message = 'changed' WHERE id = ?", row), "the text is fixed");
+        assertThrows(Exception.class, () -> owner.update("UPDATE notification SET kind = 'rejected' WHERE id = ?", row));
+        assertThrows(Exception.class, () -> owner.update("UPDATE notification SET read_at = NULL WHERE id = ?", row), "a read mark never goes back");
+        assertThrows(Exception.class, () -> owner.update("DELETE FROM notification WHERE id = ?", row), "append-only");
+        assertThrows(Exception.class, () -> db.update("UPDATE notification SET read_at = now() WHERE id = ?", row), "the runtime login marks only through the function");
+        assertThrows(Exception.class, () -> db.update("INSERT INTO notification (recipient_account_id, application_id, kind, message) SELECT recipient_account_id, application_id, kind, message FROM notification WHERE id = ?", row));
+        assertThrows(Exception.class, () -> db.update("DELETE FROM notification WHERE id = ?", row));
+        assertTrue(db.queryForObject("SELECT count(*) FROM notification WHERE id = ?", Integer.class, row) == 1, "but it can read");
+        assertThrows(Exception.class, () -> db.queryForObject("SELECT notify_application_organisation(?, 'approved', 'x')", Integer.class, id), "only the triggers write");
     }
 
     @Test

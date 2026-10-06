@@ -64,6 +64,20 @@ export async function sessionRead<T>(request: NextRequest, springPath: string, o
   return isErrorCode(error) ? setOutcome(res, error) : res;
 }
 
+/**
+ * A read that needs no sign-in (the public certificate verification, decision D8). No session is read and no token is sent: Spring's
+ * public route reads one view and answers the same for an unknown and a malformed registration ID. Only the registration ID is
+ * passed on, URL-encoded; nothing from the request's headers or cookies reaches Spring.
+ */
+export async function publicRead<T>(request: NextRequest, springPath: string, op: { errors: UpstreamErrors; validate: Validator<T> }) {
+  const correlationId = correlationIdOf(request);
+  const api = await callBeeApi(springPath, { correlationId });
+  const out = fromUpstream(api.status, api.body, op);
+  const res = jsonResponse(out.body, out.status, correlationId);
+  const error = (out.body as { error?: unknown } | null)?.error;
+  return isErrorCode(error) ? setOutcome(res, error) : res;
+}
+
 /** Largest multipart body Next.js buffers: Spring's 5 MiB default file limit plus form-field and boundary overhead. */
 export const MAX_MULTIPART_BYTES = 6 * 1024 * 1024;
 const MULTIPART = /^multipart\/form-data;\s*boundary=\S+/i;

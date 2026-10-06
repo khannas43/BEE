@@ -119,6 +119,10 @@ const CORRECTION_PROPOSAL_UPSTREAM = {
 const CORRECTION_DECISION_UPSTREAM = {
   POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
 };
+// Public certificate verification (no session, no token). Keep equal to lib/server/contracts/verification.ts and the artifact.
+const VERIFICATION_ROUTE = "/api/runtime/verification";
+const VERIFICATION_URL = "/api/runtime/verification?reg=BEE%2FRAC%2F2026%2F10001";
+const VERIFICATION_UPSTREAM = { GET: { 404: ["not_found"], 422: ["validation_failed"], 503: ["service_unavailable"] } };
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: WRITE_DENIALS, 503: ["service_unavailable"] },
@@ -130,6 +134,7 @@ const LIST_ROUTE = "/api/runtime/model-applications";
 const DETAIL_ROUTE = "/api/runtime/model-applications/{id}";
 const upstreamLogRoute = (route, method) => {
   if (route === "/api/runtime/me") return "/api/me";
+  if (route === VERIFICATION_ROUTE) return "/api/public/verification";
   if (route === SUBMIT_ROUTE) return "/api/model-applications/{id}/submit";
   if (route === DOC_LIST_ROUTE) return "/api/model-applications/{id}/documents";
   if (route === DOC_CONTENT_ROUTE) return "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
@@ -693,6 +698,7 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", sessionJar, CORRECTION_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", sessionJar, CORRECTION_DECISION_UPSTREAM);
     await exerciseStandInPairs("/api/runtime/model-applications/{id}/history", `/api/runtime/model-applications/${NOVA_APP}/history`, "GET", sessionJar, DOC_READ_UPSTREAM);
+    await exerciseStandInPairs(VERIFICATION_ROUTE, VERIFICATION_URL, "GET", sessionJar, VERIFICATION_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(DOC_CONTENT_ROUTE, DOC_CONTENT_URL, "GET", sessionJar, DOC_READ_UPSTREAM);

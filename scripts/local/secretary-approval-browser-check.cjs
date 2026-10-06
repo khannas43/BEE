@@ -259,6 +259,25 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     await nova.goto(`${WEB}/app/model-label/model-dashboard?id=${A.id}`);
     const card = await nova.waitFor(`!!document.querySelector('[data-testid=model-app-certificate]')`, 30000);
     check(`${runLabel}.ui.dashboard-shows-the-certificate`, card && (await nova.eval(`document.querySelector('[data-testid=model-app-certificate-registration]').textContent`)) === cert?.registrationId && /local demonstration/i.test(await nova.eval(`document.querySelector('[data-testid=model-app-certificate-demo]').textContent`)), cert?.registrationId ?? "no certificate");
+    // WP09.1b: the printable certificate and label, with a QR code that points to the public verification page.
+    const openHref = await nova.eval(`document.querySelector('[data-testid=model-app-certificate-open]')?.getAttribute('href') ?? ""`);
+    check(`${runLabel}.ui.dashboard-links-to-the-printable-certificate`, openHref === `/app/model-label/label-preview?id=${A.id}`, openHref);
+    await nova.goto(`${WEB}/app/model-label/label-preview`);
+    const listed = await nova.waitFor(`!!document.querySelector('[data-testid="certdocs-open-${A.reference}"]')`, 30000);
+    check(`${runLabel}.ui.certificate-list-has-the-approved-application`, listed, `${A.reference} is listed`);
+    await nova.goto(`${WEB}/app/model-label/label-preview?id=${A.id}`);
+    const docs = await nova.waitFor(`!!document.querySelector('[data-testid=certificate-document]') && !!document.querySelector('[data-testid=label-document]')`, 30000);
+    const verifyUrl = `${WEB}/verify?reg=${encodeURIComponent(cert?.registrationId ?? "")}`;
+    const docInfo = docs ? await nova.eval(`(() => { const t = (id) => document.querySelector('[data-testid="' + id + '"]')?.textContent ?? ""; const q = (id) => document.querySelector('[data-testid="' + id + '"]')?.getAttribute("data-qr-text") ?? ""; return JSON.stringify({ reg: t("certificate-registration"), model: t("certificate-model"), validity: t("certificate-validity"), demo: t("certificate-demo"), labelDemo: t("label-demo"), iseer: t("label-iseer"), certQr: q("certificate-qr"), labelQr: q("label-qr"), print: !!document.querySelector('[data-testid=certdocs-print]'), modules: Number(document.querySelector('[data-testid=certificate-qr]')?.getAttribute("data-qr-modules")) }); })()`) : "{}";
+    const d = JSON.parse(docInfo);
+    check(`${runLabel}.ui.certificate-document`, docs && d.reg === cert?.registrationId && d.model.includes("SA-A-") && /^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} \(valid\)$/.test(d.validity) && /LOCAL DEMONSTRATION/.test(d.demo), `${d.reg} ${d.validity}`);
+    check(`${runLabel}.ui.label-document`, docs && d.iseer === "ISEER 4.62" && /not issued by BEE/.test(d.labelDemo) && d.print === true, `${d.iseer}, print button ${d.print}`);
+    check(`${runLabel}.ui.both-qr-codes-point-to-the-verification-page`, docs && d.certQr === verifyUrl && d.labelQr === verifyUrl && d.modules >= 21, verifyUrl);
+    // Printing shows the documents and hides the console around them (the browser's print emulation).
+    await nova.send("Emulation.setEmulatedMedia", { media: "print" });
+    const printed = JSON.parse(await nova.eval(`(() => { const shown = (sel) => { const e = document.querySelector(sel); return !!e && e.getClientRects().length > 0; }; return JSON.stringify({ aside: shown("aside"), button: shown('[data-testid=certdocs-print]'), cert: shown('[data-testid=certificate-document]'), label: shown('[data-testid=label-document]'), identity: shown('[data-testid=certdocs-identity]') }); })()`));
+    await nova.send("Emulation.setEmulatedMedia", { media: "screen" });
+    check(`${runLabel}.ui.print-shows-only-the-documents`, printed.cert && printed.label && !printed.aside && !printed.button && !printed.identity, JSON.stringify(printed));
     r = await approveApi(secretary, A.id, approveBody(A.version + 1), key());
     check(`${runLabel}.secretary.cannot-approve-twice`, r.status === 404 && r.body?.error === "not_found", `${r.status} ${r.body?.error ?? ""}`);
     check(`${runLabel}.db.still-one-approval`, countOf("model_application_secretary_approval", A.id) === 1, "exactly one approval record");

@@ -35,7 +35,7 @@ import {
   AIModelGovernance,
 } from "./ai/AIScreens";
 import { FabricMonitoring } from "./blockchain/FabricMonitoring";
-import { LabelPreviewScreen } from "./lifecycle/LabelPreviewScreen";
+import { CertificateAndLabel } from "./lifecycle/CertificateAndLabel";
 
 type DeepComponent = (props: { module: Module; screen: Screen }) => React.ReactNode;
 
@@ -102,7 +102,7 @@ export const DEEP_SCREENS: Record<string, DeepComponent> = {
   "model-label/director-approval": DirectorApproval,
   "model-label/secretary-approval": DeepSecretaryApproval,
   "model-label/rating-calculation": ProgrammeRating,
-  "model-label/label-preview": LabelPreviewScreen,
+  "model-label/label-preview": CertificateAndLabel,
   "model-label/test-reports": DeepDetailTestReports,
   "model-label/model-documents": DeepDetailDocuments,
   "model-label/performance-parameters": DeepDetailPerformance,

@@ -22,9 +22,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <LifecycleProvider>
         <QRProvider>
         <CertProvider>
-        <div className="h-screen flex overflow-hidden bg-surface-ground">
+        <div className="h-screen flex overflow-hidden bg-surface-ground print:block print:h-auto print:overflow-visible">
         {/* Desktop sidebar */}
-        <aside className="hidden lg:block w-72 shrink-0">
+        <aside className="hidden lg:block w-72 shrink-0 print:hidden">
           <AppSidebar />
         </aside>
 
@@ -39,10 +39,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Main column */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <PreviewBanner />
-          <AppTopbar onMenu={() => setMobileOpen(true)} />
-          <main className="flex-1 overflow-y-auto app-scroll">
+        <div className="flex-1 flex flex-col min-w-0 print:block">
+          <div className="print:hidden"><PreviewBanner /></div>
+          <div className="print:hidden"><AppTopbar onMenu={() => setMobileOpen(true)} /></div>
+          <main className="flex-1 overflow-y-auto app-scroll print:overflow-visible">
             <div key={pathname} className="screen-enter"><RouteGuard>{children}</RouteGuard></div>
           </main>
         </div>

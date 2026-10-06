@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.21.0";
+export const CONTRACT_VERSION = "0.22.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -198,6 +198,7 @@ export interface ModelApplication {
   rating?: ApplicationRating;
   returnNote?: ApplicationReturn;
   rejection?: ApplicationRejection;
+  certificate?: ApplicationCertificate;
 }
 
 export interface ModelApplicationList {
@@ -291,8 +292,35 @@ export const validateApplicationRejection: Validator<ApplicationRejection> = (bo
   return ok ? (b as unknown as ApplicationRejection) : null;
 };
 
+/** The certificate issued at approval, on the detail read only (a local demonstration, never a BEE certificate). */
+export interface ApplicationCertificate {
+  registrationId: string;
+  validFrom: string;
+  validTo: string;
+  status: "valid" | "expired" | "not_yet_valid";
+  stars: number;
+  declaredIseer: string;
+  verifiedIseer: string;
+  schemeKey: string;
+  localDemoCertificate: true;
+  issuedAt: string;
+}
+
+export const validateApplicationCertificate: Validator<ApplicationCertificate> = (body) => {
+  if (!exactKeys(body, ["registrationId", "validFrom", "validTo", "status", "stars", "declaredIseer", "verifiedIseer", "schemeKey", "localDemoCertificate", "issuedAt"])) return null;
+  const b = body;
+  const ok =
+    isString(b.registrationId) && /^BEE\/[A-Z]{2,10}\/[0-9]{4}\/[0-9]{5,}$/.test(b.registrationId) &&
+    isString(b.validFrom) && ISO_DATE.test(b.validFrom) && isString(b.validTo) && ISO_DATE.test(b.validTo) && b.validTo > b.validFrom &&
+    (b.status === "valid" || b.status === "expired" || b.status === "not_yet_valid") &&
+    Number.isInteger(b.stars) && (b.stars as number) >= 1 && (b.stars as number) <= 5 &&
+    isString(b.declaredIseer) && isString(b.verifiedIseer) && isString(b.schemeKey) && b.localDemoCertificate === true &&
+    isString(b.issuedAt) && !Number.isNaN(Date.parse(b.issuedAt));
+  return ok ? (b as unknown as ApplicationCertificate) : null;
+};
+
 export const MODEL_APPLICATION_KEYS = ["id", "reference", "organisation", "brandName", "category", "modelNumber", "state", "version", "readBasis"] as const;
-export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee", "rating", "returnNote", "rejection"] as const;
+export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee", "rating", "returnNote", "rejection", "certificate"] as const;
 export const MODEL_APPLICATION_LIST_KEYS = ["items", "count", "authority"] as const;
 const READ_BASIS = /^(own-org|assigned|stage:[a-z_]+)$/;
 const LABORATORY_CODE = /^[A-Z0-9_-]{1,32}$/;
@@ -314,7 +342,8 @@ export const validateModelApplication: Validator<ModelApplication> = (body) => {
     (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null) &&
     (b.rating === undefined || validateApplicationRating(b.rating) !== null) &&
     (b.returnNote === undefined || validateApplicationReturn(b.returnNote) !== null) &&
-    (b.rejection === undefined || validateApplicationRejection(b.rejection) !== null);
+    (b.rejection === undefined || validateApplicationRejection(b.rejection) !== null) &&
+    (b.certificate === undefined || validateApplicationCertificate(b.certificate) !== null);
   return ok ? (b as unknown as ModelApplication) : null;
 };
 

@@ -81,7 +81,8 @@ public class ModelApplicationController {
             .filter(r -> SlicePolicy.canRead(scope, facts(r)))
             .map(r -> ResponseEntity.ok(ModelApplicationViewSupport.detailView(r, scope, submissions.findFeeSnapshot(r.id()), submissions.findLatestRating(r.id()),
                 "returned".equals(r.state()) ? submissions.findOpenReturn(r.id()) : java.util.Optional.empty(),
-                "rejected".equals(r.state()) ? submissions.findRejection(r.id()) : java.util.Optional.empty())))
+                "rejected".equals(r.state()) ? submissions.findRejection(r.id()) : java.util.Optional.empty(),
+                "approved".equals(r.state()) ? submissions.findCertificate(r.id()) : java.util.Optional.empty())))
             .orElseGet(() -> error(HttpStatus.NOT_FOUND, "not_found"));
     }
 

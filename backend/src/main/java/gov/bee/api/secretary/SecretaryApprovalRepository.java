@@ -65,6 +65,8 @@ public class SecretaryApprovalRepository {
         jdbc.update(
             "INSERT INTO model_application_secretary_approval (id, application_id, transition_event_id, note, approved_by_account_id) VALUES (?, ?, ?, ?, ?)",
             UUID.randomUUID(), applicationId, eventId, note, actorAccountId);
+        // The certificate is issued in this same transaction; if it cannot be, the approval does not happen.
+        jdbc.queryForObject("SELECT issue_certificate(?, ?, ?)", String.class, applicationId, eventId, actorAccountId);
         return new Result(Outcome.APPROVED, versionAfter, at.toInstant());
     }
 }

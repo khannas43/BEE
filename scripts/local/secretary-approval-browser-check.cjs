@@ -252,6 +252,13 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     check(`${runLabel}.secretary.no-longer-sees-it`, r.status === 404 && r.body?.error === "not_found" && !(after.body?.items ?? []).some((x) => x.id === A.id), "the stage moved on, so the Secretary's scope no longer includes it");
     r = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${A.id}`, null, null);
     check(`${runLabel}.nova.sees-approved-and-rating`, r.status === 200 && r.body?.state === "approved" && r.body?.rating?.stars === 4 && r.body?.rating?.localDemoRating === true, `${r.body?.state}, ${r.body?.rating?.stars} stars (local demonstration)`);
+    // WP09.1a: the approval issued the certificate in the same step; the applicant sees it (a local demonstration) and the dashboard shows it.
+    const cert = r.body?.certificate;
+    check(`${runLabel}.nova.sees-the-certificate`, /^BEE\/RAC\/\d{4}\/\d{5}$/.test(cert?.registrationId ?? "") && cert?.status === "valid" && cert?.stars === 4 && cert?.localDemoCertificate === true, `${cert?.registrationId} ${cert?.status} ${cert?.stars} stars`);
+    check(`${runLabel}.db.one-certificate-issued-by-the-secretary-for-three-years`, sql(`SELECT count(*) || '|' || (valid_to = valid_from + interval '3 years' - interval '1 day') || '|' || (issued_by_account_id = '${ids.accountId("bee.secretary")}') || '|' || basis FROM app.certificate WHERE application_id = '${A.id}' GROUP BY valid_from, valid_to, issued_by_account_id, basis`) === "1|true|true|local_demo", sql(`SELECT registration_id || ' ' || valid_from || '..' || valid_to FROM app.certificate WHERE application_id = '${A.id}'`));
+    await nova.goto(`${WEB}/app/model-label/model-dashboard?id=${A.id}`);
+    const card = await nova.waitFor(`!!document.querySelector('[data-testid=model-app-certificate]')`, 30000);
+    check(`${runLabel}.ui.dashboard-shows-the-certificate`, card && (await nova.eval(`document.querySelector('[data-testid=model-app-certificate-registration]').textContent`)) === cert?.registrationId && /local demonstration/i.test(await nova.eval(`document.querySelector('[data-testid=model-app-certificate-demo]').textContent`)), cert?.registrationId ?? "no certificate");
     r = await approveApi(secretary, A.id, approveBody(A.version + 1), key());
     check(`${runLabel}.secretary.cannot-approve-twice`, r.status === 404 && r.body?.error === "not_found", `${r.status} ${r.body?.error ?? ""}`);
     check(`${runLabel}.db.still-one-approval`, countOf("model_application_secretary_approval", A.id) === 1, "exactly one approval record");
@@ -266,6 +273,9 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     r = await approveApi(secretary, B.id, { ...body, note: `OTHER ${tag}`.slice(0, 40) }, k);
     check(`${runLabel}.secretary.key-conflict`, r.status === 409 && r.body?.error === "idempotency_key_conflict", `${r.status} ${r.body?.error ?? ""}`);
 
+    // Numbers rise by one per approval within a category and year (the second approval of this run follows the first).
+    const nA = Number(sql(`SELECT sequence_no FROM app.certificate WHERE application_id = '${A.id}'`)), nB = Number(sql(`SELECT sequence_no FROM app.certificate WHERE application_id = '${B.id}'`));
+    check(`${runLabel}.db.numbers-rise`, Number.isFinite(nA) && nB > nA, `${nA} then ${nB}`);
     // The seeded applications are untouched.
     check(`${runLabel}.seed-untouched`, stateOf(SEEDED_IAME_APP) === "iame_scrutiny" && stateOf(NOVA_FEE_DUE) === "fee_due", "seeded LOCAL-MA-0002 and LOCAL-MA-0003 unchanged");
   } finally {

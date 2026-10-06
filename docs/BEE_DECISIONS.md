@@ -163,6 +163,15 @@ Each decision below gives what the system does today, the realistic options, a r
 - **If unanswered.** No team queue is built.
 - **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: a team view for a supervisor role only, who may also reassign. **The supervisor role is not named yet**; no team queue is built until it is (BL-129, BL-135).
 
+### D7 — Registration ID, validity and when the certificate is issued
+- **Owner's assumption, 5 October 2026 (not BEE's decision).** (1) Registration ID: `BEE/<category>/<year>/<number>`, numbered per category and year from 10001 (the fixtures use `BEE/RAC/2026/10016`). (2) Validity: 3 years from the approval date (the fixture shows Jan 2026 to Dec 2028); renewal is not built. (3) The certificate is issued **automatically in the same step as the Secretary's final approval**; if issuing fails, the approval does not happen.
+
+### D8 — What the public may see when verifying a certificate
+- **Owner's assumption, 5 October 2026 (not BEE's decision).** The public verification page shows the registration ID, brand, model, category, star rating, efficiency figure (ISEER), validity dates, status and the manufacturer's legal name. It shows no personal names, addresses or internal notes, and it gives the same answer for every registration that does not exist. Status is valid or expired, worked out from the dates; revoked is designed in but not built.
+
+### D9 — The label and the certificate document
+- **Owner's assumption, 5 October 2026 (not BEE's decision).** The certificate and the label are a printable web page with a QR image (the browser's Print gives a PDF); a server-made PDF can follow. The label is a simple design clearly marked "local demonstration", showing stars, efficiency figure, brand and model, registration ID, QR and validity. It shows no annual-energy figure (there is no rule for it). BEE's official artwork is not available.
+
 ### B10 — The applicant's model record (D4)
 - **Question.** Should the registration record screen become the applicant's own record of their models?
 - **Today.** Yes, limited to the applicant's organisation.
@@ -192,6 +201,7 @@ Each decision below gives what the system does today, the realistic options, a r
 | B9, B10 | Defaults stay |
 | B14 | No overdue, no ages, no due dates; counts only |
 | B15 | No team queue; each officer sees only their own work |
+| D7, D8, D9 | Registration ID, validity, the public page's fields and the label are the owner's defaults, labelled as not BEE's |
 | B13 | The applicant sees the timeline and the notes addressed to them, not the officers' internal notes |
 | B11, B12 | Manual confirmation with an exact amount and no correction route |
 | C1 | Rule-editing screens stay read-only |

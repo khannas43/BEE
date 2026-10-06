@@ -79,6 +79,10 @@ public class DirectorRecommendationRepository {
             "INSERT INTO model_application_director_recommendation (id, application_id, transition_event_id, note, director_final, resulting_state, "
                 + "recommended_by_account_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
             UUID.randomUUID(), applicationId, eventId, note, directorFinal, toState, actorAccountId);
+        if (directorFinal) {
+            // A recommendation that is final ends in approved, so the certificate is issued in this same transaction.
+            jdbc.queryForObject("SELECT issue_certificate(?, ?, ?)", String.class, applicationId, eventId, actorAccountId);
+        }
         return new Result(Outcome.RECOMMENDED, versionAfter, toState, at.toInstant());
     }
 }

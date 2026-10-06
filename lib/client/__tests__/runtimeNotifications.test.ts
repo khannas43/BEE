@@ -30,6 +30,12 @@ describe("runtimeNotifications", () => {
     expect(parseNotificationList(listBody)).toEqual(listBody);
   });
 
+  it("parseNotificationList accepts the seeded fixtures' ids, whose version and variant digits are not RFC 4122 ones", () => {
+    const seeded = { ...listBody, items: [{ ...listBody.items[0], applicationId: "00000000-0000-4000-c000-000000000002", id: "00000000-0000-4000-a000-0000000000b1" }] };
+    expect(parseNotificationList(seeded)).not.toBeNull();
+    expect(parseNotificationList({ ...listBody, items: [{ ...listBody.items[0], applicationId: "not-an-id" }] })).toBeNull();
+  });
+
   it("parseNotificationList rejects extra fields and a bad kind", () => {
     expect(parseNotificationList({ ...listBody, extra: true })).toBeNull();
     expect(parseNotificationList({ ...listBody, items: [{ ...listBody.items[0], kind: "unknown" }] })).toBeNull();

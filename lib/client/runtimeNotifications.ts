@@ -32,7 +32,8 @@ export const NOTIFICATIONS_PATH = "/api/runtime/notifications";
 export const notificationReadPath = (id: string) => `/api/runtime/notifications/${encodeURIComponent(id)}/read`;
 export const NOTIFICATIONS_READ_ALL_PATH = "/api/runtime/notifications/read-all";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** The same shape the server accepts: any 8-4-4-4-12 hex id. The seeded fixtures use ids whose version and variant digits are not RFC 4122 ones. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function exactKeys(obj: unknown, keys: readonly string[]): obj is Record<string, unknown> {
   return typeof obj === "object" && obj !== null && !Array.isArray(obj) && Object.keys(obj).length === keys.length && keys.every((k) => k in obj);

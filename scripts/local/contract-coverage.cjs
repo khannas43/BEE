@@ -105,6 +105,7 @@ function springEvidence(p) {
     no_active_account: "identityDenialsAreDocumentedCodes", no_effective_role: "identityDenialsAreDocumentedCodes", no_read_scope: "identityDenialsAreDocumentedCodes",
     not_found: "unknownMalformedAndOutOfScopeIdsAreOneNotFound", service_unavailable: "databaseFailureIs503AndUnexpectedFailureIs500WithoutDetail",
     internal_error: "databaseFailureIs503AndUnexpectedFailureIs500WithoutDetail",
+    rate_limited: "publicVerificationRateLimitDocumentedPairs",
   };
   return byCode[p.code] ? mockMvc(byCode[p.code]) : null;
 }

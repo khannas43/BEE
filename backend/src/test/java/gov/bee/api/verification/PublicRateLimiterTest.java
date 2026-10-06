@@ -20,7 +20,7 @@ class PublicRateLimiterTest {
         clock.addAndGet(20_000);
         var refused = limiter.tryAcquire();
         assertTrue(refused.isPresent());
-        assertEquals(41, refused.getAsInt());
+        assertEquals(40, refused.getAsInt());
         clock.addAndGet(39_999);
         assertEquals(1, limiter.tryAcquire().getAsInt(), "never below one second");
         clock.addAndGet(1);

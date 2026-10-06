@@ -176,7 +176,7 @@ const sameBody = (a, b) => JSON.stringify(Object.entries(a ?? {}).sort()) === JS
 const countOf = (table, id) => Number(sql(`SELECT count(*) FROM app.${table} WHERE application_id = '${id}'`));
 const stateOf = (id) => sql(`SELECT state FROM app.model_application WHERE id = '${id}'`);
 
-async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, programme, director, secretary) {
+async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, programme, director, secretary, anon) {
   const createdIds = [];
   const before = modelBaseline();
   const blobsBefore = blobsNow();
@@ -273,6 +273,36 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     check(`${runLabel}.ui.certificate-document`, docs && d.reg === cert?.registrationId && d.model.includes("SA-A-") && /^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} \(valid\)$/.test(d.validity) && /LOCAL DEMONSTRATION/.test(d.demo), `${d.reg} ${d.validity}`);
     check(`${runLabel}.ui.label-document`, docs && d.iseer === "ISEER 4.62" && /not issued by BEE/.test(d.labelDemo) && d.print === true, `${d.iseer}, print button ${d.print}`);
     check(`${runLabel}.ui.both-qr-codes-point-to-the-verification-page`, docs && d.certQr === verifyUrl && d.labelQr === verifyUrl && d.modules >= 21, verifyUrl);
+    // WP09.1c: a person with no account follows the QR address and sees the public facts only (the owner's assumption D8).
+    const API = `http://127.0.0.1:${process.env.BEE_API_PORT || "8090"}`;
+    const plain = async (url) => {
+      const res = await fetch(url, { cache: "no-store", headers: { "X-Correlation-Id": `verify-${Date.now()}-${Math.floor(Math.random() * 1e6)}` } });
+      const text = await res.text();
+      return { status: res.status, json: (() => { try { return JSON.parse(text); } catch { return null; } })(), text, headers: res.headers };
+    };
+    const regQ = encodeURIComponent(cert?.registrationId ?? "");
+    for (const [layer, base, route] of [["spring", `${API}/api/public/verification`, "/api/public/verification"], ["portal", `${WEB}/api/runtime/verification`, "/api/runtime/verification"]]) {
+      const found = await plain(`${base}?reg=${regQ}`);
+      const e = contract.conforms(doc, route, "GET", found);
+      const keys = Object.keys(found.json ?? {}).sort().join(",");
+      check(`${runLabel}.public.${layer}-answers-without-a-token`, found.status === 200 && e.length === 0 && found.json?.registrationId === cert?.registrationId && found.json?.status === "valid", `${found.status} ${found.json?.registrationId} ${found.json?.status}${e.length ? " " + e.join("; ") : ""}`);
+      check(`${runLabel}.public.${layer}-shows-public-fields-only`, keys === "brandName,category,localDemoCertificate,manufacturer,modelNumber,registrationId,stars,status,validFrom,validTo,verifiedIseer", keys);
+      for (const [name, q, status, code] of [["unknown", "BEE%2FRAC%2F2026%2F99999", 404, "not_found"], ["malformed", "x%27%3B%20DROP%20TABLE%20certificate%3B--", 404, "not_found"], ["blank", "%20", 422, "validation_failed"]]) {
+        const x = await plain(`${base}?reg=${q}`);
+        const ex = contract.conforms(doc, route, "GET", x);
+        check(`${runLabel}.public.${layer}-${name}`, x.status === status && x.json?.error === code && ex.length === 0, `${x.status} ${x.json?.error}${ex.length ? " " + ex.join("; ") : ""}`);
+      }
+    }
+    await anon.goto(verifyUrl);
+    const anonShown = await anon.waitFor(`document.querySelector('[data-testid=verify-result]')?.getAttribute('data-outcome') === 'valid'`, 30000);
+    // The result panel only: the site footer carries BEE's own helpdesk address, which is public and not part of the answer.
+    const pageText = anonShown ? await anon.eval(`document.querySelector('[data-testid=verify-result]')?.innerText ?? ''`) : "";
+    const maker = sql(`SELECT organisation_name FROM app.certificate WHERE application_id = '${A.id}'`);
+    check(`${runLabel}.public.page-shows-valid-registration`, anonShown && pageText.includes(cert?.registrationId ?? "?") && pageText.includes(maker) && /not a BEE certificate/.test(pageText), `${cert?.registrationId} by ${maker}`);
+    check(`${runLabel}.public.page-hides-private-details`, anonShown && !pageText.includes(A.reference) && !/@/.test(pageText) && !/nova\.applicant/i.test(pageText), "no application reference or account name on the page");
+    await anon.goto(`${WEB}/verify?reg=BEE%2FRAC%2F2026%2F99999`);
+    const missing = await anon.waitFor(`document.querySelector('[data-testid=verify-result]')?.getAttribute('data-outcome') === 'not_found'`, 30000);
+    check(`${runLabel}.public.page-says-not-found`, missing, "an unknown registration ID is reported as not found");
     // Printing shows the documents and hides the console around them (the browser's print emulation).
     await nova.send("Emulation.setEmulatedMedia", { media: "print" });
     const printed = JSON.parse(await nova.eval(`(() => { const shown = (sel) => { const e = document.querySelector(sel); return !!e && e.getClientRects().length > 0; }; return JSON.stringify({ aside: shown("aside"), button: shown('[data-testid=certdocs-print]'), cert: shown('[data-testid=certificate-document]'), label: shown('[data-testid=label-document]'), identity: shown('[data-testid=certdocs-identity]') }); })()`));
@@ -322,6 +352,7 @@ async function main() {
       await totp.ensureEnrolled(twins[k]);
     }
     const pages = {};
+    pages.anon = await openPage(chrome.cdp); // never signs in: the public verification page needs no account
     for (const k of Object.keys(twins)) {
       pages[k] = await openPage(chrome.cdp);
       if (!(await signIn(pages[k], twins[k]))) throw new Error(`${k} sign-in failed`);
@@ -333,8 +364,8 @@ async function main() {
     const was = REAL.map(([role, id]) => sql(`SELECT active FROM app.role_assignment WHERE user_id = '${id}' AND role = '${role}'`));
     for (const [role, id] of REAL) sql(`UPDATE app.role_assignment SET active = false WHERE user_id = '${id}' AND role = '${role}'`);
     try {
-      await runSecretaryChecks("secretary.run1", pages.nova, pages.finance, pages.iame, pages.reviewer, pages.programme, pages.director, pages.secretary);
-      await runSecretaryChecks("secretary.run2", pages.nova, pages.finance, pages.iame, pages.reviewer, pages.programme, pages.director, pages.secretary);
+      await runSecretaryChecks("secretary.run1", pages.nova, pages.finance, pages.iame, pages.reviewer, pages.programme, pages.director, pages.secretary, pages.anon);
+      await runSecretaryChecks("secretary.run2", pages.nova, pages.finance, pages.iame, pages.reviewer, pages.programme, pages.director, pages.secretary, pages.anon);
     } finally {
       REAL.forEach(([role, id], i) => sql(`UPDATE app.role_assignment SET active = ${was[i] === "t"} WHERE user_id = '${id}' AND role = '${role}'`));
       check("secretary.real-officers-restored", REAL.every(([role, id], i) => sql(`SELECT active FROM app.role_assignment WHERE user_id = '${id}' AND role = '${role}'`) === was[i]), "real IAME officer and Reviewer roles restored");

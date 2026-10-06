@@ -117,7 +117,7 @@ class SecretaryApprovalDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         repo = transactional(new SecretaryApprovalRepository(db));
-        assertEquals(37, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V37");
+        assertEquals(38, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V38");
     }
 
     @AfterAll
@@ -239,6 +239,19 @@ class SecretaryApprovalDatabaseTest {
         UUID event = owner.queryForObject("SELECT id FROM model_application_transition_event WHERE application_id = ? LIMIT 1", UUID.class, waiting);
         assertThrows(Exception.class, () -> db.queryForObject("SELECT issue_certificate(?, ?, ?)", String.class, waiting, event, SECRETARY_USER), "not approved, so nothing is issued");
         assertEquals(0, count("certificate", waiting));
+    }
+
+    @Test
+    void thePublicViewShowsOnlyPublicFieldsAndTheRuntimeLoginCanReadNothingElseOfTheCertificate() {
+        UUID id = inSecretaryApproval("SA-CERT-PUBLIC");
+        approve(id, 6);
+        String reg = owner.queryForObject("SELECT registration_id FROM certificate WHERE application_id = ?", String.class, id);
+        var cols = owner.queryForList("SELECT column_name FROM information_schema.columns WHERE table_schema = ? AND table_name = 'public_certificate' ORDER BY ordinal_position", String.class, MAIN);
+        assertEquals(java.util.List.of("registration_id", "brand_name", "model_number", "category_code", "stars", "verified_iseer", "valid_from", "valid_to", "manufacturer"), cols,
+            "no applicant, account, application or note field is reachable through the public view");
+        assertEquals(1, db.queryForObject("SELECT count(*) FROM public_certificate WHERE registration_id = ?", Integer.class, reg));
+        assertEquals(0, db.queryForObject("SELECT count(*) FROM public_certificate WHERE registration_id = 'BEE/RAC/2026/00000'", Integer.class));
+        assertThrows(Exception.class, () -> db.update("UPDATE public_certificate SET stars = 1 WHERE registration_id = ?", reg), "read-only");
     }
 
     @Test

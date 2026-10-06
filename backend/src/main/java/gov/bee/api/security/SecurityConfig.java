@@ -23,7 +23,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 
 /**
- * Deny by default. Only the health probe is public. GET /api/me, the model-application list and read, and the
+ * Deny by default. Only the health probe and the public certificate verification are public. GET /api/me, the model-application list and read, and the
  * history read are open to an authenticated caller, and their controllers apply the Spring-database scope. Every
  * other request is denied until a reviewed first-slice rule is implemented by its owning work package (ADR-001
  * D-RT4). No screen-matrix capacity is imported.
@@ -42,6 +42,8 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(a -> a
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                // The one public route besides health: anyone may ask whether a registration ID is valid (decision D8). It reads one view.
+                .requestMatchers(HttpMethod.GET, "/api/public/verification").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/me").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/model-applications/eligible-brands").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/model-applications", "/api/model-applications/*").authenticated()

@@ -166,6 +166,9 @@ class SpringContractTest {
     gov.bee.api.feerules.FeeRuleRepository feeRulesRepo;
 
     @MockitoBean
+    gov.bee.api.verification.PublicVerificationRepository publicVerificationRepo;
+
+    @MockitoBean
     gov.bee.api.ratingschemes.RatingSchemeRepository schemesRepo;
 
     @MockitoBean
@@ -1829,6 +1832,31 @@ class SpringContractTest {
         conforms(list, get(list).with(token("admin")), 503, "service_unavailable");
         conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
         conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(go), 503, "service_unavailable");
+    }
+
+    @Test
+    void publicVerificationDocumentedPairs() throws Exception {
+        String route = "/api/public/verification";
+        String reg = "BEE/RAC/2026/10001";
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
+        when(publicVerificationRepo.find(reg)).thenReturn(Optional.of(new gov.bee.api.verification.PublicVerificationRepository.PublicCertificate(reg, "Nova Appliances Pvt Ltd",
+            "Nova Cool", "NC-1", "RAC", 4, new java.math.BigDecimal("4.62"), today.minusDays(1), today.plusYears(3))));
+        when(publicVerificationRepo.find("BEE/RAC/2020/10001")).thenReturn(Optional.of(new gov.bee.api.verification.PublicVerificationRepository.PublicCertificate("BEE/RAC/2020/10001",
+            "Nova Appliances Pvt Ltd", "Nova Cool", "NC-1", "RAC", 3, new java.math.BigDecimal("4.10"), today.minusYears(5), today.minusYears(2))));
+        when(publicVerificationRepo.find("BEE/RAC/2026/99999")).thenReturn(Optional.empty());
+        // no token at all: the route is public
+        var ok = conforms(route, get(route).param("reg", reg), 200, null);
+        assertTrue(ok.getContentAsString().contains("\"status\":\"valid\""));
+        assertTrue(conforms(route, get(route).param("reg", "BEE/RAC/2020/10001"), 200, null).getContentAsString().contains("\"status\":\"expired\""));
+        conforms(route, get(route).param("reg", "BEE/RAC/2026/99999"), 404, "not_found");
+        conforms(route, get(route).param("reg", "not a registration"), 404, "not_found");
+        conforms(route, get(route).param("reg", "'; DROP TABLE certificate; --"), 404, "not_found");
+        conforms(route, get(route).param("reg", " "), 422, "validation_failed");
+        conforms(route, get(route), 422, "validation_failed");
+        when(publicVerificationRepo.find(reg)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(route, get(route).param("reg", reg), 503, "service_unavailable");
+        // only reading is public
+        assertEquals(401, mvc.perform(post(route).param("reg", reg)).andReturn().getResponse().getStatus());
     }
 
     @Test

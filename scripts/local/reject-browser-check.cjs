@@ -129,6 +129,13 @@ function recordReject(r) {
   contract.record({ route: RUNTIME_REJECT, method: "POST", status: r.status, code: r.status >= 400 ? (r.body?.error ?? "-") : "-", ok: contract.conforms(doc, RUNTIME_REJECT, "POST", faux).length === 0 });
 }
 
+/** The applicant's own notifications through the portal, checked against the contract (WP10: returned and rejected are proven here, not only in the database tests). */
+async function notificationsOf(page) {
+  const r = await api(page, "GET", `${WEB}/api/runtime/notifications`, null, null);
+  contract.conforms(doc, "/api/runtime/notifications", "GET", contract.observationFromBrowserFetch(r));
+  return r.body?.items ?? [];
+}
+
 /** POST a rejection and record the contract observation. */
 async function rejectApi(page, id, body, idem) {
   const r = await api(page, "POST", rejectUrl(id), body, idem);
@@ -270,6 +277,11 @@ async function runRejectChecks(runLabel, P) {
       if (x.status !== 404) { check(`${runLabel}.A.nobody-else-reads-it`, false, `${who} read it: ${x.status}`); }
     }
     check(`${runLabel}.A.nobody-else-reads-it`, true, "no officer can read a rejected application");
+
+    // The applicant's organisation is told, in the portal, with the reason and no officer.
+    const rejectedN = (await notificationsOf(P.nova)).filter((i) => i.applicationId === A.id && i.kind === "rejected");
+    check(`${runLabel}.A.nova.is-notified-of-the-rejection`, rejectedN.length >= 1 && rejectedN[0].read === false && rejectedN[0].message === `${A.reference} (Nova Cool ${A.model}) was rejected: ${REASON}`,
+      rejectedN[0]?.message?.slice(0, 120) ?? "no notification");
 
     // The model number is free again: the same applicant files a new application with it, and it is accepted.
     const again = await submittedApp(P.nova, createdIds, A.model);

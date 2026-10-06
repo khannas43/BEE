@@ -75,7 +75,7 @@ class FeeRuleDatabaseTest {
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         repo = new FeeRuleRepository(db);
         masters = new MasterDataRepository(db);
-        assertEquals(40, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V40");
+        assertEquals(41, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V41");
     }
 
     @AfterAll
@@ -235,5 +235,16 @@ class FeeRuleDatabaseTest {
                 + "VALUES ('RAC:new_model', 99, DATE '2030-01-01', 's', 'provisional', 'n', 'RAC', 'new_model', 1)"));
         assertThrows(Exception.class, () -> db.update("UPDATE master_fee_rule SET amount_inr = 1"));
         assertThrows(Exception.class, () -> db.update("DELETE FROM master_fee_rule"));
+    }
+
+    @Test
+    void aProposalIsBornPendingSoNoRowCanSkipTheSecondPerson() {
+        String insert = "INSERT INTO fee_rule_proposal (category_code, application_type, amount_inr, effective_from, source_reference, reason, proposed_by, state, decided_by, decided_at, applied_version) "
+            + "VALUES ('RAC', 'new_model', 1, ?, 's', 'r', ?, ?, ?, now(), ?)";
+        java.sql.Date when = java.sql.Date.valueOf(TODAY.plusDays(400));
+        assertThrows(Exception.class, () -> db.update(insert, when, ADMIN_USER, "rejected", FINANCE_USER, null), "already rejected");
+        assertThrows(Exception.class, () -> db.update(insert, when, ADMIN_USER, "approved", FINANCE_USER, 7), "already approved, with a version that never existed");
+        assertThrows(Exception.class, () -> owner.update(insert, when, ADMIN_USER, "approved", FINANCE_USER, 7), "the guard holds for everyone, not only the runtime login");
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM fee_rule_proposal WHERE effective_from = ?", Integer.class, when));
     }
 }

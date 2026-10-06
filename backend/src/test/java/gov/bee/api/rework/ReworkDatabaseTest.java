@@ -127,7 +127,7 @@ class ReworkDatabaseTest {
         resub = transactional(new ResubmitApplicationRepository(db));
         rejects = transactional(new StageRejectRepository(db));
         history = new HistoryRepository(db);
-        assertEquals(40, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V40");
+        assertEquals(41, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V41");
     }
 
     @AfterAll

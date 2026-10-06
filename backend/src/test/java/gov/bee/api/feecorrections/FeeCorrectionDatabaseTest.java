@@ -93,7 +93,7 @@ class FeeCorrectionDatabaseTest {
         submissions = new ModelApplicationSubmitRepository(db, applications);
         confirmations = new FeeConfirmationRepository(db);
         repo = new FeeCorrectionRepository(db);
-        assertEquals(40, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V40");
+        assertEquals(41, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V41");
     }
 
     @AfterAll
@@ -405,5 +405,18 @@ class FeeCorrectionDatabaseTest {
     @Test
     void anUnknownProposalIsNotFound() {
         assertEquals(Outcome.NOT_FOUND, repo.decide(UUID.randomUUID(), FINANCE_USER, "approve", null).outcome());
+    }
+
+    @Test
+    void aProposalIsBornPendingSoNoRowCanSkipTheSecondPerson() {
+        UUID app = confirmed("NC-FC-BORN");
+        String insert = "INSERT INTO fee_correction_proposal (application_id, fee_confirmation_id, previous_receipt_reference, previous_received_on, receipt_reference, received_on, reason, "
+            + "proposed_by, state, decided_by, decided_at) SELECT application_id, id, receipt_reference, received_on, 'UTR-FORGED', received_on, 'r', ?, ?, ?, now() "
+            + "FROM model_application_fee_confirmation WHERE application_id = ?";
+        assertThrows(Exception.class, () -> db.update(insert, FINANCE_USER, "approved", FINANCE_USER, app), "an approved correction written straight in");
+        assertThrows(Exception.class, () -> db.update(insert, FINANCE_USER, "rejected", PROGRAMME_USER, app), "already rejected");
+        assertThrows(Exception.class, () -> owner.update(insert, FINANCE_USER, "approved", PROGRAMME_USER, app), "the guard holds for everyone, not only the runtime login");
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM fee_correction_proposal WHERE application_id = ?", Integer.class, app));
+        assertEquals("UTR-WRONG-" + app.toString().substring(0, 4), repo.confirmationOf(app).orElseThrow().effectiveReceiptReference(), "nothing changed");
     }
 }

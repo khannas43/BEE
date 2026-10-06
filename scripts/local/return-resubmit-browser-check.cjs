@@ -129,6 +129,13 @@ function recordRoute(route, r) {
   contract.record({ route, method: "POST", status: r.status, code: r.status >= 400 ? (r.body?.error ?? "-") : "-", ok: contract.conforms(doc, route, "POST", faux).length === 0 });
 }
 
+/** The applicant's own notifications through the portal, checked against the contract (WP10: returned and rejected are proven here, not only in the database tests). */
+async function notificationsOf(page) {
+  const r = await api(page, "GET", `${WEB}/api/runtime/notifications`, null, null);
+  contract.conforms(doc, "/api/runtime/notifications", "GET", contract.observationFromBrowserFetch(r));
+  return r.body?.items ?? [];
+}
+
 /** POST a return and record the contract observation. */
 async function returnApi(page, id, body, idem) {
   const r = await api(page, "POST", returnUrl(id), body, idem);
@@ -245,6 +252,10 @@ async function runReworkChecks(runLabel, P) {
     // The applicant sees why, and fixes it in the real form.
     r = await api(P.nova, "GET", `${WEB}/api/runtime/model-applications/${A.id}`, null, null);
     check(`${runLabel}.A.nova.sees-why`, r.status === 200 && r.body?.state === "returned" && r.body?.returnNote?.fromState === "iame_scrutiny" && r.body?.returnNote?.reason === REASON, `${r.body?.state}, from ${r.body?.returnNote?.fromState}`);
+    const returnedN = (await notificationsOf(P.nova)).filter((i) => i.applicationId === A.id && i.kind === "returned");
+    check(`${runLabel}.A.nova.is-notified-of-the-return`, returnedN.length >= 1 && returnedN[0].read === false && returnedN[0].message === `${A.reference} (Nova Cool ${A.model}) was returned to you: ${REASON} Edit it and send it again.`,
+      returnedN[0]?.message?.slice(0, 120) ?? "no notification");
+    check(`${runLabel}.A.notification-names-no-officer-or-role`, returnedN.length >= 1 && !/@|iame|reviewer|programme|director|secretary|finance/i.test(returnedN[0].message.replace(REASON, "")), "only the reason, the reference and the instruction");
     const novaList = await api(P.nova, "GET", `${WEB}/api/runtime/model-applications`, null, null);
     check(`${runLabel}.A.list-carries-no-return-note`, (novaList.body?.items ?? []).some((x) => x.id === A.id && x.state === "returned") && (novaList.body?.items ?? []).every((x) => x.returnNote === undefined), "the reason is on the detail read only");
     await P.nova.goto(`${WEB}/app/model-label/model-dashboard?id=${encodeURIComponent(A.id)}`);

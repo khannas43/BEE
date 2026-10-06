@@ -96,6 +96,8 @@ public class HistoryService {
                 case "return" -> e.returnReason();
                 case "resubmit" -> e.resubmitNote();
                 case "reject" -> e.rejectReason();
+                // Finance's reason for reversing is an internal note: officers read it, the applicant is only told the fee is due again.
+                case "reverse_fee" -> applicant ? null : e.reversalReason();
                 default -> null;
             };
             switch (e.action()) {

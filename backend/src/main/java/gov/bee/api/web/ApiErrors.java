@@ -50,6 +50,8 @@ public final class ApiErrors {
         Map.entry("idempotency_key_required", "An Idempotency-Key header is required for this request."),
         Map.entry("idempotency_key_conflict", "This Idempotency-Key was already used with a different request body."),
         Map.entry("idempotency_in_progress", "A request with this Idempotency-Key is still in progress."),
+        Map.entry("reversal_already_pending", "A reversal of this fee confirmation is already waiting for a decision."),
+        Map.entry("reversal_not_possible", "Work has already started on this application, so the fee confirmation cannot be reversed here."),
         Map.entry("rate_limited", "Too many requests. Wait a moment and try again."),
         Map.entry("service_unavailable", "The service is temporarily unavailable. Try again later."),
         Map.entry("internal_error", "The request could not be completed."));

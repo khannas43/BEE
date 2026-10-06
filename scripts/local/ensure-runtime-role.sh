@@ -52,6 +52,13 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.notification FROM ${BEE_RUNTIME_D
 SQL
 fi
 
+if psql_super -d bee_app -c "SELECT to_regclass('app.fee_reversal_proposal') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.fee_reversal_decide(uuid, uuid, text, text), app.fee_reversal_possible(uuid, uuid) TO ${BEE_RUNTIME_DB_USER};
+REVOKE UPDATE, DELETE, TRUNCATE ON app.fee_reversal_proposal FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+
 if psql_super -d bee_app -c "SELECT to_regclass('app.fee_correction_proposal') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 GRANT EXECUTE ON FUNCTION app.fee_correction_decide(uuid, uuid, text, text) TO ${BEE_RUNTIME_DB_USER};

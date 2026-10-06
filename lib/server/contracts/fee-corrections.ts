@@ -28,6 +28,23 @@ export interface FeeConfirmationRow {
   confirmedAt: string;
   correction: FeeConfirmationCorrection | null;
   pendingProposalId: string | null;
+  /** Set when an approved reversal undid this confirmation (it stays as written and is history). */
+  reversal: { reversedBy: string; reversedAt: string } | null;
+  pendingReversalId: string | null;
+}
+
+export interface FeeReversalProposal {
+  id: string;
+  applicationId: string;
+  reference: string;
+  reason: string;
+  state: CorrectionState;
+  proposedBy: string;
+  proposedByYou: boolean;
+  proposedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
 }
 
 export interface FeeCorrectionProposal {
@@ -53,6 +70,8 @@ export interface FeeCorrectionAdmin {
   confirmations: FeeConfirmationRow[];
   pending: FeeCorrectionProposal[];
   decided: FeeCorrectionProposal[];
+  reversalsPending: FeeReversalProposal[];
+  reversalsDecided: FeeReversalProposal[];
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -71,10 +90,27 @@ const validCorrection = (v: unknown): boolean => {
 
 const validConfirmation = (v: unknown): boolean => {
   const b = obj(v);
-  return b !== null && exactKeys(b, ["applicationId", "reference", "brandName", "modelNumber", "state", "receiptReference", "receivedOn", "amountInr", "confirmedBy", "confirmedAt", "correction", "pendingProposalId"]) &&
+  return b !== null && exactKeys(b, ["applicationId", "reference", "brandName", "modelNumber", "state", "receiptReference", "receivedOn", "amountInr", "confirmedBy", "confirmedAt", "correction", "pendingProposalId", "reversal", "pendingReversalId"]) &&
     isString(b.applicationId) && UUID.test(b.applicationId) && isString(b.reference) && isString(b.brandName) && isString(b.modelNumber) && isString(b.state) &&
     isReceipt(b.receiptReference) && isDate(b.receivedOn) && isString(b.amountInr) && /^\d+\.\d{2}$/.test(b.amountInr) && isString(b.confirmedBy) && isInstant(b.confirmedAt) &&
-    nullable(b.correction, validCorrection) && nullable(b.pendingProposalId, (x) => isString(x) && UUID.test(x));
+    nullable(b.correction, validCorrection) && nullable(b.pendingProposalId, (x) => isString(x) && UUID.test(x)) &&
+    nullable(b.reversal, validReversedMark) && nullable(b.pendingReversalId, (x) => isString(x) && UUID.test(x));
+};
+
+const validReversedMark = (v: unknown): boolean => {
+  const b = obj(v);
+  return b !== null && exactKeys(b, ["reversedBy", "reversedAt"]) && isString(b.reversedBy) && isInstant(b.reversedAt);
+};
+
+export const validateFeeReversalProposal: Validator<FeeReversalProposal> = (body) => {
+  if (!exactKeys(body, ["id", "applicationId", "reference", "reason", "state", "proposedBy", "proposedByYou", "proposedAt", "decidedBy", "decidedAt", "decisionNote"])) return null;
+  const b = body;
+  const ok =
+    isString(b.id) && UUID.test(b.id) && isString(b.applicationId) && UUID.test(b.applicationId) && isString(b.reference) && isString(b.reason) &&
+    (CORRECTION_STATES as readonly unknown[]).includes(b.state) && isString(b.proposedBy) && typeof b.proposedByYou === "boolean" && isInstant(b.proposedAt) &&
+    nullable(b.decidedBy, isString) && nullable(b.decidedAt, isInstant) && nullable(b.decisionNote, isString) &&
+    (b.state === "pending") === (b.decidedBy === null);
+  return ok ? (b as unknown as FeeReversalProposal) : null;
 };
 
 export const validateFeeCorrectionProposal: Validator<FeeCorrectionProposal> = (body) => {
@@ -92,12 +128,14 @@ export const validateFeeCorrectionProposal: Validator<FeeCorrectionProposal> = (
 };
 
 export const validateFeeCorrectionAdmin: Validator<FeeCorrectionAdmin> = (body) => {
-  if (!exactKeys(body, ["today", "confirmations", "pending", "decided"])) return null;
+  if (!exactKeys(body, ["today", "confirmations", "pending", "decided", "reversalsPending", "reversalsDecided"])) return null;
   const b = body;
   const ok =
     isDate(b.today) && Array.isArray(b.confirmations) && b.confirmations.every(validConfirmation) &&
     Array.isArray(b.pending) && b.pending.every((p) => validateFeeCorrectionProposal(obj(p) ?? {}) !== null && (p as { state: string }).state === "pending") &&
-    Array.isArray(b.decided) && b.decided.every((p) => validateFeeCorrectionProposal(obj(p) ?? {}) !== null && (p as { state: string }).state !== "pending");
+    Array.isArray(b.decided) && b.decided.every((p) => validateFeeCorrectionProposal(obj(p) ?? {}) !== null && (p as { state: string }).state !== "pending") &&
+    Array.isArray(b.reversalsPending) && b.reversalsPending.every((p) => validateFeeReversalProposal(obj(p) ?? {}) !== null && (p as { state: string }).state === "pending") &&
+    Array.isArray(b.reversalsDecided) && b.reversalsDecided.every((p) => validateFeeReversalProposal(obj(p) ?? {}) !== null && (p as { state: string }).state !== "pending");
   return ok ? (b as unknown as FeeCorrectionAdmin) : null;
 };
 
@@ -112,7 +150,7 @@ export const SPRING_FEE_CORRECTION_PROPOSAL_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
   403: [...RESOLVER_DENIALS, "role_not_permitted", "segregation_refused"],
   404: ["not_found"],
-  409: ["correction_already_pending", ...IDEMPOTENCY_409],
+  409: ["correction_already_pending", "reversal_already_pending", ...IDEMPOTENCY_409],
   422: ["validation_failed", "idempotency_key_required"],
   503: ["service_unavailable"],
 };
@@ -124,6 +162,26 @@ export const SPRING_FEE_CORRECTION_DECISION_ERRORS: UpstreamErrors = {
   422: ["validation_failed", "idempotency_key_required"],
   503: ["service_unavailable"],
 };
+
+export const SPRING_FEE_REVERSAL_PROPOSAL_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: [...RESOLVER_DENIALS, "role_not_permitted", "segregation_refused"],
+  404: ["not_found"],
+  409: ["correction_already_pending", "reversal_already_pending", "reversal_not_possible", ...IDEMPOTENCY_409],
+  422: ["validation_failed", "idempotency_key_required"],
+  503: ["service_unavailable"],
+};
+export const SPRING_FEE_REVERSAL_DECISION_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: [...RESOLVER_DENIALS, "role_not_permitted", "segregation_refused"],
+  404: ["not_found"],
+  409: ["proposal_not_pending", "reversal_not_possible", ...IDEMPOTENCY_409],
+  422: ["validation_failed", "idempotency_key_required"],
+  503: ["service_unavailable"],
+};
+
+export const SPRING_FEE_REVERSAL_PROPOSAL = { errors: SPRING_FEE_REVERSAL_PROPOSAL_ERRORS, validate: validateFeeReversalProposal, successStatuses: [201] as const };
+export const SPRING_FEE_REVERSAL_DECISION = { errors: SPRING_FEE_REVERSAL_DECISION_ERRORS, validate: validateFeeReversalProposal, successStatuses: [200] as const };
 
 export const SPRING_FEE_CORRECTIONS = { errors: SPRING_FEE_CORRECTIONS_ERRORS, validate: validateFeeCorrectionAdmin };
 export const SPRING_FEE_CORRECTION_PROPOSAL = { errors: SPRING_FEE_CORRECTION_PROPOSAL_ERRORS, validate: validateFeeCorrectionProposal, successStatuses: [201] as const };

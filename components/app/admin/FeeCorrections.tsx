@@ -11,11 +11,16 @@ import { useSpringIdentity } from "@/components/app/SessionBadge";
 import {
   type FeeConfirmationRow,
   type FeeCorrectionProposal,
+  type FeeReversalProposal,
   decideCorrectionSignature,
+  decideReversalSignature,
   proposeCorrectionSignature,
+  proposeReversalSignature,
   readFeeCorrections,
   runDecideCorrection,
+  runDecideReversal,
   runProposeCorrection,
+  runProposeReversal,
 } from "@/lib/client/runtimeFeeCorrections";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { stateLabel } from "@/lib/client/runtimeModelApplications";
@@ -36,6 +41,8 @@ export const FEE_CORRECTIONS_COPY = {
   title: "Fee confirmations",
   loading: "Loading fee confirmations…",
   rule: "A fee confirmation is never edited. To fix the receipt reference or the date received, propose a correction with a reason; a different person who holds the permission approves it. Neither of you may belong to the paying organisation or have acted at another stage of the application.",
+  reversalRule: "If a fee was confirmed in error (no money was received), propose reversing the confirmation with a reason; a different person approves it. It is possible only while nothing has happened to the application since the confirmation: the application goes back to fee due, the applicant is told, and Finance confirms the fee again when it is received. Once work has started, a reversal is refused and needs a manual decision.",
+  reversalInputRequired: "Enter the reason for the reversal (up to 500 characters).",
   inputRequired: "Enter the right receipt reference (letters, numbers, space . / _ -), the date received (not after today) and the reason.",
 } as const;
 
@@ -52,6 +59,13 @@ export function FeeCorrections({ module, screen }: { module: Module; screen: Scr
   const [selected, setSelected] = useState<FeeConfirmationRow | null>(null);
   // The form closes once a correction is proposed, so the answer is shown here too.
   const [proposed, setProposed] = useState<FeeCorrectionProposal | null>(null);
+  const [reversing, setReversing] = useState<FeeConfirmationRow | null>(null);
+  const [reversalProposed, setReversalProposed] = useState<FeeReversalProposal | null>(null);
+  const [reversalNotice, setReversalNotice] = useState<FeeReversalProposal | null>(null);
+  const reversalDecided = (p: FeeReversalProposal) => {
+    setReversalNotice(p);
+    revalidation.refresh();
+  };
   const decided = (p: FeeCorrectionProposal) => {
     setNotice(p);
     revalidation.refresh();
@@ -73,11 +87,41 @@ export function FeeCorrections({ module, screen }: { module: Module; screen: Scr
       p.state !== "pending" ? ` · ${p.state}${p.decidedBy ? ` by ${p.decidedBy}` : ""}${p.decisionNote ? ` · ${p.decisionNote}` : ""}` : "",
   };
 
+  const reversalListProps = {
+    onDone: reversalDecided,
+    onReload: revalidation.refresh,
+    commandPrefix: "reversal",
+    signInReturnTo: ROUTE,
+    runDecide: runDecideReversal,
+    decideSignature: decideReversalSignature,
+    approveLabel: "Approve the reversal",
+    renderSummary: (p: FeeReversalProposal) => (
+      <>
+        <strong>{p.reference}</strong> · reverse the fee confirmation
+      </>
+    ),
+    formatDecidedSuffix: (p: FeeReversalProposal) =>
+      p.state !== "pending" ? ` · ${p.state}${p.decidedBy ? ` by ${p.decidedBy}` : ""}${p.decisionNote ? ` · ${p.decisionNote}` : ""}` : "",
+  };
+
   return (
-    <ScreenChrome module={module} screen={screen} subtitle="Correct a receipt reference or date" implemented={runtimeRouteFor(ROUTE)?.implemented}>
+    <ScreenChrome module={module} screen={screen} subtitle="Correct or reverse a fee confirmation" implemented={runtimeRouteFor(ROUTE)?.implemented}>
       <div className="space-y-space-md" data-testid="corrections-screen">
         <IdentityStrip identity={identity} testId="corrections-identity" />
         <p className="font-label-sm text-label-sm text-on-surface-variant" data-testid="corrections-notes">{FEE_CORRECTIONS_COPY.rule}</p>
+        <p className="font-label-sm text-label-sm text-on-surface-variant" data-testid="reversal-notes">{FEE_CORRECTIONS_COPY.reversalRule}</p>
+        {reversalNotice ? (
+          <p className="font-body-sm text-body-sm bg-surface-card rounded-xl shadow-sm p-space-md" data-testid={`reversal-decided-${reversalNotice.id}`}>
+            {reversalNotice.state === "approved"
+              ? `Approved: ${reversalNotice.reference} is back at fee due and the applicant has been told. Finance confirms the fee again when it is received.`
+              : `Reversal for ${reversalNotice.reference}: ${reversalNotice.state}.`}
+          </p>
+        ) : null}
+        {reversalProposed ? (
+          <p className="font-body-sm text-body-sm bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="reversal-propose-success">
+            Proposed reversing the fee confirmation of {reversalProposed.reference}. A different person must approve it before anything changes.
+          </p>
+        ) : null}
         {notice ? (
           <p className="font-body-sm text-body-sm bg-surface-card rounded-xl shadow-sm p-space-md" data-testid={`correction-decided-${notice.id}`}>
             {notice.state === "approved"
@@ -101,7 +145,7 @@ export function FeeCorrections({ module, screen }: { module: Module; screen: Scr
           emptyText="No fee has been confirmed yet."
           emptyTestId="corrections-empty"
         >
-          {(r) => <ConfirmationsTable rows={r.admin.confirmations} selectedId={selected?.applicationId ?? null} onSelect={setSelected} />}
+          {(r) => <ConfirmationsTable rows={r.admin.confirmations} selectedId={selected?.applicationId ?? null} onSelect={(c) => { setSelected(c); setReversing(null); }} reversingId={reversing?.applicationId ?? null} onReverse={(c) => { setReversing(c); setSelected(null); }} />}
         </ReadPanel>
         {selected && read && read.ok ? (
           <CorrectionForm
@@ -116,8 +160,22 @@ export function FeeCorrections({ module, screen }: { module: Module; screen: Scr
             onReload={revalidation.refresh}
           />
         ) : null}
+        {reversing && read && read.ok ? (
+          <ReversalForm
+            key={reversing.applicationId}
+            row={reversing}
+            onProposed={(p) => {
+              setReversalProposed(p);
+              setReversing(null);
+              revalidation.refresh();
+            }}
+            onReload={revalidation.refresh}
+          />
+        ) : null}
         {read && read.ok ? (
           <>
+            <ProposalList title="Reversals waiting for a second person" testId="reversals-pending" proposals={read.admin.reversalsPending} decidable {...reversalListProps} />
+            <ProposalList title="Reversals recently decided" testId="reversals-decided" proposals={read.admin.reversalsDecided} {...reversalListProps} />
             <ProposalList title="Waiting for a second person" testId="corrections-pending" proposals={read.admin.pending} decidable {...listProps} />
             <ProposalList title="Recently decided" testId="corrections-decided" proposals={read.admin.decided} {...listProps} />
           </>
@@ -127,7 +185,7 @@ export function FeeCorrections({ module, screen }: { module: Module; screen: Scr
   );
 }
 
-function ConfirmationsTable({ rows, selectedId, onSelect }: { rows: FeeConfirmationRow[]; selectedId: string | null; onSelect: (c: FeeConfirmationRow) => void }) {
+function ConfirmationsTable({ rows, selectedId, onSelect, reversingId, onReverse }: { rows: FeeConfirmationRow[]; selectedId: string | null; onSelect: (c: FeeConfirmationRow) => void; reversingId: string | null; onReverse: (c: FeeConfirmationRow) => void }) {
   return (
     <table className="w-full font-body-sm text-body-sm" data-testid="corrections-table">
       <thead>
@@ -144,8 +202,22 @@ function ConfirmationsTable({ rows, selectedId, onSelect }: { rows: FeeConfirmat
       <tbody>
         {rows.map((c) => {
           const e = effective(c);
+          if (c.reversal) {
+            // A reversed confirmation is history: kept as written, with no action.
+            return (
+              <tr key={`${c.applicationId}-${c.confirmedAt}`} data-testid={`corrections-reversed-row-${c.reference}`} data-reversed="true" className="text-on-surface-variant">
+                <td className="py-1 pr-3"><span className="font-mono">{c.reference}</span> · {c.brandName} {c.modelNumber}</td>
+                <td className="py-1 pr-3">{stateLabel(c.state)}</td>
+                <td className="py-1 pr-3">{c.receiptReference}</td>
+                <td className="py-1 pr-3">{c.receivedOn}</td>
+                <td className="py-1 pr-3">{money(c.amountInr)}</td>
+                <td className="py-1 pr-3">{c.confirmedBy}</td>
+                <td className="py-1" data-testid={`reversed-flag-${c.reference}`}>Reversed by {c.reversal.reversedBy}</td>
+              </tr>
+            );
+          }
           return (
-            <tr key={c.applicationId} data-testid={`corrections-row-${c.reference}`} data-corrected={c.correction ? "true" : "false"}>
+            <tr key={`${c.applicationId}-${c.confirmedAt}`} data-testid={`corrections-row-${c.reference}`} data-corrected={c.correction ? "true" : "false"}>
               <td className="py-1 pr-3">
                 <span className="font-mono">{c.reference}</span> · {c.brandName} {c.modelNumber}
               </td>
@@ -160,7 +232,10 @@ function ConfirmationsTable({ rows, selectedId, onSelect }: { rows: FeeConfirmat
               <td className="py-1">
                 {c.pendingProposalId ? (
                   <span className="text-on-surface-variant" data-testid={`corrections-pending-flag-${c.reference}`}>Correction waiting</span>
+                ) : c.pendingReversalId ? (
+                  <span className="text-on-surface-variant" data-testid={`reversal-pending-flag-${c.reference}`}>Reversal waiting</span>
                 ) : (
+                  <>
                   <button
                     type="button"
                     onClick={() => onSelect(c)}
@@ -169,6 +244,17 @@ function ConfirmationsTable({ rows, selectedId, onSelect }: { rows: FeeConfirmat
                   >
                     {c.applicationId === selectedId ? "Selected" : "Propose a correction"}
                   </button>
+                  {c.state === "iame_scrutiny" ? (
+                    <button
+                      type="button"
+                      onClick={() => onReverse(c)}
+                      className={`ml-space-sm font-label-sm text-label-sm ${c.applicationId === reversingId ? "text-on-surface font-semibold" : "text-primary hover:underline"}`}
+                      data-testid={`reversal-propose-${c.reference}`}
+                    >
+                      {c.applicationId === reversingId ? "Selected" : "Reverse"}
+                    </button>
+                  ) : null}
+                  </>
                 )}
               </td>
             </tr>
@@ -230,6 +316,47 @@ function CorrectionForm({ row, today, onProposed, onReload }: { row: FeeConfirma
         </label>
       </CommandPanel>
       {inputError ? <p className="text-error font-body-sm mt-space-sm" data-testid="correction-propose-input-error">{inputError}</p> : null}
+    </section>
+  );
+}
+
+function ReversalForm({ row, onProposed, onReload }: { row: FeeConfirmationRow; onProposed: (p: FeeReversalProposal) => void; onReload: () => void }) {
+  const [reason, setReason] = useState("");
+  const [inputError, setInputError] = useState<string | null>(null);
+  const command = useCommand(runProposeReversal, proposeReversalSignature);
+
+  async function propose() {
+    if (!reason.trim() || reason.trim().length > 500) {
+      setInputError(FEE_CORRECTIONS_COPY.reversalInputRequired);
+      return;
+    }
+    setInputError(null);
+    const result = await command.execute({ applicationId: row.applicationId, reason: reason.trim() });
+    if (result?.ok) onProposed(result.value);
+  }
+
+  const field = "mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm";
+  return (
+    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="reversal-form">
+      <h2 className="font-title-md text-title-md text-on-surface">Propose reversing the fee confirmation of {row.reference}</h2>
+      <CommandPanel
+        className="mt-space-sm space-y-space-sm"
+        state={command.state}
+        onRun={() => void propose()}
+        runLabel="Propose reversal"
+        busyLabel="Proposing…"
+        runTestId="reversal-propose-run"
+        errorTestId="reversal-propose-error"
+        reloadTestId="reversal-propose-reload"
+        onReload={onReload}
+        signInReturnTo={ROUTE}
+      >
+        <label className="block font-label-sm text-label-sm text-on-surface-variant">
+          Reason (an internal note for Finance; the applicant is only told the fee is due again)
+          <textarea value={reason} onChange={(ev) => setReason(ev.target.value)} maxLength={500} rows={2} className={field} data-testid="reversal-reason" />
+        </label>
+      </CommandPanel>
+      {inputError ? <p className="text-error font-body-sm mt-space-sm" data-testid="reversal-propose-input-error">{inputError}</p> : null}
     </section>
   );
 }

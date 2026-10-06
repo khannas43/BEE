@@ -121,6 +121,7 @@ const directorUrl = (id) => `${WEB}/api/runtime/model-applications/${id}/directo
 const returnUrl = (id) => `${WEB}/api/runtime/model-applications/${id}/return`;
 const resubmitUrl = (id) => `${WEB}/api/runtime/model-applications/${id}/resubmit`;
 const rejectUrl = (id) => `${WEB}/api/runtime/model-applications/${id}/reject`;
+const RUNTIME_HISTORY = "/api/runtime/model-applications/{id}/history";
 const historyUrl = (id) => `${WEB}/api/runtime/model-applications/${id}/history`;
 
 /** GET the history and record the contract observation. */
@@ -155,7 +156,13 @@ async function submittedApp(page, createdIds, model) {
 
 const PATHS = { read: `${WEB}/api/runtime/fee-corrections`, propose: `${WEB}/api/runtime/fee-corrections/proposals`, decide: (id) => `${WEB}/api/runtime/fee-corrections/proposals/${id}/decision` };
 const SCREEN = "/app/finance/receipt";
-const routeOf = (path) => (path.endsWith("/decision") ? "/api/runtime/fee-corrections/proposals/{id}/decision" : path.endsWith("/proposals") ? "/api/runtime/fee-corrections/proposals" : "/api/runtime/fee-corrections");
+const REVERSAL_PATHS = { propose: `${WEB}/api/runtime/fee-corrections/reversals`, decide: (id) => `${WEB}/api/runtime/fee-corrections/reversals/${id}/decision` };
+const routeOf = (path) =>
+  /\/reversals\/[^/]+\/decision$/.test(path) ? "/api/runtime/fee-corrections/reversals/{id}/decision"
+    : path.endsWith("/reversals") ? "/api/runtime/fee-corrections/reversals"
+      : path.endsWith("/notifications") ? "/api/runtime/notifications"
+        : path.endsWith("/decision") ? "/api/runtime/fee-corrections/proposals/{id}/decision"
+          : path.endsWith("/proposals") ? "/api/runtime/fee-corrections/proposals" : "/api/runtime/fee-corrections";
 
 /** A request through the browser's session; a fee-correction answer is checked against the artifact and recorded as live evidence. */
 async function capi(page, method, path, body, idem) {
@@ -328,6 +335,98 @@ async function runChecks(run, P) {
   check(`${run}.disposable-applications-and-their-corrections-cleaned`, before === after && sqlApp(`SELECT count(*) FROM app.fee_correction_proposal WHERE proposed_by IN (${twinAccountIds()})`) === "0", `${before} -> ${after}`);
 }
 
+/**
+ * BL-142 (the owner's assumption B17): Finance proposes reversing a confirmation recorded in error; a DIFFERENT holder approves; the application
+ * goes back to fee due, the IAME officer is released, the applicant is told, the confirmation is untouched, and Finance confirms again.
+ */
+async function runReversalChecks(run, P) {
+  const tag = crypto.randomUUID().slice(0, 6);
+  const created = [];
+  const before = sqlApp("SELECT count(*) FROM app.model_application");
+  try {
+    const app = await submittedApp(P.nova, created, `FR-${tag}`);
+    const wrong = `UTR-NOMONEY-${tag}`;
+    const conf = await api(P.finance, "POST", feeUrl(app.id), { version: app.version, receiptReference: wrong, receivedOn: RECEIVED_ON, amountInr: "24000.00" }, key());
+    check(`${run}.reversal.setup.fee-confirmed-in-error`, app.ok && conf.status === 200 && conf.body?.toState === "iame_scrutiny", `${conf.status} ${conf.body?.toState}`);
+    const stateOf = () => sqlApp(`SELECT state || '|' || version FROM app.model_application WHERE id = '${app.id}'`);
+    const v0 = Number(sqlApp(`SELECT version FROM app.model_application WHERE id = '${app.id}'`));
+    const officer = () => sqlApp(`SELECT count(*) FROM app.assignment WHERE subject_id = '${app.id}' AND stage = 'iame_scrutiny' AND active`);
+    const confirmations = () => sqlApp(`SELECT count(*) || '|' || string_agg(receipt_reference, ',') FROM app.model_application_fee_confirmation WHERE application_id = '${app.id}'`);
+    check(`${run}.reversal.setup.officer-assigned`, stateOf() === `iame_scrutiny|${v0}` && officer() === "1" && confirmations() === `1|${wrong}`, `${stateOf()} officer ${officer()} ${confirmations()}`);
+    grant("programme");
+
+    // 1. Finance proposes in the portal.
+    await open(P.finance, SCREEN, "corrections-screen");
+    check(`${run}.reversal.finance.sees-the-reverse-action`, await present(P.finance, `reversal-propose-${app.reference}`), "Reverse is offered while the application is in IAME scrutiny");
+    await uiClick(P.finance, `reversal-propose-${app.reference}`);
+    await present(P.finance, "reversal-form");
+    await uiClick(P.finance, "reversal-propose-run");
+    check(`${run}.reversal.finance.ui-refuses-an-empty-reason`, await present(P.finance, "reversal-propose-input-error", 5000), "nothing is sent without a reason");
+    await setInput(P.finance, "reversal-reason", `ui-${tag}`, "HTMLTextAreaElement");
+    await uiClick(P.finance, "reversal-propose-run");
+    check(`${run}.reversal.finance.ui-propose-success`, await present(P.finance, "reversal-propose-success", 15000), (await textOf(P.finance, "reversal-propose-success")).slice(0, 90));
+    const rid = sqlApp(`SELECT id FROM app.fee_reversal_proposal WHERE application_id = '${app.id}' AND state = 'pending'`);
+    check(`${run}.reversal.db.pending-and-nothing-moved`, !!rid && stateOf() === `iame_scrutiny|${v0}` && officer() === "1", `${rid} ${stateOf()}`);
+
+    // 2. The same person cannot approve; a second proposal and a correction are refused while one waits.
+    let r = await capi(P.finance, "POST", REVERSAL_PATHS.decide(rid), { decision: "approve" }, key());
+    check(`${run}.reversal.finance.cannot-approve-their-own`, r.status === 403 && r.body?.error === "segregation_refused", `${r.status} ${r.body?.error}`);
+    r = await capi(P.finance, "POST", REVERSAL_PATHS.propose, { applicationId: app.id, reason: "again" }, key());
+    check(`${run}.reversal.finance.second-reversal-conflicts`, r.status === 409 && r.body?.error === "reversal_already_pending", `${r.status} ${r.body?.error}`);
+    r = await capi(P.finance, "POST", PATHS.propose, { applicationId: app.id, receiptReference: `UTR-X-${tag}`, receivedOn: "2026-10-01", reason: "x" }, key());
+    check(`${run}.reversal.finance.correction-conflicts-while-a-reversal-waits`, r.status === 409 && r.body?.error === "reversal_already_pending", `${r.status} ${r.body?.error}`);
+    r = await capi(P.nova, "POST", REVERSAL_PATHS.propose, { applicationId: app.id, reason: "mine" }, key());
+    check(`${run}.reversal.applicant.cannot-propose`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
+
+    // 3. A different holder approves in the portal.
+    await open(P.programme, SCREEN, "corrections-screen");
+    check(`${run}.reversal.programme.sees-it-waiting`, await present(P.programme, `reversals-pending-${rid}`, 20000), "listed for the second person");
+    await present(P.programme, `reversal-approve-run-${rid}`);
+    await uiClick(P.programme, `reversal-approve-run-${rid}`);
+    check(`${run}.reversal.programme.ui-approve`, await present(P.programme, `reversal-decided-${rid}`, 15000) && (await textOf(P.programme, `reversal-decided-${rid}`)).includes("back at fee due"), (await textOf(P.programme, `reversal-decided-${rid}`)).slice(0, 100));
+    check(`${run}.reversal.db.back-at-fee-due-officer-released`, stateOf() === `fee_due|${v0 + 1}` && officer() === "0", `${stateOf()} officer ${officer()}`);
+    check(`${run}.reversal.db.event-and-record`, sqlApp(`SELECT action || ':' || from_state || '>' || to_state || ':' || actor_role FROM app.model_application_transition_event WHERE application_id = '${app.id}' AND action = 'reverse_fee'`) === "reverse_fee:iame_scrutiny>fee_due:programme"
+      && sqlApp(`SELECT state || '|' || (transition_event_id IS NOT NULL) FROM app.fee_reversal_proposal WHERE id = '${rid}'`) === "approved|true", "one reverse_fee step; the proposal approved and tied to it");
+    check(`${run}.reversal.db.confirmation-untouched`, confirmations() === `1|${wrong}`, confirmations());
+
+    // 4. The applicant is told without Finance's reason; officers read the reason in the history.
+    const note = await capi(P.nova, "GET", `${WEB}/api/runtime/notifications`, null, null);
+    const told = (note.body?.items ?? []).filter((i) => i.applicationId === app.id && /fee due again/.test(i.message));
+    check(`${run}.reversal.applicant.is-told-the-fee-is-due-again`, note.status === 200 && told.length === 1 && told[0].kind === "fee_due" && !told[0].message.includes(`ui-${tag}`), told[0]?.message?.slice(0, 110) ?? "none");
+    const hOfficer = await historyApi(P.finance, app.id), hApplicant = await historyApi(P.nova, app.id);
+    const evO = hOfficer.body?.items?.find((x) => x.action === "reverse_fee"), evA = hApplicant.body?.items?.find((x) => x.action === "reverse_fee");
+    check(`${run}.reversal.history.officer-reads-the-reason-applicant-does-not`, evO?.note === `ui-${tag}` && !!evA && evA.note === undefined && evA.actorName === undefined, `officer note ${evO?.note}; applicant note ${evA?.note}`);
+
+    // 5. The screen shows the reversed confirmation as history; Finance confirms again; the new one is in effect.
+    await open(P.finance, SCREEN, "corrections-screen");
+    check(`${run}.reversal.ui.reversed-confirmation-is-history`, await present(P.finance, `corrections-reversed-row-${app.reference}`, 15000) && (await textOf(P.finance, `reversed-flag-${app.reference}`)).startsWith("Reversed by"), await textOf(P.finance, `reversed-flag-${app.reference}`));
+    const again = `UTR-AGAIN-${tag}`;
+    const cur = sqlApp(`SELECT version FROM app.model_application WHERE id = '${app.id}'`);
+    r = await api(P.finance, "POST", feeUrl(app.id), { version: Number(cur), receiptReference: again, receivedOn: RECEIVED_ON, amountInr: "24000.00" }, key());
+    check(`${run}.reversal.finance.confirms-again`, r.status === 200 && r.body?.toState === "iame_scrutiny" && officer() === "1" && confirmations() === `2|${wrong},${again}`, `${r.status} ${r.body?.toState} officer ${officer()} ${confirmations()}`);
+    await open(P.finance, SCREEN, "corrections-screen");
+    check(`${run}.reversal.ui.new-confirmation-is-in-effect`, (await present(P.finance, `corrections-row-${app.reference}`, 15000)) && (await textOf(P.finance, `corrections-receipt-${app.reference}`)) === again, again);
+    r = await capi(P.programme, "POST", REVERSAL_PATHS.decide(rid), { decision: "approve" }, key());
+    check(`${run}.reversal.programme.cannot-decide-twice`, r.status === 409 && r.body?.error === "proposal_not_pending", `${r.status} ${r.body?.error}`);
+    r = await capi(P.finance, "POST", REVERSAL_PATHS.decide(crypto.randomUUID()), { decision: "approve" }, key());
+    check(`${run}.reversal.unknown-reversal-is-404`, r.status === 404 && r.body?.error === "not_found", `${r.status} ${r.body?.error}`);
+    // A rejected reversal changes nothing.
+    r = await capi(P.finance, "POST", REVERSAL_PATHS.propose, { applicationId: app.id, reason: `second-${tag}` }, key());
+    const rid2 = r.body?.id;
+    const stateBefore = stateOf();
+    r = await capi(P.programme, "POST", REVERSAL_PATHS.decide(rid2), { decision: "reject", note: `keep-${tag}` }, key());
+    check(`${run}.reversal.programme.reject-changes-nothing`, r.status === 200 && r.body?.state === "rejected" && stateOf() === stateBefore && officer() === "1", `${r.status} ${r.body?.state} ${stateOf()}`);
+    revoke("programme");
+    r = await capi(P.programme, "POST", REVERSAL_PATHS.propose, { applicationId: app.id, reason: "late" }, key());
+    check(`${run}.reversal.programme.refused-once-the-permission-is-removed`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
+  } finally {
+    revoke("programme");
+    cleanupDisposable(created);
+  }
+  const after = sqlApp("SELECT count(*) FROM app.model_application");
+  check(`${run}.reversal.disposable-applications-and-their-reversals-cleaned`, before === after && sqlApp(`SELECT count(*) FROM app.fee_reversal_proposal WHERE proposed_by IN (${twinAccountIds()})`) === "0", `${before} -> ${after}`);
+}
+
 async function main() {
   const chrome = await launchChrome();
   try {
@@ -339,7 +438,9 @@ async function main() {
       if (!(await signIn(P[k], u))) throw new Error(`${k} sign-in failed`);
     }
     await runChecks("corrections.run1", P);
+    await runReversalChecks("corrections.run1", P);
     await runChecks("corrections.run2", P);
+    await runReversalChecks("corrections.run2", P);
   } finally {
     await chrome.close();
   }

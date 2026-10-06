@@ -36,6 +36,8 @@ public class FeeCorrectionService {
 
     static final String PROPOSE_ROUTE = "/api/fee-corrections/proposals";
     static final String DECIDE_ROUTE = "/api/fee-corrections/proposals/{id}/decision";
+    static final String REVERSE_ROUTE = "/api/fee-corrections/reversals";
+    static final String REVERSE_DECIDE_ROUTE = "/api/fee-corrections/reversals/{id}/decision";
     static final ZoneId INDIA = ZoneId.of("Asia/Kolkata");
     /** The same receipt-reference rule as the confirmation itself. */
     private static final Pattern RECEIPT = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9 ./_-]{0,63}$");
@@ -73,6 +75,12 @@ public class FeeCorrectionService {
         out.put("confirmations", confirmations);
         out.put("pending", pending);
         out.put("decided", decided);
+        List<Map<String, Object>> reversalsPending = new ArrayList<>();
+        repository.pendingReversals().forEach(r -> reversalsPending.add(reversalView(r, caller)));
+        List<Map<String, Object>> reversalsDecided = new ArrayList<>();
+        repository.recentDecidedReversals(20).forEach(r -> reversalsDecided.add(reversalView(r, caller)));
+        out.put("reversalsPending", reversalsPending);
+        out.put("reversalsDecided", reversalsDecided);
         return ResponseEntity.ok(out);
     }
 
@@ -102,6 +110,9 @@ public class FeeCorrectionService {
         }
         if (c.pendingProposalId() != null) {
             return error(HttpStatus.CONFLICT, "correction_already_pending");
+        }
+        if (c.pendingReversalId() != null) {
+            return error(HttpStatus.CONFLICT, "reversal_already_pending");
         }
         if (!idempotency.begin(caller.accountId(), "POST", PROPOSE_ROUTE, IdempotencyRepository.CREATE_TARGET, idempotencyKey, DraftRequestSupport.bodyHash(body))) {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
@@ -152,6 +163,109 @@ public class FeeCorrectionService {
         Map<String, Object> view = proposalView(repository.proposal(proposalId).orElseThrow(), caller);
         idempotency.complete(caller.accountId(), "POST", DECIDE_ROUTE, proposalId, idempotencyKey, 200, writeJson(view), 0);
         return ResponseEntity.ok(view);
+    }
+
+    /** Propose reversing the confirmation in effect for an application (BL-142; the owner's assumption B17). */
+    @Transactional
+    public ResponseEntity<Map<String, Object>> proposeReversal(Caller caller, String idempotencyKey, JsonNode body) {
+        Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, REVERSE_ROUTE, IdempotencyRepository.CREATE_TARGET, idempotencyKey, body);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
+        if (!mayCorrect(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
+        if (body == null || !body.isObject() || !text(body, "applicationId") || !text(body, "reason")) {
+            return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+        }
+        String id = body.get("applicationId").asText().trim();
+        String reason = body.get("reason").asText().trim();
+        if (!UUID_TEXT.matcher(id).matches() || !TEXT_500.matcher(reason).matches()) {
+            return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+        }
+        Optional<Confirmation> found = repository.confirmationOf(UUID.fromString(id));
+        if (found.isEmpty()) {
+            return error(HttpStatus.NOT_FOUND, "not_found");
+        }
+        Confirmation c = found.get();
+        if (repository.segregated(c.applicationId(), caller.accountId())) {
+            return error(HttpStatus.FORBIDDEN, "segregation_refused");
+        }
+        if (c.pendingProposalId() != null) {
+            return error(HttpStatus.CONFLICT, "correction_already_pending");
+        }
+        if (c.pendingReversalId() != null) {
+            return error(HttpStatus.CONFLICT, "reversal_already_pending");
+        }
+        if (!repository.reversalPossible(c.applicationId(), c.confirmationId())) {
+            return error(HttpStatus.CONFLICT, "reversal_not_possible");
+        }
+        if (!idempotency.begin(caller.accountId(), "POST", REVERSE_ROUTE, IdempotencyRepository.CREATE_TARGET, idempotencyKey, DraftRequestSupport.bodyHash(body))) {
+            return error(HttpStatus.CONFLICT, "idempotency_in_progress");
+        }
+        FeeCorrectionRepository.Reversal saved = repository.insertReversal(caller.accountId(), c.applicationId(), c.confirmationId(), reason);
+        Map<String, Object> view = reversalView(saved, caller);
+        idempotency.complete(caller.accountId(), "POST", REVERSE_ROUTE, IdempotencyRepository.CREATE_TARGET, idempotencyKey, 201, writeJson(view), 0);
+        return ResponseEntity.status(HttpStatus.CREATED).body(view);
+    }
+
+    /** Approve, reject or withdraw a reversal. Approving moves the application back to fee due, in the same transaction (V40). */
+    @Transactional
+    public ResponseEntity<Map<String, Object>> decideReversal(Caller caller, UUID proposalId, String idempotencyKey, JsonNode body) {
+        Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, REVERSE_DECIDE_ROUTE, proposalId, idempotencyKey, body);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
+        if (!mayCorrect(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
+        if (repository.reversal(proposalId).isEmpty()) {
+            return error(HttpStatus.NOT_FOUND, "not_found");
+        }
+        if (body == null || !body.isObject() || !body.hasNonNull("decision") || !body.get("decision").isTextual()
+            || !List.of("approve", "reject", "withdraw").contains(body.get("decision").asText())) {
+            return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+        }
+        String note = null;
+        if (body.hasNonNull("note")) {
+            if (!body.get("note").isTextual() || !TEXT_500.matcher(body.get("note").asText().trim()).matches()) {
+                return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+            }
+            note = body.get("note").asText().trim();
+        }
+        if (!idempotency.begin(caller.accountId(), "POST", REVERSE_DECIDE_ROUTE, proposalId, idempotencyKey, DraftRequestSupport.bodyHash(body))) {
+            return error(HttpStatus.CONFLICT, "idempotency_in_progress");
+        }
+        var done = repository.decideReversal(proposalId, caller.accountId(), body.get("decision").asText(), note);
+        if (done.outcome() != FeeCorrectionRepository.ReversalOutcome.DONE) {
+            idempotency.abandon(caller.accountId(), "POST", REVERSE_DECIDE_ROUTE, proposalId, idempotencyKey);
+            return switch (done.outcome()) {
+                case NOT_FOUND -> error(HttpStatus.NOT_FOUND, "not_found");
+                case NOT_PENDING -> error(HttpStatus.CONFLICT, "proposal_not_pending");
+                case NOT_POSSIBLE -> error(HttpStatus.CONFLICT, "reversal_not_possible");
+                case SAME_PERSON, SEGREGATED -> error(HttpStatus.FORBIDDEN, "segregation_refused");
+                default -> error(HttpStatus.FORBIDDEN, "role_not_permitted");
+            };
+        }
+        Map<String, Object> view = reversalView(repository.reversal(proposalId).orElseThrow(), caller);
+        idempotency.complete(caller.accountId(), "POST", REVERSE_DECIDE_ROUTE, proposalId, idempotencyKey, 200, writeJson(view), 0);
+        return ResponseEntity.ok(view);
+    }
+
+    private static Map<String, Object> reversalView(FeeCorrectionRepository.Reversal r, Caller caller) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.id().toString());
+        m.put("applicationId", r.applicationId().toString());
+        m.put("reference", r.reference());
+        m.put("reason", r.reason());
+        m.put("state", r.state());
+        m.put("proposedBy", r.proposedBy());
+        m.put("proposedByYou", r.proposedById().equals(caller.accountId()));
+        m.put("proposedAt", r.proposedAt().toString());
+        m.put("decidedBy", r.decidedBy());
+        m.put("decidedAt", r.decidedAt() == null ? null : r.decidedAt().toString());
+        m.put("decisionNote", r.decisionNote());
+        return m;
     }
 
     private record Input(UUID applicationId, String receiptReference, LocalDate receivedOn, String reason) {
@@ -208,6 +322,15 @@ public class FeeCorrectionService {
             m.put("correction", k);
         }
         m.put("pendingProposalId", c.pendingProposalId() == null ? null : c.pendingProposalId().toString());
+        if (c.reversed()) {
+            Map<String, Object> k = new LinkedHashMap<>();
+            k.put("reversedBy", c.reversedBy());
+            k.put("reversedAt", c.reversedAt().toString());
+            m.put("reversal", k);
+        } else {
+            m.put("reversal", null);
+        }
+        m.put("pendingReversalId", c.pendingReversalId() == null ? null : c.pendingReversalId().toString());
         return m;
     }
 

@@ -112,9 +112,17 @@ const SCHEME_DECISION_UPSTREAM = FEE_DECISION_UPSTREAM;
 const CORRECTIONS_ROUTE = "/api/runtime/fee-corrections";
 const CORRECTION_PROPOSAL_ROUTE = "/api/runtime/fee-corrections/proposals";
 const CORRECTION_DECISION_ROUTE = "/api/runtime/fee-corrections/proposals/{id}/decision";
+const REVERSAL_ROUTE = "/api/runtime/fee-corrections/reversals";
+const REVERSAL_DECISION_ROUTE = "/api/runtime/fee-corrections/reversals/{id}/decision";
 const CORRECTIONS_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: FEE_DENIALS, 503: ["service_unavailable"] } };
 const CORRECTION_PROPOSAL_UPSTREAM = {
-  POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["correction_already_pending", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["correction_already_pending", "reversal_already_pending", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
+const REVERSAL_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["correction_already_pending", "reversal_already_pending", "reversal_not_possible", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
+const REVERSAL_DECISION_UPSTREAM = {
+  POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "reversal_not_possible", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
 };
 const CORRECTION_DECISION_UPSTREAM = {
   POST: { 401: ["unauthenticated"], 403: [...FEE_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
@@ -546,6 +554,8 @@ async function nextChecks(jar, novaToken) {
     [CORRECTIONS_ROUTE, "/api/runtime/fee-corrections", "GET", "corrections-anon-get", undefined],
     [CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", "correction-proposal-anon-post", "{}"],
     [CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", "correction-decision-anon-post", "{}"],
+    [REVERSAL_ROUTE, "/api/runtime/fee-corrections/reversals", "POST", "reversal-proposal-anon-post", "{}"],
+    [REVERSAL_DECISION_ROUTE, `/api/runtime/fee-corrections/reversals/${NOVA_APP}/decision`, "POST", "reversal-decision-anon-post", "{}"],
   ]) {
     const r = await call(`${WEB}${path}`, { method, correlationId: cid(`next-${tag}`), ...(body ? { headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123477" }, body } : {}) });
     e = contract.conforms(doc, route, method, r);
@@ -710,6 +720,8 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(CORRECTIONS_ROUTE, "/api/runtime/fee-corrections", "GET", sessionJar, CORRECTIONS_UPSTREAM);
     await exerciseStandInPairs(CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", sessionJar, CORRECTION_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", sessionJar, CORRECTION_DECISION_UPSTREAM);
+    await exerciseStandInPairs(REVERSAL_ROUTE, "/api/runtime/fee-corrections/reversals", "POST", sessionJar, REVERSAL_UPSTREAM);
+    await exerciseStandInPairs(REVERSAL_DECISION_ROUTE, `/api/runtime/fee-corrections/reversals/${NOVA_APP}/decision`, "POST", sessionJar, REVERSAL_DECISION_UPSTREAM);
     await exerciseStandInPairs("/api/runtime/model-applications/{id}/history", `/api/runtime/model-applications/${NOVA_APP}/history`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(NOTIFICATIONS_ROUTE, "/api/runtime/notifications", "GET", sessionJar, NOTIFICATIONS_UPSTREAM);
     await exerciseStandInPairs(NOTIFICATION_READ_ROUTE, `/api/runtime/notifications/${NOVA_APP}/read`, "POST", sessionJar, NOTIFICATION_READ_UPSTREAM);

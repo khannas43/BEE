@@ -6,7 +6,7 @@
 import { exactKeys, isString, MODEL_STATES, SPRING_READ_ERRORS, UUID, type Validator } from "@/lib/server/apiContract";
 
 export const HISTORY_ACTIONS = [
-  "submit", "confirm_fee", "iame_recommend", "reviewer_forward", "compute_rating", "director_recommend", "secretary_approve", "return", "resubmit", "reject",
+  "submit", "confirm_fee", "iame_recommend", "reviewer_forward", "compute_rating", "director_recommend", "secretary_approve", "return", "resubmit", "reject", "reverse_fee",
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 

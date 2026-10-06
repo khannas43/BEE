@@ -27,7 +27,19 @@ public class FeeCorrectionRepository {
     public record Confirmation(UUID confirmationId, UUID applicationId, String reference, String brand, String modelNumber, String state,
                                String receiptReference, LocalDate receivedOn, BigDecimal amountInr, String confirmedBy, Instant confirmedAt,
                                String correctedReceiptReference, LocalDate correctedReceivedOn, String correctionApprovedBy, Instant correctionApprovedAt,
-                               UUID pendingProposalId) {
+                               UUID pendingProposalId, String reversedBy, Instant reversedAt, UUID pendingReversalId) {
+        /** A confirmation that has not been reversed and has no reversal waiting. */
+        public Confirmation(UUID confirmationId, UUID applicationId, String reference, String brand, String modelNumber, String state, String receiptReference,
+                            LocalDate receivedOn, BigDecimal amountInr, String confirmedBy, Instant confirmedAt, String correctedReceiptReference,
+                            LocalDate correctedReceivedOn, String correctionApprovedBy, Instant correctionApprovedAt, UUID pendingProposalId) {
+            this(confirmationId, applicationId, reference, brand, modelNumber, state, receiptReference, receivedOn, amountInr, confirmedBy, confirmedAt,
+                correctedReceiptReference, correctedReceivedOn, correctionApprovedBy, correctionApprovedAt, pendingProposalId, null, null, null);
+        }
+
+        public boolean reversed() {
+            return reversedAt != null;
+        }
+
         public String effectiveReceiptReference() {
             return correctedReceiptReference != null ? correctedReceiptReference : receiptReference;
         }
@@ -46,6 +58,19 @@ public class FeeCorrectionRepository {
                               LocalDate receivedOn, String reason) {
     }
 
+    /** A proposal to reverse a fee confirmation (BL-142, the owner's assumption B17). */
+    public record Reversal(UUID id, UUID applicationId, String reference, String reason, UUID proposedById, String proposedBy, Instant proposedAt, String state,
+                           String decidedBy, Instant decidedAt, String decisionNote) {
+    }
+
+    public enum ReversalOutcome { DONE, NOT_FOUND, NOT_PENDING, NOT_PERMITTED, SAME_PERSON, ONLY_PROPOSER, SEGREGATED, NOT_POSSIBLE }
+
+    public record ReversalDecided(ReversalOutcome outcome, String state) {
+        static ReversalDecided of(ReversalOutcome o) {
+            return new ReversalDecided(o, null);
+        }
+    }
+
     public enum Outcome { DONE, NOT_FOUND, NOT_PENDING, NOT_PERMITTED, SAME_PERSON, ONLY_PROPOSER, SEGREGATED }
 
     public record Decided(Outcome outcome, String state) {
@@ -57,11 +82,19 @@ public class FeeCorrectionRepository {
     private static final String CONFIRMATION = "SELECT fc.id, fc.application_id, a.reference, a.brand_name, a.model_number, a.state, fc.receipt_reference, "
         + "fc.received_on, fc.amount_inr, u.display_name AS confirmed_by, fc.confirmed_at, cr.receipt_reference AS corrected_ref, cr.received_on AS corrected_on, "
         + "cd.display_name AS corrected_by, cr.decided_at AS corrected_at, "
-        + "(SELECT p.id FROM fee_correction_proposal p WHERE p.fee_confirmation_id = fc.id AND p.state = 'pending') AS pending_id "
+        + "(SELECT p.id FROM fee_correction_proposal p WHERE p.fee_confirmation_id = fc.id AND p.state = 'pending') AS pending_id, "
+        + "rvu.display_name AS reversed_by, rv.decided_at AS reversed_at, "
+        + "(SELECT r.id FROM fee_reversal_proposal r WHERE r.fee_confirmation_id = fc.id AND r.state = 'pending') AS pending_reversal_id "
         + "FROM model_application_fee_confirmation fc JOIN model_application a ON a.id = fc.application_id "
         + "JOIN user_account u ON u.id = fc.confirmed_by_account_id "
         + "LEFT JOIN LATERAL (SELECT p.* FROM fee_correction_proposal p WHERE p.fee_confirmation_id = fc.id AND p.state = 'approved' ORDER BY p.decided_at DESC LIMIT 1) cr ON true "
-        + "LEFT JOIN user_account cd ON cd.id = cr.decided_by";
+        + "LEFT JOIN user_account cd ON cd.id = cr.decided_by "
+        + "LEFT JOIN fee_reversal_proposal rv ON rv.fee_confirmation_id = fc.id AND rv.state = 'approved' "
+        + "LEFT JOIN user_account rvu ON rvu.id = rv.decided_by";
+
+    private static final String REVERSAL = "SELECT p.id, p.application_id, a.reference, p.reason, p.proposed_by, u.display_name AS proposed_by_name, p.proposed_at, p.state, "
+        + "d.display_name AS decided_by_name, p.decided_at, p.decision_note FROM fee_reversal_proposal p JOIN model_application a ON a.id = p.application_id "
+        + "JOIN user_account u ON u.id = p.proposed_by LEFT JOIN user_account d ON d.id = p.decided_by";
 
     private static final String PROPOSAL = "SELECT p.id, p.application_id, a.reference, p.previous_receipt_reference, p.previous_received_on, p.receipt_reference, "
         + "p.received_on, p.reason, p.proposed_by, u.display_name AS proposed_by_name, p.proposed_at, p.state, d.display_name AS decided_by_name, p.decided_at, "
@@ -84,7 +117,9 @@ public class FeeCorrectionRepository {
     }
 
     public Optional<Confirmation> confirmationOf(UUID applicationId) {
-        return jdbc.query(CONFIRMATION + " WHERE fc.application_id = ?", this::mapConfirmation, applicationId).stream().findFirst();
+        // The confirmation in effect: the latest one that has not been reversed (a reversed one is history).
+        return jdbc.query(CONFIRMATION + " WHERE fc.application_id = ? AND rv.id IS NULL ORDER BY fc.confirmed_at DESC LIMIT 1", this::mapConfirmation, applicationId)
+            .stream().findFirst();
     }
 
     /** True when the person belongs to the paying organisation or acted on the application at a stage other than the fee. */
@@ -125,13 +160,57 @@ public class FeeCorrectionRepository {
         }, proposalId, deciderAccountId, decision, note);
     }
 
+    public List<Reversal> pendingReversals() {
+        return jdbc.query(REVERSAL + " WHERE p.state = 'pending' ORDER BY p.proposed_at", this::mapReversal);
+    }
+
+    public List<Reversal> recentDecidedReversals(int limit) {
+        return jdbc.query(REVERSAL + " WHERE p.state <> 'pending' ORDER BY p.decided_at DESC LIMIT " + Math.max(1, Math.min(limit, 100)), this::mapReversal);
+    }
+
+    public Optional<Reversal> reversal(UUID id) {
+        return jdbc.query(REVERSAL + " WHERE p.id = ?", this::mapReversal, id).stream().findFirst();
+    }
+
+    /** True while nothing has happened to the application since the confirmation (see V40). */
+    public boolean reversalPossible(UUID applicationId, UUID confirmationId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT fee_reversal_possible(?, ?)", Boolean.class, applicationId, confirmationId));
+    }
+
+    public Reversal insertReversal(UUID proposerAccountId, UUID applicationId, UUID confirmationId, String reason) {
+        UUID id = jdbc.queryForObject(
+            "INSERT INTO fee_reversal_proposal (application_id, fee_confirmation_id, reason, proposed_by) VALUES (?, ?, ?, ?) RETURNING id", UUID.class,
+            applicationId, confirmationId, reason, proposerAccountId);
+        return reversal(id).orElseThrow();
+    }
+
+    /** Approve, reject or withdraw a reversal. A refusal comes back as a result, so the surrounding transaction stays usable. */
+    public ReversalDecided decideReversal(UUID proposalId, UUID deciderAccountId, String decision, String note) {
+        return jdbc.query("SELECT out_state FROM fee_reversal_decide(?, ?, ?, ?)", rs -> {
+            rs.next();
+            String state = rs.getString("out_state");
+            if (state.equals("approved") || state.equals("rejected") || state.equals("withdrawn")) {
+                return new ReversalDecided(ReversalOutcome.DONE, state);
+            }
+            return ReversalDecided.of(ReversalOutcome.valueOf(state.toUpperCase()));
+        }, proposalId, deciderAccountId, decision, note);
+    }
+
+    private Reversal mapReversal(ResultSet rs, int i) throws SQLException {
+        java.sql.Timestamp d = rs.getTimestamp("decided_at");
+        return new Reversal(rs.getObject("id", UUID.class), rs.getObject("application_id", UUID.class), rs.getString("reference"), rs.getString("reason"),
+            rs.getObject("proposed_by", UUID.class), rs.getString("proposed_by_name"), rs.getTimestamp("proposed_at").toInstant(), rs.getString("state"),
+            rs.getString("decided_by_name"), d == null ? null : d.toInstant(), rs.getString("decision_note"));
+    }
+
     private Confirmation mapConfirmation(ResultSet rs, int i) throws SQLException {
         Date correctedOn = rs.getDate("corrected_on");
         java.sql.Timestamp correctedAt = rs.getTimestamp("corrected_at");
         return new Confirmation(rs.getObject("id", UUID.class), rs.getObject("application_id", UUID.class), rs.getString("reference"), rs.getString("brand_name"),
             rs.getString("model_number"), rs.getString("state"), rs.getString("receipt_reference"), rs.getDate("received_on").toLocalDate(), rs.getBigDecimal("amount_inr"),
             rs.getString("confirmed_by"), rs.getTimestamp("confirmed_at").toInstant(), rs.getString("corrected_ref"), correctedOn == null ? null : correctedOn.toLocalDate(),
-            rs.getString("corrected_by"), correctedAt == null ? null : correctedAt.toInstant(), rs.getObject("pending_id", UUID.class));
+            rs.getString("corrected_by"), correctedAt == null ? null : correctedAt.toInstant(), rs.getObject("pending_id", UUID.class),
+            rs.getString("reversed_by"), rs.getTimestamp("reversed_at") == null ? null : rs.getTimestamp("reversed_at").toInstant(), rs.getObject("pending_reversal_id", UUID.class));
     }
 
     private Proposal mapProposal(ResultSet rs, int i) throws SQLException {

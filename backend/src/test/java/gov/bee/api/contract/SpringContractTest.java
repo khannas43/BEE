@@ -1620,6 +1620,18 @@ class SpringContractTest {
             null, null, null, null, pending ? PROPOSAL_ID : null);
     }
 
+    static gov.bee.api.feecorrections.FeeCorrectionRepository.Confirmation corrConfirmationWithReversal(UUID pendingReversal, boolean reversed) {
+        return new gov.bee.api.feecorrections.FeeCorrectionRepository.Confirmation(UUID.fromString("00000000-0000-4000-f000-0000000000c1"), NOVA_APP, "LOCAL-MA-0002", "Nova Cool",
+            "NC-RAC-18F", reversed ? "fee_due" : "iame_scrutiny", "UTR-WRONG", java.time.LocalDate.of(2026, 10, 2), new BigDecimal("24000.00"), "BEE Finance", Instant.parse("2026-10-03T10:00:00Z"),
+            null, null, null, null, null, reversed ? "BEE Programme" : null, reversed ? Instant.parse("2026-10-04T12:00:00Z") : null, pendingReversal);
+    }
+
+    static gov.bee.api.feecorrections.FeeCorrectionRepository.Reversal reversalOf(String state, UUID proposer) {
+        boolean pending = state.equals("pending");
+        return new gov.bee.api.feecorrections.FeeCorrectionRepository.Reversal(PROPOSAL_ID, NOVA_APP, "LOCAL-MA-0002", "No money was received", proposer, "Proposer Name",
+            Instant.parse("2026-10-04T10:00:00Z"), state, pending ? null : "Decider Name", pending ? null : Instant.parse("2026-10-04T11:00:00Z"), null);
+    }
+
     static gov.bee.api.feecorrections.FeeCorrectionRepository.Proposal corrProposal(String state, UUID proposer) {
         boolean pending = state.equals("pending");
         return new gov.bee.api.feecorrections.FeeCorrectionRepository.Proposal(PROPOSAL_ID, NOVA_APP, "LOCAL-MA-0002", "UTR-WRONG", java.time.LocalDate.of(2026, 10, 2), "UTR-RIGHT",
@@ -1672,6 +1684,8 @@ class SpringContractTest {
         when(correctionRepo.segregated(any(), any())).thenReturn(false);
         when(correctionRepo.confirmationOf(NOVA_APP)).thenReturn(Optional.of(corrConfirmation(true)));
         conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "correction_already_pending");
+        when(correctionRepo.confirmationOf(NOVA_APP)).thenReturn(Optional.of(corrConfirmationWithReversal(PROPOSAL_ID, false)));
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "reversal_already_pending");
         when(correctionRepo.confirmationOf(NOVA_APP)).thenReturn(Optional.of(corrConfirmation(false)));
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
         conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
@@ -1939,6 +1953,105 @@ class SpringContractTest {
         conforms(route, get(route).param("reg", reg), 503, "service_unavailable");
         // only reading is public
         assertEquals(401, mvc.perform(post(route).param("reg", reg)).andReturn().getResponse().getStatus());
+    }
+
+    @Test
+    void feeReversalOperationsDocumentedPairs() throws Exception {
+        String list = "/api/fee-corrections";
+        String propose = "/api/fee-corrections/reversals";
+        String decide = "/api/fee-corrections/reversals/{id}/decision";
+        String decidePath = "/api/fee-corrections/reversals/" + PROPOSAL_ID + "/decision";
+        String ok = "{\"applicationId\":\"" + NOVA_APP + "\",\"reason\":\"No money was received\"}";
+        String go = "{\"decision\":\"approve\"}";
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("finance"))));
+        UUID other = UUID.fromString("00000000-0000-4000-a000-0000000000aa");
+        var Out = gov.bee.api.feecorrections.FeeCorrectionRepository.ReversalOutcome.class;
+        account("finance", "all");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(correctionRepo.rolesHolding("fee_confirmation_correct")).thenReturn(Set.of("finance"));
+        when(correctionRepo.recentConfirmations(anyInt())).thenReturn(List.of(corrConfirmationWithReversal(PROPOSAL_ID, false), corrConfirmationWithReversal(null, true)));
+        when(correctionRepo.pendingReversals()).thenReturn(List.of(reversalOf("pending", other)));
+        when(correctionRepo.recentDecidedReversals(anyInt())).thenReturn(List.of(reversalOf("approved", other)));
+        when(correctionRepo.confirmationOf(NOVA_APP)).thenReturn(Optional.of(corrConfirmation(false)));
+        when(correctionRepo.segregated(any(), any())).thenReturn(false);
+        when(correctionRepo.reversalPossible(any(), any())).thenReturn(true);
+        when(correctionRepo.insertReversal(any(), any(), any(), any())).thenReturn(reversalOf("pending", USER));
+        when(correctionRepo.reversal(PROPOSAL_ID)).thenReturn(Optional.of(reversalOf("pending", other)));
+        when(correctionRepo.decideReversal(any(), any(), any(), any())).thenReturn(new gov.bee.api.feecorrections.FeeCorrectionRepository.ReversalDecided(Out.getEnumConstants()[0], "approved"));
+
+        // the read now lists reversals and marks a reversed confirmation
+        var read = conforms(list, get(list).with(token("finance")), 200, null);
+        assertTrue(read.getContentAsString().contains("\"reversalsPending\":[{") && read.getContentAsString().contains("\"reversedBy\":\"BEE Programme\""), read.getContentAsString());
+
+        var created = conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 201, null);
+        assertTrue(created.getContentAsString().contains("\"state\":\"pending\"") && created.getContentAsString().contains("\"proposedByYou\":true"), created.getContentAsString());
+        conforms(propose, post(propose).with(token("finance")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("No money was received", "line\\nbreak")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("No money was received", "x".repeat(501))), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace(NOVA_APP.toString(), "not-a-uuid")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace(NOVA_APP.toString(), UUID.randomUUID().toString())), 404, "not_found");
+        when(correctionRepo.segregated(any(), any())).thenReturn(true);
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "segregation_refused");
+        when(correctionRepo.segregated(any(), any())).thenReturn(false);
+        when(correctionRepo.confirmationOf(NOVA_APP)).thenReturn(Optional.of(corrConfirmation(true)));
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "correction_already_pending");
+        when(correctionRepo.confirmationOf(NOVA_APP)).thenReturn(Optional.of(corrConfirmationWithReversal(PROPOSAL_ID, false)));
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "reversal_already_pending");
+        when(correctionRepo.confirmationOf(NOVA_APP)).thenReturn(Optional.of(corrConfirmation(false)));
+        when(correctionRepo.reversalPossible(any(), any())).thenReturn(false);
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "reversal_not_possible");
+        when(correctionRepo.reversalPossible(any(), any())).thenReturn(true);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 201, "{}", 0)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        account("manufacturer", "own-org");
+        conforms(propose, post(propose).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("finance", "all");
+
+        when(correctionRepo.reversal(PROPOSAL_ID)).thenReturn(Optional.of(reversalOf("approved", other)));
+        var approved = conforms(decide, post(decidePath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 200, null);
+        assertTrue(approved.getContentAsString().contains("\"state\":\"approved\""), approved.getContentAsString());
+        when(correctionRepo.reversal(PROPOSAL_ID)).thenReturn(Optional.of(reversalOf("pending", other)));
+        record Refusal(gov.bee.api.feecorrections.FeeCorrectionRepository.ReversalOutcome outcome, int status, String code) {
+        }
+        var o = Out.getEnumConstants();
+        for (var r : List.of(new Refusal(o[4], 403, "segregation_refused"), new Refusal(o[6], 403, "segregation_refused"), new Refusal(o[5], 403, "role_not_permitted"),
+            new Refusal(o[3], 403, "role_not_permitted"), new Refusal(o[2], 409, "proposal_not_pending"), new Refusal(o[7], 409, "reversal_not_possible"), new Refusal(o[1], 404, "not_found"))) {
+            when(correctionRepo.decideReversal(any(), any(), any(), any())).thenReturn(new gov.bee.api.feecorrections.FeeCorrectionRepository.ReversalDecided(r.outcome(), null));
+            conforms(decide, post(decidePath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), r.status(), r.code());
+        }
+        when(correctionRepo.decideReversal(any(), any(), any(), any())).thenReturn(new gov.bee.api.feecorrections.FeeCorrectionRepository.ReversalDecided(o[0], "approved"));
+        conforms(decide, post("/api/fee-corrections/reversals/" + UUID.randomUUID() + "/decision").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 404, "not_found");
+        conforms(decide, post(decidePath).with(token("finance")).contentType("application/json").content(go), 422, "idempotency_key_required");
+        conforms(decide, post(decidePath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"decision\":\"delete\"}"), 422, "validation_failed");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(decide, post(decidePath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        conforms(decide, post(decidePath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        for (String r : new String[] {propose, decide}) {
+            String path = r.equals(decide) ? decidePath : r;
+            String content = r.equals(propose) ? ok : go;
+            conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(content), 401, "unauthenticated");
+            conforms(r, post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(content).with(pwdOnly), 403, "mfa_required");
+        }
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        conforms(decide, post(decidePath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 403, "no_active_account");
+        account("auditor", "all");
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        conforms(decide, post(decidePath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 403, "no_effective_role");
+        account("finance", "all");
+        when(correctionRepo.insertReversal(any(), any(), any(), any())).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(propose, post(propose).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 503, "service_unavailable");
+        when(correctionRepo.decideReversal(any(), any(), any(), any())).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(decide, post(decidePath).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 503, "service_unavailable");
     }
 
     @Test

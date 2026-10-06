@@ -7,7 +7,7 @@ import { type FetchLike, type ReadFailure, runtimeRead } from "@/lib/client/runt
 
 export type HistoryAction =
   | "submit" | "confirm_fee" | "iame_recommend" | "reviewer_forward" | "compute_rating" | "director_recommend" | "secretary_approve"
-  | "return" | "resubmit" | "reject";
+  | "return" | "resubmit" | "reject" | "reverse_fee";
 
 export type HistoryEvent = {
   sequence: number;
@@ -58,4 +58,5 @@ export const HISTORY_ACTION_LABELS: Record<HistoryAction, string> = {
   return: "Returned to the applicant",
   resubmit: "Resubmitted by the applicant",
   reject: "Rejected",
+  reverse_fee: "Fee confirmation reversed; the fee is due again",
 };

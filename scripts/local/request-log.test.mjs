@@ -52,6 +52,8 @@ before(async () => {
     corrections: await import("../../app/api/runtime/fee-corrections/route.ts"),
     correctionProposals: await import("../../app/api/runtime/fee-corrections/proposals/route.ts"),
     correctionDecision: await import("../../app/api/runtime/fee-corrections/proposals/[id]/decision/route.ts"),
+    reversals: await import("../../app/api/runtime/fee-corrections/reversals/route.ts"),
+    reversalDecision: await import("../../app/api/runtime/fee-corrections/reversals/[id]/decision/route.ts"),
     notifications: await import("../../app/api/runtime/notifications/route.ts"),
     notificationRead: await import("../../app/api/runtime/notifications/[id]/read/route.ts"),
     notificationReadAll: await import("../../app/api/runtime/notifications/read-all/route.ts"),
@@ -403,6 +405,30 @@ test("unit-evidence: POST /api/runtime/fee-corrections/proposals/{id}/decision 4
   const res = await routes.correctionDecision.POST(req("/api/runtime/fee-corrections/proposals/00000000-0000-4000-c000-000000000002/decision", "unit-correction-decision-refresh-refused", cookie, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123483" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/fee-corrections/reversals 401 session_expired | Keycloak refusing refresh on a fee reversal proposal", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.reversals.POST(req("/api/runtime/fee-corrections/reversals", "unit-reversal-proposal-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123484" },
+    body: "{}",
+  }));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/fee-corrections/reversals/{id}/decision 401 session_expired | Keycloak refusing refresh on a fee reversal decision", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.reversalDecision.POST(req("/api/runtime/fee-corrections/reversals/00000000-0000-4000-c000-000000000002/decision", "unit-reversal-decision-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123485" },
     body: "{}",
   }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) });
   assert.equal(res.status, 401);

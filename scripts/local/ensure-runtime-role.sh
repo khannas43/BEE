@@ -45,6 +45,13 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.certificate, app.certificate_allo
 SQL
 fi
 
+if psql_super -d bee_app -c "SELECT to_regclass('app.notification') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.notification_mark_read(uuid, uuid), app.notification_mark_all_read(uuid) TO ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.notification FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+
 if psql_super -d bee_app -c "SELECT to_regclass('app.fee_correction_proposal') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 GRANT EXECUTE ON FUNCTION app.fee_correction_decide(uuid, uuid, text, text) TO ${BEE_RUNTIME_DB_USER};

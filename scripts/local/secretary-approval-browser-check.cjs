@@ -273,6 +273,37 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     check(`${runLabel}.ui.certificate-document`, docs && d.reg === cert?.registrationId && d.model.includes("SA-A-") && /^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} \(valid\)$/.test(d.validity) && /LOCAL DEMONSTRATION/.test(d.demo), `${d.reg} ${d.validity}`);
     check(`${runLabel}.ui.label-document`, docs && d.iseer === "ISEER 4.62" && /not issued by BEE/.test(d.labelDemo) && d.print === true, `${d.iseer}, print button ${d.print}`);
     check(`${runLabel}.ui.both-qr-codes-point-to-the-verification-page`, docs && d.certQr === verifyUrl && d.labelQr === verifyUrl && d.modules >= 21, verifyUrl);
+    // WP10.1a: the applicant is notified in the portal of the fee due and the approval; an officer sees none of it and cannot mark it read.
+    const portal = async (page, method, path, route) => {
+      const r = await page.eval(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, credentials: "include", cache: "no-store" }).then(async (r) => { const hs = {}; r.headers.forEach((v, k) => { hs[k] = v; }); return { status: r.status, body: await r.json().catch(() => null), headers: hs }; })`);
+      const e = contract.conforms(doc, route, method, contract.observationFromBrowserFetch(r));
+      return { ...r, e };
+    };
+    const N = "/api/runtime/notifications";
+    const mine = await portal(nova, "GET", N, N);
+    const ofA = (mine.body?.items ?? []).filter((i) => i.applicationId === A.id);
+    const approvedN = ofA.find((i) => i.kind === "approved"), dueN = ofA.find((i) => i.kind === "fee_due");
+    check(`${runLabel}.notify.applicant-sees-fee-due-and-approval`, mine.status === 200 && mine.e.length === 0 && !!approvedN && !!dueN && approvedN.message.includes(cert?.registrationId ?? "?") && /INR 24000/.test(dueN.message) && approvedN.read === false && mine.body.unread >= 2,
+      `${mine.status} unread ${mine.body?.unread}; ${ofA.map((i) => i.kind).join(", ")}${mine.e.length ? " " + mine.e.join("; ") : ""}`);
+    const people = sql(`SELECT display_name FROM app.user_account UNION SELECT username FROM app.user_account`).split("\n").filter((n) => n.length >= 4);
+    check(`${runLabel}.notify.text-names-no-person`, ofA.length >= 2 && ofA.every((i) => !/@/.test(i.message) && people.every((n) => !i.message.includes(n))), `no account name, username or address in the text the applicant reads (${people.length} names checked)`);
+    const theirs = await portal(finance, "GET", N, N);
+    check(`${runLabel}.notify.officer-sees-none-of-it`, theirs.status === 200 && theirs.e.length === 0 && (theirs.body?.items ?? []).every((i) => i.applicationId !== A.id), `${theirs.status}; the officer's own list has ${theirs.body?.items?.length} entries, none for this application`);
+    const steal = await portal(finance, "POST", `${N}/${approvedN?.id}/read`, `${N}/{id}/read`);
+    check(`${runLabel}.notify.officer-cannot-mark-someone-elses-read`, steal.status === 404 && steal.body?.error === "not_found" && steal.e.length === 0, `${steal.status} ${steal.body?.error}`);
+    const stillUnread = (await portal(nova, "GET", N, N)).body?.items?.find((i) => i.id === approvedN?.id);
+    check(`${runLabel}.notify.still-unread-after-the-attempt`, stillUnread?.read === false, `read=${stillUnread?.read}`);
+    const unreadBefore = mine.body?.unread ?? 0;
+    const marked = await portal(nova, "POST", `${N}/${approvedN?.id}/read`, `${N}/{id}/read`);
+    const repeat = await portal(nova, "POST", `${N}/${approvedN?.id}/read`, `${N}/{id}/read`);
+    check(`${runLabel}.notify.applicant-marks-one-read-once`, marked.status === 200 && marked.e.length === 0 && marked.body?.unread === unreadBefore - 1 && repeat.status === 200 && repeat.body?.unread === unreadBefore - 1, `unread ${unreadBefore} -> ${marked.body?.unread}, repeat -> ${repeat.body?.unread}`);
+    const unknown = await portal(nova, "POST", `${N}/00000000-0000-4000-a000-00000000dead/read`, `${N}/{id}/read`);
+    check(`${runLabel}.notify.unknown-id-is-404`, unknown.status === 404 && unknown.body?.error === "not_found" && unknown.e.length === 0, `${unknown.status} ${unknown.body?.error}`);
+    const readAll = await portal(nova, "POST", `${N}/read-all`, `${N}/read-all`);
+    const listAfter = await portal(nova, "GET", N, N);
+    check(`${runLabel}.notify.read-all`, readAll.status === 200 && readAll.e.length === 0 && readAll.body?.unread === 0 && listAfter.body?.unread === 0 && (listAfter.body?.items ?? []).every((i) => i.read), `marked ${readAll.body?.marked}, unread now ${listAfter.body?.unread}`);
+    check(`${runLabel}.notify.db-one-per-member-and-event`, Number(sql(`SELECT count(*) FROM app.notification WHERE application_id = '${A.id}' AND kind = 'approved'`)) === Number(sql(`SELECT count(DISTINCT m.user_id) FROM app.organisation_membership m JOIN app.organisation o ON o.id = m.organisation_id JOIN app.user_account u ON u.id = m.user_id JOIN app.model_application a ON a.organisation_id = m.organisation_id WHERE a.id = '${A.id}' AND m.active AND o.status = 'active' AND u.status = 'active' AND now() >= m.valid_from AND now() < m.valid_to`)), "one approval notification for each person of the organisation");
+
     // WP09.1c: a person with no account follows the QR address and sees the public facts only (the owner's assumption D8).
     const API = `http://127.0.0.1:${process.env.BEE_API_PORT || "8090"}`;
     const plain = async (url) => {

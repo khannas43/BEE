@@ -85,6 +85,9 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         if (path.equals("/api/rating-schemes")) return "/api/rating-schemes";
         if (path.equals("/api/rating-schemes/proposals")) return "/api/rating-schemes/proposals";
         if (path.matches("/api/rating-schemes/proposals/[^/]+/decision")) return "/api/rating-schemes/proposals/{id}/decision";
+        if (path.equals("/api/notifications")) return "/api/notifications";
+        if (path.equals("/api/notifications/read-all")) return "/api/notifications/read-all";
+        if (path.startsWith("/api/notifications/") && path.endsWith("/read")) return "/api/notifications/{id}/read";
         if (path.endsWith("/history") && path.startsWith("/api/model-applications/")) return "/api/model-applications/{id}/history";
         if (DETAIL.matcher(path).matches()) return "/api/model-applications/{id}";
         if (HEALTH_GROUP.matcher(path).matches()) return "/actuator/health/{group}";

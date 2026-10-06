@@ -42,7 +42,10 @@ export type WebRoute =
   | "/api/runtime/fee-corrections"
   | "/api/runtime/fee-corrections/proposals"
   | "/api/runtime/fee-corrections/proposals/{id}/decision"
-  | "/api/runtime/verification";
+  | "/api/runtime/verification"
+  | "/api/runtime/notifications"
+  | "/api/runtime/notifications/read-all"
+  | "/api/runtime/notifications/{id}/read";
 
 export type SpringRoute =
   | "/actuator/health"
@@ -72,7 +75,10 @@ export type SpringRoute =
   | "/api/fee-corrections"
   | "/api/fee-corrections/proposals"
   | "/api/fee-corrections/proposals/{id}/decision"
-  | "/api/public/verification";
+  | "/api/public/verification"
+  | "/api/notifications"
+  | "/api/notifications/read-all"
+  | "/api/notifications/{id}/read";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
 
@@ -96,7 +102,8 @@ export const safeOutcome = (code: unknown): string => (typeof code === "string" 
 export function springRoute(path: string): SpringRoute {
   const p = path.split("?")[0];
   if (p === "/api/me" || p === "/api/model-applications" || p === "/api/model-applications/eligible-brands" || p === "/actuator/health") return p;
-  if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/public/verification") return p;
+  if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/public/verification" || p === "/api/notifications" || p === "/api/notifications/read-all") return p;
+  if (/^\/api\/notifications\/[^/]+\/read$/.test(p)) return "/api/notifications/{id}/read";
   if (/^\/api\/fee-corrections\/proposals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/proposals/{id}/decision";
   if (/^\/api\/rating-schemes\/proposals\/[^/]+\/decision$/.test(p)) return "/api/rating-schemes/proposals/{id}/decision";
   if (/^\/api\/fee-rules\/proposals\/[^/]+\/decision$/.test(p)) return "/api/fee-rules/proposals/{id}/decision";

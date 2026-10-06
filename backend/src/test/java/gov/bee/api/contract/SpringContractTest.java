@@ -169,6 +169,9 @@ class SpringContractTest {
     gov.bee.api.verification.PublicVerificationRepository publicVerificationRepo;
 
     @MockitoBean
+    gov.bee.api.notifications.NotificationRepository notificationRepo;
+
+    @MockitoBean
     gov.bee.api.ratingschemes.RatingSchemeRepository schemesRepo;
 
     @MockitoBean
@@ -1832,6 +1835,62 @@ class SpringContractTest {
         conforms(list, get(list).with(token("admin")), 503, "service_unavailable");
         conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
         conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(go), 503, "service_unavailable");
+    }
+
+    @Test
+    void notificationOperationsDocumentedPairs() throws Exception {
+        String list = "/api/notifications";
+        String one = "/api/notifications/{id}/read";
+        String all = "/api/notifications/read-all";
+        UUID mine = UUID.fromString("00000000-0000-4000-a000-0000000000b1");
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
+        // no token, a planted token, and the wrong method are all refused
+        conforms(list, get(list), 401, "unauthenticated");
+        conforms(one, post("/api/notifications/" + mine + "/read"), 401, "unauthenticated");
+        conforms(all, post(all), 401, "unauthenticated");
+        // identity denials
+        conforms(list, get(list).with(pwdOnly), 403, "mfa_required");
+        conforms(all, post(all).with(pwdOnly), 403, "mfa_required");
+        conforms(one, post("/api/notifications/" + mine + "/read").with(pwdOnly), 403, "mfa_required");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(list, get(list).with(token("manufacturer")), 403, "no_active_account");
+        conforms(one, post("/api/notifications/" + mine + "/read").with(token("manufacturer")), 403, "no_active_account");
+        conforms(all, post(all).with(token("manufacturer")), 403, "no_active_account");
+        account("auditor", "all");
+        conforms(list, get(list).with(token("finance")), 403, "no_effective_role");
+        conforms(one, post("/api/notifications/" + mine + "/read").with(token("finance")), 403, "no_effective_role");
+        conforms(all, post(all).with(token("finance")), 403, "no_effective_role");
+        // the caller's own notifications
+        account("manufacturer", "own");
+        when(notificationRepo.newest(USER)).thenReturn(List.of(new gov.bee.api.notifications.NotificationRepository.Item(mine, "returned",
+            "LOCAL-MA-0002 (Nova Cool NC-RAC-18F) was returned to you: The report does not match. Edit it and send it again.", NOVA_APP, "LOCAL-MA-0002",
+            java.time.Instant.parse("2026-10-06T10:00:00Z"), false)));
+        when(notificationRepo.unread(USER)).thenReturn(1);
+        var body = conforms(list, get(list).with(token("manufacturer")), 200, null).getContentAsString();
+        assertTrue(body.contains("\"unread\":1") && body.contains("\"kind\":\"returned\""), body);
+        when(notificationRepo.newest(USER)).thenReturn(List.of());
+        when(notificationRepo.unread(USER)).thenReturn(0);
+        conforms(list, get(list).with(token("manufacturer")), 200, null);
+        // marking one read: its own, someone else's or unknown (the same 404), and a malformed id
+        when(notificationRepo.owns(USER, mine)).thenReturn(true);
+        when(notificationRepo.markRead(USER, mine)).thenReturn(1);
+        conforms(one, post("/api/notifications/" + mine + "/read").with(token("manufacturer")), 200, null);
+        when(notificationRepo.markRead(USER, mine)).thenReturn(0);
+        conforms(one, post("/api/notifications/" + mine + "/read").with(token("manufacturer")), 200, null);
+        conforms(one, post("/api/notifications/" + UUID.randomUUID() + "/read").with(token("manufacturer")), 404, "not_found");
+        conforms(one, post("/api/notifications/not-a-uuid/read").with(token("manufacturer")), 404, "not_found");
+        when(notificationRepo.markAllRead(USER)).thenReturn(3);
+        var bodyAll = conforms(all, post(all).with(token("manufacturer")), 200, null).getContentAsString();
+        assertTrue(bodyAll.contains("\"marked\":3"), bodyAll);
+        // the database is down
+        when(notificationRepo.newest(USER)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(list, get(list).with(token("manufacturer")), 503, "service_unavailable");
+        when(notificationRepo.owns(USER, mine)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(one, post("/api/notifications/" + mine + "/read").with(token("manufacturer")), 503, "service_unavailable");
+        when(notificationRepo.markAllRead(USER)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(all, post(all).with(token("manufacturer")), 503, "service_unavailable");
+        // the other methods are not routes
+        assertEquals(401, mvc.perform(delete(list)).andReturn().getResponse().getStatus());
     }
 
     @Test

@@ -123,6 +123,13 @@ const CORRECTION_DECISION_UPSTREAM = {
 const VERIFICATION_ROUTE = "/api/runtime/verification";
 const VERIFICATION_URL = "/api/runtime/verification?reg=BEE%2FRAC%2F2026%2F10001";
 const VERIFICATION_UPSTREAM = { GET: { 404: ["not_found"], 422: ["validation_failed"], 503: ["service_unavailable"] } };
+// In-portal notifications. Keep equal to lib/server/contracts/notifications.ts and the artifact.
+const NOTIFICATIONS_ROUTE = "/api/runtime/notifications";
+const NOTIFICATION_READ_ROUTE = "/api/runtime/notifications/{id}/read";
+const NOTIFICATION_READ_ALL_ROUTE = "/api/runtime/notifications/read-all";
+const NOTIFICATION_RESOLVER_DENIALS = ["mfa_required", "no_active_account", "no_effective_role"];
+const NOTIFICATIONS_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: NOTIFICATION_RESOLVER_DENIALS, 503: ["service_unavailable"] }, POST: { 401: ["unauthenticated"], 403: NOTIFICATION_RESOLVER_DENIALS, 503: ["service_unavailable"] } };
+const NOTIFICATION_READ_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: NOTIFICATION_RESOLVER_DENIALS, 404: ["not_found"], 503: ["service_unavailable"] } };
 const WRITE_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope", "brand_not_permitted", "not_editable", "not_submittable"];
 const DRAFT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: WRITE_DENIALS, 503: ["service_unavailable"] },
@@ -135,6 +142,9 @@ const DETAIL_ROUTE = "/api/runtime/model-applications/{id}";
 const upstreamLogRoute = (route, method) => {
   if (route === "/api/runtime/me") return "/api/me";
   if (route === VERIFICATION_ROUTE) return "/api/public/verification";
+  if (route === NOTIFICATIONS_ROUTE) return "/api/notifications";
+  if (route === NOTIFICATION_READ_ROUTE) return "/api/notifications/{id}/read";
+  if (route === NOTIFICATION_READ_ALL_ROUTE) return "/api/notifications/read-all";
   if (route === SUBMIT_ROUTE) return "/api/model-applications/{id}/submit";
   if (route === DOC_LIST_ROUTE) return "/api/model-applications/{id}/documents";
   if (route === DOC_CONTENT_ROUTE) return "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
@@ -530,6 +540,9 @@ async function nextChecks(jar, novaToken) {
     [SCHEMES_ROUTE, "/api/runtime/rating-schemes", "GET", "schemes-anon-get", undefined],
     [SCHEME_PROPOSAL_ROUTE, "/api/runtime/rating-schemes/proposals", "POST", "scheme-proposal-anon-post", "{}"],
     [SCHEME_DECISION_ROUTE, `/api/runtime/rating-schemes/proposals/${NOVA_APP}/decision`, "POST", "scheme-decision-anon-post", "{}"],
+    [NOTIFICATIONS_ROUTE, "/api/runtime/notifications", "GET", "notifications-anon-get", undefined],
+    [NOTIFICATION_READ_ROUTE, `/api/runtime/notifications/${NOVA_APP}/read`, "POST", "notification-read-anon-post", undefined],
+    [NOTIFICATION_READ_ALL_ROUTE, "/api/runtime/notifications/read-all", "POST", "notification-read-all-anon-post", undefined],
     [CORRECTIONS_ROUTE, "/api/runtime/fee-corrections", "GET", "corrections-anon-get", undefined],
     [CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", "correction-proposal-anon-post", "{}"],
     [CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", "correction-decision-anon-post", "{}"],
@@ -698,6 +711,9 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", sessionJar, CORRECTION_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", sessionJar, CORRECTION_DECISION_UPSTREAM);
     await exerciseStandInPairs("/api/runtime/model-applications/{id}/history", `/api/runtime/model-applications/${NOVA_APP}/history`, "GET", sessionJar, DOC_READ_UPSTREAM);
+    await exerciseStandInPairs(NOTIFICATIONS_ROUTE, "/api/runtime/notifications", "GET", sessionJar, NOTIFICATIONS_UPSTREAM);
+    await exerciseStandInPairs(NOTIFICATION_READ_ROUTE, `/api/runtime/notifications/${NOVA_APP}/read`, "POST", sessionJar, NOTIFICATION_READ_UPSTREAM);
+    await exerciseStandInPairs(NOTIFICATION_READ_ALL_ROUTE, "/api/runtime/notifications/read-all", "POST", sessionJar, NOTIFICATIONS_UPSTREAM);
     await exerciseStandInPairs(VERIFICATION_ROUTE, VERIFICATION_URL, "GET", sessionJar, VERIFICATION_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);

@@ -127,7 +127,7 @@ class ReworkDatabaseTest {
         resub = transactional(new ResubmitApplicationRepository(db));
         rejects = transactional(new StageRejectRepository(db));
         history = new HistoryRepository(db);
-        assertEquals(38, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V38");
+        assertEquals(39, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V39");
     }
 
     @AfterAll
@@ -183,6 +183,56 @@ class ReworkDatabaseTest {
 
     static int count(String table, UUID appId) {
         return owner.queryForObject("SELECT count(*) FROM " + table + " WHERE application_id = ?", Integer.class, appId);
+    }
+
+    // ---- WP10.1a: the applicant's organisation is notified of a fee due, a return and a rejection, in the same transaction ----
+    static List<String> notified(UUID appId, String kind) {
+        return owner.queryForList("SELECT message FROM notification WHERE application_id = ? AND kind = ? ORDER BY recipient_account_id", String.class, appId, kind);
+    }
+
+    static int members() {
+        return owner.queryForObject("SELECT count(DISTINCT m.user_id) FROM organisation_membership m JOIN organisation o ON o.id = m.organisation_id JOIN user_account u ON u.id = m.user_id "
+            + "WHERE m.organisation_id = ? AND m.active AND o.status = 'active' AND u.status = 'active' AND now() >= m.valid_from AND now() < m.valid_to", Integer.class, NOVA);
+    }
+
+    @Test
+    void aFeeDueAReturnAndARejectionEachNotifyEveryoneInTheApplicantsOrganisationAndNobodyElse() {
+        UUID id = at("iame_scrutiny", "RW-NOTE");
+        String ref = owner.queryForObject("SELECT reference FROM model_application WHERE id = ?", String.class, id);
+        assertTrue(members() >= 1);
+        var due = notified(id, "fee_due");
+        assertEquals(members(), due.size(), "one for each person of the organisation");
+        assertTrue(due.get(0).startsWith(ref + " (Nova Cool RW-NOTE) has its fee due: INR "), due.get(0));
+        assertEquals(members(), owner.queryForObject("SELECT count(*) FROM notification n JOIN organisation_membership m ON m.user_id = n.recipient_account_id AND m.organisation_id = ? WHERE n.application_id = ?", Integer.class, NOVA, id),
+            "every recipient belongs to the application's organisation");
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM notification n WHERE n.application_id = ? AND n.recipient_account_id IN (?, ?, ?)", Integer.class, id, FINANCE_USER, IAME_USER, DIRECTOR_USER), "no officer is notified");
+        assertEquals(0, notified(id, "returned").size(), "the internal steps notify nobody");
+
+        giveBack(id, "iame_scrutiny");
+        var returned = notified(id, "returned");
+        assertEquals(members(), returned.size());
+        assertTrue(returned.get(0).contains("was returned to you: The report does not match the application. Edit it and send it again."), returned.get(0));
+        assertFalse(returned.get(0).contains("IAME"), "the text never names an officer or a role");
+
+        UUID other = at("director_review", "RW-NOTE-REJ");
+        reject(other, "director_review");
+        var rejected = notified(other, "rejected");
+        assertEquals(members(), rejected.size());
+        assertTrue(rejected.get(0).contains("was rejected: The report is for a different model."), rejected.get(0));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM notification WHERE application_id = ? AND kind = 'fee_due' AND recipient_account_id = ?", Integer.class, other, NOVA_USER));
+    }
+
+    @Test
+    void aStepThatFailsLeavesNoNotificationAndAReturnTwiceNotifiesTwice() {
+        UUID id = at("iame_scrutiny", "RW-NOTE-TWICE");
+        int before = count("notification", id);
+        var stale = returns.doReturn(id, version(id) + 7, IAME_USER, "iame", "iame_scrutiny", "Stale.");
+        assertEquals(StageReturnRepository.Outcome.STALE, stale.outcome());
+        assertEquals(before, count("notification", id), "a refused return writes nothing");
+        giveBack(id, "iame_scrutiny");
+        resubmit(id);
+        giveBack(id, "iame_scrutiny");
+        assertEquals(2 * members(), owner.queryForObject("SELECT count(*) FROM notification WHERE application_id = ? AND kind = 'returned'", Integer.class, id), "each return is a new event");
     }
 
     @Test

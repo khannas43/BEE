@@ -37,6 +37,7 @@ export const validatePublicVerification: Validator<PublicVerification> = (body) 
 export const SPRING_PUBLIC_VERIFICATION_ERRORS: UpstreamErrors = {
   404: ["not_found"],
   422: ["validation_failed"],
+  429: ["rate_limited"],
   503: ["service_unavailable"],
 };
 

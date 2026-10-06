@@ -122,7 +122,7 @@ const CORRECTION_DECISION_UPSTREAM = {
 // Public certificate verification (no session, no token). Keep equal to lib/server/contracts/verification.ts and the artifact.
 const VERIFICATION_ROUTE = "/api/runtime/verification";
 const VERIFICATION_URL = "/api/runtime/verification?reg=BEE%2FRAC%2F2026%2F10001";
-const VERIFICATION_UPSTREAM = { GET: { 404: ["not_found"], 422: ["validation_failed"], 503: ["service_unavailable"] } };
+const VERIFICATION_UPSTREAM = { GET: { 404: ["not_found"], 422: ["validation_failed"], 429: ["rate_limited"], 503: ["service_unavailable"] } };
 // In-portal notifications. Keep equal to lib/server/contracts/notifications.ts and the artifact.
 const NOTIFICATIONS_ROUTE = "/api/runtime/notifications";
 const NOTIFICATION_READ_ROUTE = "/api/runtime/notifications/{id}/read";

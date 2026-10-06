@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,13 +27,20 @@ public class PublicVerificationController {
     private static final ZoneId INDIA = ZoneId.of("Asia/Kolkata");
 
     private final PublicVerificationRepository repository;
+    private final PublicRateLimiter limiter;
 
-    public PublicVerificationController(PublicVerificationRepository repository) {
+    public PublicVerificationController(PublicVerificationRepository repository, PublicRateLimiter limiter) {
         this.repository = repository;
+        this.limiter = limiter;
     }
 
     @GetMapping("/api/public/verification")
     public ResponseEntity<Map<String, Object>> verify(@RequestParam(name = "reg", required = false) String reg) {
+        var wait = limiter.tryAcquire();
+        if (wait.isPresent()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", String.valueOf(wait.getAsInt()))
+                .contentType(MediaType.APPLICATION_JSON).body(ApiErrors.body("rate_limited"));
+        }
         if (reg == null || reg.isBlank()) {
             return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }

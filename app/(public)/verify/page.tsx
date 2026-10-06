@@ -95,7 +95,14 @@ function Result({ result }: { result: VerificationResult | "loading" }) {
       </div>
     );
   }
-  const text = result.outcome === "not_found" ? VERIFICATION_COPY.notFound : result.outcome === "empty" ? VERIFICATION_COPY.empty : VERIFICATION_COPY.unavailable;
+  const text =
+    result.outcome === "not_found"
+      ? VERIFICATION_COPY.notFound
+      : result.outcome === "empty"
+        ? VERIFICATION_COPY.empty
+        : result.outcome === "rate_limited"
+          ? `${VERIFICATION_COPY.rateLimited}${result.retryAfter ? ` (about ${result.retryAfter} seconds)` : ""}`
+          : VERIFICATION_COPY.unavailable;
   return (
     <div className="mt-space-lg rounded-xl border border-error/40 bg-error/5 p-space-lg" data-testid="verify-result" data-outcome={result.outcome}>
       <p className="font-body-md text-body-md" data-testid="verify-message">{text}</p>

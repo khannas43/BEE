@@ -94,6 +94,8 @@ export async function publicRead<T>(request: NextRequest, springPath: string, op
   const api = await callBeeApi(springPath, { correlationId });
   const out = fromUpstream(api.status, api.body, op);
   const res = jsonResponse(out.body, out.status, correlationId);
+  // Spring's own ceiling was reached: pass its wait on (whole seconds only), or a safe default if it sent none.
+  if (out.status === 429) res.headers.set("Retry-After", /^[0-9]{1,3}$/.test(api.forwardHeaders?.["Retry-After"] ?? "") ? api.forwardHeaders!["Retry-After"] : "60");
   const error = (out.body as { error?: unknown } | null)?.error;
   return isErrorCode(error) ? setOutcome(res, error) : res;
 }

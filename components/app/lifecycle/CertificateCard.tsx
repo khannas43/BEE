@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ModelApplication } from "@/lib/client/runtimeModelApplications";
 
 /**
@@ -12,7 +13,7 @@ export const CERTIFICATE_COPY = {
 
 type Certificate = NonNullable<ModelApplication["certificate"]>;
 
-export function CertificateCard({ certificate, testIdPrefix = "model-app-certificate" }: { certificate: Certificate; testIdPrefix?: string }) {
+export function CertificateCard({ certificate, applicationId, testIdPrefix = "model-app-certificate" }: { certificate: Certificate; applicationId?: string; testIdPrefix?: string }) {
   return (
     <div className="mt-space-md rounded-lg border border-primary/40 bg-primary/5 p-space-md" data-testid={testIdPrefix} data-status={certificate.status}>
       <p className="font-label-md text-label-md text-on-surface">{CERTIFICATE_COPY.heading}</p>
@@ -24,6 +25,11 @@ export function CertificateCard({ certificate, testIdPrefix = "model-app-certifi
         {"★".repeat(certificate.stars)}{"☆".repeat(5 - certificate.stars)} {certificate.stars} {certificate.stars === 1 ? "star" : "stars"} · efficiency {certificate.verifiedIseer}
       </p>
       <p className="font-label-sm text-label-sm text-on-surface-variant mt-1" data-testid={`${testIdPrefix}-demo`}>{CERTIFICATE_COPY.demo}</p>
+      {applicationId ? (
+        <Link href={`/app/model-label/label-preview?id=${encodeURIComponent(applicationId)}`} className="inline-block mt-space-sm text-primary font-label-md hover:underline" data-testid={`${testIdPrefix}-open`}>
+          Open the printable certificate and label
+        </Link>
+      ) : null}
     </div>
   );
 }

@@ -102,6 +102,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["Create draft", "Edit draft", "Upload test reports", "Submit draft", "Edit and resubmit a returned application"],
   },
   {
+    href: "/app/model-label/label-preview",
+    en: "Certificate and label",
+    hi: "प्रमाणपत्र एवं लेबल",
+    icon: "verified_user",
+    navRoles: ["manufacturer", "agency"],
+    implemented: ["List your approved applications", "Open the printable certificate and star label", "Print or save as PDF", "A QR code that opens the public verification page"],
+  },
+  {
     href: "/app/finance/finance-queue",
     en: "Finance queue",
     hi: "वित्त कतार",

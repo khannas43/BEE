@@ -160,3 +160,10 @@ textarea:focus-visible,
   background: #cbd5e1;
   border-radius: 9999px;
 }
+
+/* Printing a certificate or label (WP09.1b): only the document is printed; the chrome around it is hidden. */
+@media print {
+  .print-hidden { display: none !important; }
+  .print-break-before { break-before: page; }
+  body { background: #fff !important; }
+}

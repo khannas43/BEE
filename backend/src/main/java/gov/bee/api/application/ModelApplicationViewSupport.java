@@ -22,8 +22,10 @@ final class ModelApplicationViewSupport {
                                           Optional<ModelApplicationSubmitRepository.FeeSnapshotRow> fee,
                                           Optional<ModelApplicationSubmitRepository.RatingRow> rating,
                                           Optional<ModelApplicationSubmitRepository.ReturnRow> openReturn,
-                                          Optional<ModelApplicationSubmitRepository.RejectionRow> rejection) {
+                                          Optional<ModelApplicationSubmitRepository.RejectionRow> rejection,
+                                          Optional<ModelApplicationSubmitRepository.CertificateRow> certificate) {
         Map<String, Object> m = readView(row, scope, fee);
+        certificate.ifPresent(c -> m.put("certificate", certificateView(c, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")))));
         rejection.ifPresent(r -> {
             Map<String, Object> v = new java.util.LinkedHashMap<>();
             v.put("fromState", r.fromState());
@@ -50,5 +52,21 @@ final class ModelApplicationViewSupport {
             m.put("rating", v);
         });
         return m;
+    }
+
+    /** The certificate as shown to the applicant. Status is worked out from the dates (valid or expired); revoked is not built yet. */
+    static Map<String, Object> certificateView(ModelApplicationSubmitRepository.CertificateRow c, java.time.LocalDate today) {
+        Map<String, Object> v = new java.util.LinkedHashMap<>();
+        v.put("registrationId", c.registrationId());
+        v.put("validFrom", c.validFrom().toString());
+        v.put("validTo", c.validTo().toString());
+        v.put("status", today.isAfter(c.validTo()) ? "expired" : today.isBefore(c.validFrom()) ? "not_yet_valid" : "valid");
+        v.put("stars", c.stars());
+        v.put("declaredIseer", c.declaredIseer().toPlainString());
+        v.put("verifiedIseer", c.verifiedIseer().toPlainString());
+        v.put("schemeKey", c.schemeKey());
+        v.put("localDemoCertificate", true);
+        v.put("issuedAt", c.issuedAt().toString());
+        return v;
     }
 }

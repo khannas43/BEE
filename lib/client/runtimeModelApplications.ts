@@ -66,6 +66,19 @@ export interface ModelApplication {
     reason: string;
     returnedAt: string;
   };
+  /** The certificate issued at approval, on the detail read once the application is approved. A local demonstration, never a BEE certificate. */
+  certificate?: {
+    registrationId: string;
+    validFrom: string;
+    validTo: string;
+    status: "valid" | "expired" | "not_yet_valid";
+    stars: number;
+    declaredIseer: string;
+    verifiedIseer: string;
+    schemeKey: string;
+    localDemoCertificate: true;
+    issuedAt: string;
+  };
   /** The rejection, on the detail read once the application is rejected (terminal): why, and by which stage. */
   rejection?: {
     fromState: "iame_scrutiny" | "bee_scrutiny" | "rating" | "director_review" | "secretary_approval";

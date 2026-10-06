@@ -117,7 +117,7 @@ class SecretaryApprovalDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         repo = transactional(new SecretaryApprovalRepository(db));
-        assertEquals(36, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V36");
+        assertEquals(37, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V37");
     }
 
     @AfterAll
@@ -154,6 +154,103 @@ class SecretaryApprovalDatabaseTest {
 
     static int count(String table, UUID appId) {
         return owner.queryForObject("SELECT count(*) FROM " + table + " WHERE application_id = ?", Integer.class, appId);
+    }
+
+    // ---- WP09.1a: the certificate is issued in the same transaction as the step that ends in "approved" ----
+
+    static final java.time.ZoneId INDIA = java.time.ZoneId.of("Asia/Kolkata");
+
+    static UUID finalByTheDirector(String model) {
+        UUID id = UUID.randomUUID();
+        applications.insertDraft(id, applications.nextReference(), NOVA, NOVA, NOVA_COOL, "Nova Cool", "RAC", model);
+        submissions.submit(id, NOVA, 0, NOVA_USER, "manufacturer", new BigDecimal("24000.00"), "RAC:new_model", 2, "provisional", "ref", "note");
+        UUID snapshot = submissions.findFeeSnapshot(id).orElseThrow().id();
+        feeRepo.confirm(id, 1, FINANCE_USER, "finance", snapshot, new BigDecimal("24000.00"), "UTR-" + id.toString().substring(0, 8), LocalDate.of(2026, 10, 2));
+        iameRepo.recommend(id, 2, IAME_USER, "iame", "verified", "n");
+        reviewerRepo.forward(id, 3, REVIEWER_USER, "reviewer", "n");
+        ratingRepo.compute(id, 4, PROGRAMME_USER, "programme", "RAC-ISEER-DEMO-1", new BigDecimal("4.50"), new BigDecimal("4.62"), 4);
+        assertEquals("approved", directorRepo.recommend(id, 5, DIRECTOR_USER, "director", "final", true).toState());
+        return id;
+    }
+
+    @Test
+    void approvalIssuesOneCertificateWithTheRegistrationIdTheValidityAndTheFactsItWasIssuedOn() {
+        UUID id = inSecretaryApproval("SA-CERT");
+        assertEquals(0, count("certificate", id), "nothing is issued before the approval");
+        assertEquals(Outcome.APPROVED, approve(id, 6).outcome());
+        assertEquals(1, count("certificate", id));
+        var c = owner.queryForMap("SELECT * FROM certificate WHERE application_id = ?", id);
+        LocalDate today = LocalDate.now(INDIA);
+        assertTrue(((String) c.get("registration_id")).matches("^BEE/RAC/" + today.getYear() + "/1[0-9]{4}$"), String.valueOf(c.get("registration_id")));
+        assertEquals(today, ((java.sql.Date) c.get("valid_from")).toLocalDate());
+        assertEquals(today.plusYears(3).minusDays(1), ((java.sql.Date) c.get("valid_to")).toLocalDate(), "three years, ending the day before the anniversary");
+        assertEquals("Nova Cool", c.get("brand_name"));
+        assertEquals("SA-CERT", c.get("model_number"));
+        assertEquals(owner.queryForObject("SELECT legal_name FROM organisation WHERE id = ?", String.class, NOVA), c.get("organisation_name"));
+        assertEquals(4, ((Number) c.get("stars")).intValue());
+        assertEquals(new BigDecimal("4.62"), c.get("verified_iseer"));
+        assertEquals("RAC-ISEER-DEMO-1", c.get("scheme_key"));
+        assertEquals("local_demo", c.get("basis"));
+        assertEquals(SECRETARY_USER, c.get("issued_by_account_id"));
+        assertEquals(owner.queryForObject("SELECT id FROM model_application_transition_event WHERE application_id = ? AND action = 'secretary_approve'", UUID.class, id), c.get("transition_event_id"));
+    }
+
+    @Test
+    void aDirectorsFinalRecommendationIssuesTheCertificateToo() {
+        UUID id = finalByTheDirector("SA-CERT-FINAL");
+        assertEquals(1, count("certificate", id));
+        assertEquals(DIRECTOR_USER, owner.queryForObject("SELECT issued_by_account_id FROM certificate WHERE application_id = ?", UUID.class, id));
+        UUID other = inSecretaryApproval("SA-CERT-NOT-FINAL");
+        assertEquals(0, count("certificate", other), "a recommendation that is not final issues nothing");
+    }
+
+    @Test
+    void numbersRiseByOneAndConcurrentApprovalsNeverShareOne() throws Exception {
+        UUID a = inSecretaryApproval("SA-NUM-1");
+        UUID b = inSecretaryApproval("SA-NUM-2");
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch go = new CountDownLatch(1);
+        try {
+            Future<?> fa = pool.submit(() -> { go.await(); return approve(a, 6).outcome(); });
+            Future<?> fb = pool.submit(() -> { go.await(); return approve(b, 6).outcome(); });
+            go.countDown();
+            assertEquals(Outcome.APPROVED, fa.get(30, TimeUnit.SECONDS));
+            assertEquals(Outcome.APPROVED, fb.get(30, TimeUnit.SECONDS));
+        } finally {
+            pool.shutdownNow();
+        }
+        int na = owner.queryForObject("SELECT sequence_no FROM certificate WHERE application_id = ?", Integer.class, a);
+        int nb = owner.queryForObject("SELECT sequence_no FROM certificate WHERE application_id = ?", Integer.class, b);
+        assertEquals(1, Math.abs(na - nb), "two approvals at once get the next two numbers");
+        assertEquals(Math.max(na, nb) + 1, owner.queryForObject("SELECT next_value FROM certificate_allocator WHERE category_code = 'RAC' AND issue_year = ?", Integer.class, LocalDate.now(INDIA).getYear()));
+        UUID c = inSecretaryApproval("SA-NUM-3");
+        approve(c, 6);
+        assertEquals(Math.max(na, nb) + 1, owner.queryForObject("SELECT sequence_no FROM certificate WHERE application_id = ?", Integer.class, c));
+    }
+
+    @Test
+    void theCertificateIsAppendOnlyAndTheRuntimeLoginCanOnlyIssueOneThroughTheFunction() {
+        UUID id = inSecretaryApproval("SA-CERT-PRIV");
+        approve(id, 6);
+        assertThrows(Exception.class, () -> owner.update("UPDATE certificate SET stars = 5 WHERE application_id = ?", id), "append-only");
+        assertThrows(Exception.class, () -> owner.update("DELETE FROM certificate WHERE application_id = ?", id), "append-only");
+        assertThrows(Exception.class, () -> db.update("INSERT INTO certificate_allocator (category_code, issue_year, next_value) VALUES ('ZZ', 2026, 10001)"), "the runtime login cannot touch the numbers");
+        UUID waiting = inSecretaryApproval("SA-CERT-EARLY");
+        UUID event = owner.queryForObject("SELECT id FROM model_application_transition_event WHERE application_id = ? LIMIT 1", UUID.class, waiting);
+        assertThrows(Exception.class, () -> db.queryForObject("SELECT issue_certificate(?, ?, ?)", String.class, waiting, event, SECRETARY_USER), "not approved, so nothing is issued");
+        assertEquals(0, count("certificate", waiting));
+    }
+
+    @Test
+    void disposableCleanupRemovesTheCertificateOfARegisteredApplicationToo() {
+        UUID id = inSecretaryApproval("SA-CERT-CLEAN");
+        approve(id, 6);
+        assertEquals(1, count("certificate", id));
+        var maint = new JdbcTemplate(sourceAs(MAIN, env("BEE_MAINT_DB_USER", "bee_local_maint"), env("BEE_MAINT_DB_PASSWORD", "bee-local-maint")));
+        maint.execute("SELECT set_config('bee.cleanup_schema', '" + MAIN + "', true); INSERT INTO " + MAIN + ".local_disposable_application (application_id) VALUES ('" + id + "'); "
+            + "SELECT " + MAIN + ".app_disposable_model_cleanup(ARRAY['" + id + "']::uuid[])");
+        assertEquals(0, count("certificate", id));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_application WHERE id = ?", Integer.class, id));
     }
 
     @Test

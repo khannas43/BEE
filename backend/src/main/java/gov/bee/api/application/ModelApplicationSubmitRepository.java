@@ -78,6 +78,19 @@ public class ModelApplicationSubmitRepository {
             applicationId).stream().findFirst();
     }
 
+    /** The certificate issued when the application was approved (a local demonstration, never a BEE certificate). */
+    public record CertificateRow(String registrationId, java.time.LocalDate validFrom, java.time.LocalDate validTo, int stars,
+                                 java.math.BigDecimal declaredIseer, java.math.BigDecimal verifiedIseer, String schemeKey, java.time.Instant issuedAt) {
+    }
+
+    public Optional<CertificateRow> findCertificate(UUID applicationId) {
+        return jdbc.query(
+            "SELECT registration_id, valid_from, valid_to, stars, declared_iseer, verified_iseer, scheme_key, issued_at FROM certificate WHERE application_id = ?",
+            (rs, i) -> new CertificateRow(rs.getString("registration_id"), rs.getDate("valid_from").toLocalDate(), rs.getDate("valid_to").toLocalDate(), rs.getInt("stars"),
+                rs.getBigDecimal("declared_iseer"), rs.getBigDecimal("verified_iseer"), rs.getString("scheme_key"), rs.getTimestamp("issued_at").toInstant()),
+            applicationId).stream().findFirst();
+    }
+
     /** The latest rating record of an application (a local demonstration, never a BEE rating). */
     public record RatingRow(int ratingVersion, String schemeKey, java.math.BigDecimal declaredIseer, java.math.BigDecimal verifiedIseer,
                             int stars, java.time.Instant computedAt) {

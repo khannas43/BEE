@@ -21,7 +21,7 @@ export default defineConfig({
       "components/app/__tests__/**/*.test.tsx",
       "components/i18n/__tests__/**/*.test.tsx",
       "components/public/__tests__/**/*.test.tsx",
-      "lib/client/__tests__/**/*.test.tsx",
+      "lib/client/__tests__/**/*.test.{ts,tsx}",
     ],
     setupFiles: ["components/app/kit/__tests__/setup.ts"],
   },

@@ -257,6 +257,7 @@ export const MODULES: Module[] = [
     screens: [
       s("model-label", "Model dashboard", P.VR, "dashboard"),
       s("model-label", "New model application", P.VR, "form"),
+      s("model-label", "Notifications", P.VR, "inbox"),
       s("model-label", "Family models", P.VR, "table"),
       s("model-label", "Test reports", P.VR, "detail"),
       s("model-label", "Lab accreditation", P.VR, "detail"),

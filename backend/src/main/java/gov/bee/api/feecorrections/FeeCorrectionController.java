@@ -70,6 +70,36 @@ public class FeeCorrectionController {
         return service.decide(resolved.caller(), parseId(id), idempotencyKey, body);
     }
 
+    @PostMapping("/api/fee-corrections/reversals")
+    public ResponseEntity<Map<String, Object>> proposeReversal(@AuthenticationPrincipal Jwt jwt,
+                                                               @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                                               @RequestBody(required = false) String rawBody) {
+        var resolved = callers.resolve(jwt);
+        if (resolved.caller() == null) {
+            return ApiErrors.response(HttpStatus.FORBIDDEN, resolved.denial());
+        }
+        JsonNode body = parseBody(rawBody);
+        if (body == null) {
+            return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+        }
+        return service.proposeReversal(resolved.caller(), idempotencyKey, body);
+    }
+
+    @PostMapping("/api/fee-corrections/reversals/{id}/decision")
+    public ResponseEntity<Map<String, Object>> decideReversal(@AuthenticationPrincipal Jwt jwt, @PathVariable("id") String id,
+                                                              @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                                              @RequestBody(required = false) String rawBody) {
+        var resolved = callers.resolve(jwt);
+        if (resolved.caller() == null) {
+            return ApiErrors.response(HttpStatus.FORBIDDEN, resolved.denial());
+        }
+        JsonNode body = parseBody(rawBody);
+        if (body == null) {
+            return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+        }
+        return service.decideReversal(resolved.caller(), parseId(id), idempotencyKey, body);
+    }
+
     private static UUID parseId(String id) {
         try {
             return UUID.fromString(id);

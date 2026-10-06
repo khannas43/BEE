@@ -45,7 +45,7 @@ public class FeeConfirmationRepository {
     public Set<UUID> actorsAtOtherStages(UUID applicationId) {
         List<UUID> rows = jdbc.queryForList(
             "SELECT actor_account_id FROM model_application_submission_event WHERE application_id = ? "
-                + "UNION SELECT actor_account_id FROM model_application_transition_event WHERE application_id = ? AND from_state <> ?",
+                + "UNION SELECT actor_account_id FROM model_application_transition_event WHERE application_id = ? AND from_state <> ? AND action <> 'reverse_fee'",
             UUID.class, applicationId, applicationId, FROM_STATE);
         return new HashSet<>(rows);
     }
@@ -87,7 +87,9 @@ public class FeeConfirmationRepository {
                 + "receipt_reference, received_on, confirmed_by_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             UUID.randomUUID(), applicationId, eventId, feeSnapshotId, amountInr, receiptReference, java.sql.Date.valueOf(receivedOn), actorAccountId);
         jdbc.update(
-            "INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES (?, 'model_application', ?, ?, true)",
+            // A confirmation after a reversal meets the assignment the reversal released: the same officer gets it back (active again).
+            "INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES (?, 'model_application', ?, ?, true) "
+                + "ON CONFLICT (user_id, subject_type, subject_id, stage) DO UPDATE SET active = true",
             officer.get(), applicationId, TO_STATE);
         return new Result(Outcome.CONFIRMED, versionAfter, at.toInstant());
     }

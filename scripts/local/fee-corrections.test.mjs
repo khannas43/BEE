@@ -5,11 +5,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  CORRECTION_PROPOSALS_PATH, FEE_CORRECTIONS_PATH, correctionDecisionPath, decideCorrectionSignature, proposeCorrectionSignature, readFeeCorrections,
-  runDecideCorrection, runProposeCorrection,
+  CORRECTION_PROPOSALS_PATH, FEE_CORRECTIONS_PATH, REVERSALS_PATH, correctionDecisionPath, decideCorrectionSignature, proposeCorrectionSignature, proposeReversalSignature,
+  readFeeCorrections, reversalDecisionPath, runDecideCorrection, runDecideReversal, runProposeCorrection, runProposeReversal,
 } from "../../lib/client/runtimeFeeCorrections.ts";
 import {
-  SPRING_FEE_CORRECTION_DECISION, SPRING_FEE_CORRECTION_PROPOSAL, SPRING_FEE_CORRECTIONS, validateFeeCorrectionAdmin, validateFeeCorrectionProposal,
+  SPRING_FEE_CORRECTION_DECISION, SPRING_FEE_CORRECTION_PROPOSAL, SPRING_FEE_CORRECTIONS, SPRING_FEE_REVERSAL_DECISION, SPRING_FEE_REVERSAL_PROPOSAL,
+  validateFeeCorrectionAdmin, validateFeeCorrectionProposal, validateFeeReversalProposal,
 } from "../../lib/server/contracts/fee-corrections.ts";
 
 const KEY = "0123456789abcdef01234567";
@@ -23,9 +24,14 @@ const PROPOSAL = {
 };
 const ROW = {
   applicationId: APP, reference: "LOCAL-MA-0002", brandName: "Nova Cool", modelNumber: "NC-1", state: "iame_scrutiny", receiptReference: "UTR-WRONG", receivedOn: "2026-10-02",
-  amountInr: "24000.00", confirmedBy: "BEE Finance", confirmedAt: "2026-10-03T10:00:00Z", correction: null, pendingProposalId: ID,
+  amountInr: "24000.00", confirmedBy: "BEE Finance", confirmedAt: "2026-10-03T10:00:00Z", correction: null, pendingProposalId: ID, reversal: null, pendingReversalId: null,
 };
-const ADMIN = { today: "2026-10-04", confirmations: [ROW], pending: [PROPOSAL], decided: [{ ...PROPOSAL, state: "approved", proposedByYou: false, decidedBy: "BEE Programme", decidedAt: "2026-10-04T11:00:00Z" }] };
+const REVERSAL = {
+  id: ID, applicationId: APP, reference: "LOCAL-MA-0002", reason: "No money was received", state: "pending", proposedBy: "BEE Finance", proposedByYou: true,
+  proposedAt: "2026-10-04T10:00:00Z", decidedBy: null, decidedAt: null, decisionNote: null,
+};
+const ADMIN = { today: "2026-10-04", confirmations: [ROW], pending: [PROPOSAL], decided: [{ ...PROPOSAL, state: "approved", proposedByYou: false, decidedBy: "BEE Programme", decidedAt: "2026-10-04T11:00:00Z" }],
+  reversalsPending: [REVERSAL], reversalsDecided: [{ ...REVERSAL, state: "approved", proposedByYou: false, decidedBy: "BEE Programme", decidedAt: "2026-10-04T11:00:00Z" }] };
 const PROPOSE = { applicationId: APP, receiptReference: "UTR-RIGHT", receivedOn: "2026-10-01", reason: "The reference was mistyped" };
 
 test("the client reads the confirmations, proposes with the key and the cookie, and decides on the proposal's own route", async () => {
@@ -99,7 +105,47 @@ test("the status and code tables are the documented ones", () => {
   assert.ok(SPRING_FEE_CORRECTIONS.errors[403].includes("role_not_permitted") && !SPRING_FEE_CORRECTIONS.errors[403].includes("segregation_refused"));
   assert.deepEqual(SPRING_FEE_CORRECTION_PROPOSAL.successStatuses, [201]);
   assert.deepEqual(SPRING_FEE_CORRECTION_DECISION.successStatuses, [200]);
-  assert.deepEqual(SPRING_FEE_CORRECTION_PROPOSAL.errors[409], ["correction_already_pending", "idempotency_key_conflict", "idempotency_in_progress"]);
+  assert.deepEqual(SPRING_FEE_CORRECTION_PROPOSAL.errors[409], ["correction_already_pending", "reversal_already_pending", "idempotency_key_conflict", "idempotency_in_progress"]);
   assert.deepEqual(SPRING_FEE_CORRECTION_DECISION.errors[409], ["proposal_not_pending", "idempotency_key_conflict", "idempotency_in_progress"]);
   assert.ok(SPRING_FEE_CORRECTION_PROPOSAL.errors[403].includes("segregation_refused") && SPRING_FEE_CORRECTION_DECISION.errors[403].includes("segregation_refused"));
+});
+
+test("the client proposes and decides a reversal on its own routes, with the key", async () => {
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (p, init) => {
+    seen.push({ p, init });
+    return p === REVERSALS_PATH ? json(201, REVERSAL) : json(200, { ...REVERSAL, state: "approved", proposedByYou: false, decidedBy: "BEE Programme", decidedAt: "2026-10-04T11:00:00Z" });
+  };
+  try {
+    const created = await runProposeReversal({ applicationId: APP, reason: "No money was received" }, KEY);
+    assert.deepEqual([created.ok, created.value.state], [true, "pending"]);
+    const post = seen.find((s) => s.p === REVERSALS_PATH);
+    assert.equal(post.init.headers["Idempotency-Key"], KEY);
+    assert.deepEqual(JSON.parse(post.init.body), { applicationId: APP, reason: "No money was received" });
+    const decided = await runDecideReversal({ id: ID, decision: "approve", note: "Checked the bank statement" }, KEY);
+    assert.deepEqual([decided.ok, decided.value.state], [true, "approved"]);
+    assert.deepEqual(JSON.parse(seen.find((s) => s.p === reversalDecisionPath(ID)).init.body), { decision: "approve", note: "Checked the bank statement" });
+    assert.notDeepEqual(proposeReversalSignature({ applicationId: APP, reason: "a" }), proposeReversalSignature({ applicationId: APP, reason: "b" }));
+    globalThis.fetch = async () => json(409, { error: "reversal_not_possible", message: "Work has already started on this application, so the fee confirmation cannot be reversed here." });
+    const refused = await runDecideReversal({ id: ID, decision: "approve" }, KEY);
+    assert.deepEqual([refused.ok, refused.failure.kind], [false, "conflict"]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("the BFF validators accept a reversal and a reversed confirmation, and refuse anything else", () => {
+  assert.ok(validateFeeReversalProposal(REVERSAL));
+  assert.ok(validateFeeCorrectionAdmin({ ...ADMIN, confirmations: [{ ...ROW, pendingProposalId: null, reversal: { reversedBy: "BEE Programme", reversedAt: "2026-10-04T12:00:00Z" } }] }));
+  assert.equal(validateFeeReversalProposal({ ...REVERSAL, state: "approved" }), null, "an approved reversal names who decided it");
+  assert.equal(validateFeeReversalProposal({ ...REVERSAL, extra: 1 }), null);
+  assert.equal(validateFeeReversalProposal({ ...REVERSAL, state: "undone" }), null);
+  assert.equal(validateFeeCorrectionAdmin({ ...ADMIN, reversalsPending: [{ ...REVERSAL, state: "rejected", decidedBy: "x" }] }), null, "a decided reversal is not in the pending list");
+  assert.equal(validateFeeCorrectionAdmin({ ...ADMIN, confirmations: [{ ...ROW, reversal: { reversedBy: "x" } }] }), null);
+  assert.equal(validateFeeCorrectionAdmin({ ...ADMIN, reversalsPending: undefined }), null, "the reversal lists are required");
+  assert.deepEqual(SPRING_FEE_REVERSAL_PROPOSAL.successStatuses, [201]);
+  assert.deepEqual(SPRING_FEE_REVERSAL_DECISION.successStatuses, [200]);
+  assert.deepEqual(SPRING_FEE_REVERSAL_PROPOSAL.errors[409], ["correction_already_pending", "reversal_already_pending", "reversal_not_possible", "idempotency_key_conflict", "idempotency_in_progress"]);
+  assert.deepEqual(SPRING_FEE_REVERSAL_DECISION.errors[409], ["proposal_not_pending", "reversal_not_possible", "idempotency_key_conflict", "idempotency_in_progress"]);
 });

@@ -93,7 +93,7 @@ class FeeCorrectionDatabaseTest {
         submissions = new ModelApplicationSubmitRepository(db, applications);
         confirmations = new FeeConfirmationRepository(db);
         repo = new FeeCorrectionRepository(db);
-        assertEquals(39, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V39");
+        assertEquals(40, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V40");
     }
 
     @AfterAll
@@ -262,6 +262,143 @@ class FeeCorrectionDatabaseTest {
         maint.execute("SELECT set_config('bee.cleanup_schema', '" + MAIN + "', true); INSERT INTO " + MAIN + ".local_disposable_application (application_id) VALUES ('" + app + "'); "
             + "SELECT " + MAIN + ".app_disposable_model_cleanup(ARRAY['" + app + "']::uuid[])");
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM fee_correction_proposal WHERE application_id = ?", Integer.class, app));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_application WHERE id = ?", Integer.class, app));
+    }
+
+    // ---- BL-142: reversing a fee confirmation recorded in error (the owner's assumption B17) ----
+    static FeeCorrectionRepository.Reversal reverseProposal(UUID app) {
+        var c = repo.confirmationOf(app).orElseThrow();
+        return repo.insertReversal(FINANCE_USER, app, c.confirmationId(), "No money was received");
+    }
+
+    static int versionOf(UUID app) {
+        return owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, app);
+    }
+
+    static String stateOf(UUID app) {
+        return owner.queryForObject("SELECT state FROM model_application WHERE id = ?", String.class, app);
+    }
+
+    @Test
+    void anApprovedReversalMovesTheApplicationBackToFeeDueReleasesTheOfficerTellsTheApplicantAndNeverEditsTheConfirmation() {
+        grant("programme");
+        try {
+            UUID app = confirmed("NC-FR-OK");
+            assertEquals("iame_scrutiny", stateOf(app));
+            assertEquals(1, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage = 'iame_scrutiny' AND active", Integer.class, app));
+            int before = versionOf(app);
+            var confirmation = repo.confirmationOf(app).orElseThrow();
+            var p = reverseProposal(app);
+            assertEquals("pending", p.state());
+            assertNotNull(repo.confirmationOf(app).orElseThrow().pendingReversalId());
+            assertTrue(repo.reversalPossible(app, confirmation.confirmationId()));
+            var done = repo.decideReversal(p.id(), PROGRAMME_USER, "approve", "checked against the bank statement");
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.DONE, done.outcome());
+            assertEquals("fee_due", stateOf(app));
+            assertEquals(before + 1, versionOf(app));
+            var ev = owner.queryForMap("SELECT action, from_state, to_state, actor_account_id, actor_role FROM model_application_transition_event WHERE application_id = ? AND action = 'reverse_fee'", app);
+            assertEquals("iame_scrutiny", ev.get("from_state"));
+            assertEquals("fee_due", ev.get("to_state"));
+            assertEquals(PROGRAMME_USER, ev.get("actor_account_id"));
+            assertEquals(0, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage = 'iame_scrutiny' AND active", Integer.class, app), "the officer is released");
+            // The confirmation is exactly as written; it is now reversed, so it is no longer the one in effect.
+            assertEquals(1, owner.queryForObject("SELECT count(*) FROM model_application_fee_confirmation WHERE application_id = ? AND receipt_reference = ?", Integer.class, app, confirmation.receiptReference()));
+            assertTrue(repo.confirmationOf(app).isEmpty(), "no confirmation is in effect until Finance confirms again");
+            var listed = repo.recentConfirmations(50).stream().filter(x -> x.applicationId().equals(app)).findFirst().orElseThrow();
+            assertTrue(listed.reversed());
+            assertNotNull(listed.reversedBy());
+            // The applicant's organisation is told the fee is due again, without Finance's reason.
+            var told = owner.queryForList("SELECT message FROM notification WHERE application_id = ? AND kind = 'fee_due' ORDER BY created_at", String.class, app);
+            assertTrue(told.stream().anyMatch(m -> m.contains("has its fee due again: Finance reversed the confirmation of the fee")), told.toString());
+            assertTrue(told.stream().noneMatch(m -> m.contains("No money was received")), "the reason is Finance's internal note");
+            // The history shows the step, with the reason for officers.
+            var hist = new HistoryRepository(db).events(app).stream().filter(e -> e.action().equals("reverse_fee")).findFirst().orElseThrow();
+            assertEquals("No money was received", hist.reversalReason());
+            // Finance confirms again: a new confirmation, and the reversal's approver is not barred from the fee stage.
+            assertFalse(confirmations.actorsAtOtherStages(app).contains(PROGRAMME_USER), "a reversal step does not bar its approver");
+            UUID snapshot = submissions.findFeeSnapshot(app).orElseThrow().id();
+            var again = confirmations.confirm(app, versionOf(app), FINANCE_USER, "finance", snapshot, new BigDecimal("24000.00"), "UTR-AGAIN-" + app.toString().substring(0, 4), RECEIVED);
+            assertEquals(FeeConfirmationRepository.Outcome.CONFIRMED, again.outcome());
+            assertEquals("iame_scrutiny", stateOf(app));
+            assertEquals("UTR-AGAIN-" + app.toString().substring(0, 4), repo.confirmationOf(app).orElseThrow().receiptReference(), "the new confirmation is the one in effect");
+            assertEquals(2, owner.queryForObject("SELECT count(*) FROM model_application_fee_confirmation WHERE application_id = ?", Integer.class, app));
+            // The second confirmation cannot be reversed by the first reversal, and a reversed confirmation is never reversed twice.
+            assertFalse(repo.reversalPossible(app, confirmation.confirmationId()));
+        } finally {
+            revoke("programme");
+        }
+    }
+
+    @Test
+    void aReversalNeedsASecondPersonWhoMayTouchTheFeeAndOnlyTheProposerMayWithdraw() {
+        grant("programme");
+        grant("manufacturer");
+        try {
+            UUID app = confirmed("NC-FR-SEG");
+            var p = reverseProposal(app);
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.SAME_PERSON, repo.decideReversal(p.id(), FINANCE_USER, "approve", null).outcome());
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.ONLY_PROPOSER, repo.decideReversal(p.id(), PROGRAMME_USER, "withdraw", null).outcome());
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.SEGREGATED, repo.decideReversal(p.id(), NOVA_USER, "approve", null).outcome(), "the paying organisation");
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.NOT_PERMITTED, repo.decideReversal(p.id(), IAME_USER, "approve", null).outcome(), "no permission");
+            assertEquals("iame_scrutiny", stateOf(app), "a refused decision changes nothing");
+            assertEquals("pending", repo.reversal(p.id()).orElseThrow().state());
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.DONE, repo.decideReversal(p.id(), PROGRAMME_USER, "reject", "it was received").outcome());
+            assertEquals("iame_scrutiny", stateOf(app), "a rejected reversal changes nothing");
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.NOT_PENDING, repo.decideReversal(p.id(), PROGRAMME_USER, "approve", null).outcome());
+            var second = reverseProposal(app);
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.DONE, repo.decideReversal(second.id(), FINANCE_USER, "withdraw", null).outcome());
+        } finally {
+            revoke("programme");
+            revoke("manufacturer");
+        }
+    }
+
+    @Test
+    void aReversalIsRefusedOnceAnythingHasHappenedSinceTheConfirmationAndOneWaitsPerConfirmation() {
+        grant("programme");
+        try {
+            UUID app = confirmed("NC-FR-LATE");
+            var p = reverseProposal(app);
+            assertThrows(Exception.class, () -> reverseProposal(app), "a second reversal waiting for the same confirmation");
+            // Something happened after the confirmation: a later step. Approving refuses and changes nothing.
+            owner.update("INSERT INTO model_application_transition_event (application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) "
+                + "VALUES (?, 'resubmit', 'returned', 'iame_scrutiny', ?, 'manufacturer', 99)", app, NOVA_USER);
+            int version = versionOf(app);
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.NOT_POSSIBLE, repo.decideReversal(p.id(), PROGRAMME_USER, "approve", null).outcome());
+            assertEquals("iame_scrutiny", stateOf(app));
+            assertEquals(version, versionOf(app));
+            assertEquals("pending", repo.reversal(p.id()).orElseThrow().state(), "the proposal stays, so it can be rejected");
+            assertEquals(FeeCorrectionRepository.ReversalOutcome.DONE, repo.decideReversal(p.id(), PROGRAMME_USER, "reject", "work has started").outcome());
+            // The application moved on to another stage: not possible to propose either.
+            UUID moved = confirmed("NC-FR-MOVED");
+            owner.update("UPDATE model_application SET state = 'bee_scrutiny' WHERE id = ?", moved);
+            assertFalse(repo.reversalPossible(moved, repo.confirmationOf(moved).orElseThrow().confirmationId()));
+        } finally {
+            revoke("programme");
+        }
+    }
+
+    @Test
+    void theRuntimeLoginCanAddAReversalButNeverEditDeleteOrDecideOneDirectly() {
+        UUID app = confirmed("NC-FR-PRIV");
+        var p = reverseProposal(app);
+        assertThrows(Exception.class, () -> db.update("UPDATE fee_reversal_proposal SET state = 'approved' WHERE id = ?", p.id()));
+        assertThrows(Exception.class, () -> db.update("DELETE FROM fee_reversal_proposal WHERE id = ?", p.id()));
+        assertThrows(Exception.class, () -> db.update("INSERT INTO fee_reversal_proposal (application_id, fee_confirmation_id, reason, proposed_by, state, decided_by, decided_at) "
+            + "SELECT application_id, id, 'x', ?, 'rejected', ?, now() FROM model_application_fee_confirmation WHERE application_id = ?", FINANCE_USER, FINANCE_USER, app),
+            "a proposal is born pending: the runtime login cannot insert one that is already decided");
+        repo.decideReversal(p.id(), FINANCE_USER, "withdraw", null);
+    }
+
+    @Test
+    void disposableCleanupRemovesTheReversalsOfARegisteredApplicationToo() {
+        UUID app = confirmed("NC-FR-CLEAN");
+        reverseProposal(app);
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM fee_reversal_proposal WHERE application_id = ?", Integer.class, app));
+        var maint = new JdbcTemplate(sourceAs(MAIN, env("BEE_MAINT_DB_USER", "bee_local_maint"), env("BEE_MAINT_DB_PASSWORD", "bee-local-maint")));
+        maint.execute("SELECT set_config('bee.cleanup_schema', '" + MAIN + "', true); INSERT INTO " + MAIN + ".local_disposable_application (application_id) VALUES ('" + app + "'); "
+            + "SELECT " + MAIN + ".app_disposable_model_cleanup(ARRAY['" + app + "']::uuid[])");
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM fee_reversal_proposal WHERE application_id = ?", Integer.class, app));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_application WHERE id = ?", Integer.class, app));
     }
 

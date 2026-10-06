@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.25.0";
+export const CONTRACT_VERSION = "0.26.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -55,6 +55,8 @@ export const ERROR_MESSAGES = {
   idempotency_in_progress: "A request with this Idempotency-Key is still in progress.",
   not_found: "No such record is available to you.",
   rate_limited: "Too many requests. Wait a moment and try again.",
+  reversal_already_pending: "A reversal of this fee confirmation is already waiting for a decision.",
+  reversal_not_possible: "Work has already started on this application, so the fee confirmation cannot be reversed here.",
   service_unavailable: "The service is temporarily unavailable. Try again later.",
   internal_error: "The request could not be completed.",
   // Next.js boundary only

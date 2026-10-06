@@ -73,6 +73,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/fee-corrections").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/fee-corrections/proposals").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/fee-corrections/proposals/*/decision").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/fee-corrections/reversals").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/fee-corrections/reversals/*/decision").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/rating-schemes").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/rating-schemes/proposals").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/rating-schemes/proposals/*/decision").authenticated()

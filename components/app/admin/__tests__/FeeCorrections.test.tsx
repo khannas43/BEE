@@ -21,13 +21,18 @@ vi.mock("@/components/app/SessionBadge", () => ({
 const APP = "3d6f0a8e-0000-4000-a000-0000000000a1";
 const row = (over: Record<string, unknown>) => ({
   applicationId: APP, reference: "LOCAL-MA-0002", brandName: "Nova Cool", modelNumber: "NC-1", state: "iame_scrutiny", receiptReference: "UTR-WRONG", receivedOn: "2026-10-02",
-  amountInr: "24000.00", confirmedBy: "BEE Finance", confirmedAt: "2026-10-03T10:00:00Z", correction: null, pendingProposalId: null, ...over,
+  amountInr: "24000.00", confirmedBy: "BEE Finance", confirmedAt: "2026-10-03T10:00:00Z", correction: null, pendingProposalId: null, reversal: null, pendingReversalId: null, ...over,
 });
 const proposal = (over: Record<string, unknown>) => ({
   id: "p1", applicationId: APP, reference: "LOCAL-MA-0002", previousReceiptReference: "UTR-WRONG", previousReceivedOn: "2026-10-02", receiptReference: "UTR-RIGHT", receivedOn: "2026-10-01",
   reason: "The reference was mistyped", state: "pending", proposedBy: "BEE Programme", proposedByYou: false, proposedAt: "2026-10-04T10:00:00Z", decidedBy: null, decidedAt: null, decisionNote: null, ...over,
 });
-const admin = (confirmations: unknown[], pending: unknown[]) => ({ today: "2026-10-04", confirmations, pending, decided: [] });
+const reversalProposal = (over: Record<string, unknown>) => ({
+  id: "r1", applicationId: APP, reference: "LOCAL-MA-0002", reason: "No money was received", state: "pending", proposedBy: "BEE Programme", proposedByYou: false,
+  proposedAt: "2026-10-04T10:00:00Z", decidedBy: null, decidedAt: null, decisionNote: null, ...over,
+});
+const admin = (confirmations: unknown[], pending: unknown[], reversals: { pending?: unknown[]; decided?: unknown[] } = {}) =>
+  ({ today: "2026-10-04", confirmations, pending, decided: [], reversalsPending: reversals.pending ?? [], reversalsDecided: reversals.decided ?? [] });
 
 async function load(body: unknown, status = 200) {
   cleanup();
@@ -94,6 +99,70 @@ describe("FeeCorrections", () => {
       call.resolve(proposal({ proposedByYou: true, proposedBy: "BEE Finance" }), 201);
     });
     expect(screen.getByTestId("correction-propose-success").textContent).toContain("different person must approve");
+  });
+
+  it("offers a reversal only for a confirmation still in IAME scrutiny with nothing waiting, and shows a reversed one as history", async () => {
+    await load(admin([
+      row({}),
+      row({ applicationId: "b", reference: "LOCAL-MA-0003", state: "bee_scrutiny" }),
+      row({ applicationId: "c", reference: "LOCAL-MA-0004", pendingReversalId: "r1" }),
+      row({ applicationId: "d", reference: "LOCAL-MA-0005", state: "fee_due", reversal: { reversedBy: "BEE Programme", reversedAt: "2026-10-04T12:00:00Z" } }),
+    ], [], { pending: [reversalProposal({ applicationId: "c", reference: "LOCAL-MA-0004" })] }));
+    expect(screen.getByTestId("reversal-propose-LOCAL-MA-0002")).toBeTruthy();
+    expect(screen.queryByTestId("reversal-propose-LOCAL-MA-0003")).toBeNull();
+    expect(screen.getByTestId("reversal-pending-flag-LOCAL-MA-0004")).toBeTruthy();
+    expect(screen.queryByTestId("reversal-propose-LOCAL-MA-0004")).toBeNull();
+    const reversed = screen.getByTestId("corrections-reversed-row-LOCAL-MA-0005");
+    expect(reversed.getAttribute("data-reversed")).toBe("true");
+    expect(screen.getByTestId("reversed-flag-LOCAL-MA-0005").textContent).toBe("Reversed by BEE Programme");
+    expect(screen.queryByTestId("correction-propose-LOCAL-MA-0005")).toBeNull();
+    expect(screen.queryByTestId("reversal-propose-LOCAL-MA-0005")).toBeNull();
+    expect(screen.getByTestId("reversal-notes").textContent).toContain("only while nothing has happened");
+  });
+
+  it("offers approve and reject on a colleague's reversal, and only withdraw on your own", async () => {
+    await load(admin([row({})], [], { pending: [reversalProposal({ id: "r1" }), reversalProposal({ id: "r2", proposedByYou: true, proposedBy: "BEE Finance" })] }));
+    expect(screen.getByTestId("reversal-approve-run-r1")).toBeTruthy();
+    expect(screen.getByTestId("reversal-reject-run-r1")).toBeTruthy();
+    expect(screen.queryByTestId("reversal-withdraw-run-r1")).toBeNull();
+    expect(screen.getByTestId("reversal-withdraw-run-r2")).toBeTruthy();
+    expect(screen.queryByTestId("reversal-approve-run-r2")).toBeNull();
+    expect(screen.getByTestId("reversals-pending-r1").textContent).toContain("reverse the fee confirmation");
+  });
+
+  it("refuses an empty reversal reason on the screen and sends nothing, then sends the reversal with the application", async () => {
+    await load(admin([row({})], []));
+    fireEvent.click(screen.getByTestId("reversal-propose-LOCAL-MA-0002"));
+    const before = deferredFetches().length;
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("reversal-propose-run"));
+    });
+    expect(screen.getByTestId("reversal-propose-input-error")).toBeTruthy();
+    expect(deferredFetches().length).toBe(before);
+    fireEvent.change(screen.getByTestId("reversal-reason"), { target: { value: "No money was received" } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("reversal-propose-run"));
+    });
+    const call = deferredFetches()[before];
+    expect(call.url).toBe("/api/runtime/fee-corrections/reversals");
+    expect(JSON.parse(String(call.init?.body))).toEqual({ applicationId: APP, reason: "No money was received" });
+    await act(async () => {
+      call.resolve(reversalProposal({ proposedByYou: true }), 201);
+    });
+    expect(screen.getByTestId("reversal-propose-success").textContent).toContain("A different person must approve it");
+  });
+
+  it("says the application is back at fee due once a reversal is approved", async () => {
+    await load(admin([row({})], [], { pending: [reversalProposal({ id: "r1" })] }));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("reversal-approve-run-r1"));
+    });
+    const call = deferredFetches()[1];
+    expect(call.url).toBe("/api/runtime/fee-corrections/reversals/r1/decision");
+    await act(async () => {
+      call.resolve(reversalProposal({ id: "r1", state: "approved", decidedBy: "BEE Finance", decidedAt: "2026-10-04T12:00:00Z" }), 200);
+    });
+    expect(screen.getByTestId("reversal-decided-r1").textContent).toContain("is back at fee due and the applicant has been told");
   });
 
   it("shows the refusal when a person who may not read the confirmations opens the screen", async () => {

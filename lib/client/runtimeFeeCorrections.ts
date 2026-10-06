@@ -22,6 +22,9 @@ export type FeeConfirmationRow = {
   /** The latest approved correction, whose values are in effect; null when none. */
   correction: { receiptReference: string; receivedOn: string; approvedBy: string; approvedAt: string } | null;
   pendingProposalId: string | null;
+  /** Set when an approved reversal undid this confirmation: it stays as written and is history. */
+  reversal: { reversedBy: string; reversedAt: string } | null;
+  pendingReversalId: string | null;
 };
 
 export type FeeCorrectionProposal = {
@@ -43,16 +46,44 @@ export type FeeCorrectionProposal = {
   decisionNote: string | null;
 };
 
-export type FeeCorrectionAdmin = { today: string; confirmations: FeeConfirmationRow[]; pending: FeeCorrectionProposal[]; decided: FeeCorrectionProposal[] };
+/** A proposal to reverse a fee confirmation recorded in error (BL-142, the owner's assumption B17). */
+export type FeeReversalProposal = {
+  id: string;
+  applicationId: string;
+  reference: string;
+  reason: string;
+  state: CorrectionState;
+  proposedBy: string;
+  proposedByYou: boolean;
+  proposedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+};
+
+export type FeeCorrectionAdmin = {
+  today: string;
+  confirmations: FeeConfirmationRow[];
+  pending: FeeCorrectionProposal[];
+  decided: FeeCorrectionProposal[];
+  reversalsPending: FeeReversalProposal[];
+  reversalsDecided: FeeReversalProposal[];
+};
 
 export type FeeCorrectionsResult = { ok: true; admin: FeeCorrectionAdmin } | { ok: false; failure: ReadFailure };
 
 export const FEE_CORRECTIONS_PATH = "/api/runtime/fee-corrections";
 export const CORRECTION_PROPOSALS_PATH = "/api/runtime/fee-corrections/proposals";
+export const REVERSALS_PATH = "/api/runtime/fee-corrections/reversals";
+export const reversalDecisionPath = (id: string) => `/api/runtime/fee-corrections/reversals/${encodeURIComponent(id)}/decision`;
 export const correctionDecisionPath = (id: string) => `/api/runtime/fee-corrections/proposals/${encodeURIComponent(id)}/decision`;
 
 const parseAdmin = (body: unknown): FeeCorrectionAdmin | null =>
-  body && typeof body === "object" && Array.isArray((body as FeeCorrectionAdmin).confirmations) && Array.isArray((body as FeeCorrectionAdmin).pending) ? (body as FeeCorrectionAdmin) : null;
+  body && typeof body === "object" && Array.isArray((body as FeeCorrectionAdmin).confirmations) && Array.isArray((body as FeeCorrectionAdmin).pending) &&
+  Array.isArray((body as FeeCorrectionAdmin).reversalsPending) && Array.isArray((body as FeeCorrectionAdmin).reversalsDecided) ? (body as FeeCorrectionAdmin) : null;
+
+const parseReversal = (body: unknown): FeeReversalProposal | null =>
+  body && typeof body === "object" && "id" in body && "state" in body && "reason" in body && !("previousReceiptReference" in body) ? (body as FeeReversalProposal) : null;
 
 const parseProposal = (body: unknown): FeeCorrectionProposal | null =>
   body && typeof body === "object" && "id" in body && "state" in body && "previousReceiptReference" in body ? (body as FeeCorrectionProposal) : null;
@@ -78,3 +109,17 @@ export function runDecideCorrection(p: DecideCorrectionInput, idempotencyKey: st
 }
 
 export const decideCorrectionSignature = (p: DecideCorrectionInput) => [p.id, p.decision, p.note ?? ""];
+
+export type ProposeReversalInput = { applicationId: string; reason: string };
+
+export function runProposeReversal(p: ProposeReversalInput, idempotencyKey: string) {
+  return runtimeCommand(REVERSALS_PATH, "POST", p, idempotencyKey, parseReversal);
+}
+
+export const proposeReversalSignature = (p: ProposeReversalInput) => [p.applicationId, p.reason];
+
+export function runDecideReversal(p: DecideCorrectionInput, idempotencyKey: string) {
+  return runtimeCommand(reversalDecisionPath(p.id), "POST", p.note ? { decision: p.decision, note: p.note } : { decision: p.decision }, idempotencyKey, parseReversal);
+}
+
+export const decideReversalSignature = decideCorrectionSignature;

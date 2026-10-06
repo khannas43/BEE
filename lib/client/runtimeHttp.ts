@@ -223,6 +223,34 @@ export async function runtimeCommand<T>(
   return { ok: false, replayed, failure: commandFailure(res.status, parsed) };
 }
 
+/**
+ * POST with no body and no Idempotency-Key (recorded exceptions in the OpenAPI artifact, for example marking a notification read).
+ * Same failure handling as `runtimeCommand`; `replayed` is always false.
+ */
+export async function runtimeAction<T>(
+  path: string,
+  parse: (body: unknown) => T | null,
+  fetchImpl: FetchLike = fetch,
+): Promise<CommandResult<T>> {
+  let res: Response;
+  try {
+    const headers = new Headers();
+    headers.delete("authorization");
+    headers.delete("Authorization");
+    res = await fetchImpl(path, { method: "POST", credentials: "include", cache: "no-store", headers });
+  } catch {
+    return { ok: false, replayed: false, failure: { kind: "unavailable", message: RUNTIME_MESSAGES.api_unreachable } };
+  }
+  const parsed = await parseJson(res);
+  if (res.ok) {
+    const value = parse(parsed);
+    return value === null
+      ? { ok: false, replayed: false, failure: { kind: "unavailable", message: RUNTIME_MESSAGES.invalid_api_response } }
+      : { ok: true, replayed: false, value };
+  }
+  return { ok: false, replayed: false, failure: commandFailure(res.status, parsed) };
+}
+
 // ---- what to do after a command ----
 
 /**

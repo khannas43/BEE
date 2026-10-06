@@ -102,6 +102,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["Create draft", "Edit draft", "Upload test reports", "Submit draft", "Edit and resubmit a returned application"],
   },
   {
+    href: "/app/model-label/notifications",
+    en: "Notifications",
+    hi: "सूचनाएँ",
+    icon: "notifications",
+    navRoles: ["manufacturer", "agency"],
+    implemented: ["See updates about your applications", "Open the screen to act", "Mark one or all as read"],
+  },
+  {
     href: "/app/model-label/label-preview",
     en: "Certificate and label",
     hi: "प्रमाणपत्र एवं लेबल",

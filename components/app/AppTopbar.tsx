@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ROLES, RoleKey } from "@/lib/roles";
 import { countForRole } from "@/lib/screens";
 import { ROLE_PREVIEW_ENABLED, useRole } from "./RoleContext";
+import { NotificationBell } from "./notifications/NotificationBell";
 import { SessionBadge } from "./SessionBadge";
 import { useLang } from "@/components/i18n/LangProvider";
 
@@ -65,10 +66,7 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
         </div>
         )}
 
-        <button className="relative text-on-surface-variant hover:text-on-surface" type="button" aria-label="Notifications">
-          <Icon name="notifications" size={22} />
-          <span className="absolute -top-1 -right-1 w-4 h-4 bg-error text-on-error rounded-full text-[10px] font-bold flex items-center justify-center">7</span>
-        </button>
+        <NotificationBell />
 
         {/* The only identity shown here is the signed-in one, as Spring reports it. */}
         <SessionBadge

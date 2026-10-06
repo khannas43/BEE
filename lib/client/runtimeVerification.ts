@@ -20,6 +20,7 @@ export type VerificationResult =
   | { outcome: "found"; certificate: PublicVerification }
   | { outcome: "not_found" }
   | { outcome: "empty" }
+  | { outcome: "rate_limited"; retryAfter: number | null }
   | { outcome: "unavailable" };
 
 export const VERIFICATION_PATH = "/api/runtime/verification";
@@ -41,6 +42,10 @@ export async function readPublicVerification(reg: string, fetchImpl: typeof fetc
   if (res.status === 200) return isCertificate(body) ? { outcome: "found", certificate: body } : { outcome: "unavailable" };
   if (res.status === 404) return { outcome: "not_found" };
   if (res.status === 422) return { outcome: "empty" };
+  if (res.status === 429) {
+    const wait = Number(res.headers.get("Retry-After"));
+    return { outcome: "rate_limited", retryAfter: Number.isInteger(wait) && wait > 0 && wait <= 999 ? wait : null };
+  }
   return { outcome: "unavailable" };
 }
 
@@ -51,6 +56,7 @@ export const VERIFICATION_COPY = {
   statusText: { valid: "Valid registration", expired: "Expired registration", not_yet_valid: "Registration not yet valid" },
   notFound: "No such registration. Check the registration ID against the certificate or label.",
   unavailable: "The check is not available right now. Please try again.",
+  rateLimited: "Too many checks just now. Please wait a moment and try again.",
   empty: "Enter a registration ID.",
   demo: "Local demonstration: this is not a BEE certificate and has no legal effect.",
 } as const;

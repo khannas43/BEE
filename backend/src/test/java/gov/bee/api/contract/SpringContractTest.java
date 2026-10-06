@@ -171,6 +171,9 @@ class SpringContractTest {
     @MockitoBean
     gov.bee.api.notifications.NotificationRepository notificationRepo;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    gov.bee.api.verification.PublicRateLimiter publicRateLimiter;
+
     @MockitoBean
     gov.bee.api.ratingschemes.RatingSchemeRepository schemesRepo;
 
@@ -1891,6 +1894,26 @@ class SpringContractTest {
         conforms(all, post(all).with(token("manufacturer")), 503, "service_unavailable");
         // the other methods are not routes
         assertEquals(401, mvc.perform(delete(list)).andReturn().getResponse().getStatus());
+    }
+
+    @Test
+    void publicVerificationRateLimitDocumentedPairs() throws Exception {
+        String route = "/api/public/verification";
+        java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(5_000_000);
+        publicRateLimiter.resetForTest(2, clock::get);
+        try {
+            when(publicVerificationRepo.find("BEE/RAC/2026/99999")).thenReturn(Optional.empty());
+            conforms(route, get(route).param("reg", "BEE/RAC/2026/99999"), 404, "not_found");
+            conforms(route, get(route).param("reg", "BEE/RAC/2026/99999"), 404, "not_found");
+            var limited = conforms(route, get(route).param("reg", "BEE/RAC/2026/99999"), 429, "rate_limited");
+            assertEquals("60", limited.getHeader("Retry-After"));
+            clock.addAndGet(25_000);
+            assertEquals("35", conforms(route, get(route), 429, "rate_limited").getHeader("Retry-After"), "a blank request counts too, and the wait shrinks");
+            clock.addAndGet(35_000);
+            conforms(route, get(route).param("reg", "BEE/RAC/2026/99999"), 404, "not_found");
+        } finally {
+            publicRateLimiter.resetForTest(600, System::currentTimeMillis);
+        }
     }
 
     @Test

@@ -374,6 +374,39 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
   }
 }
 
+
+/**
+ * BL-143: the portal limits the public verification route. With no trusted proxy every visitor shares one window (300 a minute), so a
+ * burst of unknown IDs must reach a 429 with a whole-second Retry-After, still refuse while the window is full, and answer normally
+ * once the wait has passed. Runs last in this check, and waits the window out, so nothing after it meets a full window.
+ */
+async function rateLimitProof() {
+  const route = "/api/runtime/verification";
+  const url = `${WEB}${route}?reg=${encodeURIComponent("BEE/RAC/2026/99999")}`;
+  const get = async () => {
+    const res = await fetch(url, { cache: "no-store", headers: { "X-Correlation-Id": `ratelimit-${Date.now()}-${Math.floor(Math.random() * 1e6)}` } });
+    const text = await res.text();
+    return { status: res.status, json: (() => { try { return JSON.parse(text); } catch { return null; } })(), text, headers: res.headers };
+  };
+  let sent = 0, first = null;
+  while (sent < 700 && !first) {
+    const r = await get();
+    sent += 1;
+    if (r.status === 429) first = r;
+    else if (r.status !== 404) throw new Error(`unexpected ${r.status} while filling the window`);
+  }
+  const retry = Number(first?.headers.get("retry-after"));
+  const e = first ? contract.conforms(doc, route, "GET", first) : ["no 429 seen"];
+  check("secretary.public.rate-limit-refuses-a-burst", !!first && sent <= 301 && e.length === 0 && first.json?.error === "rate_limited", `429 after ${sent} requests${e.length ? " " + e.join("; ") : ""}`);
+  check("secretary.public.rate-limit-says-how-long", Number.isInteger(retry) && retry >= 1 && retry <= 60, `Retry-After ${first?.headers.get("retry-after")}`);
+  const still = await get();
+  check("secretary.public.rate-limit-keeps-refusing-while-full", still.status === 429, `${still.status}`);
+  await new Promise((r) => setTimeout(r, (Number.isInteger(retry) ? retry : 60) * 1000 + 1500));
+  const after = await get();
+  const e2 = contract.conforms(doc, route, "GET", after);
+  check("secretary.public.rate-limit-opens-again", after.status === 404 && after.json?.error === "not_found" && e2.length === 0, `${after.status} ${after.json?.error}`);
+}
+
 async function main() {
   const chrome = await launchChrome();
   try {
@@ -397,6 +430,7 @@ async function main() {
     try {
       await runSecretaryChecks("secretary.run1", pages.nova, pages.finance, pages.iame, pages.reviewer, pages.programme, pages.director, pages.secretary, pages.anon);
       await runSecretaryChecks("secretary.run2", pages.nova, pages.finance, pages.iame, pages.reviewer, pages.programme, pages.director, pages.secretary, pages.anon);
+      await rateLimitProof();
     } finally {
       REAL.forEach(([role, id], i) => sql(`UPDATE app.role_assignment SET active = ${was[i] === "t"} WHERE user_id = '${id}' AND role = '${role}'`));
       check("secretary.real-officers-restored", REAL.every(([role, id], i) => sql(`SELECT active FROM app.role_assignment WHERE user_id = '${id}' AND role = '${role}'`) === was[i]), "real IAME officer and Reviewer roles restored");

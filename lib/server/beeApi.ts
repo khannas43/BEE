@@ -43,7 +43,7 @@ export interface CallInit {
   timeoutMs?: number;
 }
 
-const FORWARD_REQUEST_HEADERS = ["Idempotency-Replayed"] as const;
+const FORWARD_REQUEST_HEADERS = ["Idempotency-Replayed", "Retry-After"] as const;
 const FORWARD_BINARY_HEADERS = ["Idempotency-Replayed", "Content-Disposition"] as const;
 
 function requestHeaders(init: CallInit, accept: string): Record<string, string> {

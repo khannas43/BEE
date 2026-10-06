@@ -59,4 +59,17 @@ describe("the public verification page", () => {
     render(<VerifyPage />);
     await waitFor(() => expect(screen.getByTestId("verify-result").getAttribute("data-outcome")).toBe("unavailable"));
   });
+
+  it("asks a person who checks too often to wait, with the wait the server gave", async () => {
+    search = "reg=BEE%2FRAC%2F2026%2F10001";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "rate_limited" }), { status: 429, headers: { "Retry-After": "42" } })));
+    render(<VerifyPage />);
+    await waitFor(() => expect(screen.getByTestId("verify-result").getAttribute("data-outcome")).toBe("rate_limited"));
+    expect(screen.getByTestId("verify-message").textContent).toMatch(/Too many checks just now.*about 42 seconds/);
+    cleanup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "rate_limited" }), { status: 429, headers: { "Retry-After": "junk" } })));
+    render(<VerifyPage />);
+    await waitFor(() => expect(screen.getByTestId("verify-result").getAttribute("data-outcome")).toBe("rate_limited"));
+    expect(screen.getByTestId("verify-message").textContent).not.toMatch(/seconds/);
+  });
 });

@@ -417,4 +417,42 @@ class RegistrationDatabaseTest {
         refused(feeService.confirm(FINANCE, id, key(), json(body.replace("\"version\":1", "\"version\":2"))), 404, "not_found");
         assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_fee_confirmation SET amount_inr = 1 WHERE application_id = ?", id));
     }
+
+    @Test
+    void aReplayedCreateIsRefusedOnceTheCallerCanNoLongerFile() {
+        String k = key();
+        var created = ok(service.create(NOVA, k, json("{\"brandName\":\"Gale Cool\"}")), 201);
+        assertEquals("Gale Cool", created.get("brandName"));
+        assertEquals("true", service.create(NOVA, k, json("{\"brandName\":\"Gale Cool\"}")).getHeaders().getFirst("Idempotency-Replayed"));
+        var lostRole = new Caller(NOVA_USER, "nova.applicant", List.of(), Set.of(NOVA_ORG));
+        refused(service.create(lostRole, k, json("{\"brandName\":\"Gale Cool\"}")), 403, "no_write_scope");
+    }
+
+    @Test
+    void textFieldsMustBeText() {
+        refused(service.create(NOVA, key(), json("{\"brandName\":12345}")), 422, "validation_failed");
+        refused(service.create(NOVA, key(), json("{\"brandName\":[\"x\"]}")), 422, "validation_failed");
+        refused(service.create(PIXEL, key(), json("{\"brandId\":12345}")), 422, "validation_failed");
+        refused(service.create(PIXEL, key(), json("{\"brandId\":\"" + NOVA_COOL + "\",\"validFrom\":20261201}")), 422, "validation_failed");
+    }
+
+    @Test
+    void twoFilingsOfOneNameAtOnceGiveOneCreatedAndOneConflict() throws Exception {
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(db.getDataSource()));
+        var barrier = new java.util.concurrent.CyclicBarrier(2);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<Integer> filing = () -> {
+                barrier.await();
+                return tx.execute(st -> service.create(NOVA, key(), json("{\"brandName\":\"Squall Cool\"}")).getStatusCode().value());
+            };
+            var a = pool.submit(filing);
+            var b = pool.submit(filing);
+            var codes = new java.util.TreeSet<>(List.of(a.get(30, java.util.concurrent.TimeUnit.SECONDS), b.get(30, java.util.concurrent.TimeUnit.SECONDS)));
+            assertEquals(new java.util.TreeSet<>(List.of(201, 409)), codes);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
 }

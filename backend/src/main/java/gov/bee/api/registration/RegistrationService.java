@@ -270,13 +270,13 @@ public class RegistrationService {
         }
         try {
             if (RegistrationPolicy.BRAND.equals(kind)) {
-                if (!body.hasNonNull("brandName") || body.hasNonNull("brandId") || body.hasNonNull("validFrom") || body.hasNonNull("validTo")) {
+                if (!body.hasNonNull("brandName") || !body.get("brandName").isTextual() || body.hasNonNull("brandId") || body.hasNonNull("validFrom") || body.hasNonNull("validTo")) {
                     return Optional.empty();
                 }
                 String name = DraftRequestSupport.trim(body.get("brandName").asText());
                 return BRAND_NAME.matcher(name).matches() ? Optional.of(new Fields(null, null, name, null, null)) : Optional.empty();
             }
-            if (!body.hasNonNull("brandId") || body.hasNonNull("brandName")) {
+            if (!body.hasNonNull("brandId") || !body.get("brandId").isTextual() || body.hasNonNull("brandName")) {
                 return Optional.empty();
             }
             UUID brandId = UUID.fromString(body.get("brandId").asText());
@@ -299,6 +299,9 @@ public class RegistrationService {
         if (!body.hasNonNull(name)) {
             return null;
         }
+        if (!body.get(name).isTextual()) {
+            throw new IllegalArgumentException(name);
+        }
         String s = body.get(name).asText();
         if (!s.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
             throw new IllegalArgumentException(name);
@@ -313,6 +316,9 @@ public class RegistrationService {
 
     /** Refusals that depend on other records: a name already on the register, or a live request already filed. */
     private Optional<ResponseEntity<Map<String, Object>>> refuse(String kind, Fields f, UUID filing, UUID except) {
+        // Two filings of one name or brand by one organisation queue here, so the second sees the first's row and gets the 409
+        // instead of a unique-index violation.
+        registrations.lockRequestKey(filing + ":" + (RegistrationPolicy.BRAND.equals(kind) ? f.brandName().toLowerCase() : String.valueOf(f.brandId())));
         if (RegistrationPolicy.BRAND.equals(kind)) {
             if (registrations.brandNameTaken(f.brandName())) {
                 return Optional.of(error(HttpStatus.CONFLICT, "brand_name_taken"));
@@ -398,7 +404,10 @@ public class RegistrationService {
         if (prior.isEmpty() || !java.security.MessageDigest.isEqual(prior.get(), DraftRequestSupport.bodyHash(body))) {
             return Optional.of(error(HttpStatus.CONFLICT, "idempotency_key_conflict"));
         }
-        // A replay is shown only to a caller who can still reach the record it was made on.
+        // A replay is shown only to a caller who can still file, and (for a record) still reach the record it was made on.
+        if (NIL.equals(target) && RegistrationPolicy.kindFor(caller).isEmpty()) {
+            return Optional.of(error(HttpStatus.FORBIDDEN, "no_write_scope"));
+        }
         if (!NIL.equals(target)) {
             Optional<UUID> filing = RegistrationPolicy.filingOrganisation(caller);
             if (filing.isEmpty()) {

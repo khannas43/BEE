@@ -134,7 +134,15 @@ public class RegistrationRepository {
     }
 
     public Optional<BrandChoice> activeBrand(UUID brandId) {
-        return activeBrands().stream().filter(b -> b.id().equals(brandId)).findFirst();
+        return jdbc.query("SELECT b.id, b.name, b.owner_organisation_id, o.code FROM brand b JOIN organisation o ON o.id = b.owner_organisation_id "
+            + "WHERE b.id = ? AND b.status = 'active'", (rs, i) -> new BrandChoice(rs.getObject("id", UUID.class), rs.getString("name"),
+                rs.getObject("owner_organisation_id", UUID.class), rs.getString("code")), brandId).stream().findFirst();
+    }
+
+    /** A transaction-scoped lock on a name, so filings of the same name queue instead of racing the unique index. */
+    public void lockRequestKey(String key) {
+        jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> {
+        }, key);
     }
 
     /** A brand of this name (any owner) is already on the register. */

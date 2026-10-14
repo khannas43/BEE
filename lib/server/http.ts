@@ -46,8 +46,11 @@ export function logged<R extends Request, A extends unknown[]>(route: WebRoute, 
     try {
       res = await handler(request, ...rest);
       return res;
-    } catch {
-      // An exception that escapes a handler must still answer in the contract body, with the correlation ID and no-store (never Next's bare 500).
+    } catch (error) {
+      // An exception that escapes a data handler (/api/runtime, except the health probe) must still answer in the contract body, with the
+      // correlation ID and no-store, never Next's bare 500. Those operations document 502 api_error; the auth and health routes do not,
+      // so they keep Next's own error.
+      if (!route.startsWith("/api/runtime/") || route === "/api/runtime/health") throw error;
       res = errorResponse("api_error", 502, correlationIdOf(request));
       return res;
     } finally {

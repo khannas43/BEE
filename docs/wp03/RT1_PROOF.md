@@ -143,13 +143,13 @@ The figures above are those of 30 September 2026 (35 checks, Flyway V2, one rout
 
 | Resident memory (median of five samples) | Measured | Budget (ADR-001) |
 | --- | --- | --- |
-| PostgreSQL | 171 MB | |
-| Keycloak | 714 MB | |
-| Spring API | 265 MB | |
+| PostgreSQL | 171 MB | within the total |
+| Keycloak | 714 MB | within the total |
+| Spring API | 265 MB | within the total |
 | Next.js web | 597 MB | 1500 MB |
 | Total | 1747 MB | 3600 MB |
 
-The memory gate (`memory.web`, `memory.total`) is part of every `local:check` and has passed on every full run. Reproducible start, seed and reset are exercised on every gate: `local:down`, `local:up` and `local:seed` before each full run, and the targeted reset between runs of each live check (every check removes the rows it makes and runs twice).
+The memory gate (`memory.web`, `memory.total`) is part of every `local:check` and passed in the final full run. Start, seed and targeted reset are routine rather than enforced: the full runs were normally started after `local:down` and `local:up` (the preflight only refuses to run when the runtime is down), `local:seed` is run before the live checks, and every live check removes the rows it makes and runs twice.
 
 **Not re-run:** the destructive proof (`npm run local:rt1 -- --allow-destroy`, which deletes the database volume and rebuilds it) was not repeated on the current system. That is recorded as BL-205.
 

@@ -14,11 +14,11 @@ All 58 Spring method and path pairs in `SecurityConfig` equal the artifact's int
 
 | # | Correction | Done |
 | --- | --- | --- |
-| 1 | Stale text in the artifact (default-deny wording naming history, the unmatched-route example that now exists, the denied-by-default description, the description line, the version policy, the correlation header text) | rewritten; contract **0.32.1**, re-pinned |
+| 1 | Stale text in the artifact (default-deny wording naming history, the unmatched-route example that now exists, the denied-by-default description, the description line, the version policy, the correlation header text) | rewritten; contract **0.32.1**, then **0.32.2**, re-pinned |
 | 2 | WP03.1, WP03.2 and WP03.3 notes and two plan lines said writes, history, idempotency and screens do not exist | each note carries a "historical, written 1 October" banner pointing to the artifact and this review; the plan lines are dated |
 | 3 | RT1 evidence was of 30 September (35 checks, Flyway V2, one route, memory idle) | addendum to `RT1_PROOF.md` with the current memory measurements (total 1747 MB of a 3600 MB budget; web 597 MB of 1500 MB) and the statement that the destructive rebuild was not repeated (BL-205) |
 | 4 | Acceptance checks A8 and A9 still "not started" | progress text in the acceptance map says what evidences each and what does not (BL-204, BL-205) |
-| 5 | An exception escaping a portal handler produced Next's bare 500 without the correlation ID or the contract body | `logged` now turns it into `502 api_error` with the header, no-store and the log line (no exception text); a unit test proves it |
+| 5 | An exception escaping a portal handler produced Next's bare 500 without the correlation ID or the contract body | `logged` now turns an exception escaping a data handler under `/api/runtime` into `502 api_error` (a code those operations already document) with the header, no-store and the log line (no exception text); the health probe and the auth routes keep Next's own error, as they document no 502; a unit test proves both. The second review made this narrower; the contract is 0.32.2 |
 
 Not blocking, recorded in docs/BACKLOG.md: BL-167 (no contract-only check), BL-206 (a generic static validator-versus-artifact test), BL-207 (three over-allowed error tables), BL-208 (key check before session; correlation route label), BL-200 (Origin check on BFF writes), BL-079 to BL-081 (hard-coded coverage maps).
 

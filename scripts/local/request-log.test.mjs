@@ -616,16 +616,20 @@ test("unit-evidence: GET /api/auth/callback 303 login_expired | planted OAuth qu
 
 test("an exception that escapes a handler still answers 502 api_error with the correlation ID, no-store and the log line", async () => {
   const http = await import("../../lib/server/http.ts");
-  const wrapped = http.logged("/api/runtime/health", () => {
+  const wrapped = http.logged("/api/runtime/me", () => {
     throw new Error(`boom ${SECRET}`);
   });
   const id = "unit-escaped-exception";
-  const res = await wrapped(req(path("/api/runtime/health"), id, null));
+  const res = await wrapped(req(path("/api/runtime/me"), id, null));
   assert.equal(res.status, 502);
   assert.equal((await res.json()).error, "api_error");
   assert.equal(res.headers.get("x-correlation-id"), id);
   assert.match(res.headers.get("cache-control") ?? "", /no-store/);
-  assert.deepEqual(byCorrelation(id).map((x) => [x.event, x.route, x.status, x.outcome]), [["request", "/api/runtime/health", 502, "api_error"]]);
+  assert.deepEqual(byCorrelation(id).map((x) => [x.event, x.route, x.status, x.outcome]), [["request", "/api/runtime/me", 502, "api_error"]]);
+  const health = http.logged("/api/runtime/health", () => {
+    throw new Error("boom");
+  });
+  await assert.rejects(async () => health(req(path("/api/runtime/health"), "unit-escaped-health", null)), /boom/, "the health probe and the auth routes keep Next's own error");
   assert.equal(JSON.stringify(byCorrelation(id)).includes(SECRET), false, "the exception text never reaches the log");
 });
 

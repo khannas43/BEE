@@ -212,7 +212,7 @@ class FeeRuleDatabaseTest {
         grantFinance();
         try {
             assertEquals(java.util.List.of("fee_confirmation_correct", "fee_rule_manage"), identity.capabilities(java.util.List.of("finance", "reviewer")));
-            assertEquals(java.util.List.of("business_setting_manage", "fee_confirmation_correct", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin", "finance")), "each permission once");
+            assertEquals(java.util.List.of("business_setting_manage", "delegation_approve", "fee_confirmation_correct", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin", "finance")), "each permission once");
         } finally {
             revokeFinance();
         }

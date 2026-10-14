@@ -1,0 +1,65 @@
+package gov.bee.api.registration;
+
+import gov.bee.api.application.ModelDraftPolicy;
+import gov.bee.api.identity.Caller;
+import gov.bee.api.identity.IdentityRepository.RoleGrant;
+import java.util.LinkedHashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+/** WP04.2b-1: who may file a registration and who may read one. Provisional local rules, not BEE rules. */
+public final class RegistrationPolicy {
+
+    public static final String BRAND = "brand";
+    public static final String AGENCY = "agency";
+
+    private RegistrationPolicy() {
+    }
+
+    /** The kind of request the caller may file: a manufacturer registers a brand, an agency asks to act for one. */
+    public static Optional<String> kindFor(Caller caller) {
+        if (ModelDraftPolicy.filingOrganisation(caller).isEmpty()) {
+            return Optional.empty();
+        }
+        if (caller.holds("manufacturer", "own-org")) {
+            return Optional.of(BRAND);
+        }
+        if (caller.holds("agency", "own-org")) {
+            return Optional.of(AGENCY);
+        }
+        return Optional.empty();
+    }
+
+    public static Optional<UUID> filingOrganisation(Caller caller) {
+        return kindFor(caller).isPresent() ? ModelDraftPolicy.filingOrganisation(caller) : Optional.empty();
+    }
+
+    /** What a caller reads: their own organisation's requests, and the stage each reviewing role works at. */
+    public record ReadScope(Set<UUID> organisations, Set<String> stages) {
+        public boolean isEmpty() {
+            return organisations.isEmpty() && stages.isEmpty();
+        }
+
+        public boolean canRead(RegistrationRepository.Row r) {
+            return organisations.contains(r.organisationId()) || stages.contains(r.state());
+        }
+    }
+
+    public static ReadScope readScope(Caller caller) {
+        Set<UUID> orgs = new LinkedHashSet<>();
+        Set<String> stages = new LinkedHashSet<>();
+        for (RoleGrant g : caller.roles()) {
+            if (("manufacturer".equals(g.role()) || "agency".equals(g.role())) && "own-org".equals(g.scope())) {
+                orgs.addAll(caller.organisationIds());
+            } else if ("finance".equals(g.role()) && "all".equals(g.scope())) {
+                stages.add("fee_due");
+            } else if ("programme".equals(g.role()) && "all".equals(g.scope())) {
+                stages.add("programme_review");
+            } else if ("director".equals(g.role()) && "all".equals(g.scope())) {
+                stages.add("director_approval");
+            }
+        }
+        return new ReadScope(orgs, stages);
+    }
+}

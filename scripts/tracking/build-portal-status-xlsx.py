@@ -80,7 +80,7 @@ TAB2_ROWS = [
     ("Work package", "WP04", "Masters and brand authorisation", "In progress", 90),
     ("Work package", "WP04.2b-1", "Registration: file, trade-licence PDF, fee, Finance confirmation", "Done", 100),
     ("Work package", "WP04.2b-2", "Registration: recommend, approve, return, reject, resubmit; register entry", "Done", 100),
-    ("Work package", "WP04.2b-2b", "Revocation and closure of a brand or authorisation by a second person", "Not started", 0),
+    ("Work package", "WP04.2b-2b", "Revocation and closure of a brand or authorisation by a second person", "Done", 100),
     ("Work package", "WP04.2b-3", "Model flow uses the registered brand (brand id); live proof of the chain", "Done", 100),
     ("Work package", "WP05.1a", "Read-only model applications UI", "Done", 100),
     ("Work package", "WP05.1b", "Draft create/edit", "Done", 100),

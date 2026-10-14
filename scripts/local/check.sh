@@ -310,6 +310,13 @@ read -r rev_pass rev_fail <<<"$(sed -nE 's/^registration review checks: ([0-9]+)
 if [[ -z "${rev_pass:-}" ]]; then check "registrationreview.run" 0 "registration-review-browser-check did not complete: $(tail -1 <<<"$rev_out")"
 else pass=$((pass + rev_pass)); fail=$((fail + rev_fail)); fi
 
+# ---- WP04.2b-2b: closing and revoking register entries (records the runtime register-revocation pairs)
+rvk_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/register-revocation-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$rvk_out"
+read -r rvk_pass rvk_fail <<<"$(sed -nE 's/^revocation checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$rvk_out")"
+if [[ -z "${rvk_pass:-}" ]]; then check "registerrevocation.run" 0 "register-revocation-browser-check did not complete: $(tail -1 <<<"$rvk_out")"
+else pass=$((pass + rvk_pass)); fail=$((fail + rvk_fail)); fi
+
 # ---- WP08.1h / Brief 12: the Business settings screen, driven in the portal
 bsu_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/business-settings-ui-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$bsu_out"

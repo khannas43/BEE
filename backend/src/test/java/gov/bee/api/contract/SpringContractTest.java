@@ -38,6 +38,7 @@ import gov.bee.api.identity.IdentityRepository;
 import gov.bee.api.masters.MasterDataRepository;
 import gov.bee.api.registration.RegistrationDocumentRepository;
 import gov.bee.api.registration.RegistrationRepository;
+import gov.bee.api.revocation.RevocationRepository;
 import gov.bee.api.masters.MasterVersion;
 import gov.bee.api.masters.Masters;
 import java.math.BigDecimal;
@@ -184,6 +185,9 @@ class SpringContractTest {
 
     @MockitoBean
     RegistrationRepository registrationRepo;
+
+    @MockitoBean
+    RevocationRepository revocationRepo;
 
     @MockitoBean
     RegistrationDocumentRepository registrationDocumentRepo;
@@ -2504,6 +2508,126 @@ class SpringContractTest {
         assertEquals(pin.path("version").asText(), doc.path("info").path("version").asText(), "artifact version differs from the pin");
         String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(ContractSchema.ARTIFACT)));
         assertEquals(pin.path("sha256").asText(), sha, "artifact content changed without a version bump and a new pin (scripts/local/contract-pin.json)");
+    }
+
+    /** WP04.2b-2b: every documented status and code of the register-revocation routes, through the real chain with the repository mocked. */
+    @Test
+    void registerRevocationDocumentedPairs() throws Exception {
+        final String LIST = "/api/register-revocations", DECIDE = LIST + "/{id}/decision";
+        final UUID P = UUID.fromString("00000000-0000-4000-f000-0000000000a1");
+        final UUID BRAND = UUID.fromString("00000000-0000-4000-d000-000000000001");
+        final String decidePath = LIST + "/" + P + "/decision";
+        final UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("programme"))));
+        final String propose = "{\"targetKind\":\"brand\",\"targetId\":\"" + BRAND + "\",\"action\":\"revoke\",\"reason\":\"Licence withdrawn\"}";
+        final String approve = "{\"decision\":\"approve\"}";
+        var entry = new RevocationRepository.BrandEntry(BRAND, "Nova Cool", "NOVA", "active", "seed");
+        var pending = new RevocationRepository.Proposal(P, "brand", BRAND, "Nova Cool", "revoke", null, "Licence withdrawn", UUID.randomUUID(), "BEE Programme",
+            Instant.parse("2026-10-14T10:00:00Z"), "pending", null, null, null);
+        var approved = new RevocationRepository.Proposal(P, "brand", BRAND, "Nova Cool", "revoke", null, "Licence withdrawn", UUID.randomUUID(), "BEE Programme",
+            Instant.parse("2026-10-14T10:00:00Z"), "approved", "BEE Director", Instant.parse("2026-10-14T11:00:00Z"), null);
+        java.util.function.Supplier<Boolean> fresh = () -> {
+            reset(identity, idempotency, revocationRepo);
+            when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+            when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+            when(revocationRepo.rolesHolding("register_revoke_propose")).thenReturn(Set.of("programme"));
+            when(revocationRepo.rolesHolding("register_revoke_decide")).thenReturn(Set.of("director"));
+            when(revocationRepo.brands()).thenReturn(List.of(entry));
+            when(revocationRepo.authorisations()).thenReturn(List.of());
+            when(revocationRepo.pending()).thenReturn(List.of(pending));
+            when(revocationRepo.recentDecided(anyInt())).thenReturn(List.of());
+            when(revocationRepo.brand(BRAND)).thenReturn(Optional.of(entry));
+            when(revocationRepo.hasPending(any(), any())).thenReturn(false);
+            when(revocationRepo.proposal(P)).thenReturn(Optional.of(pending));
+            when(revocationRepo.insert(any(), any())).thenReturn(pending);
+            return true;
+        };
+        java.util.function.Consumer<String> staffAs = role -> {
+            account(role, "all");
+            when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staff));
+            when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
+        };
+        record Op(String route, java.util.function.Function<RequestPostProcessor, MockHttpServletRequestBuilder> req) {
+        }
+        List<Op> ops = List.of(
+            new Op(LIST, rp -> get(LIST).with(rp)),
+            new Op(LIST, rp -> post(LIST).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(propose)),
+            new Op(DECIDE, rp -> post(decidePath).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(approve)));
+
+        // Identity and scope denials, once per operation.
+        for (Op op : ops) {
+            fresh.get();
+            account("programme", "all");
+            conforms(op.route(), op.req().apply(r -> r), 401, "unauthenticated");
+            conforms(op.route(), op.req().apply(pwdOnly), 403, "mfa_required");
+            when(identity.activeAccount(any())).thenReturn(Optional.empty());
+            conforms(op.route(), op.req().apply(token("programme")), 403, "no_active_account");
+            account("programme", "all");
+            conforms(op.route(), op.req().apply(token("finance")), 403, "no_effective_role");
+            account("auditor", "all");
+            conforms(op.route(), op.req().apply(token("auditor")), 403, "role_not_permitted");
+        }
+
+        // Read.
+        fresh.get();
+        staffAs.accept("programme");
+        conforms(LIST, get(LIST).with(token("programme")), 200, null);
+        doThrow(new DataAccessResourceFailureException("down")).when(revocationRepo).brands();
+        conforms(LIST, get(LIST).with(token("programme")), 503, "service_unavailable");
+
+        // Propose.
+        fresh.get();
+        staffAs.accept("programme");
+        conforms(LIST, post(LIST).with(token("programme")).contentType("application/json").content(propose), 422, "idempotency_key_required");
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(propose), 201, null);
+        when(revocationRepo.hasPending(any(), any())).thenReturn(true);
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(propose), 409, "revocation_pending");
+        when(revocationRepo.hasPending(any(), any())).thenReturn(false);
+        when(revocationRepo.brand(BRAND)).thenReturn(Optional.of(new RevocationRepository.BrandEntry(BRAND, "Nova Cool", "NOVA", "revoked", "seed")));
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(propose), 409, "target_not_active");
+        when(revocationRepo.brand(BRAND)).thenReturn(Optional.empty());
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(propose), 404, "not_found");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(propose), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 201, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(propose), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        staffAs.accept("director");
+        conforms(LIST, post(LIST).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(propose), 403, "role_not_permitted");
+        staffAs.accept("programme");
+        doThrow(new DataAccessResourceFailureException("down")).when(revocationRepo).lockTarget(any());
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(propose), 503, "service_unavailable");
+
+        // Decide.
+        fresh.get();
+        staffAs.accept("director");
+        when(revocationRepo.decide(any(), any(), any(), any())).thenReturn(new RevocationRepository.Decided(RevocationRepository.Outcome.DONE, "approved"));
+        when(revocationRepo.proposal(P)).thenReturn(Optional.of(approved));
+        java.util.function.Function<String, MockHttpServletRequestBuilder> asDirector = b ->
+            post(decidePath).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(b);
+        conforms(DECIDE, post(decidePath).with(token("director")).contentType("application/json").content(approve), 422, "idempotency_key_required");
+        conforms(DECIDE, asDirector.apply("{}"), 422, "validation_failed");
+        conforms(DECIDE, asDirector.apply(approve), 200, null);
+        for (var refusal : List.of(new Object[] {RevocationRepository.Outcome.NOT_PENDING, 409, "proposal_not_pending"},
+            new Object[] {RevocationRepository.Outcome.DATE_PASSED, 409, "closing_date_passed"}, new Object[] {RevocationRepository.Outcome.RULE_CONFLICT, 409, "target_not_active"},
+            new Object[] {RevocationRepository.Outcome.SAME_PERSON, 403, "segregation_refused"}, new Object[] {RevocationRepository.Outcome.NOT_PERMITTED, 403, "role_not_permitted"},
+            new Object[] {RevocationRepository.Outcome.NOT_FOUND, 404, "not_found"})) {
+            when(revocationRepo.decide(any(), any(), any(), any())).thenReturn(new RevocationRepository.Decided((RevocationRepository.Outcome) refusal[0], null));
+            conforms(DECIDE, asDirector.apply(approve), (Integer) refusal[1], (String) refusal[2]);
+        }
+        when(revocationRepo.proposal(P)).thenReturn(Optional.empty());
+        conforms(DECIDE, asDirector.apply(approve), 404, "not_found");
+        when(revocationRepo.proposal(P)).thenReturn(Optional.of(pending));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(DECIDE, asDirector.apply(approve), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(DECIDE, asDirector.apply(approve), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        doThrow(new DataAccessResourceFailureException("down")).when(revocationRepo).proposal(P);
+        conforms(DECIDE, asDirector.apply(approve), 503, "service_unavailable");
     }
 
     /** WP04.2b-2: every documented status and code of the registration review step, through the real chain with the repositories mocked. */

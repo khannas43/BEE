@@ -177,6 +177,15 @@ const REG_SUBMIT_UPSTREAM = {
 };
 const REG_FEE_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM], 422: ["validation_failed", "idempotency_key_required", "amount_mismatch"], 503: ["service_unavailable"] } };
 const REG_TRANSITION_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused", "brand_not_permitted"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM, "brand_name_taken", "authorisation_overlap"], 422: ["validation_failed", "idempotency_key_required", "document_required"], 503: ["service_unavailable"] } };
+// WP04.2b-2b (closing or revoking a register entry). Keep equal to lib/server/contracts/register-revocations.ts and the artifact.
+const REVOCATIONS_ROUTE = "/api/runtime/register-revocations";
+const REVOCATION_DECISION_ROUTE = "/api/runtime/register-revocations/{id}/decision";
+const REVOCATION_DENIALS = ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted"];
+const REVOCATIONS_UPSTREAM = {
+  GET: { 401: ["unauthenticated"], 403: REVOCATION_DENIALS, 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: REVOCATION_DENIALS, 404: ["not_found"], 409: ["idempotency_key_conflict", "idempotency_in_progress", "revocation_pending", "target_not_active"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
+const REVOCATION_DECISION_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...REVOCATION_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "closing_date_passed", "target_not_active", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const REG_UPLOAD_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_editable"], 404: ["not_found"], 409: [...REG_IDEM], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const upstreamLogRoute = (route, method) => {
   if (route === "/api/runtime/me") return "/api/me";
@@ -582,6 +591,9 @@ async function nextChecks(jar, novaToken) {
     [SETTINGS_ROUTE, "/api/runtime/business-settings", "GET", "settings-anon-get", undefined],
     [SETTING_PROPOSAL_ROUTE, "/api/runtime/business-settings/proposals", "POST", "setting-proposal-anon-post", "{}"],
     [SETTING_DECISION_ROUTE, `/api/runtime/business-settings/proposals/${NOVA_APP}/decision`, "POST", "setting-decision-anon-post", "{}"],
+    [REVOCATIONS_ROUTE, "/api/runtime/register-revocations", "GET", "revocations-anon-get", undefined],
+    [REVOCATIONS_ROUTE, "/api/runtime/register-revocations", "POST", "revocations-anon-post", "{}"],
+    [REVOCATION_DECISION_ROUTE, `/api/runtime/register-revocations/${NOVA_APP}/decision`, "POST", "revocation-decision-anon-post", "{}"],
     [NOTIFICATIONS_ROUTE, "/api/runtime/notifications", "GET", "notifications-anon-get", undefined],
     [NOTIFICATION_READ_ROUTE, `/api/runtime/notifications/${NOVA_APP}/read`, "POST", "notification-read-anon-post", undefined],
     [NOTIFICATION_READ_ALL_ROUTE, "/api/runtime/notifications/read-all", "POST", "notification-read-all-anon-post", undefined],
@@ -754,6 +766,9 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(SETTINGS_ROUTE, "/api/runtime/business-settings", "GET", sessionJar, SETTINGS_UPSTREAM);
     await exerciseStandInPairs(SETTING_PROPOSAL_ROUTE, "/api/runtime/business-settings/proposals", "POST", sessionJar, SETTING_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(SETTING_DECISION_ROUTE, `/api/runtime/business-settings/proposals/${NOVA_APP}/decision`, "POST", sessionJar, SETTING_DECISION_UPSTREAM);
+    await exerciseStandInPairs(REVOCATIONS_ROUTE, "/api/runtime/register-revocations", "GET", sessionJar, REVOCATIONS_UPSTREAM);
+    await exerciseStandInPairs(REVOCATIONS_ROUTE, "/api/runtime/register-revocations", "POST", sessionJar, REVOCATIONS_UPSTREAM);
+    await exerciseStandInPairs(REVOCATION_DECISION_ROUTE, `/api/runtime/register-revocations/${NOVA_APP}/decision`, "POST", sessionJar, REVOCATION_DECISION_UPSTREAM);
     await exerciseStandInPairs(CORRECTIONS_ROUTE, "/api/runtime/fee-corrections", "GET", sessionJar, CORRECTIONS_UPSTREAM);
     await exerciseStandInPairs(CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", sessionJar, CORRECTION_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", sessionJar, CORRECTION_DECISION_UPSTREAM);

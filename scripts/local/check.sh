@@ -296,6 +296,13 @@ read -r bs_pass bs_fail <<<"$(sed -nE 's/^business-settings checks: ([0-9]+) pas
 if [[ -z "${bs_pass:-}" ]]; then check "businesssettings.run" 0 "business-settings-browser-check did not complete: $(tail -1 <<<"$bs_out")"
 else pass=$((pass + bs_pass)); fail=$((fail + bs_fail)); fi
 
+# ---- WP04.2b-1: brand and agency registration (records the runtime registration pairs)
+reg_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/registration-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$reg_out"
+read -r reg_pass reg_fail <<<"$(sed -nE 's/^registration checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$reg_out")"
+if [[ -z "${reg_pass:-}" ]]; then check "registrations.run" 0 "registration-browser-check did not complete: $(tail -1 <<<"$reg_out")"
+else pass=$((pass + reg_pass)); fail=$((fail + reg_fail)); fi
+
 # ---- WP08.1h / Brief 12: the Business settings screen, driven in the portal
 bsu_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/business-settings-ui-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$bsu_out"

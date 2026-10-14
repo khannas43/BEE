@@ -163,7 +163,7 @@ async function evidenceFormChecks(runLabel, nova, draftId) {
   const errShown = await nova.waitFor(`!!document.querySelector('[data-testid=model-draft-error]')`, 8000);
   const errText = errShown ? await nova.eval(`document.querySelector('[data-testid=model-draft-error]').textContent`) : "";
   const afterTypo = await api(nova, "GET", `${WEB}/api/runtime/model-applications/${draftId}`, null, null);
-  check(`${runLabel}.ui.evidence-bad-efficiency`, errShown && /positive number up to 99\.99/.test(errText) && afterTypo.body?.declaredIseer === 4.5, errText.slice(0, 70) || "no error shown");
+  check(`${runLabel}.ui.evidence-bad-efficiency`, errShown && /positive number with at most two decimals/.test(errText) && afterTypo.body?.declaredIseer === 4.5, errText.slice(0, 70) || "no error shown");
   await nova.eval(`(() => {
     const el = document.querySelector('[data-testid=model-draft-iseer]');
     const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;

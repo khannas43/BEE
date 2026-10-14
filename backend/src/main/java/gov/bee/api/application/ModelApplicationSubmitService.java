@@ -30,7 +30,7 @@ public class ModelApplicationSubmitService {
 
     static final String ROUTE_SUBMIT = "/api/model-applications/{id}/submit";
     private static final String INTAKE_NOTE =
-        "WP05.1c validates category, performance-test standard and fee rule only. Test evidence, accreditation and full RFP intake remain deferred (WP05.1 / WP06.1).";
+        "Provisional local intake rules (the owner's defaults, not BEE rules): the gates listed here are checked, and the fee shown is the one recorded when you submit. Other required documents, families and configurations are not part of this intake yet.";
 
     private final IdentityRepository identity;
     private final ModelApplicationRepository applications;

@@ -36,7 +36,7 @@ type Laboratory = { code: string; name: string };
 const GATE_LABELS: Record<string, string> = {
   test_report_required: "Test report uploaded",
   declared_efficiency_required: "Declared efficiency entered",
-  test_date_invalid: "Test date entered and not in the future",
+  test_date_invalid: "Test date entered, not in the future and not older than the allowed age",
   laboratory_not_accredited: "Laboratory accredited for this category on the test date",
   standard_not_available: "Applicable standard in force on the test date",
   duplicate_model: "Brand and model number not already in use",
@@ -46,7 +46,7 @@ type Evidence = { laboratoryCode: string; testedOn: string; declaredIseer: strin
 const NO_EVIDENCE: Evidence = { laboratoryCode: "", testedOn: "", declaredIseer: "" };
 
 const ISEER_TEXT = /^\d{1,2}(\.\d{1,2})?$/;
-const ISEER_MESSAGE = "Declared efficiency must be a positive number up to 99.99 with at most two decimals.";
+const ISEER_MESSAGE = "Declared efficiency must be a positive number with at most two decimals. The largest figure allowed is checked when you save.";
 
 /** Empty text means "not entered"; anything else must be a positive figure with at most two decimals, never silently dropped. */
 function parseIseer(text: string): { ok: true; value: number | null } | { ok: false } {
@@ -354,7 +354,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
           <p className="font-body-md text-body-md">
             Draft <strong>{saved.reference}</strong> was saved.
           </p>
-          {submitError && <p className="text-error font-body-sm mt-space-sm" data-testid="model-submit-error">{submitError}</p>}
+          {submitError && <p role="alert" className="text-error font-body-sm mt-space-sm" data-testid="model-submit-error">{submitError}</p>}
           <div className="flex flex-col gap-space-sm mt-space-md">
             <button
               type="button"
@@ -428,7 +428,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
         <IdentityStrip identity={identity} />
         {identity.status === "loading" && <p className="text-on-surface-variant">Checking your sign-in…</p>}
         {identity.status === "signed-out" && <p className="text-on-surface-variant">Sign in to save a draft.</p>}
-        {loadError && <p className="text-error font-body-sm" data-testid="model-draft-load-error">{loadError}</p>}
+        {loadError && <p role="alert" className="text-error font-body-sm" data-testid="model-draft-load-error">{loadError}</p>}
         {identity.status === "signed-in" && !loadError && (
           <>
             {isEdit && reference ? (
@@ -523,7 +523,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             </Card>
             {draftErrorDisplay ? (
               <div data-testid="model-draft-error">
-                <p className="text-error font-body-sm">{draftErrorDisplay}</p>
+                <p role="alert" className="text-error font-body-sm">{draftErrorDisplay}</p>
                 {draftCommandFailure ? (
                   <CommandFailureFollowUp
                     failure={draftCommandFailure}
@@ -555,12 +555,12 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             {isEdit && activeId && !returned ? (
               <>
                 {draftDirty ? (
-                  <p className="text-error font-body-sm" data-testid="model-draft-dirty-hint">
+                  <p role="alert" className="text-error font-body-sm" data-testid="model-draft-dirty-hint">
                     Save your changes before reviewing submit.
                   </p>
                 ) : null}
                 {submitError && !submitOpen ? (
-                  <p className="text-error font-body-sm" data-testid="model-submit-error">{submitError}</p>
+                  <p role="alert" className="text-error font-body-sm" data-testid="model-submit-error">{submitError}</p>
                 ) : null}
                 <button
                   type="button"
@@ -652,7 +652,7 @@ function ResubmitPanel({
   return (
     <section className="space-y-space-sm" data-testid="model-resubmit">
       {draftDirty ? (
-        <p className="text-error font-body-sm" data-testid="model-resubmit-dirty-hint">Save your changes before resubmitting.</p>
+        <p role="alert" className="text-error font-body-sm" data-testid="model-resubmit-dirty-hint">Save your changes before resubmitting.</p>
       ) : null}
       <CommandPanel
         className="space-y-space-sm"
@@ -683,7 +683,7 @@ function ResubmitPanel({
         </p>
       </CommandPanel>
       {inputError ? (
-        <p className="text-error font-body-sm" data-testid="model-resubmit-input-error">{inputError}</p>
+        <p role="alert" className="text-error font-body-sm" data-testid="model-resubmit-input-error">{inputError}</p>
       ) : null}
     </section>
   );
@@ -715,12 +715,13 @@ function SubmitConfirmCard({
         {preview.evidenceGates.map((g) => (
           <li key={g.code} data-testid={`model-submit-gate-${g.code}`} data-met={g.met ? "true" : "false"} className="flex items-center gap-1">
             <Icon name={g.met ? "check_circle" : "cancel"} size={16} className={g.met ? "text-primary" : "text-error"} />
+            <span className="sr-only">{g.met ? "Met: " : "Not met: "}</span>
             <span className={g.met ? "" : "text-error"}>{GATE_LABELS[g.code] ?? g.code}</span>
           </li>
         ))}
       </ul>
       {!preview.ready || !preview.submissionFee ? (
-        <p className="text-error font-body-sm mt-space-sm">This draft is not ready to submit. Complete the unmet checks above, and check brand authorisation and master rules.</p>
+        <p role="alert" className="text-error font-body-sm mt-space-sm">This draft is not ready to submit. Complete the unmet checks above, and check brand authorisation and master rules.</p>
       ) : (
         <div className="mt-space-md space-y-1 font-body-sm">
           {preview.draftSummary ? (
@@ -741,10 +742,10 @@ function SubmitConfirmCard({
           </p>
         </div>
       )}
-      {error ? <p className="text-error font-body-sm mt-space-sm">{error}</p> : null}
+      {error ? <p role="alert" className="text-error font-body-sm mt-space-sm">{error}</p> : null}
       {commandFailure ? (
         <div className="mt-space-sm">
-          <p className="text-error font-body-sm">{commandFailure.message}</p>
+          <p role="alert" className="text-error font-body-sm">{commandFailure.message}</p>
           <CommandFailureFollowUp failure={commandFailure} signInReturnTo={signInReturnTo} onReload={onReload} />
         </div>
       ) : null}

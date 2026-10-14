@@ -124,6 +124,14 @@ test("unit-evidence: GET /api/runtime/model-applications 503 identity_unavailabl
   await identityUnavailableOnSessionRead("/api/runtime/model-applications", (r) => routes.list.GET(r), "unit-idp-down-list");
 });
 
+test("unit-evidence: GET /api/runtime/registrations 503 identity_unavailable | Keycloak unreachable during refresh", async () => {
+  await identityUnavailableOnSessionRead("/api/runtime/registrations", (r) => routes.registrations.GET(r), "unit-idp-down-registrations");
+});
+
+test("unit-evidence: GET /api/runtime/registrations/{id} 503 identity_unavailable | Keycloak unreachable during refresh", async () => {
+  await identityUnavailableOnSessionRead("/api/runtime/registrations/{id}", (r) => routes.registration.GET(r, { params: Promise.resolve({ id: "00000000-0000-4000-f000-000000000001" }) }), "unit-idp-down-registration");
+});
+
 test("unit-evidence: GET /api/runtime/model-applications/{id} 503 identity_unavailable | Keycloak unreachable during refresh", async () => {
   await identityUnavailableOnSessionRead("/api/runtime/model-applications/{id}", (r) => routes.detail.GET(r, { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000002" }) }), "unit-idp-down-detail");
 });
@@ -643,5 +651,21 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
     }), { params: Promise.resolve({ id: REG_ID }) });
     assert.equal(res.status, 401);
     assert.equal((await res.json()).error, "session_expired");
+  });
+}
+
+/* Spring unreachable on the two registration reads: the portal answers 503 api_unreachable (unit evidence for the pair). */
+for (const [route, handler, url] of [["/api/runtime/registrations", "registrations", "/api/runtime/registrations"], ["/api/runtime/registrations/{id}", "registration", "/api/runtime/registrations/00000000-0000-4000-f000-000000000001"]]) {
+  test(`unit-evidence: GET ${route} 503 api_unreachable | Spring unreachable on a registration read`, async () => {
+    const fresh = session.createSession("00000000-0000-4000-a000-000000000001", "nova.applicant", { access_token: `access-${SECRET}`, refresh_token: `refresh-${SECRET}`, expires_in: 300, refresh_expires_in: 0 }, ["pwd", "otp"]).cookie;
+    stubFetch(async (u) => {
+      if (!u.includes(":8090")) throw new Error("no Keycloak call expected");
+      throw new TypeError("fetch failed");
+    });
+    const res = await routes[handler].GET(req(url, `unit-registration-${handler}-down`, fresh), { params: Promise.resolve({ id: "00000000-0000-4000-f000-000000000001" }) });
+    const body = await res.json();
+    assert.equal(res.status, 503);
+    assert.equal(body.error, "api_unreachable");
+    assert.deepEqual(lib.conforms(contract, route, "GET", { status: res.status, headers: res.headers, json: body }), []);
   });
 }

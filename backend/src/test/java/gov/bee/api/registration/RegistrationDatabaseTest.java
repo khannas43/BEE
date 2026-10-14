@@ -65,6 +65,7 @@ class RegistrationDatabaseTest {
     static JdbcTemplate owner;
     static JdbcTemplate db;
     static RegistrationService service;
+    static RegistrationDocumentService documentService;
     static int appRegistrationTablesBefore;
 
     static String env(String k, String d) {
@@ -94,7 +95,14 @@ class RegistrationDatabaseTest {
         owner = new JdbcTemplate(migrateSource(MAIN));
         owner.execute(Files.readString(SEED));
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
-        service = new RegistrationService(new RegistrationRepository(db), new MasterDataRepository(db), new IdempotencyRepository(db), JSON);
+        var props = new gov.bee.api.document.DocumentProperties();
+        props.setStorePath(java.nio.file.Files.createTempDirectory("bee-reg-docs").toString());
+        var registrationRepo = new RegistrationRepository(db);
+        var documentRepo = new RegistrationDocumentRepository(db);
+        var idem = new IdempotencyRepository(db);
+        service = new RegistrationService(registrationRepo, new MasterDataRepository(db), idem, JSON);
+        documentService = new RegistrationDocumentService(registrationRepo, documentRepo, new RegistrationDocumentRecorder(documentRepo, idem),
+            new gov.bee.api.document.LocalSha256FileStore(props), idem, JSON);
         assertEquals(43, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V43");
     }
 
@@ -306,5 +314,64 @@ class RegistrationDatabaseTest {
         } finally {
             owner.update("DELETE FROM capability_grant WHERE capability = 'fee_rule_manage' AND role = 'finance'");
         }
+    }
+
+    static org.springframework.mock.web.MockMultipartFile pdf(String name, String body) {
+        return new org.springframework.mock.web.MockMultipartFile("file", name, "application/pdf",
+            ("%PDF-1.4\n" + body).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void theTradeLicenceIsAPdfThatGatesTheSubmitAndFreezesWithTheDraft() throws Exception {
+        var draft = draftBrand("Eclipse Cool");
+        UUID id = UUID.fromString((String) draft.get("id"));
+        String k = key();
+        var first = ok(documentService.upload(NOVA, id, k, pdf("licence.pdf", "one"), null), 201);
+        assertEquals("trade_licence", first.get("documentKind"));
+        assertEquals("pending_local_verification", first.get("verificationStatus"));
+        @SuppressWarnings("unchecked") Map<String, Object> latest = (Map<String, Object>) first.get("latestVersion");
+        assertEquals(1, latest.get("versionNumber"));
+        assertEquals("Trade licence", latest.get("label"));
+        assertEquals(64, ((String) latest.get("contentSha256")).length());
+
+        var replay = documentService.upload(NOVA, id, k, pdf("licence.pdf", "one"), null);
+        assertEquals("true", replay.getHeaders().getFirst("Idempotency-Replayed"));
+        refused(documentService.upload(NOVA, id, k, pdf("licence.pdf", "different"), null), 409, "idempotency_key_conflict");
+
+        // A second upload is version 2 of the same document; the first is kept.
+        var second = ok(documentService.upload(NOVA, id, key(), pdf("renewed.pdf", "two"), "Renewed licence"), 201);
+        @SuppressWarnings("unchecked") List<Map<String, Object>> versions = (List<Map<String, Object>>) second.get("versions");
+        assertEquals(2, versions.size());
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM registration_document WHERE application_id = ?", Integer.class, id));
+        assertEquals(2, owner.queryForObject("SELECT count(*) FROM registration_document_version", Integer.class)
+            - owner.queryForObject("SELECT count(*) FROM registration_document_version v JOIN registration_document d ON d.id = v.document_id WHERE d.application_id <> ?",
+                Integer.class, id));
+        assertTrue((Boolean) ok(service.get(NOVA, id), 200).get("tradeLicenceUploaded"));
+
+        // Only a PDF, only with a file, only by the owner, and not from a stranger or a reviewer.
+        refused(documentService.upload(NOVA, id, key(), new org.springframework.mock.web.MockMultipartFile("file", "x.pdf", "application/pdf", "not a pdf".getBytes()), null), 422, "validation_failed");
+        refused(documentService.upload(NOVA, id, key(), null, null), 422, "validation_failed");
+        refused(documentService.upload(NOVA, id, null, pdf("a.pdf", "k"), null), 422, "idempotency_key_required");
+        refused(documentService.upload(PIXEL, id, key(), pdf("a.pdf", "k"), null), 404, "not_found");
+        refused(documentService.upload(FINANCE, id, key(), pdf("a.pdf", "k"), null), 403, "no_write_scope");
+
+        // Read: the owner lists and downloads; a stranger does not; Finance may once it is fee due.
+        @SuppressWarnings("unchecked") List<Map<String, Object>> items = (List<Map<String, Object>>) ok(documentService.list(NOVA, id), 200).get("items");
+        assertEquals(1, items.size());
+        refused(documentService.list(PIXEL, id), 404, "not_found");
+        refused(documentService.list(FINANCE, id), 404, "not_found");
+        UUID docId = UUID.fromString((String) items.get(0).get("id"));
+        @SuppressWarnings("unchecked") List<Map<String, Object>> vs = (List<Map<String, Object>>) items.get(0).get("versions");
+        UUID versionId = UUID.fromString((String) vs.get(0).get("id"));
+        var bytes = documentService.content(NOVA, id, docId, versionId);
+        assertEquals(200, bytes.getStatusCode().value());
+        assertTrue(new String((byte[]) bytes.getBody(), java.nio.charset.StandardCharsets.UTF_8).startsWith("%PDF-"));
+        assertEquals(404, documentService.content(NOVA, id, docId, UUID.randomUUID()).getStatusCode().value());
+        assertEquals(404, documentService.content(PIXEL, id, docId, versionId).getStatusCode().value());
+
+        // Submitting freezes the documents with the draft.
+        ok(service.submit(NOVA, id, key(), json("{\"version\":0,\"expectedFee\":{\"amountInr\":\"5000.00\",\"feeRuleKey\":\"REG:brand_registration\",\"feeRuleVersion\":1}}")), 200);
+        refused(documentService.upload(NOVA, id, key(), pdf("late.pdf", "late"), null), 403, "not_editable");
+        assertEquals(200, documentService.list(FINANCE, id).getStatusCode().value());
     }
 }

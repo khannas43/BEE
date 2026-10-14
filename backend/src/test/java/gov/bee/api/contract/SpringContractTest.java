@@ -183,6 +183,9 @@ class SpringContractTest {
     @MockitoBean
     gov.bee.api.registration.RegistrationRepository registrationRepo;
 
+    @MockitoBean
+    gov.bee.api.registration.RegistrationDocumentRepository registrationDocumentRepo;
+
     /** Every other operation reads its business settings through the service; the defaults are the catalogue's (V42). */
     @org.junit.jupiter.api.BeforeEach
     void businessSettingDefaults() {

@@ -69,7 +69,7 @@ public class BusinessSettingService {
 
     private boolean mayManage(Caller caller) {
         var roles = repository.rolesHolding(BusinessSettingRepository.CAPABILITY);
-        return caller.roles().stream().anyMatch(g -> roles.contains(g.role()));
+        return caller.ownRoles().stream().anyMatch(g -> roles.contains(g.role()));
     }
 
     public ResponseEntity<Map<String, Object>> read(Caller caller) {

@@ -75,7 +75,7 @@ class FeeRuleDatabaseTest {
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         repo = new FeeRuleRepository(db);
         masters = new MasterDataRepository(db);
-        assertEquals(48, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V48");
+        assertEquals(50, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V50");
     }
 
     @AfterAll
@@ -206,13 +206,13 @@ class FeeRuleDatabaseTest {
     @Test
     void theMenuLearnsThePermissionsFromTheRolesThatHoldThem() {
         var identity = new gov.bee.api.identity.IdentityRepository(db);
-        assertEquals(java.util.List.of("business_setting_manage", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin")));
+        assertEquals(java.util.List.of("business_setting_manage", "delegation_approve", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin")));
         assertEquals(java.util.List.of("fee_confirmation_correct"), identity.capabilities(java.util.List.of("finance")), "Finance holds only the right to correct a fee confirmation until a permission is given to it");
         assertEquals(java.util.List.of(), identity.capabilities(java.util.List.of()));
         grantFinance();
         try {
             assertEquals(java.util.List.of("fee_confirmation_correct", "fee_rule_manage"), identity.capabilities(java.util.List.of("finance", "reviewer")));
-            assertEquals(java.util.List.of("business_setting_manage", "fee_confirmation_correct", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin", "finance")), "each permission once");
+            assertEquals(java.util.List.of("business_setting_manage", "delegation_approve", "fee_confirmation_correct", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin", "finance")), "each permission once");
         } finally {
             revokeFinance();
         }

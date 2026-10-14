@@ -95,7 +95,7 @@ public class RegistrationReviewService {
     }
 
     private static boolean holdsRole(Caller caller, String role) {
-        return "applicant".equals(role) ? RegistrationPolicy.filingOrganisation(caller).isPresent() : caller.holds(role, "all");
+        return "applicant".equals(role) ? RegistrationPolicy.filingOrganisation(caller).isPresent() : caller.holdsOwn(role, "all");
     }
 
     @Transactional
@@ -105,7 +105,7 @@ public class RegistrationReviewService {
             return replay.get();
         }
         Optional<Input> parsed = parse(body);
-        boolean anyRole = caller.holds("programme", "all") || caller.holds("director", "all") || RegistrationPolicy.filingOrganisation(caller).isPresent();
+        boolean anyRole = caller.holdsOwn("programme", "all") || caller.holdsOwn("director", "all") || RegistrationPolicy.filingOrganisation(caller).isPresent();
         if (!anyRole) {
             return error(HttpStatus.FORBIDDEN, "role_not_permitted");
         }
@@ -231,7 +231,7 @@ public class RegistrationReviewService {
             return Optional.of(error(HttpStatus.CONFLICT, "idempotency_key_conflict"));
         }
         var row = registrations.find(id);
-        boolean mayReplay = row.isPresent() && (caller.holds("programme", "all") || caller.holds("director", "all") || isApplicant(caller, row.get()));
+        boolean mayReplay = row.isPresent() && (caller.holdsOwn("programme", "all") || caller.holdsOwn("director", "all") || isApplicant(caller, row.get()));
         if (!mayReplay) {
             return Optional.of(error(HttpStatus.FORBIDDEN, "role_not_permitted"));
         }

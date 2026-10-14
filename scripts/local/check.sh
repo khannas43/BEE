@@ -333,6 +333,13 @@ read -r rvk_pass rvk_fail <<<"$(sed -nE 's/^revocation checks: ([0-9]+) passed, 
 if [[ -z "${rvk_pass:-}" ]]; then check "registerrevocation.run" 0 "register-revocation-browser-check did not complete: $(tail -1 <<<"$rvk_out")"
 else pass=$((pass + rvk_pass)); fail=$((fail + rvk_fail)); fi
 
+# ---- WP02.4c: delegation (records the runtime delegation pairs)
+dl_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/delegation-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$dl_out"
+read -r dl_pass dl_fail <<<"$(sed -nE 's/^delegation checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$dl_out")"
+if [[ -z "${dl_pass:-}" ]]; then check "delegation.run" 0 "delegation-browser-check did not complete: $(tail -1 <<<"$dl_out")"
+else pass=$((pass + dl_pass)); fail=$((fail + dl_fail)); fi
+
 # ---- WP08.1h / Brief 12: the Business settings screen, driven in the portal
 bsu_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/business-settings-ui-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$bsu_out"

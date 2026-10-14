@@ -41,6 +41,7 @@
     "local:registrations": "bash -c 'source scripts/local/lib.sh && node scripts/local/registration-browser-check.cjs'",
     "local:register-revocation": "bash -c 'source scripts/local/lib.sh && node scripts/local/register-revocation-browser-check.cjs'",
     "local:denial": "bash -c 'source scripts/local/lib.sh && node scripts/local/denial-suite-check.cjs'",
+    "local:delegation": "bash -c 'source scripts/local/lib.sh && node scripts/local/delegation-browser-check.cjs'",
     "local:bruteforce": "bash -c 'source scripts/local/lib.sh && node scripts/local/bruteforce-check.cjs'",
     "local:registration-review": "bash -c 'source scripts/local/lib.sh && node scripts/local/registration-review-browser-check.cjs'",
     "local:business-settings-ui": "bash -c 'source scripts/local/lib.sh && node scripts/local/business-settings-ui-check.cjs'",

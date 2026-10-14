@@ -62,6 +62,17 @@ public class IdentityRepository {
             (rs, i) -> rs.getObject(1, UUID.class), userId));
     }
 
+    /** The delegations that make the delegate hold a role today: approved, in period, and the delegator still holds the role as an active account. */
+    public List<Caller.Delegated> activeDelegations(UUID delegateId, java.time.LocalDate today) {
+        return jdbc.query(
+            "SELECT d.id, d.delegator_id, d.role FROM delegation d JOIN user_account u ON u.id = d.delegator_id AND u.status = 'active' "
+                + "WHERE d.delegate_id = ? AND d.state = 'approved' AND d.valid_from <= ? AND ? < d.valid_to "
+                + "AND EXISTS (SELECT 1 FROM role_assignment ra WHERE ra.user_id = d.delegator_id AND ra.role = d.role AND ra.scope = 'all' AND ra.active "
+                + "AND now() >= ra.valid_from AND now() < ra.valid_to) ORDER BY d.role, d.id",
+            (rs, i) -> new Caller.Delegated(rs.getObject("id", UUID.class), rs.getObject("delegator_id", UUID.class), rs.getString("role")),
+            delegateId, java.sql.Date.valueOf(today), java.sql.Date.valueOf(today));
+    }
+
     public int activeAssignments(UUID userId) {
         Integer n = jdbc.queryForObject("SELECT count(*) FROM assignment WHERE user_id = ? AND active", Integer.class, userId);
         return n == null ? 0 : n;

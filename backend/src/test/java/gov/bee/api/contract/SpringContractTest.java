@@ -37,6 +37,7 @@ import gov.bee.api.brand.BrandAuthRepository;
 import gov.bee.api.identity.IdentityRepository;
 import gov.bee.api.masters.MasterDataRepository;
 import gov.bee.api.registration.RegistrationDocumentRepository;
+import gov.bee.api.delegation.DelegationRepository;
 import gov.bee.api.registration.RegistrationRepository;
 import gov.bee.api.revocation.RevocationRepository;
 import gov.bee.api.masters.MasterVersion;
@@ -188,6 +189,9 @@ class SpringContractTest {
 
     @MockitoBean
     RevocationRepository revocationRepo;
+
+    @MockitoBean
+    DelegationRepository delegationRepo;
 
     @MockitoBean
     RegistrationDocumentRepository registrationDocumentRepo;
@@ -2508,6 +2512,130 @@ class SpringContractTest {
         assertEquals(pin.path("version").asText(), doc.path("info").path("version").asText(), "artifact version differs from the pin");
         String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(ContractSchema.ARTIFACT)));
         assertEquals(pin.path("sha256").asText(), sha, "artifact content changed without a version bump and a new pin (scripts/local/contract-pin.json)");
+    }
+
+    /** WP02.4c: every documented status and code of the delegation routes, through the real chain with the repository mocked. */
+    @Test
+    void delegationDocumentedPairs() throws Exception {
+        final String LIST = "/api/delegations", DECIDE = LIST + "/{id}/decision";
+        final UUID D = UUID.fromString("00000000-0000-4000-f000-0000000000d1");
+        final UUID DELEGATE = UUID.fromString("00000000-0000-4000-a000-000000000003");
+        final String decidePath = LIST + "/" + D + "/decision";
+        final UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("programme"))));
+        final String ask = "{\"delegateId\":\"" + DELEGATE + "\",\"role\":\"programme\",\"validFrom\":\"" + LocalDate.now().plusDays(1) + "\",\"validTo\":\"" + LocalDate.now().plusDays(8)
+            + "\",\"reason\":\"Away on leave\"}";
+        final String approve = "{\"decision\":\"approve\"}";
+        var pending = new DelegationRepository.Delegation(D, UUID.randomUUID(), "BEE Programme", DELEGATE, "BEE Finance", "programme", "Away on leave", LocalDate.now().plusDays(1),
+            LocalDate.now().plusDays(8), "pending", Instant.parse("2026-10-14T10:00:00Z"), null, null, null, null, null, null, 0, false);
+        var approved = new DelegationRepository.Delegation(D, pending.delegatorId(), "BEE Programme", DELEGATE, "BEE Finance", "programme", "Away on leave", LocalDate.now().plusDays(1),
+            LocalDate.now().plusDays(8), "approved", Instant.parse("2026-10-14T10:00:00Z"), "BEE Administrator", Instant.parse("2026-10-14T11:00:00Z"), null, null, null, null, 0, false);
+        java.util.function.Supplier<Boolean> fresh = () -> {
+            reset(identity, idempotency, delegationRepo);
+            when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+            when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+            when(delegationRepo.rolesHolding("delegation_approve")).thenReturn(Set.of("admin"));
+            when(delegationRepo.forPerson(any(), any())).thenReturn(List.of(pending));
+            when(delegationRepo.pending(any())).thenReturn(List.of(pending));
+            when(delegationRepo.recent(any(), anyInt())).thenReturn(List.of());
+            when(delegationRepo.colleagues(any())).thenReturn(List.of(new DelegationRepository.Colleague(DELEGATE, "BEE Finance", List.of("finance"))));
+            when(delegationRepo.accountExists(DELEGATE)).thenReturn(true);
+            when(delegationRepo.insert(any(), any(), any())).thenReturn(pending);
+            when(delegationRepo.find(eq(D), any())).thenReturn(Optional.of(pending));
+            return true;
+        };
+        java.util.function.Consumer<String> staffAs = role -> {
+            account(role, "all");
+            when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staff));
+            when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
+        };
+        record Op(String route, java.util.function.Function<RequestPostProcessor, MockHttpServletRequestBuilder> req) {
+        }
+        List<Op> ops = List.of(
+            new Op(LIST, rp -> get(LIST).with(rp)),
+            new Op(LIST, rp -> post(LIST).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(ask)),
+            new Op(DECIDE, rp -> post(decidePath).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(approve)));
+        for (Op op : ops) {
+            fresh.get();
+            account("programme", "all");
+            conforms(op.route(), op.req().apply(r -> r), 401, "unauthenticated");
+            conforms(op.route(), op.req().apply(pwdOnly), 403, "mfa_required");
+            when(identity.activeAccount(any())).thenReturn(Optional.empty());
+            conforms(op.route(), op.req().apply(token("programme")), 403, "no_active_account");
+            account("programme", "all");
+            conforms(op.route(), op.req().apply(token("finance")), 403, "no_effective_role");
+        }
+
+        // Read.
+        fresh.get();
+        staffAs.accept("programme");
+        conforms(LIST, get(LIST).with(token("programme")), 200, null);
+        staffAs.accept("admin");
+        conforms(LIST, get(LIST).with(token("admin")), 200, null);
+        doThrow(new DataAccessResourceFailureException("down")).when(delegationRepo).forPerson(any(), any());
+        conforms(LIST, get(LIST).with(token("admin")), 503, "service_unavailable");
+
+        // Request.
+        fresh.get();
+        staffAs.accept("programme");
+        conforms(LIST, post(LIST).with(token("programme")).contentType("application/json").content(ask), 422, "idempotency_key_required");
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ask), 201, null);
+        when(delegationRepo.colleagues(any())).thenReturn(List.of());
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ask), 409, "delegate_not_eligible");
+        when(delegationRepo.colleagues(any())).thenReturn(List.of(new DelegationRepository.Colleague(DELEGATE, "BEE Finance", List.of("finance"))));
+        when(delegationRepo.insert(any(), any(), any())).thenThrow(new org.springframework.dao.DataIntegrityViolationException("x",
+            new RuntimeException("duplicate key value violates unique constraint \"delegation_open\"")));
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ask), 409, "delegation_exists");
+        org.mockito.Mockito.doReturn(pending).when(delegationRepo).insert(any(), any(), any());
+        when(delegationRepo.accountExists(DELEGATE)).thenReturn(false);
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ask), 404, "not_found");
+        when(delegationRepo.accountExists(DELEGATE)).thenReturn(true);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ask), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 201, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ask), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        staffAs.accept("auditor");
+        conforms(LIST, post(LIST).with(token("auditor")).header("Idempotency-Key", IDEM).contentType("application/json").content(ask), 403, "role_not_permitted");
+        staffAs.accept("programme");
+        doThrow(new DataAccessResourceFailureException("down")).when(delegationRepo).colleagues(any());
+        conforms(LIST, post(LIST).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ask), 503, "service_unavailable");
+
+        // Decide.
+        fresh.get();
+        staffAs.accept("admin");
+        when(delegationRepo.decide(any(), any(), any(), any())).thenReturn(new DelegationRepository.Decided(DelegationRepository.Outcome.DONE, "approved"));
+        java.util.function.Function<String, MockHttpServletRequestBuilder> asAdmin = b ->
+            post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(b);
+        conforms(DECIDE, post(decidePath).with(token("admin")).contentType("application/json").content(approve), 422, "idempotency_key_required");
+        conforms(DECIDE, asAdmin.apply("{}"), 422, "validation_failed");
+        conforms(DECIDE, asAdmin.apply("{\"decision\":\"reject\"}"), 422, "validation_failed");
+        when(delegationRepo.find(eq(D), any())).thenReturn(Optional.of(pending), Optional.of(approved));
+        conforms(DECIDE, asAdmin.apply(approve), 200, null);
+        when(delegationRepo.find(eq(D), any())).thenReturn(Optional.of(approved));
+        for (var refusal : List.of(new Object[] {DelegationRepository.Outcome.NOT_PENDING, 409, "proposal_not_pending"}, new Object[] {DelegationRepository.Outcome.NOT_ACTIVE, 409, "delegation_not_active"},
+            new Object[] {DelegationRepository.Outcome.DATE_PASSED, 409, "effective_date_passed"}, new Object[] {DelegationRepository.Outcome.NOT_ELIGIBLE, 409, "delegate_not_eligible"},
+            new Object[] {DelegationRepository.Outcome.SAME_PERSON, 403, "segregation_refused"}, new Object[] {DelegationRepository.Outcome.NOT_PERMITTED, 403, "role_not_permitted"},
+            new Object[] {DelegationRepository.Outcome.NOT_FOUND, 404, "not_found"})) {
+            when(delegationRepo.decide(any(), any(), any(), any())).thenReturn(new DelegationRepository.Decided((DelegationRepository.Outcome) refusal[0], null));
+            conforms(DECIDE, asAdmin.apply(approve), (Integer) refusal[1], (String) refusal[2]);
+        }
+        when(delegationRepo.find(eq(D), any())).thenReturn(Optional.empty());
+        conforms(DECIDE, asAdmin.apply(approve), 404, "not_found");
+        when(delegationRepo.find(eq(D), any())).thenReturn(Optional.of(pending));
+        staffAs.accept("programme");
+        conforms(DECIDE, post(decidePath).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(approve), 403, "role_not_permitted");
+        staffAs.accept("admin");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(DECIDE, asAdmin.apply(approve), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(DECIDE, asAdmin.apply(approve), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        doThrow(new DataAccessResourceFailureException("down")).when(delegationRepo).find(eq(D), any());
+        conforms(DECIDE, asAdmin.apply(approve), 503, "service_unavailable");
     }
 
     /** WP04.2b-2b: every documented status and code of the register-revocation routes, through the real chain with the repository mocked. */

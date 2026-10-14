@@ -108,7 +108,7 @@ public final class SlicePolicy {
      * state, the officer's own assignment where the scope is assigned, and nobody who acted at another stage.
      */
     public static Decision checkStage(java.util.Set<String> fromStates, String stage, List<RoleGrant> actors, Caller caller, ApplicationFacts app) {
-        List<RoleGrant> usable = caller.roles().stream().filter(actors::contains).toList();
+        List<RoleGrant> usable = caller.usable(actors::contains);
         if (usable.isEmpty()) {
             return Decision.deny("role_not_permitted");
         }
@@ -119,7 +119,7 @@ public final class SlicePolicy {
         if (scope.equals(ASSIGNED) && !app.assignedStagesForCaller().contains(stage)) {
             return Decision.deny("not_assigned");
         }
-        if (app.actorsAtOtherStages().contains(caller.accountId())) {
+        if (caller.actingIdentities().stream().anyMatch(app.actorsAtOtherStages()::contains)) {
             return Decision.deny("same_user_other_stage");
         }
         return Decision.allow();
@@ -134,7 +134,7 @@ public final class SlicePolicy {
         if (caller.roles().stream().noneMatch(g -> READ_RULES.containsKey(g.role()))) {
             return Decision.deny("not_a_slice_role");
         }
-        List<RoleGrant> usable = caller.roles().stream().filter(action.actors()::contains).toList();
+        List<RoleGrant> usable = caller.usable(action.actors()::contains);
         if (usable.isEmpty()) {
             return Decision.deny("role_not_permitted");
         }
@@ -151,7 +151,7 @@ public final class SlicePolicy {
         if (action == SliceAction.SUBMIT && !app.brandPermitted()) {
             return Decision.deny("brand_not_permitted");
         }
-        if (action != SliceAction.SUBMIT && app.actorsAtOtherStages().contains(caller.accountId())) {
+        if (action != SliceAction.SUBMIT && caller.actingIdentities().stream().anyMatch(app.actorsAtOtherStages()::contains)) {
             return Decision.deny("same_user_other_stage");
         }
         return Decision.allow();

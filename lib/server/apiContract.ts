@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.31.0";
+export const CONTRACT_VERSION = "0.32.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -50,6 +50,9 @@ export const ERROR_MESSAGES = {
   standard_not_available: "No applicable standard is in force on the test date.",
   duplicate_model: "Another application already holds this brand and model number.",
   brand_name_taken: "A brand with this name is already registered.",
+  delegate_not_eligible: "The person you named cannot take this role: they need an active account, a role of their own, and an organisation in common with you.",
+  delegation_exists: "You already have a delegation of this role to this person that is waiting or in force.",
+  delegation_not_active: "This delegation is not in force, so it cannot be revoked.",
   revocation_pending: "A closure or revocation is already proposed for this record.",
   target_not_active: "This record is no longer active, or the closing date does not fit its period.",
   closing_date_passed: "The closing date has passed; propose the closure again with a later date.",

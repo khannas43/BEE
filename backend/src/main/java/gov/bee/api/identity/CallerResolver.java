@@ -14,6 +14,8 @@ public class CallerResolver {
         }
     }
 
+    public static final String CALLER_ATTRIBUTE = "bee.caller";
+
     private final IdentityRepository identity;
 
     public CallerResolver(IdentityRepository identity) {
@@ -39,6 +41,13 @@ public class CallerResolver {
             return Resolution.denied("no_effective_role");
         }
         var orgs = identity.activeMembershipOrganisationIds(account.get().id());
-        return new Resolution(new Caller(account.get().id(), account.get().username(), effective, orgs), null);
+        var delegated = identity.activeDelegations(account.get().id(), java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")));
+        var caller = new Caller(account.get().id(), account.get().username(), effective, orgs, delegated, null);
+        // The request carries its caller, so the delegation log can see which delegations a successful write depended on.
+        var attributes = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        if (attributes != null) {
+            attributes.setAttribute(CALLER_ATTRIBUTE, caller, org.springframework.web.context.request.RequestAttributes.SCOPE_REQUEST);
+        }
+        return new Resolution(caller, null);
     }
 }

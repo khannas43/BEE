@@ -28,10 +28,10 @@ public final class RegistrationPolicy {
         if (ModelDraftPolicy.filingOrganisation(caller).isEmpty()) {
             return Optional.empty();
         }
-        if (caller.holds("manufacturer", "own-org")) {
+        if (caller.holdsOwn("manufacturer", "own-org")) {
             return Optional.of(BRAND);
         }
-        if (caller.holds("agency", "own-org")) {
+        if (caller.holdsOwn("agency", "own-org")) {
             return Optional.of(AGENCY);
         }
         return Optional.empty();
@@ -55,7 +55,7 @@ public final class RegistrationPolicy {
     public static ReadScope readScope(Caller caller) {
         Set<UUID> orgs = new LinkedHashSet<>();
         Set<String> stages = new LinkedHashSet<>();
-        for (RoleGrant g : caller.roles()) {
+        for (RoleGrant g : caller.ownRoles()) {
             if (("manufacturer".equals(g.role()) || "agency".equals(g.role())) && "own-org".equals(g.scope())) {
                 orgs.addAll(caller.organisationIds());
             } else if ("finance".equals(g.role()) && "all".equals(g.scope())) {

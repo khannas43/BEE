@@ -96,7 +96,8 @@ public class ResubmitApplicationService {
         if (row.brandId() != null) {
             applications.lockModelKey(row.brandId(), row.modelNumber());
         }
-        Optional<ModelApplicationEvidence.Gate> unmet = evidence.evaluate(row, today).firstUnmet();
+        ModelApplicationEvidence.Result gates = evidence.evaluate(row, today);
+        Optional<ModelApplicationEvidence.Gate> unmet = gates.firstUnmet();
         if (unmet.isPresent()) {
             return error(unmet.get().status(), unmet.get().code());
         }
@@ -116,6 +117,9 @@ public class ResubmitApplicationService {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
+        // The accreditation and standard versions that the edited application resolved replace those kept at the first submission.
+        gates.resolved().ifPresent(res -> repository.recordEvidenceSnapshot(appId, row.organisationId(), res.accreditationRuleKey(), res.accreditationVersion(),
+            res.standardRuleKey(), res.standardVersion()));
         Map<String, Object> receipt = new LinkedHashMap<>();
         receipt.put("applicationId", appId.toString());
         receipt.put("reference", row.reference());

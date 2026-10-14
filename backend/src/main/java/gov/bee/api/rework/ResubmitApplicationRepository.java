@@ -61,6 +61,13 @@ public class ResubmitApplicationRepository {
             open.reportVersions(), applicationId);
     }
 
+    /** Keeps the master versions the evidence check resolved on a resubmission, in the same transaction as the state change. */
+    public void recordEvidenceSnapshot(UUID applicationId, UUID organisationId, String accreditationRuleKey, int accreditationVersion, String standardRuleKey,
+                                       int standardVersion) {
+        jdbc.update("UPDATE model_application SET accreditation_rule_key = ?, accreditation_version = ?, standard_rule_key = ?, standard_version = ? "
+            + "WHERE id = ? AND organisation_id = ?", accreditationRuleKey, accreditationVersion, standardRuleKey, standardVersion, applicationId, organisationId);
+    }
+
     @Transactional
     public Result resubmit(UUID applicationId, int expectedVersion, UUID actorAccountId, String actorRole, UUID returnId,
                            String resumedState, boolean ratingSuperseded, String note) {

@@ -127,7 +127,7 @@ class ReworkDatabaseTest {
         resub = transactional(new ResubmitApplicationRepository(db));
         rejects = transactional(new StageRejectRepository(db));
         history = new HistoryRepository(db);
-        assertEquals(50, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V50");
+        assertEquals(51, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V51");
     }
 
     @AfterAll
@@ -679,5 +679,20 @@ class ReworkDatabaseTest {
         assertEquals(2, history.events(a).size());
         assertEquals(3, history.events(b).size());
         assertEquals(List.of(), history.events(UUID.randomUUID()));
+    }
+
+    @Test
+    void aResubmissionKeepsTheMasterVersionsItResolvedAndTheGuardLeavesTheStagesAlone() {
+        UUID id = at("iame_scrutiny", "RW-SNAP");
+        owner.update("UPDATE model_application SET accreditation_version = 1, standard_version = 1 WHERE id = ?", id);
+        resub.recordEvidenceSnapshot(id, NOVA, "LAB:accreditation", 7, "RAC:performance_test", 9);
+        var row = owner.queryForMap("SELECT accreditation_rule_key, accreditation_version, standard_rule_key, standard_version FROM model_application WHERE id = ?", id);
+        assertEquals("LAB:accreditation", row.get("accreditation_rule_key"));
+        assertEquals(7, row.get("accreditation_version"));
+        assertEquals("RAC:performance_test", row.get("standard_rule_key"));
+        assertEquals(9, row.get("standard_version"));
+        // Another organisation's id changes nothing.
+        resub.recordEvidenceSnapshot(id, UUID.randomUUID(), "X", 1, "Y", 1);
+        assertEquals(9, owner.queryForObject("SELECT standard_version FROM model_application WHERE id = ?", Integer.class, id));
     }
 }

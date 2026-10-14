@@ -23,4 +23,4 @@ Not blocking, recorded in docs/BACKLOG.md: BL-189 (master closure actor as text)
 - Database tests: `Wp04AuditValidationDatabaseTest` 3/3, `RegistrationDatabaseTest` 13/13, `RegistrationReviewDatabaseTest` 6/6, `RevocationDatabaseTest` 4/4, `BrandAuthDatabaseTest` 6/6, `MastersDatabaseTest` 12/12; `SpringContractTest` 35/0; web unit tests 236/0.
 - Live checks: `local:registrations` 178/0, `local:registration-review` 122/0, `local:register-revocation` 100/0.
 - A second, focused independent review of the corrections (V47, V48, the audit trail in the API, the new test, the documents) found no high defect. Fixed from it: the test that proved only a privilege error now also proves the table's own checks, and the trail test covers a closure (status unchanged, end date moves). Logged: BL-191.
-- The full `local:check` on the final tree is recorded below.
+- The full `local:check` on the final tree: **2025 passed, 0 failed** (migrations V1 to V48, contract 0.31.0).

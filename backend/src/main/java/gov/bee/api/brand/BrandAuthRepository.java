@@ -55,7 +55,7 @@ public class BrandAuthRepository {
         Date d = Date.valueOf(at);
         List<AgencyAuthorisation> rows = jdbc.query(
             "SELECT " + AUTH_COLS + " FROM agency_authorisation WHERE agency_organisation_id = ? AND brand_id = ? "
-                + "AND principal_organisation_id = ? AND status = 'active' "
+                + "AND principal_organisation_id = ? AND status = 'active' AND EXISTS (SELECT 1 FROM brand b WHERE b.id = brand_id AND b.status = 'active') "
                 + "AND valid_from <= ? AND (valid_to IS NULL OR ? < valid_to) ORDER BY valid_from LIMIT 2",
             this::mapAuthorisation, agencyOrganisationId, brandId, principalOrganisationId, d, d);
         if (rows.size() > 1) {

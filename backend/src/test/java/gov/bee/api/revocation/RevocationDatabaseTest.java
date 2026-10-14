@@ -252,4 +252,28 @@ class RevocationDatabaseTest {
         // A rejected proposal frees the record for a new one.
         ok(service.propose(PROGRAMME, key(), json(propose("brand", f3.brand(), "revoke", ""))), 201);
     }
+
+    @Test
+    void aClosureThatNoLongerFitsAtApprovalAndABrandRevocationWithAPendingSiblingAreRefusedOrLeftHarmless() {
+        var f = fixture();
+        // Proposals inserted directly (as the runtime login can) with dates that no longer fit the authorisation's period.
+        for (var date : new java.time.LocalDate[] {TODAY.minusDays(30), TODAY.minusDays(40)}) {
+            UUID bad = owner.queryForObject("INSERT INTO register_revocation_proposal (target_authorisation_id, action, close_on, reason, proposed_by) "
+                + "VALUES (?, 'close', ?, 'x', ?) RETURNING id", UUID.class, f.auth(), date.isBefore(TODAY) ? TODAY : date, PROGRAMME_USER);
+            owner.update("UPDATE agency_authorisation SET valid_to = ? WHERE id = ?", TODAY.plusDays(3), f.auth());
+            // close_on (today) is inside [valid_from, valid_to): fine; now shorten the period so close_on is at or beyond valid_to.
+            owner.update("UPDATE agency_authorisation SET valid_to = ? WHERE id = ?", TODAY.plusDays(1), f.auth());
+            owner.update("UPDATE register_revocation_proposal SET close_on = ? WHERE id = ?", TODAY.plusDays(1), bad);
+            assertEquals("rule_conflict".toUpperCase(), db.queryForObject("SELECT upper(out_state) FROM register_revocation_decide(?, ?, 'approve', NULL)", String.class, bad, DIRECTOR_USER));
+            owner.update("DELETE FROM register_revocation_proposal WHERE id = ?", bad);
+            owner.update("UPDATE agency_authorisation SET valid_to = NULL WHERE id = ?", f.auth());
+        }
+        // A pending proposal for the authorisation does not stop the brand being revoked; it then answers target_not_active.
+        UUID sibling = owner.queryForObject("INSERT INTO register_revocation_proposal (target_authorisation_id, action, reason, proposed_by) VALUES (?, 'revoke', 'x', ?) RETURNING id",
+            UUID.class, f.auth(), PROGRAMME_USER);
+        var brand = ok(service.propose(PROGRAMME, key(), json(propose("brand", f.brand(), "revoke", ""))), 201);
+        ok(decide(DIRECTOR, brand.get("id"), "approve", null), 200);
+        refused(decide(DIRECTOR, sibling, "approve", null), 409, "target_not_active");
+        ok(decide(DIRECTOR, sibling, "reject", "Superseded by the brand revocation"), 200);
+    }
 }

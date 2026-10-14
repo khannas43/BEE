@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Idempotent: applies the realm settings that the Keycloak import cannot change on an existing realm (the import only runs for a realm that does
  * not exist yet). Today that is brute-force detection (WP02.4). Values come from local/generate-fixtures.cjs, the same list the import file is

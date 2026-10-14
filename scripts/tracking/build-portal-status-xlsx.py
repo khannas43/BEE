@@ -75,6 +75,7 @@ TAB2_ROWS = [
     ("Cursor brief", "BRIEF-12", "Business settings screen (WP08.1h frontend)", "Done", 100),
     ("Cursor brief", "BRIEF-13", "Registration applicant screens (list, form, request, licence, fee)", "Done", 100),
     ("Cursor brief", "BRIEF-14", "Registration review screens and applicant's returned path", "Done", 100),
+    ("Cursor brief", "BRIEF-15", "Register screen: propose and decide closing or revoking an entry", "Done", 100),
     ("Work package", "WP02", "Identity, session, MFA, model-application policy", "In progress", 75),
     ("Work package", "WP03", "OpenAPI contract, BFF, contract tests", "Done", 100),
     ("Work package", "WP04", "Masters and brand authorisation", "In progress", 90),

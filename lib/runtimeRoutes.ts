@@ -127,6 +127,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["List requests waiting for you", "Recommend or return", "Approve, return or reject", "Read the trail"],
   },
   {
+    href: "/app/registrations/register",
+    en: "Register",
+    hi: "रजिस्टर",
+    icon: "menu_book",
+    navRoles: ["programme", "director"],
+    implemented: ["See registered brands and authorisations", "Propose a closure or revocation", "Approve, reject or withdraw a proposal", "Read the history"],
+  },
+  {
     href: "/app/model-label/model-dashboard",
     en: "My model applications",
     hi: "मेरे मॉडल आवेदन",

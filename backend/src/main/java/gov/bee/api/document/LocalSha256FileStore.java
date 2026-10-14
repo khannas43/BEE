@@ -170,7 +170,7 @@ public class LocalSha256FileStore {
     public static final class FileTooLargeException extends IOException {
         private final long limit;
 
-        FileTooLargeException(long limit) {
+        public FileTooLargeException(long limit) {
             super("too large");
             this.limit = limit;
         }
@@ -181,7 +181,7 @@ public class LocalSha256FileStore {
     }
 
     public static final class InvalidDocumentException extends IOException {
-        InvalidDocumentException(String reason) {
+        public InvalidDocumentException(String reason) {
             super(reason);
         }
     }

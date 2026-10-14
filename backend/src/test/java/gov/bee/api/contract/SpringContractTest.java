@@ -36,6 +36,8 @@ import gov.bee.api.brand.BrandAuth;
 import gov.bee.api.brand.BrandAuthRepository;
 import gov.bee.api.identity.IdentityRepository;
 import gov.bee.api.masters.MasterDataRepository;
+import gov.bee.api.registration.RegistrationDocumentRepository;
+import gov.bee.api.registration.RegistrationRepository;
 import gov.bee.api.masters.MasterVersion;
 import gov.bee.api.masters.Masters;
 import java.math.BigDecimal;
@@ -179,6 +181,12 @@ class SpringContractTest {
 
     @MockitoBean
     gov.bee.api.settings.BusinessSettingRepository settingsRepo;
+
+    @MockitoBean
+    RegistrationRepository registrationRepo;
+
+    @MockitoBean
+    RegistrationDocumentRepository registrationDocumentRepo;
 
     /** Every other operation reads its business settings through the service; the defaults are the catalogue's (V42). */
     @org.junit.jupiter.api.BeforeEach
@@ -2496,5 +2504,270 @@ class SpringContractTest {
         assertEquals(pin.path("version").asText(), doc.path("info").path("version").asText(), "artifact version differs from the pin");
         String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(ContractSchema.ARTIFACT)));
         assertEquals(pin.path("sha256").asText(), sha, "artifact content changed without a version bump and a new pin (scripts/local/contract-pin.json)");
+    }
+
+    /** WP04.2b-1: every documented status and code of the registration routes, through the real chain with the repositories mocked. */
+    @Test
+    void registrationOperationsDocumentedPairs() throws Exception {
+        final String LIST = "/api/registrations", BRANDS = LIST + "/eligible-brands", ONE = LIST + "/{id}", PREVIEW = ONE + "/submit", FEE = ONE + "/fee-confirmation",
+            DOCS = ONE + "/documents", CONTENT = DOCS + "/{documentId}/versions/{versionId}/content";
+        final UUID REG = UUID.fromString("00000000-0000-4000-f000-000000000001");
+        final String base = LIST + "/" + REG;
+        final String contentPath = base + "/documents/" + DOC_ID + "/versions/" + VER_ID + "/content";
+        final UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        final String createBody = "{\"brandName\":\"Zephyr Cool\"}";
+        final String patchBody = "{\"version\":0,\"brandName\":\"Zephyr Air\"}";
+        final String submitBody = "{\"version\":0,\"expectedFee\":{\"amountInr\":\"5000.00\",\"feeRuleKey\":\"REG:brand_registration\",\"feeRuleVersion\":1}}";
+        final String feeBody = "{\"version\":1,\"receiptReference\":\"RCPT-1\",\"receivedOn\":\"2026-10-02\",\"amountInr\":\"5000.00\"}";
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
+        MockMultipartFile pdf = new MockMultipartFile("file", "licence.pdf", "application/pdf", MIN_PDF);
+        when(documentStore.maxUploadBytes()).thenReturn(5_242_880L);
+        var draft = new RegistrationRepository.Row(REG, "REG-2026-10001", "brand", NOVA, "NOVA", null, null, "Zephyr Cool", null, null, "draft", 0);
+        var feeDue = new RegistrationRepository.Row(REG, "REG-2026-10001", "brand", NOVA, "NOVA", null, null, "Zephyr Cool", null, null, "fee_due", 1);
+        var agencyDraft = new RegistrationRepository.Row(REG, "REG-2026-10002", "agency", NOVA, "NOVA", NOVA, NOVA_COOL, "Nova Cool", null, null, "draft", 0);
+        var feeRow = new RegistrationRepository.FeeRow(UUID.randomUUID(), new BigDecimal("5000.00"), new BigDecimal("0.00"), new BigDecimal("0.00"),
+            new BigDecimal("5000.00"), "REG:brand_registration", 1, "synthetic", "ref");
+        var regFee = new Masters.FeeRule(new MasterVersion(UUID.randomUUID(), "REG:brand_registration", 1, LocalDate.of(2026, 1, 1), null, "ref",
+            MasterVersion.Verification.SYNTHETIC, "note", null, null), "REG", "brand_registration", new BigDecimal("5000.00"));
+
+        record Op(String route, java.util.function.Function<RequestPostProcessor, MockHttpServletRequestBuilder> req, String noScopeCode) {
+        }
+        List<Op> ops = List.of(
+            new Op(LIST, rp -> get(LIST).with(rp), "no_read_scope"),
+            new Op(BRANDS, rp -> get(BRANDS).with(rp), "no_write_scope"),
+            new Op(ONE, rp -> get(base).with(rp), "no_read_scope"),
+            new Op(PREVIEW, rp -> get(base + "/submit").with(rp), "no_write_scope"),
+            new Op(DOCS, rp -> get(base + "/documents").with(rp), "no_read_scope"),
+            new Op(CONTENT, rp -> get(contentPath).with(rp), "no_read_scope"),
+            new Op(LIST, rp -> post(LIST).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), "no_write_scope"),
+            new Op(ONE, rp -> patch(base).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), "no_write_scope"),
+            new Op(PREVIEW, rp -> post(base + "/submit").with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), "no_write_scope"),
+            new Op(FEE, rp -> post(base + "/fee-confirmation").with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), "role_not_permitted"),
+            new Op(DOCS, rp -> multipart(base + "/documents").file(pdf).with(rp).header("Idempotency-Key", IDEM), "no_write_scope"));
+        java.util.function.Supplier<Boolean> fresh = () -> {
+            reset(identity, idempotency, registrationRepo, registrationDocumentRepo, documentStore, masters);
+            when(documentStore.maxUploadBytes()).thenReturn(5_242_880L);
+            when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+            when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+            account("manufacturer", "own-org");
+            return true;
+        };
+
+        // Identity and scope denials, once per operation.
+        for (Op op : ops) {
+            fresh.get();
+            conforms(op.route(), op.req().apply(r -> r), 401, "unauthenticated");
+            conforms(op.route(), op.req().apply(pwdOnly), 403, "mfa_required");
+            when(identity.activeAccount(any())).thenReturn(Optional.empty());
+            conforms(op.route(), op.req().apply(token("manufacturer")), 403, "no_active_account");
+            account("manufacturer", "own-org");
+            conforms(op.route(), op.req().apply(token("finance")), 403, "no_effective_role");
+            account("auditor", "all");
+            conforms(op.route(), op.req().apply(token("auditor")), 403, op.noScopeCode());
+        }
+
+        // Reads.
+        fresh.get();
+        when(registrationRepo.list(any(), any())).thenReturn(List.of(draft));
+        when(registrationRepo.feeSnapshot(REG)).thenReturn(Optional.empty());
+        conforms(LIST, get(LIST).with(token("manufacturer")), 200, null);
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).list(any(), any());
+        conforms(LIST, get(LIST).with(token("manufacturer")), 503, "service_unavailable");
+        doThrow(new IllegalStateException("boom")).when(registrationRepo).list(any(), any());
+        conforms(LIST, get(LIST).with(token("manufacturer")), 500, "internal_error");
+        fresh.get();
+        account("agency", "own-org");
+        when(registrationRepo.activeBrands()).thenReturn(List.of(new RegistrationRepository.BrandChoice(NOVA_COOL, "Nova Cool", NOVA, "NOVA")));
+        conforms(BRANDS, get(BRANDS).with(token("agency")), 200, null);
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).activeBrands();
+        conforms(BRANDS, get(BRANDS).with(token("agency")), 503, "service_unavailable");
+        fresh.get();
+        when(registrationRepo.find(REG)).thenReturn(Optional.of(feeDue));
+        when(registrationRepo.feeSnapshot(REG)).thenReturn(Optional.of(feeRow));
+        when(registrationRepo.documentCount(REG)).thenReturn(1);
+        conforms(ONE, get(base).with(token("manufacturer")), 200, null);
+        when(registrationRepo.find(REG)).thenReturn(Optional.empty());
+        conforms(ONE, get(base).with(token("manufacturer")), 404, "not_found");
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).find(REG);
+        conforms(ONE, get(base).with(token("manufacturer")), 503, "service_unavailable");
+        doThrow(new IllegalStateException("boom")).when(registrationRepo).find(REG);
+        conforms(ONE, get(base).with(token("manufacturer")), 500, "internal_error");
+
+        // Create and edit.
+        fresh.get();
+        when(registrationRepo.nextReference(anyInt())).thenReturn("REG-2026-10001");
+        when(registrationRepo.insertDraft(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(draft);
+        conforms(LIST, post(LIST).with(token("manufacturer")).contentType("application/json").content(createBody), 422, "idempotency_key_required");
+        conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 201, null);
+        when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(true);
+        conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 409, "brand_name_taken");
+        when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(false);
+        when(registrationRepo.liveBrandRequest(any(), any(), any())).thenReturn(true);
+        conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 409, "duplicate_registration");
+        when(registrationRepo.liveBrandRequest(any(), any(), any())).thenReturn(false);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
+        conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 201, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).nextReference(anyInt());
+        conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 503, "service_unavailable");
+
+        fresh.get();
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(draft));
+        var edited = new RegistrationRepository.Row(REG, "REG-2026-10001", "brand", NOVA, "NOVA", null, null, "Zephyr Air", null, null, "draft", 1);
+        when(registrationRepo.updateDraft(any(), any(), anyInt(), any(), any(), any(), any(), any())).thenReturn(Optional.of(edited));
+        conforms(ONE, patch(base).with(token("manufacturer")).contentType("application/json").content(patchBody), 422, "idempotency_key_required");
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":0}"), 422, "validation_failed");
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 200, null);
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody.replace("\"version\":0", "\"version\":5")), 409, "version_conflict");
+        when(registrationRepo.brandNameTaken("Zephyr Air")).thenReturn(true);
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 409, "brand_name_taken");
+        when(registrationRepo.brandNameTaken("Zephyr Air")).thenReturn(false);
+        when(registrationRepo.liveBrandRequest(any(), any(), any())).thenReturn(true);
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 409, "duplicate_registration");
+        when(registrationRepo.liveBrandRequest(any(), any(), any())).thenReturn(false);
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(feeDue));
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 403, "not_editable");
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.empty());
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 404, "not_found");
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).findOwned(REG, NOVA);
+        conforms(ONE, patch(base).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(patchBody), 503, "service_unavailable");
+
+        // The submit preview and the submit.
+        fresh.get();
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(draft));
+        when(registrationRepo.documentCount(REG)).thenReturn(1);
+        when(masters.feeRule(eq("REG"), eq("brand_registration"), any())).thenReturn(Optional.of(regFee));
+        conforms(PREVIEW, get(base + "/submit").with(token("manufacturer")), 200, null);
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(feeDue));
+        conforms(PREVIEW, get(base + "/submit").with(token("manufacturer")), 403, "not_submittable");
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.empty());
+        conforms(PREVIEW, get(base + "/submit").with(token("manufacturer")), 404, "not_found");
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).findOwned(REG, NOVA);
+        conforms(PREVIEW, get(base + "/submit").with(token("manufacturer")), 503, "service_unavailable");
+
+        fresh.get();
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(draft));
+        when(registrationRepo.documentCount(REG)).thenReturn(1);
+        when(masters.feeRule(eq("REG"), eq("brand_registration"), any())).thenReturn(Optional.of(regFee));
+        var submitted = new RegistrationRepository.SubmissionResult(feeDue, UUID.randomUUID(), feeRow);
+        when(registrationRepo.submit(any(), any(), anyInt(), any(), any(), any(), any(), any(), anyInt(), any(), any(), any())).thenReturn(Optional.of(submitted));
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).contentType("application/json").content(submitBody), 422, "idempotency_key_required");
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 200, null);
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody.replace("5000.00", "1.00")), 409, "fee_preview_conflict");
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody.replace("\"version\":0", "\"version\":4")), 409, "version_conflict");
+        when(registrationRepo.documentCount(REG)).thenReturn(0);
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "document_required");
+        when(registrationRepo.documentCount(REG)).thenReturn(1);
+        when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(true);
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 409, "brand_name_taken");
+        when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(false);
+        when(masters.feeRule(eq("REG"), eq("brand_registration"), any())).thenReturn(Optional.empty());
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 422, "rule_not_available");
+        when(masters.feeRule(eq("REG"), eq("brand_registration"), any())).thenReturn(Optional.of(regFee));
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(feeDue));
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "not_submittable");
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(agencyDraft));
+        account("agency", "own-org");
+        when(registrationRepo.activeBrand(NOVA_COOL)).thenReturn(Optional.empty());
+        conforms(PREVIEW, post(base + "/submit").with(token("agency")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 403, "brand_not_permitted");
+        account("manufacturer", "own-org");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.empty());
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 404, "not_found");
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).findOwned(REG, NOVA);
+        conforms(PREVIEW, post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 503, "service_unavailable");
+
+        // Finance confirms the fee.
+        fresh.get();
+        financeAccount(staff);
+        when(registrationRepo.find(REG)).thenReturn(Optional.of(feeDue));
+        when(registrationRepo.feeSnapshot(REG)).thenReturn(Optional.of(feeRow));
+        when(registrationRepo.feeSnapshotId(REG)).thenReturn(Optional.of(feeRow.id()));
+        when(registrationRepo.submitter(REG)).thenReturn(Optional.of(UUID.randomUUID()));
+        when(registrationRepo.confirmFee(any(), anyInt(), any(), any(), any(), any(), any())).thenReturn(Optional.of(new RegistrationRepository.Confirmed(2, Instant.parse("2026-10-03T10:00:00Z"))));
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).contentType("application/json").content(feeBody), 422, "idempotency_key_required");
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody.replace("5000.00", "4999.00")), 422, "amount_mismatch");
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), 200, null);
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody.replace("\"version\":1", "\"version\":0")), 409, "version_conflict");
+        when(registrationRepo.confirmFee(any(), anyInt(), any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), 409, "version_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        account("finance", "all"); // the payer's own organisation
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), 403, "segregation_refused");
+        account("manufacturer", "own-org");
+        conforms(FEE, post(base + "/fee-confirmation").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), 403, "role_not_permitted");
+        financeAccount(staff);
+        when(registrationRepo.find(REG)).thenReturn(Optional.empty());
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), 404, "not_found");
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).find(REG);
+        conforms(FEE, post(base + "/fee-confirmation").with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(feeBody), 503, "service_unavailable");
+
+        // Documents: list, download and upload.
+        fresh.get();
+        when(registrationRepo.find(REG)).thenReturn(Optional.of(draft));
+        when(registrationDocumentRepo.listDocuments(REG)).thenReturn(List.of());
+        conforms(DOCS, get(base + "/documents").with(token("manufacturer")), 200, null);
+        when(registrationRepo.find(REG)).thenReturn(Optional.empty());
+        conforms(DOCS, get(base + "/documents").with(token("manufacturer")), 404, "not_found");
+        conforms(CONTENT, get(contentPath).with(token("manufacturer")), 404, "not_found");
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).find(REG);
+        conforms(DOCS, get(base + "/documents").with(token("manufacturer")), 503, "service_unavailable");
+        conforms(CONTENT, get(contentPath).with(token("manufacturer")), 503, "service_unavailable");
+        reset(registrationRepo);
+        when(registrationRepo.find(REG)).thenReturn(Optional.of(draft));
+        when(registrationDocumentRepo.findDocument(DOC_ID, REG)).thenReturn(Optional.of(new RegistrationDocumentRepository.DocumentRow(DOC_ID, REG, "trade_licence")));
+        when(registrationDocumentRepo.findVersion(VER_ID, DOC_ID)).thenReturn(Optional.of(new RegistrationDocumentRepository.VersionRow(VER_ID, DOC_ID, 1,
+            "a".repeat(64), MIN_PDF.length, "application/pdf", "licence.pdf", "Trade licence", USER, java.time.OffsetDateTime.parse("2026-10-03T00:00:00Z"))));
+        when(documentStore.read("a".repeat(64))).thenReturn(Optional.of(MIN_PDF));
+        conforms(CONTENT, get(contentPath).with(token("manufacturer")), 200, null);
+
+        fresh.get();
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(feeDue));
+        conforms(DOCS, multipart(base + "/documents").file(pdf).with(token("manufacturer")).header("Idempotency-Key", IDEM), 403, "not_editable");
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.empty());
+        conforms(DOCS, multipart(base + "/documents").file(pdf).with(token("manufacturer")).header("Idempotency-Key", IDEM), 404, "not_found");
+        when(registrationRepo.findOwned(REG, NOVA)).thenReturn(Optional.of(draft));
+        conforms(DOCS, multipart(base + "/documents").file(pdf).with(token("manufacturer")), 422, "idempotency_key_required");
+        conforms(DOCS, multipart(base + "/documents").with(token("manufacturer")).header("Idempotency-Key", IDEM), 422, "validation_failed");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
+        conforms(DOCS, multipart(base + "/documents").file(pdf).with(token("manufacturer")).header("Idempotency-Key", IDEM), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 201, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(DOCS, multipart(base + "/documents").file(pdf).with(token("manufacturer")).header("Idempotency-Key", IDEM), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        Path staged = Path.of("target/contract-documents/.tmp/staged-registration-pdf");
+        Files.createDirectories(staged.getParent());
+        Files.write(staged, MIN_PDF);
+        when(documentStore.stage(any())).thenReturn(new StagedBlob(staged, "e".repeat(64), MIN_PDF.length));
+        when(registrationDocumentRepo.lockState(REG)).thenReturn(Optional.of("draft"));
+        when(registrationDocumentRepo.recordVersion(any(), any(), anyLong(), any(), any(), any())).thenReturn(new RegistrationDocumentRepository.DocumentRow(DOC_ID, REG, "trade_licence"));
+        when(registrationDocumentRepo.listVersions(DOC_ID)).thenReturn(List.of(new RegistrationDocumentRepository.VersionRow(VER_ID, DOC_ID, 1, "e".repeat(64),
+            MIN_PDF.length, "application/pdf", "licence.pdf", "Trade licence", USER, java.time.OffsetDateTime.parse("2026-10-03T00:00:00Z"))));
+        conforms(DOCS, multipart(base + "/documents").file(pdf).with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345d"), 201, null);
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationDocumentRepo).recordVersion(any(), any(), anyLong(), any(), any(), any());
+        when(documentStore.stage(any())).thenReturn(new StagedBlob(staged, "f".repeat(64), MIN_PDF.length));
+        conforms(DOCS, multipart(base + "/documents").file(pdf).with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345e"), 503, "service_unavailable");
     }
 }

@@ -75,7 +75,7 @@ class FeeRuleDatabaseTest {
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         repo = new FeeRuleRepository(db);
         masters = new MasterDataRepository(db);
-        assertEquals(42, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V42");
+        assertEquals(43, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V43");
     }
 
     @AfterAll
@@ -102,7 +102,7 @@ class FeeRuleDatabaseTest {
     @Test
     void theAdministratorHoldsTheCapabilityAndNobodyElseDoes() {
         assertEquals(java.util.Set.of("admin"), repo.rolesHolding(FeeRuleRepository.CAPABILITY));
-        assertEquals(java.util.List.of("new_model"), repo.applicationTypes().stream().map(FeeRuleRepository.AppType::code).toList());
+        assertEquals(java.util.List.of("agency_registration", "brand_registration", "new_model"), repo.applicationTypes().stream().map(FeeRuleRepository.AppType::code).toList());
         assertTrue(repo.categoryAppliesOn("RAC", TODAY));
         assertFalse(repo.categoryAppliesOn("ZZ", TODAY));
     }

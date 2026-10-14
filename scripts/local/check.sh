@@ -80,7 +80,7 @@ w="$(jq -r '"\(.organisations) \(.userAccounts) \(.memberships) \(.roleAssignmen
 check "db.seed-counts" "$(ok test "$g_org $g_usr $g_mem $g_role $g_act" = "$w")" "org/user/membership/role/active = $g_org/$g_usr/$g_mem/$g_role/$g_act (expected ${w// //})"
 # ---- WP04.1 effective-dated masters: fixture counts, the ₹1,000 / ₹24,000 versions, nothing BEE-verified, V2 tables retired
 m_want="$(jq -r '.masters | "\(.master_category) \(.master_standard) \(.master_lab_accreditation) \(.master_fee_rule) \(.master_rating_formula)"' <<<"$want")"
-m_got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.master_category), (SELECT count(*) FROM app.master_standard), (SELECT count(*) FROM app.master_lab_accreditation), (SELECT count(*) FROM app.master_fee_rule WHERE rule_key <> 'RAC:live_check'), (SELECT count(*) FROM app.master_rating_formula)" 2>/dev/null || true)"
+m_got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.master_category), (SELECT count(*) FROM app.master_standard), (SELECT count(*) FROM app.master_lab_accreditation), (SELECT count(*) FROM app.master_fee_rule WHERE rule_key <> 'RAC:live_check' AND rule_key NOT LIKE 'REG:%'), (SELECT count(*) FROM app.master_rating_formula)" 2>/dev/null || true)"
 check "db.masters-seeded" "$(ok test "$m_got" = "$m_want")" "category/standard/accreditation/fee/formula versions = ${m_got// //} (expected ${m_want// //})"
 rule_state="$(psql_app -F ' ' -c "SELECT
   (SELECT string_agg(version || ':' || amount_inr || ':' || verification_status || ':' || coalesce(legacy_id, '-') || ':' || effective_from || '..' || coalesce(effective_to::text, 'open'), ',' ORDER BY version) FROM app.master_fee_rule WHERE rule_key = 'RAC:new_model'),
@@ -295,6 +295,13 @@ grep -E '^(PASS|FAIL) ' <<<"$bs_out"
 read -r bs_pass bs_fail <<<"$(sed -nE 's/^business-settings checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$bs_out")"
 if [[ -z "${bs_pass:-}" ]]; then check "businesssettings.run" 0 "business-settings-browser-check did not complete: $(tail -1 <<<"$bs_out")"
 else pass=$((pass + bs_pass)); fail=$((fail + bs_fail)); fi
+
+# ---- WP04.2b-1: brand and agency registration (records the runtime registration pairs)
+reg_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/registration-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$reg_out"
+read -r reg_pass reg_fail <<<"$(sed -nE 's/^registration checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$reg_out")"
+if [[ -z "${reg_pass:-}" ]]; then check "registrations.run" 0 "registration-browser-check did not complete: $(tail -1 <<<"$reg_out")"
+else pass=$((pass + reg_pass)); fail=$((fail + reg_fail)); fi
 
 # ---- WP08.1h / Brief 12: the Business settings screen, driven in the portal
 bsu_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/business-settings-ui-check.cjs" 2>&1)"

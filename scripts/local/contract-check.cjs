@@ -154,6 +154,28 @@ const DRAFT_UPSTREAM = {
 const BRANDS_ROUTE = "/api/runtime/model-applications/eligible-brands";
 const LIST_ROUTE = "/api/runtime/model-applications";
 const DETAIL_ROUTE = "/api/runtime/model-applications/{id}";
+// WP04.2b-1 (brand and agency registration). Keep equal to lib/server/contracts/registrations.ts and the artifact.
+const REG_ROUTE = "/api/runtime/registrations";
+const REG_BRANDS_ROUTE = "/api/runtime/registrations/eligible-brands";
+const REG_ONE_ROUTE = "/api/runtime/registrations/{id}";
+const REG_SUBMIT_ROUTE = "/api/runtime/registrations/{id}/submit";
+const REG_FEE_ROUTE = "/api/runtime/registrations/{id}/fee-confirmation";
+const REG_DOCS_ROUTE = "/api/runtime/registrations/{id}/documents";
+const REG_CONTENT_ROUTE = "/api/runtime/registrations/{id}/documents/{documentId}/versions/{versionId}/content";
+const REG_READ = ["mfa_required", "no_active_account", "no_effective_role", "no_read_scope"];
+const REG_WRITE = ["mfa_required", "no_active_account", "no_effective_role", "no_write_scope"];
+const REG_IDEM = ["idempotency_key_conflict", "idempotency_in_progress"];
+const REG_LIST_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: REG_READ, 503: ["service_unavailable"] } };
+const REG_READ_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: REG_READ, 404: ["not_found"], 503: ["service_unavailable"] } };
+const REG_BRANDS_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: REG_WRITE, 503: ["service_unavailable"] } };
+const REG_CREATE_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: REG_WRITE, 409: [...REG_IDEM, "brand_name_taken", "duplicate_registration"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
+const REG_PATCH_UPSTREAM = { PATCH: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_editable"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM, "brand_name_taken", "duplicate_registration"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
+const REG_SUBMIT_UPSTREAM = {
+  GET: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_submittable"], 404: ["not_found"], 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: [...REG_WRITE, "brand_not_permitted", "not_submittable"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM, "fee_preview_conflict", "brand_name_taken"], 422: ["validation_failed", "idempotency_key_required", "rule_not_available", "document_required"], 503: ["service_unavailable"] },
+};
+const REG_FEE_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM], 422: ["validation_failed", "idempotency_key_required", "amount_mismatch"], 503: ["service_unavailable"] } };
+const REG_UPLOAD_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_editable"], 404: ["not_found"], 409: [...REG_IDEM], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const upstreamLogRoute = (route, method) => {
   if (route === "/api/runtime/me") return "/api/me";
   if (route === VERIFICATION_ROUTE) return "/api/public/verification";
@@ -654,12 +676,12 @@ async function plantedValues(sessionJar, m0) {
   async function exerciseStandInPairs(route, url, method, jar, upstreamTable = SUBMIT_UPSTREAM) {
     const op = doc.paths[route]?.[method.toLowerCase()];
     if (!op) return;
-    const uploadMultipart = route === DOC_LIST_ROUTE && method === "POST";
+    const uploadMultipart = (route === DOC_LIST_ROUTE || route === REG_DOCS_ROUTE) && method === "POST";
     for (const [status, spec] of Object.entries(op.responses)) {
       const st = Number(status);
       if (st === 200 || st === 201) continue;
       for (const code of spec["x-error-codes"] || []) {
-        if (code === "no_session") continue;
+        if (code === "no_session" || code === "api_unreachable" || code === "identity_unavailable") continue; // boundary-only codes: unit evidence
         fake.set("documented", [st, { error: code, message: doc["x-bee-error-codes"][code]?.message || code }]);
         const headers = {};
         let body;
@@ -743,6 +765,18 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "GET", sessionJar, DOC_READ_UPSTREAM);
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(DOC_CONTENT_ROUTE, DOC_CONTENT_URL, "GET", sessionJar, DOC_READ_UPSTREAM);
+    const REG_URL = `/api/runtime/registrations/${NOVA_APP}`;
+    await exerciseStandInPairs(REG_ROUTE, REG_ROUTE, "GET", sessionJar, REG_LIST_UPSTREAM);
+    await exerciseStandInPairs(REG_ONE_ROUTE, REG_URL, "GET", sessionJar, REG_READ_UPSTREAM);
+    await exerciseStandInPairs(REG_BRANDS_ROUTE, REG_BRANDS_ROUTE, "GET", sessionJar, REG_BRANDS_UPSTREAM);
+    await exerciseStandInPairs(REG_ROUTE, REG_ROUTE, "POST", sessionJar, REG_CREATE_UPSTREAM);
+    await exerciseStandInPairs(REG_ONE_ROUTE, REG_URL, "PATCH", sessionJar, REG_PATCH_UPSTREAM);
+    await exerciseStandInPairs(REG_SUBMIT_ROUTE, `${REG_URL}/submit`, "GET", sessionJar, REG_SUBMIT_UPSTREAM);
+    await exerciseStandInPairs(REG_SUBMIT_ROUTE, `${REG_URL}/submit`, "POST", sessionJar, REG_SUBMIT_UPSTREAM);
+    await exerciseStandInPairs(REG_FEE_ROUTE, `${REG_URL}/fee-confirmation`, "POST", sessionJar, REG_FEE_UPSTREAM);
+    await exerciseStandInPairs(REG_DOCS_ROUTE, `${REG_URL}/documents`, "GET", sessionJar, REG_READ_UPSTREAM);
+    await exerciseStandInPairs(REG_DOCS_ROUTE, `${REG_URL}/documents`, "POST", sessionJar, REG_UPLOAD_UPSTREAM);
+    await exerciseStandInPairs(REG_CONTENT_ROUTE, `${REG_URL}/documents/${crypto.randomUUID()}/versions/${crypto.randomUUID()}/content`, "GET", sessionJar, REG_READ_UPSTREAM);
   } finally {
     contract.setSource("live");
     await fake.close();

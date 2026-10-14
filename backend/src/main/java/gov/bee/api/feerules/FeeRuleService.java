@@ -119,7 +119,7 @@ public class FeeRuleService {
         LocalDate today = LocalDate.now(INDIA);
         Optional<NewProposal> input = parsePropose(body, today);
         if (input.isEmpty() || !repository.applicationTypeExists(input.get().applicationType())
-            || !repository.categoryAppliesOn(input.get().categoryCode(), input.get().effectiveFrom())) {
+            || !categoryFits(input.get().categoryCode(), input.get().applicationType(), input.get().effectiveFrom())) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
         if (!idempotency.begin(caller.accountId(), "POST", PROPOSE_ROUTE, IdempotencyRepository.CREATE_TARGET, idempotencyKey, DraftRequestSupport.bodyHash(body))) {
@@ -172,6 +172,17 @@ public class FeeRuleService {
         Map<String, Object> view = proposalView(repository.proposal(proposalId).orElseThrow(), caller);
         idempotency.complete(caller.accountId(), "POST", DECIDE_ROUTE, proposalId, idempotencyKey, 200, writeJson(view), 0);
         return ResponseEntity.ok(view);
+    }
+
+    /**
+     * A registration fee type (brand_registration, agency_registration) belongs to the pseudo category REG (WP04.2b-1), which is not a
+     * model category; every other type needs a model category in force on the start date.
+     */
+    private boolean categoryFits(String category, String type, LocalDate from) {
+        if (type.endsWith("_registration")) {
+            return "REG".equals(category);
+        }
+        return repository.categoryAppliesOn(category, from);
     }
 
     /** categoryCode, applicationType, amountInr and taxRatePercent as plain decimal strings, effectiveFrom as a date not before today. */

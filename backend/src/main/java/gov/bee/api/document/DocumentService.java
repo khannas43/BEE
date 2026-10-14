@@ -403,7 +403,7 @@ public class DocumentService {
      * joiners Indic scripts need and ._ ()[]+,- replaced, always ending in .pdf and at most 180 characters.
      * Never rejects; the bytes are judged by the PDF check, not the name.
      */
-    static String sanitizeFilename(String raw) {
+    public static String sanitizeFilename(String raw) {
         String base = raw == null ? "" : raw.replace('\\', '/');
         base = base.substring(base.lastIndexOf('/') + 1);
         StringBuilder out = new StringBuilder();
@@ -443,7 +443,7 @@ public class DocumentService {
     }
 
     /** Header-safe name: the BFF only forwards ASCII; the exact name stays in the version metadata. */
-    static String asciiHeaderFilename(String stored) {
+    public static String asciiHeaderFilename(String stored) {
         String ascii = stored.replaceAll("[^A-Za-z0-9._ -]", "_");
         return ascii.isBlank() || ascii.length() > 180 ? "document.pdf" : ascii;
     }

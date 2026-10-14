@@ -99,6 +99,25 @@ public class RevocationService {
         repository.pending().forEach(p -> pending.add(view(p, caller)));
         List<Map<String, Object>> decided = new ArrayList<>();
         repository.recentDecided(20).forEach(p -> decided.add(view(p, caller)));
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (var e : repository.events(50)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", e.id().toString());
+            m.put("kind", e.kind());
+            m.put("targetKind", e.targetKind());
+            m.put("targetId", e.targetId().toString());
+            m.put("targetLabel", e.targetLabel());
+            m.put("fromStatus", e.fromStatus());
+            m.put("toStatus", e.toStatus());
+            m.put("validToBefore", e.validToBefore() == null ? null : e.validToBefore().toString());
+            m.put("validToAfter", e.validToAfter() == null ? null : e.validToAfter().toString());
+            m.put("source", e.source());
+            m.put("cascaded", e.cascaded());
+            m.put("by", e.by());
+            m.put("reason", e.reason());
+            m.put("at", e.at().toString());
+            events.add(m);
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("today", LocalDate.now(INDIA).toString());
         out.put("canPropose", mayPropose(caller));
@@ -107,6 +126,7 @@ public class RevocationService {
         out.put("authorisations", authorisations);
         out.put("pending", pending);
         out.put("decided", decided);
+        out.put("events", events);
         return ResponseEntity.ok(out);
     }
 

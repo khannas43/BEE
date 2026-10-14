@@ -33,6 +33,10 @@ public class RevocationRepository {
                            String proposedBy, Instant proposedAt, String state, String decidedBy, Instant decidedAt, String decisionNote) {
     }
 
+    public record Event(UUID id, String kind, String targetKind, UUID targetId, String targetLabel, String fromStatus, String toStatus, LocalDate validToBefore,
+                        LocalDate validToAfter, String source, boolean cascaded, String by, String reason, Instant at) {
+    }
+
     public record NewProposal(UUID brandId, UUID authorisationId, String action, LocalDate closeOn, String reason) {
     }
 
@@ -72,6 +76,27 @@ public class RevocationRepository {
             (rs, i) -> new AuthorisationEntry(rs.getObject("id", UUID.class), rs.getObject("brand_id", UUID.class), rs.getString("brand_name"),
                 rs.getString("agency"), rs.getString("principal"), rs.getDate("valid_from").toLocalDate(),
                 rs.getDate("valid_to") == null ? null : rs.getDate("valid_to").toLocalDate(), rs.getString("status"), rs.getString("source_reference")));
+    }
+
+    /** The register's audit trail, newest first: every registration, revocation and closure that changed an entry. */
+    public List<Event> events(int limit) {
+        return jdbc.query("SELECT e.id, e.brand_id, e.authorisation_id, e.from_status, e.to_status, e.valid_to_before, e.valid_to_after, e.source, e.cascaded, "
+            + "u.display_name, e.reason, e.occurred_at, coalesce(b.name, ab.name || ' for ' || ag.code || ' (' || pr.code || ')') AS label "
+            + "FROM register_status_event e JOIN user_account u ON u.id = e.actor_account_id LEFT JOIN brand b ON b.id = e.brand_id "
+            + "LEFT JOIN agency_authorisation a ON a.id = e.authorisation_id LEFT JOIN brand ab ON ab.id = a.brand_id "
+            + "LEFT JOIN organisation ag ON ag.id = a.agency_organisation_id LEFT JOIN organisation pr ON pr.id = a.principal_organisation_id "
+            + "ORDER BY e.occurred_at DESC, e.id LIMIT " + Math.max(1, Math.min(limit, 200)), (rs, i) -> {
+                UUID brand = rs.getObject("brand_id", UUID.class);
+                UUID auth = rs.getObject("authorisation_id", UUID.class);
+                String from = rs.getString("from_status");
+                String to = rs.getString("to_status");
+                Date before = rs.getDate("valid_to_before");
+                Date after = rs.getDate("valid_to_after");
+                String kind = from == null ? "registered" : "revoked".equals(to) ? "revoked" : "closed";
+                return new Event(rs.getObject("id", UUID.class), kind, brand != null ? "brand" : "authorisation", brand != null ? brand : auth, rs.getString("label"),
+                    from, to, before == null ? null : before.toLocalDate(), after == null ? null : after.toLocalDate(), rs.getString("source"),
+                    rs.getBoolean("cascaded"), rs.getString("display_name"), rs.getString("reason"), rs.getTimestamp("occurred_at").toInstant());
+            });
     }
 
     public Optional<BrandEntry> brand(UUID id) {

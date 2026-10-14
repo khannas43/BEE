@@ -207,6 +207,7 @@ public class RegistrationReviewService {
     private static ResponseEntity<Map<String, Object>> approveRefusal(String outcome) {
         return switch (outcome) {
             case "version_conflict", "brand_name_taken", "authorisation_overlap" -> error(HttpStatus.CONFLICT, outcome);
+            case "period_passed" -> error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
             case "segregation_refused", "not_permitted", "brand_not_permitted" ->
                 error(HttpStatus.FORBIDDEN, "not_permitted".equals(outcome) ? "role_not_permitted" : outcome);
             default -> error(HttpStatus.NOT_FOUND, "not_found");

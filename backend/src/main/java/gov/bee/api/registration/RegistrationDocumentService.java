@@ -129,7 +129,7 @@ public class RegistrationDocumentService {
         if (replay.isPresent()) {
             return replay.get();
         }
-        if (!"draft".equals(registrations.findOwned(id, filing.get()).orElseThrow().state())) {
+        if (!RegistrationPolicy.editable(registrations.findOwned(id, filing.get()).orElseThrow().state())) {
             return error(HttpStatus.FORBIDDEN, "not_editable");
         }
         if (!idempotency.begin(caller.accountId(), "POST", ROUTE_UPLOAD, id, key, hash)) {

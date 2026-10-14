@@ -42,6 +42,7 @@ public final class ApiErrors {
         Map.entry("laboratory_not_accredited", "The laboratory must hold an active accreditation for this category on the test date."),
         Map.entry("standard_not_available", "No applicable standard is in force on the test date."),
         Map.entry("brand_name_taken", "A brand with this name is already registered."),
+        Map.entry("authorisation_overlap", "This agency already holds an authorisation for the brand that overlaps the requested period."),
         Map.entry("duplicate_registration", "A registration request for this brand has already been filed by your organisation."),
         Map.entry("document_required", "A trade licence must be uploaded before the registration request can be submitted."),
         Map.entry("duplicate_model", "Another application already holds this brand and model number."),

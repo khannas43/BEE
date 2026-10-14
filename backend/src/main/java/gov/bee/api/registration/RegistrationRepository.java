@@ -93,7 +93,7 @@ public class RegistrationRepository {
     public Optional<Row> updateDraft(UUID id, UUID organisationId, int version, UUID principalOrganisationId, UUID brandId, String brandName,
                                      LocalDate validFrom, LocalDate validTo) {
         int n = jdbc.update("UPDATE registration_application SET principal_organisation_id = ?, brand_id = ?, brand_name = ?, valid_from = ?, "
-            + "valid_to = ?, version = version + 1 WHERE id = ? AND organisation_id = ? AND state = 'draft' AND version = ?",
+            + "valid_to = ?, version = version + 1 WHERE id = ? AND organisation_id = ? AND state IN ('draft', 'returned') AND version = ?",
             principalOrganisationId, brandId, brandName, validFrom, validTo, id, organisationId, version);
         return n == 1 ? findOwned(id, organisationId) : Optional.empty();
     }
@@ -197,5 +197,60 @@ public class RegistrationRepository {
             + "received_on, confirmed_by_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", UUID.randomUUID(), applicationId, eventId, feeSnapshotId,
             amountInr, receiptReference, java.sql.Date.valueOf(receivedOn), actorAccountId);
         return Optional.of(new Confirmed(after, at.toInstant()));
+    }
+
+    public record Moved(int versionAfter, java.time.Instant at) {
+    }
+
+    /** A review step (recommend, return, reject) or the applicant's resubmit, with its transition event; empty if the state or version has moved. */
+    public Optional<Moved> transition(UUID applicationId, int expectedVersion, String from, String to, String action, UUID actorAccountId,
+                                      String actorRole, String note) {
+        int n = jdbc.update("UPDATE registration_application SET state = ?, version = version + 1 WHERE id = ? AND state = ? AND version = ?",
+            to, applicationId, from, expectedVersion);
+        if (n != 1) {
+            return Optional.empty();
+        }
+        int after = expectedVersion + 1;
+        java.sql.Timestamp at = jdbc.queryForObject("INSERT INTO registration_transition_event (id, application_id, action, from_state, to_state, "
+            + "actor_account_id, actor_role, version_after, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING occurred_at",
+            java.sql.Timestamp.class, UUID.randomUUID(), applicationId, action, from, to, actorAccountId, actorRole, after, note);
+        return Optional.of(new Moved(after, at.toInstant()));
+    }
+
+    public record Approved(String outcome, Integer versionAfter, UUID brandId, UUID authorisationId) {
+    }
+
+    /** Approve in the database function: the capability, the second-person rule and the register entry are decided there. */
+    public Approved approve(UUID applicationId, UUID actorAccountId, int version, String note) {
+        return jdbc.query("SELECT out_state, out_version, out_brand, out_authorisation FROM registration_approve(?, ?, ?, ?)", rs -> {
+            rs.next();
+            int v = rs.getInt("out_version");
+            Integer after = rs.wasNull() ? null : v;
+            return new Approved(rs.getString("out_state"), after, rs.getObject("out_brand", UUID.class), rs.getObject("out_authorisation", UUID.class));
+        }, applicationId, actorAccountId, version, note);
+    }
+
+    public java.time.Instant lastEventAt(UUID applicationId) {
+        return jdbc.queryForObject("SELECT max(occurred_at) FROM registration_transition_event WHERE application_id = ?", java.sql.Timestamp.class,
+            applicationId).toInstant();
+    }
+
+    /** The register entry an approved request made: the brand, or the agency authorisation. */
+    public record Entry(UUID brandId, UUID authorisationId) {
+    }
+
+    public Optional<Entry> registerEntry(UUID applicationId) {
+        return jdbc.query("SELECT registered_brand_id, registered_authorisation_id FROM registration_application WHERE id = ? "
+            + "AND state = 'approved'", (rs, i) -> new Entry(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)), applicationId).stream().findFirst();
+    }
+
+    public record TrailItem(String action, String actorRole, String fromState, String toState, String note, java.time.Instant at) {
+    }
+
+    /** Every step after filing, oldest first (the filing itself is the submission event). */
+    public List<TrailItem> trail(UUID applicationId) {
+        return jdbc.query("SELECT action, actor_role, from_state, to_state, note, occurred_at FROM registration_transition_event WHERE application_id = ? "
+            + "ORDER BY occurred_at, version_after", (rs, i) -> new TrailItem(rs.getString("action"), rs.getString("actor_role"), rs.getString("from_state"),
+                rs.getString("to_state"), rs.getString("note"), rs.getTimestamp("occurred_at").toInstant()), applicationId);
     }
 }

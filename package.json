@@ -39,6 +39,7 @@
     "local:fee-rules": "bash -c 'source scripts/local/lib.sh && node scripts/local/fee-rules-browser-check.cjs'",
     "local:business-settings": "bash -c 'source scripts/local/lib.sh && node scripts/local/business-settings-browser-check.cjs'",
     "local:registrations": "bash -c 'source scripts/local/lib.sh && node scripts/local/registration-browser-check.cjs'",
+    "local:registration-review": "bash -c 'source scripts/local/lib.sh && node scripts/local/registration-review-browser-check.cjs'",
     "local:business-settings-ui": "bash -c 'source scripts/local/lib.sh && node scripts/local/business-settings-ui-check.cjs'",
     "local:rating-schemes": "bash -c 'source scripts/local/lib.sh && node scripts/local/rating-schemes-browser-check.cjs'",
     "local:fee-corrections": "bash -c 'source scripts/local/lib.sh && node scripts/local/fee-corrections-browser-check.cjs'",

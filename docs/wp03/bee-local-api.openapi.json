@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.28.0",
+    "version": "0.29.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
     "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. The draft routes, submit, every stage command (fee confirmation to the Secretary's approval, return, resubmit and reject) and the history read are operational; anything not listed is denied.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
@@ -28087,6 +28087,730 @@
           }
         }
       }
+    },
+    "/api/registrations/{id}/transition": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "post": {
+        "operationId": "springTransitionRegistration",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [
+          {
+            "springBearer": []
+          }
+        ],
+        "summary": "Take one review step on a registration request: recommend, return, reject, approve or resubmit.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationTransition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The step was taken.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "true when replaying a completed idempotent confirmation."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationTransitionReceipt"
+                },
+                "examples": {
+                  "example": {
+                    "value": {
+                      "registrationId": "00000000-0000-4000-9000-000000000001",
+                      "reference": "REG-2026-10001",
+                      "action": "recommend",
+                      "fromState": "programme_review",
+                      "toState": "director_approval",
+                      "version": 3,
+                      "actedAt": "2026-10-14T10:00:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  },
+                  "segregation_refused": {
+                    "value": {
+                      "error": "segregation_refused",
+                      "message": "A person who acted at another stage of this application, or its own organisation, cannot take this step."
+                    }
+                  },
+                  "brand_not_permitted": {
+                    "value": {
+                      "error": "brand_not_permitted",
+                      "message": "This brand is not available to your organisation."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted",
+              "segregation_refused",
+              "brand_not_permitted"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "version_conflict": {
+                    "value": {
+                      "error": "version_conflict",
+                      "message": "The record has changed since it was loaded."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  },
+                  "idempotency_in_progress": {
+                    "value": {
+                      "error": "idempotency_in_progress",
+                      "message": "A request with this Idempotency-Key is still in progress."
+                    }
+                  },
+                  "brand_name_taken": {
+                    "value": {
+                      "error": "brand_name_taken",
+                      "message": "A brand with this name is already registered."
+                    }
+                  },
+                  "authorisation_overlap": {
+                    "value": {
+                      "error": "authorisation_overlap",
+                      "message": "This agency already holds an authorisation for the brand that overlaps the requested period."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "version_conflict",
+              "idempotency_key_conflict",
+              "idempotency_in_progress",
+              "brand_name_taken",
+              "authorisation_overlap"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  },
+                  "document_required": {
+                    "value": {
+                      "error": "document_required",
+                      "message": "A trade licence must be uploaded before the registration request can be submitted."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required",
+              "document_required"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/registrations/{id}/transition": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "post": {
+        "operationId": "runtimeTransitionRegistration",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "Take one review step on a registration request: recommend, return, reject, approve or resubmit.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationTransition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The step was taken.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "true when replaying a completed idempotent confirmation."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationTransitionReceipt"
+                },
+                "examples": {
+                  "example": {
+                    "value": {
+                      "registrationId": "00000000-0000-4000-9000-000000000001",
+                      "reference": "REG-2026-10001",
+                      "action": "recommend",
+                      "fromState": "programme_review",
+                      "toState": "director_approval",
+                      "version": 3,
+                      "actedAt": "2026-10-14T10:00:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  },
+                  "role_not_permitted": {
+                    "value": {
+                      "error": "role_not_permitted",
+                      "message": "This role cannot perform this action."
+                    }
+                  },
+                  "segregation_refused": {
+                    "value": {
+                      "error": "segregation_refused",
+                      "message": "A person who acted at another stage of this application, or its own organisation, cannot take this step."
+                    }
+                  },
+                  "brand_not_permitted": {
+                    "value": {
+                      "error": "brand_not_permitted",
+                      "message": "This brand is not available to your organisation."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role",
+              "role_not_permitted",
+              "segregation_refused",
+              "brand_not_permitted"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "version_conflict": {
+                    "value": {
+                      "error": "version_conflict",
+                      "message": "The record has changed since it was loaded."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  },
+                  "idempotency_in_progress": {
+                    "value": {
+                      "error": "idempotency_in_progress",
+                      "message": "A request with this Idempotency-Key is still in progress."
+                    }
+                  },
+                  "brand_name_taken": {
+                    "value": {
+                      "error": "brand_name_taken",
+                      "message": "A brand with this name is already registered."
+                    }
+                  },
+                  "authorisation_overlap": {
+                    "value": {
+                      "error": "authorisation_overlap",
+                      "message": "This agency already holds an authorisation for the brand that overlaps the requested period."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "version_conflict",
+              "idempotency_key_conflict",
+              "idempotency_in_progress",
+              "brand_name_taken",
+              "authorisation_overlap"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  },
+                  "document_required": {
+                    "value": {
+                      "error": "document_required",
+                      "message": "A trade licence must be uploaded before the registration request can be submitted."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required",
+              "document_required"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
     }
   },
   "components": {
@@ -28214,7 +28938,8 @@
               "reversal_not_possible",
               "brand_name_taken",
               "duplicate_registration",
-              "document_required"
+              "document_required",
+              "authorisation_overlap"
             ]
           },
           "message": {
@@ -31661,7 +32386,7 @@
           "version",
           "tradeLicenceUploaded"
         ],
-        "description": "A brand or agency registration request (WP04.2b-1). Provisional local rules, not BEE rules: a manufacturer registers a brand; an agency asks to act for a manufacturer's active brand; one trade-licence PDF; a fee from the REG fee rules. Review, approval and the register entry are WP04.2b-2.",
+        "description": "A brand or agency registration request (WP04.2b-1). Provisional local rules, not BEE rules: a manufacturer registers a brand; an agency asks to act for a manufacturer's active brand; one trade-licence PDF; a fee from the REG fee rules. Review and approval are WP04.2b-2: Programme recommends or returns, the Director approves, returns or rejects, the applicant resubmits a returned request; approval writes the brand or the agency authorisation.",
         "properties": {
           "id": {
             "type": "string",
@@ -31718,6 +32443,23 @@
           },
           "submissionFee": {
             "$ref": "#/components/schemas/SubmissionFee"
+          },
+          "registeredBrandId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Approved brand requests only: the brand the approval registered."
+          },
+          "registeredAuthorisationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Approved agency requests only: the authorisation the approval recorded."
+          },
+          "trail": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegistrationTrailItem"
+            },
+            "description": "A single read only: the steps after filing, oldest first. The applicant sees the decisions (return, reject, approve, resubmit) with their reasons; reviewers see every step."
           }
         }
       },
@@ -32098,6 +32840,131 @@
             "type": "string"
           }
         }
+      },
+      "RegistrationTrailItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "actorRole",
+          "fromState",
+          "toState",
+          "at"
+        ],
+        "properties": {
+          "action": {
+            "enum": [
+              "confirm_fee",
+              "recommend",
+              "return",
+              "reject",
+              "approve",
+              "resubmit"
+            ]
+          },
+          "actorRole": {
+            "type": "string"
+          },
+          "fromState": {
+            "$ref": "#/components/schemas/Registration/properties/state"
+          },
+          "toState": {
+            "$ref": "#/components/schemas/Registration/properties/state"
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RegistrationTransition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "version"
+        ],
+        "description": "One step of the review. recommend: Programme, programme_review to director_approval. return: Programme (at programme_review) or the Director (at director_approval), a reason is required. reject: the Director, a reason is required. approve: the Director; never the person who filed or recommended the request. resubmit: the applicant, returned to programme_review (no second fee); no note.",
+        "properties": {
+          "action": {
+            "enum": [
+              "recommend",
+              "return",
+              "reject",
+              "approve",
+              "resubmit"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "RegistrationTransitionReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "registrationId",
+          "reference",
+          "action",
+          "fromState",
+          "toState",
+          "version",
+          "actedAt"
+        ],
+        "description": "The answer to a review step. A receipt, not a record view: a reviewer may not read the state the request moved to, so a replay must not return a record the caller can no longer read.",
+        "properties": {
+          "registrationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "type": "string",
+            "pattern": "^REG-\\d{4}-\\d+$"
+          },
+          "action": {
+            "enum": [
+              "recommend",
+              "return",
+              "reject",
+              "approve",
+              "resubmit"
+            ]
+          },
+          "fromState": {
+            "$ref": "#/components/schemas/Registration/properties/state"
+          },
+          "toState": {
+            "$ref": "#/components/schemas/Registration/properties/state"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "actedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "registeredBrandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "registeredAuthorisationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
       }
     }
   },
@@ -32407,6 +33274,12 @@
       "layer": "spring",
       "message": "A trade licence must be uploaded before the registration request can be submitted.",
       "when": "POST submit before a trade-licence PDF has been uploaded."
+    },
+    "authorisation_overlap": {
+      "status": 409,
+      "layer": "spring",
+      "message": "This agency already holds an authorisation for the brand that overlaps the requested period.",
+      "when": "POST transition (approve) of an agency registration whose period overlaps an active authorisation for the same agency and brand."
     }
   },
   "x-bee-status-semantics": {

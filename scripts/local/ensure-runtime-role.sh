@@ -92,6 +92,13 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.capability_grant, app.fee_applica
 SQL
 fi
 
+if psql_super -d bee_app -c "SELECT to_regproc('app.registration_approve') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.registration_approve(uuid, uuid, integer, text) TO ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.brand, app.agency_authorisation FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+
 if psql_super -d bee_app -c "SELECT to_regclass('app.model_application_document') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 REVOKE DELETE, UPDATE, TRUNCATE ON app.model_application_document FROM ${BEE_RUNTIME_DB_USER};

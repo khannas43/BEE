@@ -160,6 +160,7 @@ const REG_BRANDS_ROUTE = "/api/runtime/registrations/eligible-brands";
 const REG_ONE_ROUTE = "/api/runtime/registrations/{id}";
 const REG_SUBMIT_ROUTE = "/api/runtime/registrations/{id}/submit";
 const REG_FEE_ROUTE = "/api/runtime/registrations/{id}/fee-confirmation";
+const REG_TRANSITION_ROUTE = "/api/runtime/registrations/{id}/transition";
 const REG_DOCS_ROUTE = "/api/runtime/registrations/{id}/documents";
 const REG_CONTENT_ROUTE = "/api/runtime/registrations/{id}/documents/{documentId}/versions/{versionId}/content";
 const REG_READ = ["mfa_required", "no_active_account", "no_effective_role", "no_read_scope"];
@@ -175,6 +176,7 @@ const REG_SUBMIT_UPSTREAM = {
   POST: { 401: ["unauthenticated"], 403: [...REG_WRITE, "brand_not_permitted", "not_submittable"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM, "fee_preview_conflict", "brand_name_taken"], 422: ["validation_failed", "idempotency_key_required", "rule_not_available", "document_required"], 503: ["service_unavailable"] },
 };
 const REG_FEE_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM], 422: ["validation_failed", "idempotency_key_required", "amount_mismatch"], 503: ["service_unavailable"] } };
+const REG_TRANSITION_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused", "brand_not_permitted"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM, "brand_name_taken", "authorisation_overlap"], 422: ["validation_failed", "idempotency_key_required", "document_required"], 503: ["service_unavailable"] } };
 const REG_UPLOAD_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_editable"], 404: ["not_found"], 409: [...REG_IDEM], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const upstreamLogRoute = (route, method) => {
   if (route === "/api/runtime/me") return "/api/me";
@@ -774,6 +776,7 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(REG_SUBMIT_ROUTE, `${REG_URL}/submit`, "GET", sessionJar, REG_SUBMIT_UPSTREAM);
     await exerciseStandInPairs(REG_SUBMIT_ROUTE, `${REG_URL}/submit`, "POST", sessionJar, REG_SUBMIT_UPSTREAM);
     await exerciseStandInPairs(REG_FEE_ROUTE, `${REG_URL}/fee-confirmation`, "POST", sessionJar, REG_FEE_UPSTREAM);
+    await exerciseStandInPairs(REG_TRANSITION_ROUTE, `${REG_URL}/transition`, "POST", sessionJar, REG_TRANSITION_UPSTREAM);
     await exerciseStandInPairs(REG_DOCS_ROUTE, `${REG_URL}/documents`, "GET", sessionJar, REG_READ_UPSTREAM);
     await exerciseStandInPairs(REG_DOCS_ROUTE, `${REG_URL}/documents`, "POST", sessionJar, REG_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(REG_CONTENT_ROUTE, `${REG_URL}/documents/${crypto.randomUUID()}/versions/${crypto.randomUUID()}/content`, "GET", sessionJar, REG_READ_UPSTREAM);

@@ -46,7 +46,7 @@ public class RegistrationDocumentRecorder {
     public Recorded record(UUID accountId, UUID applicationId, String key, String sha256, long size, String filename, String label,
                            Function<Recorded, String> responseBody) {
         String state = documents.lockState(applicationId).orElseThrow(() -> new Denied(HttpStatus.NOT_FOUND, "not_found"));
-        if (!"draft".equals(state)) {
+        if (!RegistrationPolicy.editable(state)) {
             throw new Denied(HttpStatus.FORBIDDEN, "not_editable");
         }
         var doc = documents.recordVersion(applicationId, sha256, size, filename, label, accountId);

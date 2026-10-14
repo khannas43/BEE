@@ -63,6 +63,7 @@ before(async () => {
     registration: await import("../../app/api/runtime/registrations/[id]/route.ts"),
     registrationSubmit: await import("../../app/api/runtime/registrations/[id]/submit/route.ts"),
     registrationFee: await import("../../app/api/runtime/registrations/[id]/fee-confirmation/route.ts"),
+    registrationTransition: await import("../../app/api/runtime/registrations/[id]/transition/route.ts"),
     registrationDocuments: await import("../../app/api/runtime/registrations/[id]/documents/route.ts"),
     registrationDocumentContent: await import("../../app/api/runtime/registrations/[id]/documents/[documentId]/versions/[versionId]/content/route.ts"),
     notificationRead: await import("../../app/api/runtime/notifications/[id]/read/route.ts"),
@@ -625,6 +626,7 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
     ["GET", "/api/runtime/registrations/{id}/submit", "registrationSubmit", "GET", `/api/runtime/registrations/${REG_ID}/submit`, {}, null],
     ["POST", "/api/runtime/registrations/{id}/submit", "registrationSubmit", "POST", `/api/runtime/registrations/${REG_ID}/submit`, json, "{}"],
     ["POST", "/api/runtime/registrations/{id}/fee-confirmation", "registrationFee", "POST", `/api/runtime/registrations/${REG_ID}/fee-confirmation`, json, "{}"],
+    ["POST", "/api/runtime/registrations/{id}/transition", "registrationTransition", "POST", `/api/runtime/registrations/${REG_ID}/transition`, json, "{}"],
     ["GET", "/api/runtime/registrations/{id}/documents", "registrationDocuments", "GET", `/api/runtime/registrations/${REG_ID}/documents`, {}, null],
     ["GET", "/api/runtime/registrations/{id}/documents/{documentId}/versions/{versionId}/content", "registrationDocumentContent", "GET", `/api/runtime/registrations/${REG_ID}/documents/${DOC}/versions/${VER}/content`, {}, null],
   ];

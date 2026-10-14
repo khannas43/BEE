@@ -78,7 +78,35 @@ public class RegistrationService {
         if (row.isEmpty()) {
             return error(scope.isEmpty() ? HttpStatus.FORBIDDEN : HttpStatus.NOT_FOUND, scope.isEmpty() ? "no_read_scope" : "not_found");
         }
-        return ResponseEntity.ok(view(row.get(), registrations.feeSnapshot(id).orElse(null), registrations.documentCount(id)));
+        Map<String, Object> view = view(row.get(), registrations.feeSnapshot(id).orElse(null), registrations.documentCount(id));
+        registrations.registerEntry(id).ifPresent(e -> {
+            if (e.brandId() != null) {
+                view.put("registeredBrandId", e.brandId().toString());
+            }
+            if (e.authorisationId() != null) {
+                view.put("registeredAuthorisationId", e.authorisationId().toString());
+            }
+        });
+        // The applicant reads what was decided and why; the recommendation and the fee step are for the reviewers.
+        boolean applicantOnly = caller.organisationIds().contains(row.get().organisationId());
+        List<Map<String, Object>> trail = new ArrayList<>();
+        for (var t : registrations.trail(id)) {
+            if (applicantOnly && !java.util.Set.of("return", "reject", "approve", "resubmit").contains(t.action())) {
+                continue;
+            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("action", t.action());
+            m.put("actorRole", t.actorRole());
+            m.put("fromState", t.fromState());
+            m.put("toState", t.toState());
+            if (t.note() != null) {
+                m.put("note", t.note());
+            }
+            m.put("at", t.at().toString());
+            trail.add(m);
+        }
+        view.put("trail", trail);
+        return ResponseEntity.ok(view);
     }
 
     /** The brands an agency can ask to represent. A manufacturer has none to choose: it names a new brand. */
@@ -184,7 +212,7 @@ public class RegistrationService {
         if (existing.isEmpty()) {
             return fail(caller, "PATCH", ROUTE_PATCH, id, key, HttpStatus.NOT_FOUND, "not_found");
         }
-        if (!"draft".equals(existing.get().state())) {
+        if (!RegistrationPolicy.editable(existing.get().state())) {
             return fail(caller, "PATCH", ROUTE_PATCH, id, key, HttpStatus.FORBIDDEN, "not_editable");
         }
         if (existing.get().version() != version.get()) {
@@ -352,7 +380,7 @@ public class RegistrationService {
         return m;
     }
 
-    private Optional<ResponseEntity<Map<String, Object>>> refuseAtSubmit(RegistrationRepository.Row r, LocalDate today) {
+    Optional<ResponseEntity<Map<String, Object>>> refuseAtSubmit(RegistrationRepository.Row r, LocalDate today) {
         if (RegistrationPolicy.AGENCY.equals(r.kind()) && (r.brandId() == null || registrations.activeBrand(r.brandId()).isEmpty())) {
             return Optional.of(error(HttpStatus.FORBIDDEN, "brand_not_permitted"));
         }

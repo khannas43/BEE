@@ -32873,8 +32873,7 @@
           },
           "note": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 500
+            "description": "1 to 500 characters."
           },
           "at": {
             "type": "string",

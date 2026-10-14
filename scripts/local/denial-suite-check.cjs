@@ -153,7 +153,7 @@ async function main() {
   check("denial.A7-nothing-changed", before === after, `applications, submission events, transition events and fee snapshots identical after ${total + extra} denied calls`);
   check("denial.A7-history-unchanged", apps.every((a) => historyBefore[a.ref] === historyAfter[a.ref]), `the history of all ${apps.length} applications is byte-identical before and after`);
 
-  /* The other API routes, by persona (WP02 package review): administration, fees, registration and the register, delegation of the approver. Every
+  /* The other API routes, by persona (WP02 package review): administration, fees, registration, the register and the request to delegate. Every
      persona not entitled to a route is denied (403 or 404); the entitled personas reach it (a read answers 200; a write is not exercised). */
   const ALL = ["nova.applicant", "pixel.applicant", "bee.finance", "iame.officer", "bee.reviewer", "bee.programme", "bee.director", "bee.secretary", "bee.admin", "bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer", "inactive.role", "role.mismatch"];
   const OTHER = [
@@ -171,6 +171,7 @@ async function main() {
     { m: "POST", path: "/api/fee-corrections/reversals", who: ["bee.finance"] },
     { m: "POST", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant"] },
     { m: "POST", path: "/api/register-revocations", who: ["bee.programme"] },
+    { m: "POST", path: "/api/delegations", who: ["bee.programme", "bee.director", "bee.finance"] },
   ];
   const otherSnapshot = () => sql(`SELECT (SELECT count(*) FROM app.fee_rule_proposal) || '|' || (SELECT count(*) FROM app.rating_scheme_proposal) || '|' || (SELECT count(*) FROM app.business_setting_proposal) || '|' || (SELECT count(*) FROM app.fee_correction_proposal) || '|' || (SELECT count(*) FROM app.registration_application) || '|' || (SELECT count(*) FROM app.register_revocation_proposal) || '|' || (SELECT count(*) FROM app.delegation) || '|' || (SELECT count(*) FROM app.fee_reversal_proposal)`);
   const otherBefore = otherSnapshot();
@@ -179,6 +180,7 @@ async function main() {
   const otherControls = [];
   for (const r of OTHER) {
     for (const p of ALL) {
+      if (r.who.includes(p) && r.m !== "GET") continue; // an entitled writer is not exercised: nothing is created or recorded
       let res;
       try { res = await call(p, r.m, r.path, r.m === "GET" ? undefined : {}); } catch (e) { otherWrong.push(`${p} ${r.m} ${r.path}: ${e.message}`); continue; }
       if (r.who.includes(p)) {

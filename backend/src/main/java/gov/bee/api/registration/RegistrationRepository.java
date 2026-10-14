@@ -155,7 +155,7 @@ public class RegistrationRepository {
     /** A live (not rejected) brand request of this name from this manufacturer, other than the one being edited. */
     public boolean liveBrandRequest(UUID organisationId, String brandName, UUID except) {
         Boolean b = jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM registration_application WHERE kind = 'brand' AND organisation_id = ? "
-            + "AND lower(btrim(brand_name)) = lower(btrim(?)) AND state <> 'rejected' AND (?::uuid IS NULL OR id <> ?::uuid))",
+            + "AND lower(btrim(brand_name)) = lower(btrim(?)) AND state NOT IN ('rejected', 'approved') AND (?::uuid IS NULL OR id <> ?::uuid))",
             Boolean.class, organisationId, brandName, except, except);
         return Boolean.TRUE.equals(b);
     }
@@ -163,7 +163,7 @@ public class RegistrationRepository {
     /** A live (not rejected) request from this agency for this brand, other than the one being edited. */
     public boolean liveAgencyRequest(UUID organisationId, UUID brandId, UUID except) {
         Boolean b = jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM registration_application WHERE kind = 'agency' AND organisation_id = ? "
-            + "AND brand_id = ? AND state <> 'rejected' AND (?::uuid IS NULL OR id <> ?::uuid))", Boolean.class, organisationId, brandId, except, except);
+            + "AND brand_id = ? AND state NOT IN ('rejected', 'approved') AND (?::uuid IS NULL OR id <> ?::uuid))", Boolean.class, organisationId, brandId, except, except);
         return Boolean.TRUE.equals(b);
     }
 

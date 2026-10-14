@@ -120,7 +120,8 @@ function cleanup(refs, twinIds, brandNames, probeBrand, modelIds = [], probeBran
   }
   if (refs.length) {
     const apps = `SELECT id FROM app.registration_application WHERE reference IN (${refs.map((x) => `'${x}'`).join(",")})`;
-    sqlMaint(`DELETE FROM app.registration_fee_confirmation WHERE application_id IN (${apps});
+    sqlMaint(`DELETE FROM app.register_status_event WHERE registration_id IN (${apps});
+      DELETE FROM app.registration_fee_confirmation WHERE application_id IN (${apps});
       DELETE FROM app.registration_transition_event WHERE application_id IN (${apps});
       DELETE FROM app.registration_fee_snapshot WHERE application_id IN (${apps});
       DELETE FROM app.registration_submission_event WHERE application_id IN (${apps});

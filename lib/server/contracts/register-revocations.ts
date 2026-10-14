@@ -45,6 +45,23 @@ export interface RegisterRevocationProposal {
   decisionNote: string | null;
 }
 
+export interface RegisterStatusEvent {
+  id: string;
+  kind: "registered" | "revoked" | "closed";
+  targetKind: "brand" | "authorisation";
+  targetId: string;
+  targetLabel: string;
+  fromStatus: string | null;
+  toStatus: string;
+  validToBefore: string | null;
+  validToAfter: string | null;
+  source: "registration" | "revocation";
+  cascaded: boolean;
+  by: string;
+  reason: string | null;
+  at: string;
+}
+
 export interface RegisterRevocations {
   today: string;
   canPropose: boolean;
@@ -53,6 +70,8 @@ export interface RegisterRevocations {
   authorisations: RegisterAuthorisationEntry[];
   pending: RegisterRevocationProposal[];
   decided: RegisterRevocationProposal[];
+  /** The register's audit trail, newest first. */
+  events: RegisterStatusEvent[];
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -89,16 +108,26 @@ const validAuthorisation = (v: unknown): boolean => {
     (b.status === "active" || b.status === "revoked") && isString(b.source);
 };
 
+const validEvent = (v: unknown): boolean => {
+  const b = obj(v);
+  return b !== null && exactKeys(b, ["id", "kind", "targetKind", "targetId", "targetLabel", "fromStatus", "toStatus", "validToBefore", "validToAfter", "source", "cascaded", "by", "reason", "at"]) &&
+    isUuid(b.id) && (b.kind === "registered" || b.kind === "revoked" || b.kind === "closed") && (b.targetKind === "brand" || b.targetKind === "authorisation") && isUuid(b.targetId) &&
+    isString(b.targetLabel) && nullable(b.fromStatus, isString) && isString(b.toStatus) && nullable(b.validToBefore, isDate) && nullable(b.validToAfter, isDate) &&
+    (b.source === "registration" || b.source === "revocation") && typeof b.cascaded === "boolean" && isString(b.by) && nullable(b.reason, isString) && isInstant(b.at) &&
+    // Only a registration starts from nothing; a cascade is a revocation of an authorisation.
+    (b.kind === "registered") === (b.fromStatus === null) && (b.cascaded !== true || (b.kind === "revoked" && b.targetKind === "authorisation"));
+};
+
 const proposals = (v: unknown, pending: boolean): boolean =>
   Array.isArray(v) && v.every((p) => validateRegisterRevocationProposal(obj(p) ?? {}) !== null && ((p as { state: string }).state === "pending") === pending);
 
 export const validateRegisterRevocations: Validator<RegisterRevocations> = (body) => {
-  if (!exactKeys(body, ["today", "canPropose", "canDecide", "brands", "authorisations", "pending", "decided"])) return null;
+  if (!exactKeys(body, ["today", "canPropose", "canDecide", "brands", "authorisations", "pending", "decided", "events"])) return null;
   const b = body;
   const ok =
     isDate(b.today) && typeof b.canPropose === "boolean" && typeof b.canDecide === "boolean" &&
     Array.isArray(b.brands) && b.brands.every(validBrand) && Array.isArray(b.authorisations) && b.authorisations.every(validAuthorisation) &&
-    proposals(b.pending, true) && proposals(b.decided, false);
+    proposals(b.pending, true) && proposals(b.decided, false) && Array.isArray(b.events) && b.events.every(validEvent);
   return ok ? (b as unknown as RegisterRevocations) : null;
 };
 

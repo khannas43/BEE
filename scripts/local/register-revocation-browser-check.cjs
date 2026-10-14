@@ -114,7 +114,8 @@ function cleanup(twinIds, brandIds, modelIds) {
   }
   if (brandIds.length) {
     const list = brandIds.map((b) => `'${b}'`).join(",");
-    sqlMaint(`DELETE FROM app.register_revocation_proposal WHERE target_brand_id IN (${list}) OR target_authorisation_id IN (SELECT id FROM app.agency_authorisation WHERE brand_id IN (${list}));
+    sqlMaint(`DELETE FROM app.register_status_event WHERE brand_id IN (${list}) OR authorisation_id IN (SELECT id FROM app.agency_authorisation WHERE brand_id IN (${list}));
+      DELETE FROM app.register_revocation_proposal WHERE target_brand_id IN (${list}) OR target_authorisation_id IN (SELECT id FROM app.agency_authorisation WHERE brand_id IN (${list}));
       DELETE FROM app.agency_authorisation WHERE brand_id IN (${list});
       DELETE FROM app.brand WHERE id IN (${list})`);
   }

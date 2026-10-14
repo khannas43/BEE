@@ -117,7 +117,7 @@ class SecretaryApprovalDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         repo = transactional(new SecretaryApprovalRepository(db));
-        assertEquals(46, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V46");
+        assertEquals(48, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V48");
     }
 
     @AfterAll

@@ -20,6 +20,7 @@ t=$(now_ms)
 compose up -d keycloak >"$LOG_DIR/compose-keycloak.log" 2>&1 || { cat "$LOG_DIR/compose-keycloak.log" >&2; die "keycloak failed to start"; }
 wait_http "${KC_ISSUER}/.well-known/openid-configuration" 240 200 bee-local-keycloak || { docker logs --tail 40 bee-local-keycloak >&2; die "keycloak realm not available"; }
 KC_MS=$(( $(now_ms) - t )); log "keycloak realm ${BEE_REALM} available on 127.0.0.1:${BEE_KC_PORT} (${KC_MS} ms)"
+node "$(dirname "$0")/ensure-realm-policy.cjs" >"$LOG_DIR/ensure-realm-policy.log" 2>&1 || { cat "$LOG_DIR/ensure-realm-policy.log" >&2; die "realm policy update failed"; }
 
 bash "$(dirname "$0")/ensure-runtime-role.sh" >"$LOG_DIR/ensure-runtime-role.log" 2>&1 || { cat "$LOG_DIR/ensure-runtime-role.log" >&2; die "runtime DB role setup failed"; }
 

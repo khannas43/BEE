@@ -22,6 +22,7 @@ compose up -d postgres >"$LOG_DIR/compose-postgres.log" 2>&1 || { cat "$LOG_DIR/
 wait_container_healthy bee-local-postgres 60
 compose up -d keycloak >"$LOG_DIR/compose-keycloak.log" 2>&1 || { cat "$LOG_DIR/compose-keycloak.log" >&2; die "keycloak failed to start"; }
 wait_http "${KC_ISSUER}/.well-known/openid-configuration" 240 200 bee-local-keycloak || { docker logs --tail 40 bee-local-keycloak >&2; die "keycloak realm not available"; }
+node "$(dirname "$0")/ensure-realm-policy.cjs" >"$LOG_DIR/ensure-realm-policy.log" 2>&1 || { cat "$LOG_DIR/ensure-realm-policy.log" >&2; die "realm policy update failed"; }
 log "postgres and keycloak up"
 
 bash "$(dirname "$0")/ensure-runtime-role.sh" >"$LOG_DIR/ensure-runtime-role.log" 2>&1 || { cat "$LOG_DIR/ensure-runtime-role.log" >&2; die "runtime DB role setup failed"; }

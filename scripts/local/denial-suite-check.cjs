@@ -4,7 +4,7 @@
  * step route on every seeded application, nothing changes, and the history of each application is identical afterwards.
  *
  * The matrix is every persona x every command route x every seeded application, minus the few combinations where the persona is the
- * entitled actor at that stage (those are the happy paths proved by the activity checks). Each denied call must answer 401, 403 or 404 and
+ * entitled actor at that stage (those are the happy paths proved by the activity checks). Each denied call must answer 403 or 404 (a 401 would mean an expired token, not a denial) and
  * no application, submission event or transition event may differ afterwards (A7). The cases that need a live multi-stage application
  * (N6 superseded rating, N8 the same person at two stages) are proved by the activity checks named in docs/wp02/WP02.4_DENIAL_EVIDENCE.md.
  *
@@ -75,13 +75,25 @@ async function main() {
     for (const a of apps) out[a.ref] = (await call(OWNER[a.org], "GET", `/api/model-applications/${a.id}/history`)).text;
     return out;
   };
+  // A previous run that was killed mid-scenario must not poison this one.
+  sql(`UPDATE app.model_application SET state = 'bee_scrutiny' WHERE reference = 'LOCAL-MA-0004' AND state IN ('secretary_approval', 'director_review')`);
+  sqlMaint(`DELETE FROM app.model_application_transition_event WHERE action = 'denial_probe'`);
   const before = snapshot();
   const historyBefore = await history();
+  check("denial.control-history-readable", apps.every((a) => !historyBefore[a.ref].includes("not_found") && !historyBefore[a.ref].includes("unauthenticated")),
+    `the owner reads the history of all ${apps.length} applications (so the ids and the path are right and the A7 comparison is not of four refusals)`);
+  // Positive control: the entitled actor reaches the service on the routes where one is seeded (an empty body is refused as invalid, so nothing changes).
+  for (const [who, route, ref] of [["bee.finance", "fee-confirmation", "LOCAL-MA-0002"], ["iame.officer", "iame-recommendation", "LOCAL-MA-0003"], ["iame.officer", "return", "LOCAL-MA-0003"], ["iame.officer", "reject", "LOCAL-MA-0003"]]) {
+    const a = apps.find((x) => x.ref === ref);
+    const c = await call(who, "POST", `/api/model-applications/${a.id}/${route}`, {});
+    check(`denial.control-${route}-reaches-the-service`, c.status === 422 || c.status === 409, `the entitled actor on ${ref}: ${c.status} ${c.json?.error ?? ""} (not 403 or 404, so the route and the record are right)`);
+  }
 
   const perRoute = {};
-  let denied = 0, total = 0;
+  let denied = 0, total = 0, extra = 0;
   const wrong = [];
   for (const [route, c] of Object.entries(ROUTE_CASES)) {
+    for (const k of Object.keys(tokens)) delete tokens[k]; // a fresh token per route: a 300 s token cannot expire mid-matrix
     perRoute[route || "patch"] = { total: 0, denied: 0 };
     for (const a of apps) {
       for (const p of PERSONAS) {
@@ -90,7 +102,7 @@ async function main() {
         const r = await call(p, c.m, `/api/model-applications/${a.id}${route ? "/" + route : ""}`, c.body);
         total++;
         perRoute[route || "patch"].total++;
-        if ([401, 403, 404].includes(r.status)) {
+        if ([403, 404].includes(r.status)) {
           denied++;
           perRoute[route || "patch"].denied++;
         } else {
@@ -100,12 +112,12 @@ async function main() {
     }
   }
   for (const [route, v] of Object.entries(perRoute)) {
-    check(`denial.${route}`, v.total === v.denied, `${v.denied} of ${v.total} calls by personas not entitled to this step were denied (401, 403 or 404)`);
+    check(`denial.${route}`, v.total === v.denied, `${v.denied} of ${v.total} calls by personas not entitled to this step were denied (403 or 404)`);
   }
   check("denial.matrix", wrong.length === 0, `${denied} of ${total} denied; ${wrong.length === 0 ? "none allowed" : "ALLOWED: " + wrong.slice(0, 5).join("; ")}`);
 
   /* the named acceptance cases, picked out of the same matrix with their wording */
-  const probe = async (u, m, path, body) => (await call(u, m, path, body));
+  const probe = async (u, m, path, body) => { extra++; return call(u, m, path, body); };
   const a2 = apps.find((a) => a.ref === "LOCAL-MA-0002"), a3 = apps.find((a) => a.ref === "LOCAL-MA-0003"), a4 = apps.find((a) => a.ref === "LOCAL-MA-0004"), a1 = apps.find((a) => a.ref === "LOCAL-MA-0001");
   let r = await probe("pixel.applicant", "PATCH", `/api/model-applications/${a1.id}`, ROUTE_CASES[""].body);
   const r2 = await probe("nova.applicant", "PATCH", `/api/model-applications/${a3.id}`, ROUTE_CASES[""].body);
@@ -134,7 +146,7 @@ async function main() {
   /* A7: every denial left the data, the events and the history exactly as they were */
   const after = snapshot();
   const historyAfter = await history();
-  check("denial.A7-nothing-changed", before === after, `applications, submission events, transition events and fee snapshots identical after ${total + 9} denied calls`);
+  check("denial.A7-nothing-changed", before === after, `applications, submission events, transition events and fee snapshots identical after ${total + extra} denied calls`);
   check("denial.A7-history-unchanged", apps.every((a) => historyBefore[a.ref] === historyAfter[a.ref]), `the history of all ${apps.length} applications is byte-identical before and after`);
 
   /* N8: a person who already acted at another stage of one application is refused at this one, whatever the role. A seeded application is moved

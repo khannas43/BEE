@@ -217,6 +217,8 @@ function SubmitReview({ registration, preview, onDone }: { registration: Registr
       expectedFee: { amountInr: fee.amountInr, feeRuleKey: fee.feeRuleKey, feeRuleVersion: fee.feeRuleVersion },
     });
     if (result?.ok) onDone();
+    // The fee rule moved after the preview: read the review again so the next Submit carries the new fee.
+    else if (result && !result.ok && "code" in result.failure && result.failure.code === "fee_preview_conflict") onDone();
   }
 
   return (

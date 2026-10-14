@@ -57,7 +57,7 @@ export function RegistrationForm({
       }
       write = { kind: "brand", brandName: name };
     } else {
-      if (!brandId || !/^\d{4}-\d{2}-\d{2}$/.test(validFrom) || validFrom < today || (validTo !== "" && validTo <= validFrom)) {
+      if (!brandId || !/^\d{4}-\d{2}-\d{2}$/.test(validFrom) || (validFrom !== saved.validFrom && validFrom < today) || (validTo !== "" && validTo <= validFrom)) {
         setInputError("Choose a brand, a start date from today, and an end date after the start if you set one.");
         return;
       }
@@ -114,7 +114,7 @@ export function RegistrationForm({
             </label>
             <label className="block font-label-sm text-label-sm text-on-surface-variant">
               Starts on
-              <input type="date" min={today} value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className={field} data-testid="reg-valid-from" />
+              <input type="date" min={saved.validFrom && saved.validFrom < today ? saved.validFrom : today} value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className={field} data-testid="reg-valid-from" />
             </label>
             <label className="block font-label-sm text-label-sm text-on-surface-variant">
               Ends on (optional)

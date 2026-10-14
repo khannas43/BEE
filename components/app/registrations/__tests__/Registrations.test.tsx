@@ -309,6 +309,9 @@ describe("registration screens", () => {
     });
     expect(screen.getByTestId("reg-submit-error").textContent).toContain("The provisional fee changed since it was reviewed.");
     expect(screen.queryByTestId("reg-submit-reload")).toBeNull();
+    // the review is read again, so the next Submit carries the current fee
+    const previewReads = deferredFetches().filter((c) => c.url.includes("/submit") && c.init?.method !== "POST");
+    expect(previewReads.length).toBeGreaterThanOrEqual(2);
 
     mount(<RegistrationRequest {...frame} />);
     await resolveAt(0, registration());

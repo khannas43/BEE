@@ -614,6 +614,21 @@ test("unit-evidence: GET /api/auth/callback 303 login_expired | planted OAuth qu
   assert.deepEqual(byCorrelation("unit-callback").map((x) => [x.route, x.status, x.outcome]), [["/api/auth/callback", 303, "login_expired"]]);
 });
 
+test("an exception that escapes a handler still answers 502 api_error with the correlation ID, no-store and the log line", async () => {
+  const http = await import("../../lib/server/http.ts");
+  const wrapped = http.logged("/api/runtime/health", () => {
+    throw new Error(`boom ${SECRET}`);
+  });
+  const id = "unit-escaped-exception";
+  const res = await wrapped(req(path("/api/runtime/health"), id, null));
+  assert.equal(res.status, 502);
+  assert.equal((await res.json()).error, "api_error");
+  assert.equal(res.headers.get("x-correlation-id"), id);
+  assert.match(res.headers.get("cache-control") ?? "", /no-store/);
+  assert.deepEqual(byCorrelation(id).map((x) => [x.event, x.route, x.status, x.outcome]), [["request", "/api/runtime/health", 502, "api_error"]]);
+  assert.equal(JSON.stringify(byCorrelation(id)).includes(SECRET), false, "the exception text never reaches the log");
+});
+
 test("Spring errors passed through, rejected or unreachable are logged with the contract code on both lines", async () => {
   const fresh = session.createSession("00000000-0000-4000-a000-000000000001", "nova.applicant", { access_token: `access-${SECRET}`, refresh_token: `refresh-${SECRET}`, expires_in: 300, refresh_expires_in: 0 }, ["pwd", "otp"]).cookie;
   const answer = { body: null };

@@ -46,6 +46,10 @@ export function logged<R extends Request, A extends unknown[]>(route: WebRoute, 
     try {
       res = await handler(request, ...rest);
       return res;
+    } catch {
+      // An exception that escapes a handler must still answer in the contract body, with the correlation ID and no-store (never Next's bare 500).
+      res = errorResponse("api_error", 502, correlationIdOf(request));
+      return res;
     } finally {
       const status = res?.status ?? 500;
       const code = res ? outcomes.get(res) : "internal_error";

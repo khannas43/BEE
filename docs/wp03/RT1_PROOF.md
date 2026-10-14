@@ -136,3 +136,20 @@ Reset refused, exit code 2, with no data changed (Keycloak users / app counts `1
 - Login through the browser, sessions and cookies (WP02.1).
 - The model workflow and approved fee/rating rules. The seed holds a synthetic fee rule and formula version `0-unverified` as provisional metadata; no rating computation or official fee is claimed.
 - Any adapter, migration or release work (WP12–WP14).
+
+## Addendum, 14 October 2026: what is current and what is not
+
+The figures above are those of 30 September 2026 (35 checks, Flyway V2, one route, memory idle) and are **historical**. Current, from the full `npm run local:check` of 14 October on the final `main` tree (2175 checks, Flyway V1 to V50, every route in the contract operational, the slice running):
+
+| Resident memory (median of five samples) | Measured | Budget (ADR-001) |
+| --- | --- | --- |
+| PostgreSQL | 171 MB | |
+| Keycloak | 714 MB | |
+| Spring API | 265 MB | |
+| Next.js web | 597 MB | 1500 MB |
+| Total | 1747 MB | 3600 MB |
+
+The memory gate (`memory.web`, `memory.total`) is part of every `local:check` and has passed on every full run. Reproducible start, seed and reset are exercised on every gate: `local:down`, `local:up` and `local:seed` before each full run, and the targeted reset between runs of each live check (every check removes the rows it makes and runs twice).
+
+**Not re-run:** the destructive proof (`npm run local:rt1 -- --allow-destroy`, which deletes the database volume and rebuilds it) was not repeated on the current system. That is recorded as BL-205.
+

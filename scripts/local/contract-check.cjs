@@ -670,7 +670,7 @@ async function plantedValues(sessionJar, m0) {
   const results = {};
   const documented = [];
   const SPRING_ERRORS = [[401, "unauthenticated"], [403, "mfa_required"], [403, "no_active_account"], [403, "no_effective_role"], [403, "no_read_scope"], [404, "not_found"], [503, "service_unavailable"]];
-  const READS = [["/api/runtime/me", "/api/runtime/me"], ["/api/runtime/model-applications", "/api/runtime/model-applications"], ["/api/runtime/model-applications/{id}", `/api/runtime/model-applications/${NOVA_APP}`], [DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`], ["/api/runtime/registrations", "/api/runtime/registrations"], ["/api/runtime/registrations/{id}", `/api/runtime/registrations/${NOVA_APP}`]];
+  const READS = [["/api/runtime/me", "/api/runtime/me"], ["/api/runtime/model-applications", "/api/runtime/model-applications"], ["/api/runtime/model-applications/{id}", `/api/runtime/model-applications/${NOVA_APP}`], [DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`]];
   const DOC_CONTENT_URL = `/api/runtime/model-applications/${NOVA_APP}/documents/${crypto.randomUUID()}/versions/${crypto.randomUUID()}/content`;
   const SUBMIT_URL = `/api/runtime/model-applications/${NOVA_APP}/submit`;
   async function exerciseStandInPairs(route, url, method, jar, upstreamTable = SUBMIT_UPSTREAM) {
@@ -681,7 +681,7 @@ async function plantedValues(sessionJar, m0) {
       const st = Number(status);
       if (st === 200 || st === 201) continue;
       for (const code of spec["x-error-codes"] || []) {
-        if (code === "no_session") continue;
+        if (code === "no_session" || code === "api_unreachable" || code === "identity_unavailable") continue; // boundary-only codes: unit evidence
         fake.set("documented", [st, { error: code, message: doc["x-bee-error-codes"][code]?.message || code }]);
         const headers = {};
         let body;
@@ -766,6 +766,8 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(DOC_LIST_ROUTE, `/api/runtime/model-applications/${NOVA_APP}/documents`, "POST", sessionJar, DOC_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(DOC_CONTENT_ROUTE, DOC_CONTENT_URL, "GET", sessionJar, DOC_READ_UPSTREAM);
     const REG_URL = `/api/runtime/registrations/${NOVA_APP}`;
+    await exerciseStandInPairs(REG_ROUTE, REG_ROUTE, "GET", sessionJar, REG_LIST_UPSTREAM);
+    await exerciseStandInPairs(REG_ONE_ROUTE, REG_URL, "GET", sessionJar, REG_READ_UPSTREAM);
     await exerciseStandInPairs(REG_BRANDS_ROUTE, REG_BRANDS_ROUTE, "GET", sessionJar, REG_BRANDS_UPSTREAM);
     await exerciseStandInPairs(REG_ROUTE, REG_ROUTE, "POST", sessionJar, REG_CREATE_UPSTREAM);
     await exerciseStandInPairs(REG_ONE_ROUTE, REG_URL, "PATCH", sessionJar, REG_PATCH_UPSTREAM);

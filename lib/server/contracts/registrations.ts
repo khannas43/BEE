@@ -197,7 +197,7 @@ export const validateRegistrationDocumentList: Validator<RegistrationDocumentLis
 const WRITE = [...RESOLVER_DENIALS, "no_write_scope"] as const;
 const IDEMPOTENCY = ["idempotency_key_conflict", "idempotency_in_progress"] as const;
 
-export const SPRING_REGISTRATION_LIST_ERRORS: UpstreamErrors = { ...SPRING_READ_ERRORS };
+export const SPRING_REGISTRATION_LIST_ERRORS: UpstreamErrors = { 401: ["unauthenticated"], 403: [...RESOLVER_DENIALS, "no_read_scope"], 503: ["service_unavailable"] };
 export const SPRING_REGISTRATION_READ_ERRORS: UpstreamErrors = { ...SPRING_READ_ERRORS, 404: ["not_found"] };
 export const SPRING_REGISTRATION_BRANDS_ERRORS: UpstreamErrors = { 401: ["unauthenticated"], 403: WRITE, 503: ["service_unavailable"] };
 export const SPRING_REGISTRATION_CREATE_ERRORS: UpstreamErrors = {

@@ -82,7 +82,7 @@ TAB2_ROWS = [
     ("Work package", "WP02.4b", "Complete denial evidence: cases N1 to N10 and A7", "Done", 100),
     ("Work package", "WP02.4c", "Delegation (maker-checker, expiry, revocation, audit)", "Done", 100),
     ("Work package", "WP02.5", "Escalation (R12): waits for BEE's time limits per stage (B14)", "Not started", 0),
-    ("Work package", "WP03", "OpenAPI contract, BFF, contract tests", "Done", 100),
+    ("Work package", "WP03", "OpenAPI contract, BFF, contract tests (package accepted 14 Oct 2026)", "Done", 100),
     ("Work package", "WP04", "Registration and master data (package accepted 14 Oct 2026)", "Done", 100),
     ("Work package", "WP04.2b-1", "Registration: file, trade-licence PDF, fee, Finance confirmation", "Done", 100),
     ("Work package", "WP04.2b-2", "Registration: recommend, approve, return, reject, resubmit; register entry", "Done", 100),

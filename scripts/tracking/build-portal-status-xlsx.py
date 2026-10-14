@@ -79,7 +79,7 @@ TAB2_ROWS = [
     ("Work package", "WP05.1a", "Read-only model applications UI", "Done", 100),
     ("Work package", "WP05.1b", "Draft create/edit", "Done", 100),
     ("Work package", "WP05.1c", "Draft submission", "Done", 100),
-    ("Work package", "WP05.1d", "Submit-time evidence gates", "In progress", 70),
+    ("Work package", "WP05.1d", "Submit-time evidence gates", "Done", 100),
     ("Work package", "WP06.1a", "Document intake and storage", "Done", 100),
     ("Work package", "WP06.2", "Blob retention, orphans, limits (BL-001–003)", "Not started", 0),
     ("Work package", "WP07.1a", "Finance fee confirmation", "Done", 100),

@@ -8,7 +8,7 @@ import { useCommand, type CommandState } from "@/components/app/kit/CommandPanel
 import { ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
-import { commandAdvice, gateRead } from "@/lib/client/runtimeHttp";
+import { commandAdvice, type CommandFailure, gateRead } from "@/lib/client/runtimeHttp";
 import {
   type RegisterAuthorisationEntry,
   type RegisterBrandEntry,
@@ -60,7 +60,7 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
           signInReturnTo={registerHref()}
         >
           {(r) => (
-            <RegisterBody register={r.register} openId={openId} onOpen={setOpenId} onChanged={() => { setOpenId(null); revalidation.refresh(); }} />
+            <RegisterBody register={r.register} openId={openId} onOpen={setOpenId} onChanged={() => { setOpenId(null); revalidation.refresh(); }} onRefresh={() => revalidation.refresh()} />
           )}
         </ReadPanel>
       </div>
@@ -73,11 +73,13 @@ function RegisterBody({
   openId,
   onOpen,
   onChanged,
+  onRefresh,
 }: {
   register: RegisterRevocations;
   openId: string | null;
   onOpen: (id: string | null) => void;
   onChanged: () => void;
+  onRefresh: () => void;
 }) {
   const openBrand = register.brands.find((b) => b.id === openId) ?? null;
   const openAuth = register.authorisations.find((a) => a.id === openId) ?? null;
@@ -88,13 +90,14 @@ function RegisterBody({
         <h2 className="font-title-md text-title-md text-on-surface">Brands</h2>
         {register.brands.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">No brand is on the register.</p> : (
           <table className="w-full font-body-sm text-body-sm mt-space-sm" data-testid="rvk-brands">
+            <caption className="sr-only">Registered brands</caption>
             <thead>
               <tr className="text-left text-on-surface-variant font-label-sm">
                 <th className="py-1 pr-3">Name</th>
                 <th className="py-1 pr-3">Owner</th>
                 <th className="py-1 pr-3">Status</th>
                 <th className="py-1 pr-3">Source</th>
-                <th className="py-1" />
+                <th className="py-1"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -110,13 +113,14 @@ function RegisterBody({
             </tbody>
           </table>
         )}
-        {openBrand && register.canPropose ? <ProposeBrand brand={openBrand} onDone={onChanged} /> : null}
+        {openBrand && register.canPropose ? <ProposeBrand key={openBrand.id} brand={openBrand} onDone={onChanged} onStale={onRefresh} /> : null}
       </section>
 
       <section>
         <h2 className="font-title-md text-title-md text-on-surface">Agency authorisations</h2>
         {register.authorisations.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">No agency authorisation is on the register.</p> : (
           <table className="w-full font-body-sm text-body-sm mt-space-sm" data-testid="rvk-auths">
+            <caption className="sr-only">Agency authorisations</caption>
             <thead>
               <tr className="text-left text-on-surface-variant font-label-sm">
                 <th className="py-1 pr-3">Brand</th>
@@ -125,7 +129,7 @@ function RegisterBody({
                 <th className="py-1 pr-3">From</th>
                 <th className="py-1 pr-3">To</th>
                 <th className="py-1 pr-3">Status</th>
-                <th className="py-1" />
+                <th className="py-1"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -143,7 +147,7 @@ function RegisterBody({
             </tbody>
           </table>
         )}
-        {openAuth && register.canPropose ? <ProposeAuthorisation auth={openAuth} onDone={onChanged} /> : null}
+        {openAuth && register.canPropose ? <ProposeAuthorisation key={openAuth.id} auth={openAuth} onDone={onChanged} onStale={onRefresh} /> : null}
       </section>
 
       <section data-testid="rvk-pending">
@@ -151,7 +155,7 @@ function RegisterBody({
         {register.pending.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">Nothing is waiting for a decision.</p> : (
           <ul className="mt-space-sm space-y-space-sm">
             {register.pending.map((proposal) => (
-              <PendingRow key={proposal.id} proposal={proposal} canPropose={register.canPropose} canDecide={register.canDecide} onChanged={onChanged} />
+              <PendingRow key={proposal.id} proposal={proposal} canPropose={register.canPropose} canDecide={register.canDecide} onChanged={onChanged} onStale={onRefresh} />
             ))}
           </ul>
         )}
@@ -185,18 +189,19 @@ function proposeButton(canPropose: boolean, active: boolean, id: string, openId:
   );
 }
 
-function ProposeBrand({ brand, onDone }: { brand: RegisterBrandEntry; onDone: () => void }) {
+function ProposeBrand({ brand, onDone, onStale }: { brand: RegisterBrandEntry; onDone: () => void; onStale: () => void }) {
   return (
     <ProposeForm
       targetKind="brand"
       targetId={brand.id}
       intro="Revoke this brand (its authorisations will be revoked with it)"
       onDone={onDone}
+      onStale={onStale}
     />
   );
 }
 
-function ProposeAuthorisation({ auth, onDone }: { auth: RegisterAuthorisationEntry; onDone: () => void }) {
+function ProposeAuthorisation({ auth, onDone, onStale }: { auth: RegisterAuthorisationEntry; onDone: () => void; onStale: () => void }) {
   const [action, setAction] = useState<RevocationAction>("revoke");
   const [closeOn, setCloseOn] = useState("");
   return (
@@ -207,6 +212,7 @@ function ProposeAuthorisation({ auth, onDone }: { auth: RegisterAuthorisationEnt
       closeOn={closeOn}
       intro={null}
       onDone={onDone}
+      onStale={onStale}
       choice={
         <div className="mt-space-sm space-y-space-sm">
           <label className="block font-label-sm text-label-sm text-on-surface-variant">
@@ -241,6 +247,7 @@ function ProposeForm({
   intro,
   choice,
   onDone,
+  onStale,
 }: {
   targetKind: "brand" | "authorisation";
   targetId: string;
@@ -249,6 +256,7 @@ function ProposeForm({
   intro: string | null;
   choice?: ReactNode;
   onDone: () => void;
+  onStale: () => void;
 }) {
   const [reason, setReason] = useState("");
   const command = useCommand(runProposeRevocation, proposeRevocationSignature);
@@ -266,6 +274,7 @@ function ProposeForm({
       ...(action === "close" ? { closeOn } : {}),
     });
     if (result?.ok) onDone();
+    else if (result && !result.ok && isStale(result.failure)) onStale();
   }
 
   return (
@@ -290,11 +299,13 @@ function PendingRow({
   canPropose,
   canDecide,
   onChanged,
+  onStale,
 }: {
   proposal: RegisterRevocationProposal;
   canPropose: boolean;
   canDecide: boolean;
   onChanged: () => void;
+  onStale: () => void;
 }) {
   const [note, setNote] = useState("");
   const command = useCommand(runDecideRevocation, decideRevocationSignature);
@@ -304,8 +315,9 @@ function PendingRow({
 
   async function act(decision: "approve" | "reject" | "withdraw") {
     if (decision === "reject" && (text.length < 1 || text.length > 500)) return;
-    const result = await command.execute({ id: proposal.id, decision, ...(decision === "reject" || text ? { note: text } : {}) });
+    const result = await command.execute({ id: proposal.id, decision, ...(decision === "reject" ? { note: text } : {}) });
     if (result?.ok) onChanged();
+    else if (result && !result.ok && isStale(result.failure)) onStale();
   }
 
   return (
@@ -341,6 +353,13 @@ function PendingRow({
   );
 }
 
+/** Refusals that mean the register has moved on since it was read: read it again so the controls match the record. */
+const STALE_CODES = new Set(["proposal_not_pending", "target_not_active", "revocation_pending", "not_found", "closing_date_passed"]);
+
+function isStale(failure: CommandFailure): boolean {
+  return failure.kind === "conflict" ? STALE_CODES.has(failure.code) : failure.kind === "not_found";
+}
+
 function confirmLine(proposal: RegisterRevocationProposal): string {
   if (proposal.action === "close") return `This closes the authorisation on ${proposal.closeOn ?? ""}`;
   if (proposal.targetKind === "brand") return "This revokes the brand and its authorisations";
@@ -354,7 +373,6 @@ function CommandOutcome<T>({ state, errorTestId, signInReturnTo }: { state: Comm
   return (
     <div className="mt-space-sm" data-testid={errorTestId} data-failure-code={"code" in failure ? failure.code : failure.kind}>
       <p className="text-error font-body-sm">{failure.message}</p>
-      {advice.reload ? <button type="button" className="mt-1 text-primary font-label-md">Reload the latest version</button> : null}
       {advice.signIn ? <Link href={`/api/auth/login?returnTo=${signInReturnTo}`} className="mt-1 inline-block text-primary font-label-md">Sign in</Link> : null}
     </div>
   );

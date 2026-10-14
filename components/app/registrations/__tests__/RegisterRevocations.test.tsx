@@ -256,4 +256,44 @@ describe("register revocations", () => {
     expect(screen.getByTestId("rvk-history-hist-3").textContent).toContain("Withdrawn");
     expect(screen.getByTestId("rvk-history-hist-3").textContent).toContain("Programme officer");
   });
+
+  it("reads the register again after a refusal that means it moved on, and does not carry a panel from one row to the next", async () => {
+    mount();
+    await resolveAt(0, register({ canPropose: true, canDecide: true, pending: [proposal({ id: "prop-9", proposedByYou: false })] }));
+    const reads = () => deferredFetches().filter((c) => c.url === "/api/runtime/register-revocations" && c.init?.method !== "POST").length;
+    const before = reads();
+    fireEvent.change(screen.getByTestId("rvk-note-prop-9"), { target: { value: "Not warranted" } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("rvk-reject-prop-9"));
+    });
+    await act(async () => {
+      lastCall(decided).resolve({ error: "proposal_not_pending", message: "This proposal has already been decided or withdrawn." }, 409);
+    });
+    expect(screen.getByTestId("rvk-decide-error").textContent).toContain("already been decided or withdrawn");
+    expect(reads()).toBe(before + 1);
+
+    mount();
+    await resolveAt(0, register({ canPropose: true }));
+    fireEvent.click(screen.getByTestId("rvk-propose-brand-active"));
+    fireEvent.change(screen.getByTestId("rvk-reason"), { target: { value: "Typed for the first row" } });
+    fireEvent.click(screen.getByTestId("rvk-propose-auth-active"));
+    expect((screen.getByTestId("rvk-reason") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("sends a note only with a rejection, never with an approval", async () => {
+    mount();
+    await resolveAt(0, register({ canPropose: false, canDecide: true, pending: [proposal({ id: "prop-8" })] }));
+    fireEvent.change(screen.getByTestId("rvk-note-prop-8"), { target: { value: "Typed for a rejection" } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("rvk-approve-prop-8"));
+    });
+    expect(bodyOf(lastCall(decided))).toEqual({ decision: "approve" });
+    await act(async () => {
+      lastCall(decided).resolve({ error: "segregation_refused", message: "x" }, 403);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("rvk-reject-prop-8"));
+    });
+    expect(bodyOf(lastCall(decided))).toEqual({ decision: "reject", note: "Typed for a rejection" });
+  });
 });

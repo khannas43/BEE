@@ -52,6 +52,8 @@ before(async () => {
     settings: await import("../../app/api/runtime/business-settings/route.ts"),
     settingProposals: await import("../../app/api/runtime/business-settings/proposals/route.ts"),
     settingDecision: await import("../../app/api/runtime/business-settings/proposals/[id]/decision/route.ts"),
+    delegations: await import("../../app/api/runtime/delegations/route.ts"),
+    delegationDecision: await import("../../app/api/runtime/delegations/[id]/decision/route.ts"),
     revocations: await import("../../app/api/runtime/register-revocations/route.ts"),
     revocationDecision: await import("../../app/api/runtime/register-revocations/[id]/decision/route.ts"),
     corrections: await import("../../app/api/runtime/fee-corrections/route.ts"),
@@ -416,6 +418,38 @@ test("unit-evidence: POST /api/runtime/business-settings/proposals 401 session_e
     headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123490" },
     body: "{}",
   }));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/delegations 401 session_expired | Keycloak refusing refresh on delegations", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.delegations.GET(req("/api/runtime/delegations", "unit-delegations-refresh-refused", cookie));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/delegations 401 session_expired | Keycloak refusing refresh on a delegation request", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.delegations.POST(req("/api/runtime/delegations", "unit-delegation-request-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123494" },
+    body: "{}",
+  }));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/delegations/{id}/decision 401 session_expired | Keycloak refusing refresh on a delegation decision", async () => {
+  refreshRefusedStub();
+  const cookie = nearExpiry();
+  const res = await routes.delegationDecision.POST(req("/api/runtime/delegations/00000000-0000-4000-c000-000000000003/decision", "unit-delegation-decision-refresh-refused", cookie, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123495" },
+    body: "{}",
+  }), { params: Promise.resolve({ id: "00000000-0000-4000-c000-000000000003" }) });
   assert.equal(res.status, 401);
   assert.equal((await res.json()).error, "session_expired");
 });

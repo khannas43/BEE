@@ -54,7 +54,7 @@ public class RegistrationFeeService {
         if (replay.isPresent()) {
             return replay.get();
         }
-        if (!caller.holds("finance", "all")) {
+        if (!caller.holdsOwn("finance", "all")) {
             return error(HttpStatus.FORBIDDEN, "role_not_permitted");
         }
         Optional<RegistrationRepository.Row> found = registrations.find(id).filter(r -> "fee_due".equals(r.state()));
@@ -148,7 +148,7 @@ public class RegistrationFeeService {
         if (prior.isEmpty() || !MessageDigest.isEqual(prior.get(), DraftRequestSupport.bodyHash(body))) {
             return Optional.of(error(HttpStatus.CONFLICT, "idempotency_key_conflict"));
         }
-        if (!caller.holds("finance", "all")) {
+        if (!caller.holdsOwn("finance", "all")) {
             return Optional.of(error(HttpStatus.FORBIDDEN, "role_not_permitted"));
         }
         try {

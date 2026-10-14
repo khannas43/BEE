@@ -98,6 +98,7 @@ function springEvidence(p) {
   if (p.route === "/api/fee-corrections" || p.route === "/api/fee-corrections/proposals" || p.route === "/api/fee-corrections/proposals/{id}/decision") return mockMvc("feeCorrectionOperationsDocumentedPairs");
   if (p.route === "/api/fee-corrections/reversals" || p.route === "/api/fee-corrections/reversals/{id}/decision") return mockMvc("feeReversalOperationsDocumentedPairs");
   if (p.route === "/api/model-applications/{id}/history") return mockMvc("applicationHistoryOperationsDocumentedPairs");
+  if (p.route === "/api/delegations" || p.route === "/api/delegations/{id}/decision") return mockMvc("delegationDocumentedPairs");
   if (p.route === "/api/register-revocations" || p.route === "/api/register-revocations/{id}/decision") return mockMvc("registerRevocationDocumentedPairs");
   if (p.route === "/api/registrations/{id}/transition") return mockMvc("registrationTransitionDocumentedPairs");
   if (p.route === "/api/registrations" || p.route.startsWith("/api/registrations/")) return mockMvc("registrationOperationsDocumentedPairs");

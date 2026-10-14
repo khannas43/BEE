@@ -106,6 +106,14 @@ REVOKE UPDATE, DELETE, TRUNCATE ON app.register_revocation_proposal FROM ${BEE_R
 SQL
 fi
 
+if psql_super -d bee_app -c "SELECT to_regclass('app.delegation') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.delegation_decide(uuid, uuid, text, text) TO ${BEE_RUNTIME_DB_USER};
+REVOKE UPDATE, DELETE, TRUNCATE ON app.delegation, app.delegation_event, app.delegation_use FROM ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT ON app.delegation_event FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+
 if psql_super -d bee_app -c "SELECT to_regclass('app.model_application_document') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 REVOKE DELETE, UPDATE, TRUNCATE ON app.model_application_document FROM ${BEE_RUNTIME_DB_USER};

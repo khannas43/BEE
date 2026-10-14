@@ -32,7 +32,7 @@ public final class ModelDraftPolicy {
     }
 
     public static Optional<UUID> filingOrganisation(Caller caller) {
-        if (!caller.holds("manufacturer", "own-org") && !caller.holds("agency", "own-org")) {
+        if (!caller.holdsOwn("manufacturer", "own-org") && !caller.holdsOwn("agency", "own-org")) {
             return Optional.empty();
         }
         if (caller.organisationIds().size() != 1) {
@@ -57,12 +57,12 @@ public final class ModelDraftPolicy {
         }
         Membership filingMembership = memberships.get(0);
         String kind = filingMembership.kind();
-        if ("manufacturer".equals(kind) && caller.holds("manufacturer", "own-org")) {
+        if ("manufacturer".equals(kind) && caller.holdsOwn("manufacturer", "own-org")) {
             return brands.brandOwnedBy(brandId, filingOrg)
                 .map(b -> Decision.allow(new BrandChoice(b.id(), b.name(), filingOrg, filingMembership.code())))
                 .orElse(Decision.deny("brand_not_permitted"));
         }
-        if ("agency".equals(kind) && caller.holds("agency", "own-org")) {
+        if ("agency".equals(kind) && caller.holdsOwn("agency", "own-org")) {
             var brand = brands.brand(brandId);
             if (brand.isEmpty() || !brand.get().active()) {
                 return Decision.deny("brand_not_permitted");

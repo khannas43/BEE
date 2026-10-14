@@ -48,6 +48,8 @@ export type WebRoute =
   | "/api/runtime/registrations/{id}/submit"
   | "/api/runtime/registrations/{id}/fee-confirmation"
   | "/api/runtime/registrations/{id}/transition"
+  | "/api/runtime/delegations"
+  | "/api/runtime/delegations/{id}/decision"
   | "/api/runtime/register-revocations"
   | "/api/runtime/register-revocations/{id}/decision"
   | "/api/runtime/registrations/{id}/documents"
@@ -96,6 +98,8 @@ export type SpringRoute =
   | "/api/registrations/{id}/submit"
   | "/api/registrations/{id}/fee-confirmation"
   | "/api/registrations/{id}/transition"
+  | "/api/delegations"
+  | "/api/delegations/{id}/decision"
   | "/api/register-revocations"
   | "/api/register-revocations/{id}/decision"
   | "/api/registrations/{id}/documents"
@@ -137,7 +141,8 @@ export function springRoute(path: string): SpringRoute {
   if (/^\/api\/registrations\/[^/]+\/submit$/.test(p)) return "/api/registrations/{id}/submit";
   if (/^\/api\/registrations\/[^/]+\/fee-confirmation$/.test(p)) return "/api/registrations/{id}/fee-confirmation";
   if (/^\/api\/registrations\/[^/]+\/transition$/.test(p)) return "/api/registrations/{id}/transition";
-  if (p === "/api/register-revocations") return p;
+  if (p === "/api/delegations" || p === "/api/register-revocations") return p;
+  if (/^\/api\/delegations\/[^/]+\/decision$/.test(p)) return "/api/delegations/{id}/decision";
   if (/^\/api\/register-revocations\/[^/]+\/decision$/.test(p)) return "/api/register-revocations/{id}/decision";
   if (/^\/api\/registrations\/[^/]+\/documents$/.test(p)) return "/api/registrations/{id}/documents";
   if (/^\/api\/registrations\/[^/]+\/documents\/[^/]+\/versions\/[^/]+\/content$/.test(p)) return "/api/registrations/{id}/documents/{documentId}/versions/{versionId}/content";

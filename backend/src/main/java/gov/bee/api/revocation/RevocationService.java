@@ -52,7 +52,7 @@ public class RevocationService {
 
     private boolean holds(Caller caller, String capability) {
         var roles = repository.rolesHolding(capability);
-        return caller.roles().stream().anyMatch(g -> roles.contains(g.role()) && "all".equals(g.scope()));
+        return caller.ownRoles().stream().anyMatch(g -> roles.contains(g.role()) && "all".equals(g.scope()));
     }
 
     private boolean mayPropose(Caller caller) {

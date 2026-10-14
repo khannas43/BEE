@@ -163,10 +163,10 @@ public class ResubmitApplicationService {
     }
 
     private static String actorRole(Caller caller) {
-        if (caller.holds("manufacturer", "own-org")) {
+        if (caller.holdsOwn("manufacturer", "own-org")) {
             return "manufacturer";
         }
-        return caller.holds("agency", "own-org") ? "agency" : "unknown";
+        return caller.holdsOwn("agency", "own-org") ? "agency" : "unknown";
     }
 
     /** The replay rules every command shares, plus: only a caller who can still file may replay. */

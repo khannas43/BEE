@@ -186,6 +186,15 @@ const REVOCATIONS_UPSTREAM = {
   POST: { 401: ["unauthenticated"], 403: REVOCATION_DENIALS, 404: ["not_found"], 409: ["idempotency_key_conflict", "idempotency_in_progress", "revocation_pending", "target_not_active"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
 };
 const REVOCATION_DECISION_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...REVOCATION_DENIALS, "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "closing_date_passed", "target_not_active", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
+// WP02.4c (delegation). Keep equal to lib/server/contracts/delegations.ts and the artifact.
+const DELEGATIONS_ROUTE = "/api/runtime/delegations";
+const DELEGATION_DECISION_ROUTE = "/api/runtime/delegations/{id}/decision";
+const DELEGATION_RESOLVER = ["mfa_required", "no_active_account", "no_effective_role"];
+const DELEGATIONS_UPSTREAM = {
+  GET: { 401: ["unauthenticated"], 403: DELEGATION_RESOLVER, 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: [...DELEGATION_RESOLVER, "role_not_permitted"], 404: ["not_found"], 409: ["idempotency_key_conflict", "idempotency_in_progress", "delegate_not_eligible", "delegation_exists"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
+const DELEGATION_DECISION_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...DELEGATION_RESOLVER, "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "delegation_not_active", "effective_date_passed", "delegate_not_eligible", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const REG_UPLOAD_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_editable"], 404: ["not_found"], 409: [...REG_IDEM], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const upstreamLogRoute = (route, method) => {
   if (route === "/api/runtime/me") return "/api/me";
@@ -591,6 +600,9 @@ async function nextChecks(jar, novaToken) {
     [SETTINGS_ROUTE, "/api/runtime/business-settings", "GET", "settings-anon-get", undefined],
     [SETTING_PROPOSAL_ROUTE, "/api/runtime/business-settings/proposals", "POST", "setting-proposal-anon-post", "{}"],
     [SETTING_DECISION_ROUTE, `/api/runtime/business-settings/proposals/${NOVA_APP}/decision`, "POST", "setting-decision-anon-post", "{}"],
+    [DELEGATIONS_ROUTE, "/api/runtime/delegations", "GET", "delegations-anon-get", undefined],
+    [DELEGATIONS_ROUTE, "/api/runtime/delegations", "POST", "delegations-anon-post", "{}"],
+    [DELEGATION_DECISION_ROUTE, `/api/runtime/delegations/${NOVA_APP}/decision`, "POST", "delegation-decision-anon-post", "{}"],
     [REVOCATIONS_ROUTE, "/api/runtime/register-revocations", "GET", "revocations-anon-get", undefined],
     [REVOCATIONS_ROUTE, "/api/runtime/register-revocations", "POST", "revocations-anon-post", "{}"],
     [REVOCATION_DECISION_ROUTE, `/api/runtime/register-revocations/${NOVA_APP}/decision`, "POST", "revocation-decision-anon-post", "{}"],
@@ -766,6 +778,9 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(SETTINGS_ROUTE, "/api/runtime/business-settings", "GET", sessionJar, SETTINGS_UPSTREAM);
     await exerciseStandInPairs(SETTING_PROPOSAL_ROUTE, "/api/runtime/business-settings/proposals", "POST", sessionJar, SETTING_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(SETTING_DECISION_ROUTE, `/api/runtime/business-settings/proposals/${NOVA_APP}/decision`, "POST", sessionJar, SETTING_DECISION_UPSTREAM);
+    await exerciseStandInPairs(DELEGATIONS_ROUTE, "/api/runtime/delegations", "GET", sessionJar, DELEGATIONS_UPSTREAM);
+    await exerciseStandInPairs(DELEGATIONS_ROUTE, "/api/runtime/delegations", "POST", sessionJar, DELEGATIONS_UPSTREAM);
+    await exerciseStandInPairs(DELEGATION_DECISION_ROUTE, `/api/runtime/delegations/${NOVA_APP}/decision`, "POST", sessionJar, DELEGATION_DECISION_UPSTREAM);
     await exerciseStandInPairs(REVOCATIONS_ROUTE, "/api/runtime/register-revocations", "GET", sessionJar, REVOCATIONS_UPSTREAM);
     await exerciseStandInPairs(REVOCATIONS_ROUTE, "/api/runtime/register-revocations", "POST", sessionJar, REVOCATIONS_UPSTREAM);
     await exerciseStandInPairs(REVOCATION_DECISION_ROUTE, `/api/runtime/register-revocations/${NOVA_APP}/decision`, "POST", sessionJar, REVOCATION_DECISION_UPSTREAM);

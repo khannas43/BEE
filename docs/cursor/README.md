@@ -1,6 +1,6 @@
 # Cursor briefs
 
-Eleven tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HANDOFF.md](../kit/AGENT_HANDOFF.md)). Each is frontend or tooling only, touches files the others and Claude's backend work do not, and ends with a hand-back.
+Twelve tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HANDOFF.md](../kit/AGENT_HANDOFF.md)). Each is frontend or tooling only, touches files the others and Claude's backend work do not, and ends with a hand-back.
 
 **How a task runs.** Claude writes [CURRENT_TASK.md](CURRENT_TASK.md) (which brief, the `cursor/<task>` branch, any overrides, the acceptance commands), checks out the branch and sets `.baton`. You then run **`/bee-run-task`** in Cursor's Agent chat; Cursor does the task and ends with **`/bee-handback`**. Claude reviews and merges.
 
@@ -17,5 +17,6 @@ Eleven tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_
 | 09 | Read stored browser state with `useSyncExternalStore` | `cursor/stored-state-hook` | BL-141 | the six stores and providers that read `localStorage`, a new shared hook | yes (the task runs the runtime itself) |
 | 10 | The notification bell and the Notifications page (WP10.1b) | `cursor/notifications-ui` | WP10.1b | `components/app/AppTopbar.tsx`, a new notifications client and page, `lib/runtimeRoutes.ts`, `lib/client/runtimeHttp.ts` (a keyless POST), four stray duplicate files removed | yes (the task runs the runtime itself) |
 | 11 | One identity strip, and a calmer notification refresh | `cursor/identity-strip-and-refresh` | BL-089 | `components/app/kit/IdentityStrip.tsx`, `ModelDashboard.tsx`, `NewModelApplication.tsx`, the notification bell and page | yes (the task runs the runtime itself) |
+| 12 | The Business settings screen (hand over after the WP08.1h backend merges) | `cursor/business-settings-screen` | WP08.1h (BL-064, BL-065, BL-085, BL-106) | `components/app/admin/BusinessSettings.tsx` (new), `lib/client/runtimeBusinessSettings.ts` (new), the page and menu entry | `local:business-settings` if present |
 
 Not briefed on purpose, because they change the contract or the backend and so belong to Claude: the Wave 1 commands (IAME recommendation onward), the OpenAPI split, the scaffolder's extensions, the WP06.2 blob work, and the lint-baseline clean-up (BL-035, which touches too many files to run beside other work).

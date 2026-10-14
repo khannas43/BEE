@@ -78,6 +78,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/rating-schemes").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/rating-schemes/proposals").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/rating-schemes/proposals/*/decision").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/business-settings").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/business-settings/proposals").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/business-settings/proposals/*/decision").authenticated()
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o -> o
                 .jwt(Customizer.withDefaults())

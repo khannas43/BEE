@@ -45,9 +45,12 @@ public class FeeConfirmationService {
     private final FeeConfirmationRepository repository;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
+    private final gov.bee.api.settings.BusinessSettingService settings;
 
     public FeeConfirmationService(ModelApplicationRepository applications, ModelApplicationSubmitRepository submissions,
-                                  FeeConfirmationRepository repository, IdempotencyRepository idempotency, ObjectMapper json) {
+                                  FeeConfirmationRepository repository, IdempotencyRepository idempotency, ObjectMapper json,
+                                  gov.bee.api.settings.BusinessSettingService settings) {
+        this.settings = settings;
         this.applications = applications;
         this.submissions = submissions;
         this.repository = repository;
@@ -95,8 +98,11 @@ public class FeeConfirmationService {
         if (fee.isEmpty()) {
             return error(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error");
         }
-        // What is received must equal the whole fee due: the amount plus its separate tax line (decision B12: exact match).
-        if (input.get().amount().compareTo(fee.get().totalInr()) != 0) {
+        // What is received must be within the tolerance in force (a business setting, WP08.1h) of the whole fee due: the amount plus its
+        // separate tax line. The default tolerance is 0.00, an exact match (decision B12, the owner's assumption). The amount actually
+        // received is what is recorded; the fee due stays on the snapshot, so the difference is always visible.
+        java.math.BigDecimal tolerance = settings.valueOn(gov.bee.api.settings.BusinessSettingService.PAYMENT_TOLERANCE_AMOUNT, today);
+        if (input.get().amount().subtract(fee.get().totalInr()).abs().compareTo(tolerance) > 0) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "amount_mismatch");
         }
         if (row.version() != input.get().version()) {
@@ -105,7 +111,7 @@ public class FeeConfirmationService {
         if (!idempotency.begin(caller.accountId(), "POST", ROUTE, appId, idempotencyKey, DraftRequestSupport.bodyHash(body))) {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
-        var done = repository.confirm(appId, row.version(), caller.accountId(), "finance", fee.get().id(), fee.get().totalInr(),
+        var done = repository.confirm(appId, row.version(), caller.accountId(), "finance", fee.get().id(), input.get().amount(),
             input.get().receipt(), input.get().receivedOn());
         if (done.outcome() != FeeConfirmationRepository.Outcome.CONFIRMED) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
@@ -120,7 +126,7 @@ public class FeeConfirmationService {
         receipt.put("toState", FeeConfirmationRepository.TO_STATE);
         receipt.put("version", done.versionAfter());
         receipt.put("receiptReference", input.get().receipt());
-        receipt.put("amountInr", fee.get().totalInr().setScale(2).toPlainString());
+        receipt.put("amountInr", input.get().amount().setScale(2).toPlainString());
         receipt.put("receivedOn", input.get().receivedOn().toString());
         receipt.put("confirmedAt", done.confirmedAt().toString());
         idempotency.complete(caller.accountId(), "POST", ROUTE, appId, idempotencyKey, 200, writeJson(receipt), done.versionAfter());

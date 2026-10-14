@@ -178,6 +178,22 @@ class SpringContractTest {
     gov.bee.api.ratingschemes.RatingSchemeRepository schemesRepo;
 
     @MockitoBean
+    gov.bee.api.settings.BusinessSettingRepository settingsRepo;
+
+    /** Every other operation reads its business settings through the service; the defaults are the catalogue's (V42). */
+    @org.junit.jupiter.api.BeforeEach
+    void businessSettingDefaults() {
+        when(settingsRepo.valueOn(any(), any())).thenAnswer(inv -> switch ((String) inv.getArgument(0)) {
+            case "declared_iseer_max" -> new BigDecimal("99.99");
+            case "test_report_max_age_days" -> new BigDecimal("1095");
+            case "payment_tolerance_amount" -> new BigDecimal("0.00");
+            case "iseer_verify_tolerance" -> new BigDecimal("99.99");
+            case "certificate_validity_years" -> new BigDecimal("3");
+            default -> throw new IllegalStateException("unknown business setting");
+        });
+    }
+
+    @MockitoBean
     gov.bee.api.feecorrections.FeeCorrectionRepository correctionRepo;
 
     @MockitoBean
@@ -978,6 +994,13 @@ class SpringContractTest {
         assertTrue(paid.getContentAsString().contains("\"amountInr\":\"28320.00\""), paid.getContentAsString());
         when(submissions.findFeeSnapshot(NOVA_APP)).thenReturn(Optional.of(feeSnap));
 
+        // A tolerance (a business setting) lets Finance confirm what was actually received; the default is exact. The amount recorded is the one received.
+        org.mockito.Mockito.doReturn(new BigDecimal("5.00")).when(settingsRepo).valueOn(org.mockito.ArgumentMatchers.eq("payment_tolerance_amount"), any());
+        var near = conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("24000.00", "23995.00")), 200, null);
+        assertTrue(near.getContentAsString().contains("\"amountInr\":\"23995.00\""), near.getContentAsString());
+        conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("24000.00", "24005.01")), 422, "amount_mismatch");
+        org.mockito.Mockito.doReturn(new BigDecimal("0.00")).when(settingsRepo).valueOn(org.mockito.ArgumentMatchers.eq("payment_tolerance_amount"), any());
+
         // Version, idempotency and assignment conflicts.
         conforms(r, post(path).with(token("finance")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
         when(feeRepo.confirm(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(
@@ -1379,6 +1402,12 @@ class SpringContractTest {
         // Below the lowest band, and no scheme in force: nothing is written.
         conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json")
             .content(ok.replace("4.62", "3.29")), 422, "rating_below_threshold");
+        // The verified figure may differ from the declared one (4.50) by no more than the tolerance in force.
+        org.mockito.Mockito.doReturn(new BigDecimal("0.10")).when(settingsRepo).valueOn(org.mockito.ArgumentMatchers.eq("iseer_verify_tolerance"), any());
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "iseer_outside_tolerance");
+        org.mockito.Mockito.doReturn(new BigDecimal("0.12")).when(settingsRepo).valueOn(org.mockito.ArgumentMatchers.eq("iseer_verify_tolerance"), any());
+        conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
+        org.mockito.Mockito.doReturn(new BigDecimal("99.99")).when(settingsRepo).valueOn(org.mockito.ArgumentMatchers.eq("iseer_verify_tolerance"), any());
         when(ratingRepo.bandsInForce(any(), any())).thenReturn(List.of());
         conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 422, "rule_not_available");
         when(ratingRepo.bandsInForce(any(), any())).thenReturn(bands);
@@ -1612,6 +1641,13 @@ class SpringContractTest {
             List.of(new BigDecimal("3.00"), new BigDecimal("3.40"), new BigDecimal("3.90"), new BigDecimal("4.40"), new BigDecimal("4.90")), "Circular 2026/14", "Revised scheme",
             proposer, "Proposer Name", Instant.parse("2026-10-04T10:00:00Z"), state, pending ? null : "Decider Name", pending ? null : Instant.parse("2026-10-04T11:00:00Z"), null,
             state.equals("approved") ? "RAC-ISEER-2" : null);
+    }
+
+    static gov.bee.api.settings.BusinessSettingRepository.Proposal settingProposal(String state, UUID proposer) {
+        boolean pending = state.equals("pending");
+        return new gov.bee.api.settings.BusinessSettingRepository.Proposal(PROPOSAL_ID, "payment_tolerance_amount", java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).plusDays(10),
+            new BigDecimal("50.00"), "Circular 2026/14", "Revised tolerance", proposer, "Proposer Name", Instant.parse("2026-10-04T10:00:00Z"), state,
+            pending ? null : "Decider Name", pending ? null : Instant.parse("2026-10-04T11:00:00Z"), null, state.equals("approved"));
     }
 
     static gov.bee.api.feecorrections.FeeCorrectionRepository.Confirmation corrConfirmation(boolean pending) {
@@ -1849,6 +1885,112 @@ class SpringContractTest {
         conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 403, "no_active_account");
         account("admin", "all");
         when(schemesRepo.rolesHolding("rating_scheme_manage")).thenThrow(new DataAccessResourceFailureException("down"));
+        conforms(list, get(list).with(token("admin")), 503, "service_unavailable");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(go), 503, "service_unavailable");
+    }
+
+    @Test
+    void businessSettingOperationsDocumentedPairs() throws Exception {
+        String list = "/api/business-settings";
+        String propose = "/api/business-settings/proposals";
+        String decide = "/api/business-settings/proposals/{id}/decision";
+        String decidePath = "/api/business-settings/proposals/" + PROPOSAL_ID + "/decision";
+        String when10 = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).plusDays(10).toString();
+        String ok = "{\"settingKey\":\"payment_tolerance_amount\",\"value\":\"50.00\",\"effectiveFrom\":\"" + when10 + "\","
+            + "\"sourceReference\":\"Circular 2026/14\",\"reason\":\"Revised tolerance\"}";
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("admin"))));
+        UUID other = UUID.fromString("00000000-0000-4000-a000-0000000000aa");
+        account("admin", "all");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(settingsRepo.rolesHolding("business_setting_manage")).thenReturn(Set.of("admin"));
+        var def = new gov.bee.api.settings.BusinessSettingRepository.Definition("payment_tolerance_amount", "Difference allowed between the fee due and the amount received", "rupees",
+            "Finance may confirm a receipt within this many rupees of the fee due.", "A confirmation is recorded with the amount actually received.", 2, new BigDecimal("0.00"), new BigDecimal("1000.00"), new BigDecimal("0.00"));
+        when(settingsRepo.definitions()).thenReturn(List.of(def));
+        when(settingsRepo.definition("payment_tolerance_amount")).thenReturn(Optional.of(def));
+        when(settingsRepo.versions()).thenReturn(List.of(new gov.bee.api.settings.BusinessSettingRepository.Version("payment_tolerance_amount",
+            java.time.LocalDate.of(2026, 1, 1), new BigDecimal("10.00"), "Local note", "Earlier tolerance")));
+        when(settingsRepo.pending()).thenReturn(List.of(settingProposal("pending", other)));
+        when(settingsRepo.recentDecided(anyInt())).thenReturn(List.of(settingProposal("approved", other)));
+        when(settingsRepo.insert(any(), any())).thenReturn(settingProposal("pending", USER));
+        when(settingsRepo.proposal(PROPOSAL_ID)).thenReturn(Optional.of(settingProposal("pending", other)));
+        when(settingsRepo.decide(any(), any(), any(), any())).thenReturn(new gov.bee.api.settings.BusinessSettingRepository.Decided(gov.bee.api.settings.BusinessSettingRepository.Outcome.DONE, "approved"));
+
+        var read = conforms(list, get(list).with(token("admin")), 200, null);
+        assertTrue(read.getContentAsString().contains("\"key\":\"payment_tolerance_amount\"") && read.getContentAsString().contains("\"valueInForce\":\"0.00\"") && read.getContentAsString().contains("\"proposedByYou\":false"), read.getContentAsString());
+        account("manufacturer", "own-org");
+        conforms(list, get(list).with(token("manufacturer")), 403, "role_not_permitted");
+        account("admin", "all");
+
+        var created = conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 201, null);
+        assertTrue(created.getContentAsString().contains("\"state\":\"pending\"") && created.getContentAsString().contains("\"proposedByYou\":true"), created.getContentAsString());
+        conforms(propose, post(propose).with(token("admin")).contentType("application/json").content(ok), 422, "idempotency_key_required");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"50.00\"", "\"50.005\"")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"50.00\"", "\"5000.00\"")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"50.00\"", "\"-1\"")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("payment_tolerance_amount", "no_such_setting")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace(when10, "2020-01-01")), 422, "validation_failed");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("Revised tolerance", "line\\nbreak")), 422, "validation_failed");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 201, "{}", 0)));
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 201, "{}", 0)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        account("manufacturer", "own-org");
+        conforms(propose, post(propose).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "role_not_permitted");
+        account("admin", "all");
+
+        when(settingsRepo.proposal(PROPOSAL_ID)).thenReturn(Optional.of(settingProposal("approved", other)));
+        var approved = conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"decision\":\"approve\"}"), 200, null);
+        assertTrue(approved.getContentAsString().contains("\"state\":\"approved\"") && approved.getContentAsString().contains("\"applied\":true"), approved.getContentAsString());
+        String go = "{\"decision\":\"approve\"}";
+        when(settingsRepo.proposal(PROPOSAL_ID)).thenReturn(Optional.of(settingProposal("pending", other)));
+        record Refusal(gov.bee.api.settings.BusinessSettingRepository.Outcome outcome, int status, String code) {
+        }
+        for (var r : List.of(new Refusal(gov.bee.api.settings.BusinessSettingRepository.Outcome.SAME_PERSON, 403, "segregation_refused"), new Refusal(gov.bee.api.settings.BusinessSettingRepository.Outcome.ONLY_PROPOSER, 403, "role_not_permitted"),
+            new Refusal(gov.bee.api.settings.BusinessSettingRepository.Outcome.NOT_PERMITTED, 403, "role_not_permitted"), new Refusal(gov.bee.api.settings.BusinessSettingRepository.Outcome.NOT_PENDING, 409, "proposal_not_pending"),
+            new Refusal(gov.bee.api.settings.BusinessSettingRepository.Outcome.DATE_PASSED, 409, "effective_date_passed"), new Refusal(gov.bee.api.settings.BusinessSettingRepository.Outcome.RULE_CONFLICT, 409, "rule_conflict"), new Refusal(gov.bee.api.settings.BusinessSettingRepository.Outcome.NOT_FOUND, 404, "not_found"))) {
+            when(settingsRepo.decide(any(), any(), any(), any())).thenReturn(new gov.bee.api.settings.BusinessSettingRepository.Decided(r.outcome(), null));
+            conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), r.status(), r.code());
+        }
+        when(settingsRepo.decide(any(), any(), any(), any())).thenReturn(new gov.bee.api.settings.BusinessSettingRepository.Decided(gov.bee.api.settings.BusinessSettingRepository.Outcome.DONE, "approved"));
+        conforms(decide, post("/api/business-settings/proposals/" + UUID.randomUUID() + "/decision").with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 404, "not_found");
+        conforms(decide, post(decidePath).with(token("admin")).contentType("application/json").content(go), 422, "idempotency_key_required");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"decision\":\"delete\"}"), 422, "validation_failed");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"decision\":\"reject\",\"note\":\"" + "x".repeat(501) + "\"}"), 422, "validation_failed");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 409, "idempotency_key_conflict");
+        String stored = "{\"id\":\"" + PROPOSAL_ID + "\",\"settingKey\":\"payment_tolerance_amount\",\"label\":\"Difference allowed\",\"unit\":\"rupees\",\"effectiveFrom\":\"" + when10 + "\",\"value\":\"50.00\","
+            + "\"valueBefore\":\"0.00\",\"sourceReference\":\"Circular 2026/14\",\"reason\":\"Revised tolerance\",\"state\":\"pending\",\"proposedBy\":\"Proposer Name\",\"proposedByYou\":false,"
+            + "\"proposedAt\":\"2026-10-04T10:00:00Z\",\"decidedBy\":null,\"decidedAt\":null,\"decisionNote\":null,\"applied\":false}";
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, stored, 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(gov.bee.api.application.DraftRequestSupport.bodyHash(new com.fasterxml.jackson.databind.ObjectMapper().readTree(go))));
+        var replay = conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 200, null);
+        assertEquals("true", replay.getHeader("Idempotency-Replayed"));
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        for (String[] r : new String[][] {{list, "GET"}, {propose, "POST"}, {decide, "POST"}}) {
+            String path = r[0].equals(decide) ? decidePath : r[0];
+            var req = r[1].equals("GET") ? get(path) : post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(r[0].equals(propose) ? ok : go);
+            conforms(r[0], req, 401, "unauthenticated");
+            var req2 = r[1].equals("GET") ? get(path) : post(path).header("Idempotency-Key", IDEM).contentType("application/json").content(r[0].equals(propose) ? ok : go);
+            conforms(r[0], req2.with(pwdOnly), 403, "mfa_required");
+        }
+        account("manufacturer", "own-org");
+        conforms(list, get(list).with(token("admin")), 403, "no_effective_role");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_effective_role");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 403, "no_effective_role");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(list, get(list).with(token("admin")), 403, "no_active_account");
+        conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
+        conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(go), 403, "no_active_account");
+        account("admin", "all");
+        when(settingsRepo.rolesHolding("business_setting_manage")).thenThrow(new DataAccessResourceFailureException("down"));
         conforms(list, get(list).with(token("admin")), 503, "service_unavailable");
         conforms(propose, post(propose).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
         conforms(decide, post(decidePath).with(token("admin")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(go), 503, "service_unavailable");

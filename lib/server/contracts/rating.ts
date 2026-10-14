@@ -40,7 +40,7 @@ export const SPRING_RATING_ERRORS: UpstreamErrors = {
   403: [...RESOLVER_DENIALS, "role_not_permitted", "segregation_refused"],
   404: ["not_found"],
   409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress"],
-  422: ["validation_failed", "idempotency_key_required", "rule_not_available", "rating_below_threshold"],
+  422: ["validation_failed", "idempotency_key_required", "rule_not_available", "iseer_outside_tolerance", "rating_below_threshold"],
   503: ["service_unavailable"],
 };
 

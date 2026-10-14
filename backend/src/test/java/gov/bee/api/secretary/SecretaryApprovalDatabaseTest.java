@@ -117,7 +117,7 @@ class SecretaryApprovalDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         repo = transactional(new SecretaryApprovalRepository(db));
-        assertEquals(41, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V41");
+        assertEquals(42, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V42");
     }
 
     @AfterAll
@@ -193,6 +193,28 @@ class SecretaryApprovalDatabaseTest {
         assertEquals("local_demo", c.get("basis"));
         assertEquals(SECRETARY_USER, c.get("issued_by_account_id"));
         assertEquals(owner.queryForObject("SELECT id FROM model_application_transition_event WHERE application_id = ? AND action = 'secretary_approve'", UUID.class, id), c.get("transition_event_id"));
+    }
+
+    @Test
+    void theValidityIsTheNumberOfYearsInForceOnTheDayOfIssueAndCertificatesAlreadyIssuedAreNeverChanged() {
+        LocalDate today = LocalDate.now(INDIA);
+        UUID early = inSecretaryApproval("SA-CERT-YEARS-EARLY");
+        assertEquals(Outcome.APPROVED, approve(early, 6).outcome());
+        owner.update("INSERT INTO business_setting_version (setting_key, effective_from, value, source_reference, reason) VALUES ('certificate_validity_years', ?, 5, 'test', 'test')",
+            java.sql.Date.valueOf(today));
+        try {
+            UUID later = inSecretaryApproval("SA-CERT-YEARS-LATER");
+            assertEquals(Outcome.APPROVED, approve(later, 6).outcome());
+            assertEquals(today.plusYears(5).minusDays(1), owner.queryForObject("SELECT valid_to FROM certificate WHERE application_id = ?", java.sql.Date.class, later).toLocalDate(),
+                "five years once the setting says so");
+            assertEquals(today.plusYears(3).minusDays(1), owner.queryForObject("SELECT valid_to FROM certificate WHERE application_id = ?", java.sql.Date.class, early).toLocalDate(),
+                "a certificate issued before the change keeps its dates");
+        } finally {
+            // The versions are immutable; this throwaway schema is cleaned by switching the guard off for a moment so later tests see the default.
+            owner.execute("ALTER TABLE business_setting_version DISABLE TRIGGER reject_row_change");
+            owner.update("DELETE FROM business_setting_version WHERE setting_key = 'certificate_validity_years'");
+            owner.execute("ALTER TABLE business_setting_version ENABLE TRIGGER reject_row_change");
+        }
     }
 
     @Test

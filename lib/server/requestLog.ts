@@ -39,6 +39,9 @@ export type WebRoute =
   | "/api/runtime/rating-schemes"
   | "/api/runtime/rating-schemes/proposals"
   | "/api/runtime/rating-schemes/proposals/{id}/decision"
+  | "/api/runtime/business-settings"
+  | "/api/runtime/business-settings/proposals"
+  | "/api/runtime/business-settings/proposals/{id}/decision"
   | "/api/runtime/fee-corrections"
   | "/api/runtime/fee-corrections/proposals"
   | "/api/runtime/fee-corrections/proposals/{id}/decision"
@@ -74,6 +77,9 @@ export type SpringRoute =
   | "/api/rating-schemes"
   | "/api/rating-schemes/proposals"
   | "/api/rating-schemes/proposals/{id}/decision"
+  | "/api/business-settings"
+  | "/api/business-settings/proposals"
+  | "/api/business-settings/proposals/{id}/decision"
   | "/api/fee-corrections"
   | "/api/fee-corrections/proposals"
   | "/api/fee-corrections/proposals/{id}/decision"
@@ -106,11 +112,12 @@ export const safeOutcome = (code: unknown): string => (typeof code === "string" 
 export function springRoute(path: string): SpringRoute {
   const p = path.split("?")[0];
   if (p === "/api/me" || p === "/api/model-applications" || p === "/api/model-applications/eligible-brands" || p === "/actuator/health") return p;
-  if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/fee-corrections/reversals" || p === "/api/public/verification" || p === "/api/notifications" || p === "/api/notifications/read-all") return p;
+  if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/business-settings" || p === "/api/business-settings/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/fee-corrections/reversals" || p === "/api/public/verification" || p === "/api/notifications" || p === "/api/notifications/read-all") return p;
   if (/^\/api\/notifications\/[^/]+\/read$/.test(p)) return "/api/notifications/{id}/read";
   if (/^\/api\/fee-corrections\/proposals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/proposals/{id}/decision";
   if (/^\/api\/fee-corrections\/reversals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/reversals/{id}/decision";
   if (/^\/api\/rating-schemes\/proposals\/[^/]+\/decision$/.test(p)) return "/api/rating-schemes/proposals/{id}/decision";
+  if (/^\/api\/business-settings\/proposals\/[^/]+\/decision$/.test(p)) return "/api/business-settings/proposals/{id}/decision";
   if (/^\/api\/fee-rules\/proposals\/[^/]+\/decision$/.test(p)) return "/api/fee-rules/proposals/{id}/decision";
   if (/^\/api\/model-applications\/[^/]+\/submit$/.test(p)) return "/api/model-applications/{id}/submit";
   if (/^\/api\/model-applications\/[^\/]+\/reject$/.test(p)) return "/api/model-applications/{id}/reject";

@@ -1,5 +1,6 @@
 package gov.bee.api.application;
 
+import gov.bee.api.settings.BusinessSettingService;
 import gov.bee.api.document.DocumentRepository;
 import gov.bee.api.masters.MasterDataService;
 import java.time.LocalDate;
@@ -68,8 +69,11 @@ public class ModelApplicationEvidence {
     private final DocumentRepository documents;
     private final MasterDataService masters;
     private final ModelApplicationRepository applications;
+    private final BusinessSettingService settings;
 
-    public ModelApplicationEvidence(DocumentRepository documents, MasterDataService masters, ModelApplicationRepository applications) {
+    public ModelApplicationEvidence(DocumentRepository documents, MasterDataService masters, ModelApplicationRepository applications,
+                                    BusinessSettingService settings) {
+        this.settings = settings;
         this.documents = documents;
         this.masters = masters;
         this.applications = applications;
@@ -78,8 +82,11 @@ public class ModelApplicationEvidence {
     public Result evaluate(ModelApplicationRepository.Row row, LocalDate today) {
         boolean report = documents.findByApplicationAndKind(row.id(), KIND_TEST_REPORT)
             .map(d -> !documents.listVersions(d.id()).isEmpty()).orElse(false);
-        boolean iseer = row.declaredIseer() != null;
-        boolean date = row.testedOn() != null && !row.testedOn().isAfter(today);
+        // Business settings (WP08.1h): the highest figure a declaration may carry, and how old a test may be on the day of submission.
+        boolean iseer = row.declaredIseer() != null
+            && row.declaredIseer().compareTo(settings.valueOn(BusinessSettingService.DECLARED_ISEER_MAX, today)) <= 0;
+        long maxAgeDays = settings.valueOn(BusinessSettingService.TEST_REPORT_MAX_AGE_DAYS, today).longValue();
+        boolean date = row.testedOn() != null && !row.testedOn().isAfter(today) && !row.testedOn().isBefore(today.minusDays(maxAgeDays));
 
         var accreditation = date && row.laboratoryCode() != null
             ? masters.accreditation(row.laboratoryCode(), row.category(), row.testedOn()) : null;

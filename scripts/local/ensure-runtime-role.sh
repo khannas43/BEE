@@ -75,6 +75,15 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.master_category, app.master_stand
 SQL
 fi
 
+if psql_super -d bee_app -c "SELECT to_regclass('app.business_setting_proposal') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT SELECT ON app.business_setting_def, app.business_setting_version TO ${BEE_RUNTIME_DB_USER};
+GRANT EXECUTE ON FUNCTION app.business_setting_decide(uuid, uuid, text, text), app.business_setting_value(text, date) TO ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.business_setting_def, app.business_setting_version FROM ${BEE_RUNTIME_DB_USER};
+REVOKE UPDATE, DELETE, TRUNCATE ON app.business_setting_proposal FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+
 if psql_super -d bee_app -c "SELECT to_regclass('app.fee_rule_proposal') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 GRANT EXECUTE ON FUNCTION app.fee_rule_decide(uuid, uuid, text, text) TO ${BEE_RUNTIME_DB_USER};

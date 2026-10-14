@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.26.0";
+export const CONTRACT_VERSION = "0.27.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -37,14 +37,15 @@ export const ERROR_MESSAGES = {
   amount_mismatch: "The amount received does not match the fee due.",
   assignee_unavailable: "No officer is available to take the next stage.",
   not_returned: "Only a returned application can be resubmitted.",
+  iseer_outside_tolerance: "The verified efficiency differs from the declared efficiency by more than the allowed difference.",
   rating_below_threshold: "The verified efficiency is below the lowest star band, so no rating can be assigned.",
   correction_already_pending: "A correction for this receipt is already waiting for a decision.",
   proposal_not_pending: "This proposal has already been decided or withdrawn.",
   effective_date_passed: "The date this rule was to start has passed; propose it again with a later date.",
   rule_conflict: "This rule cannot start on that date because of the rules already in place.",
   test_report_required: "A test report must be uploaded before the application can be submitted.",
-  declared_efficiency_required: "The declared efficiency figure is required before the application can be submitted.",
-  test_date_invalid: "A test date that is not in the future is required before the application can be submitted.",
+  declared_efficiency_required: "A declared efficiency figure within the allowed range is required before the application can be submitted.",
+  test_date_invalid: "A test date that is not in the future and not older than the allowed age is required before the application can be submitted.",
   laboratory_not_accredited: "The laboratory must hold an active accreditation for this category on the test date.",
   standard_not_available: "No applicable standard is in force on the test date.",
   duplicate_model: "Another application already holds this brand and model number.",

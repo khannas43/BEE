@@ -5,10 +5,10 @@
 ## One project, one folder
 
 ```
-/Users/sameerkhanna/Documents/Projects/BEE      the only copy of the project (the git repo itself)
+/Users/sameerkhanna/Developer/BEE      the only copy of the project (the git repo itself)
 ```
 
-Claude Code and Cursor both work in this one folder, on the same checkout, with the same `node_modules` and the same local runtime. There is no second clone, no worktree and no other path to confuse. Open this folder in Cursor, and start Claude Code from it (`cd /Users/sameerkhanna/Documents/Projects/BEE && claude`).
+Claude Code and Cursor both work in this one folder, on the same checkout, with the same `node_modules` and the same local runtime. There is no second clone, no worktree and no other path to confuse. Open this folder in Cursor, and start Claude Code from it (`cd /Users/sameerkhanna/Developer/BEE && claude`).
 
 The cost of one folder is that **only one agent works in it at a time**. The rest of this document is how that stays safe.
 
@@ -52,7 +52,7 @@ PostgreSQL, Keycloak, Spring and Next.js use fixed ports and the Docker project 
 
 ## iCloud
 
-`~/Documents` is synced to iCloud, which can evict or stall files (BL-034, BL-094). The heavy generated folders (`node_modules`, `.next`, `.local`, `backend/target`) live in `*.nosync` siblings with a symlink back, which iCloud ignores. After every `npm ci` (it recreates `node_modules` as a real folder) run `npm run setup:nosync`. It is safe to repeat.
+The project lives in `~/Developer/BEE`, **outside** the Desktop and Documents folders that iCloud syncs (moved on 14 October 2026, BL-034/BL-094). In `~/Documents` iCloud evicted files, created "name 2" conflict copies and corrupted `node_modules` mid-build. Do not move the project back under `~/Documents` or `~/Desktop`, and do not put a second clone there. The `*.nosync` workaround (`npm run setup:nosync`) is no longer needed here; leave it unused. `npm run clean:dupes` (`scripts/local/clean-icloud-dupes.sh`) lists any "name 2" copies if one ever appears.
 
 ## If you want parallel work later
 

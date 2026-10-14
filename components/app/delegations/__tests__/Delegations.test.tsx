@@ -110,6 +110,10 @@ describe("delegations", () => {
     await resolveAt(0, data);
     expect(screen.getByTestId("del-to-help").textContent).toBe("The delegation applies until the day before this date.");
     expect(screen.getByTestId("del-rules").textContent).toContain("at most 30 days later");
+    expect(screen.getByTestId("del-from").getAttribute("min")).toBe("2026-10-14");
+    expect(screen.getByTestId("del-to").getAttribute("min")).toBe("2026-10-14");
+    fireEvent.change(screen.getByTestId("del-from"), { target: { value: "2026-10-16" } });
+    expect(screen.getByTestId("del-to").getAttribute("min")).toBe("2026-10-16");
     expect((screen.getByTestId("del-submit") as HTMLButtonElement).disabled).toBe(true);
     const before = deferredFetches().length;
     fireEvent.click(screen.getByTestId("del-submit"));
@@ -184,7 +188,7 @@ describe("delegations", () => {
     const pending = delegation({ id: "ask", asDelegator: false, delegator: "Programme officer", delegate: "Finance officer" });
     mount();
     await resolveAt(0, view({ canApprove: true, delegableRoles: [], colleagues: [], pending: [pending] }));
-    expect(screen.getByTestId("del-confirm-ask").textContent).toBe("This lets Finance officer act as Programme from 2026-10-15 until 2026-10-20 for Programme officer.");
+    expect(screen.getByTestId("del-confirm-ask").textContent).toBe("This lets Finance officer act as Programme from 2026-10-15 to the day before 2026-10-20 for Programme officer.");
     expect((screen.getByTestId("del-reject-ask") as HTMLButtonElement).disabled).toBe(true);
     const before = deferredFetches().length;
     fireEvent.click(screen.getByTestId("del-reject-ask"));
@@ -238,6 +242,9 @@ describe("delegations", () => {
     expect(deferredFetches().length).toBe(before + 2);
     expect(screen.getByTestId("del-request-error").textContent).toContain("No such record is available to you.");
     await resolveAt(deferredFetches().length - 1, { ...data });
+    // On the ask form the message stays after the re-read, until the person changes something (the decision rows below clear theirs).
+    expect(screen.getByTestId("del-request-error").textContent).toContain("No such record is available to you.");
+    fireEvent.change(screen.getByTestId("del-reason"), { target: { value: "Away next week, again." } });
     expect(screen.queryByTestId("del-request-error")).toBeNull();
 
     const pending = view({ canApprove: true, delegableRoles: [], colleagues: [], pending: [delegation({ id: "ask", asDelegator: false })] });
@@ -282,5 +289,39 @@ describe("delegations", () => {
     expect(screen.getByTestId("del-history-hist-1").textContent).toContain("Not this week.");
     expect(screen.getByTestId("del-history-hist-2").textContent).toContain("Revoked");
     expect(screen.getByTestId("del-history-hist-2").textContent).toContain("Back early.");
+  });
+
+  it("keeps a refusal beside the ask form until the person changes something", async () => {
+    const data = view();
+    mount();
+    await resolveAt(0, data);
+    fireEvent.change(screen.getByTestId("del-from"), { target: { value: "2026-10-15" } });
+    fireEvent.change(screen.getByTestId("del-to"), { target: { value: "2026-10-20" } });
+    fireEvent.change(screen.getByTestId("del-reason"), { target: { value: "Away." } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("del-submit"));
+    });
+    await act(async () => {
+      lastCall(posted).resolve({ error: "effective_date_passed", message: "The date this rule was to start has passed; propose it again with a later date." }, 409);
+    });
+    expect(screen.getByTestId("del-request-error").textContent).toContain("has passed");
+    await resolveAt(deferredFetches().length - 1, data);
+    expect(screen.getByTestId("del-request-error").textContent).toContain("has passed");
+    expect(screen.getByTestId("del-request-error").getAttribute("role")).toBe("alert");
+    fireEvent.change(screen.getByTestId("del-from"), { target: { value: "2026-10-16" } });
+    expect(screen.queryByTestId("del-request-error")).toBeNull();
+  });
+
+  it("states the end date as not included in the table and in the approver's line", async () => {
+    mount();
+    await resolveAt(0, view({
+      canApprove: true,
+      mine: [delegation({ id: "m1", state: "approved", inForce: true, asDelegator: true })],
+      pending: [delegation({ id: "p1" })],
+    }));
+    expect(screen.getByText("Ends on (not included)")).toBeTruthy();
+    expect(screen.getByTestId("del-confirm-p1").textContent).toContain("to the day before");
+    expect(screen.getByTestId("del-reason-help").textContent).toContain("1 to 500");
+    expect(screen.getByTestId("del-reject-p1").getAttribute("aria-describedby")).toBe("del-note-help-p1");
   });
 });

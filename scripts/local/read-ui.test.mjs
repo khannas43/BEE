@@ -336,6 +336,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.equal(runtimeNavFor([{ role: "secretary", scope: "all" }]).some((r) => r.href === "/app/registrations/reviews"), false, "the Secretary does not review a registration");
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/registrations/reviews"), false, "an applicant does not get the review queue");
   assert.equal(runtimeNavFor([{ role: "secretary", scope: "all" }]).some((r) => r.href === "/app/registrations/register"), false, "the Secretary does not get the register");
+  assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/registrations/register"), false, "an applicant does not get the register");
   assert.equal(runtimeNavFor([{ role: "secretary", scope: "all" }]).some((r) => r.href === "/app/delegations"), false, "the Secretary does not get delegations");
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/delegations"), false, "an applicant does not get delegations");
   assert.equal(runtimeNavFor([{ role: "programme", scope: "all" }]).some((r) => r.href === "/app/model-label/director-approval"), false, "Programme never gets the Director entry");

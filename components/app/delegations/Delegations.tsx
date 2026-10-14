@@ -126,7 +126,11 @@ function AskForm({ data, onChanged, onRefresh }: { data: DelegationsView; onChan
   const [validTo, setValidTo] = useState("");
   const [reason, setReason] = useState("");
   const command = useCommand(runRequestDelegation, requestDelegationSignature);
-  useClearStale(data, command);
+  // The refusal stays beside the form until the person changes something; it is not cleared by the re-read it asks for.
+  const edit = <T,>(set: (value: T) => void) => (value: T) => {
+    if (command.state.phase === "failed") command.reset();
+    set(value);
+  };
   const text = reason.trim();
   const ready = text.length >= 1 && text.length <= 500 && validFrom.length > 0 && validTo.length > 0 && delegateId.length > 0 && data.delegableRoles.includes(role);
 
@@ -145,13 +149,13 @@ function AskForm({ data, onChanged, onRefresh }: { data: DelegationsView; onChan
       </p>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         Role
-        <select value={role} onChange={(e) => setRole(e.target.value as DelegableRole)} className="mt-1 block py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-role">
+        <select value={role} onChange={(e) => edit(setRole)(e.target.value as DelegableRole)} className="mt-1 block py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-role">
           {data.delegableRoles.map((item) => <option key={item} value={item}>{roleWord(item)}</option>)}
         </select>
       </label>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         Colleague
-        <select value={delegateId} onChange={(e) => setDelegateId(e.target.value)} className="mt-1 block py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-colleague">
+        <select value={delegateId} onChange={(e) => edit(setDelegateId)(e.target.value)} className="mt-1 block py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-colleague">
           {data.colleagues.map((person) => (
             <option key={person.id} value={person.id}>{person.displayName} · {person.roles.map(roleWord).join(", ")}</option>
           ))}
@@ -159,20 +163,20 @@ function AskForm({ data, onChanged, onRefresh }: { data: DelegationsView; onChan
       </label>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         First day
-        <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className="mt-1 block py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-from" />
+        <input type="date" min={data.today} value={validFrom} onChange={(e) => edit(setValidFrom)(e.target.value)} className="mt-1 block py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-from" />
       </label>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         Ends on
-        <input type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} className="mt-1 block py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-to" aria-describedby="del-to-help" />
+        <input type="date" min={validFrom || data.today} value={validTo} onChange={(e) => edit(setValidTo)(e.target.value)} className="mt-1 block py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-to" aria-describedby="del-to-help" />
       </label>
       <p id="del-to-help" className="font-body-sm text-on-surface-variant mt-1" data-testid="del-to-help">The delegation applies until the day before this date.</p>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         Reason
-        <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-reason" aria-describedby="del-reason-help" />
+        <textarea value={reason} onChange={(e) => edit(setReason)(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="del-reason" aria-describedby="del-reason-help" />
       </label>
-      {text.length < 1 ? <p id="del-reason-help" className="font-body-sm text-on-surface-variant mt-1" data-testid="del-reason-help">A reason of 1 to 500 characters is required.</p> : null}
+      <p id="del-reason-help" className="font-body-sm text-on-surface-variant mt-1" data-testid="del-reason-help">{text.length < 1 ? "A reason of 1 to 500 characters is required." : "Reason entered."}</p>
       <CommandOutcome state={command.state} errorTestId="del-request-error" signInReturnTo={delegationsHref()} />
-      <button type="button" disabled={!ready || command.state.phase === "busy"} onClick={() => void submit()} className="mt-space-sm border border-primary text-primary py-2 px-4 rounded-lg font-label-md disabled:opacity-50" data-testid="del-submit">
+      <button type="button" disabled={!ready || command.state.phase === "busy"} onClick={() => void submit()} className="mt-space-sm border border-primary text-primary py-2 px-4 rounded-lg font-label-md disabled:opacity-50" aria-describedby="del-reason-help" data-testid="del-submit">
         {command.state.phase === "busy" ? "Sending…" : "Submit"}
       </button>
     </section>
@@ -185,17 +189,18 @@ function Mine({ data, onChanged, onRefresh }: { data: DelegationsView; onChanged
       <h2 className="font-title-md text-title-md text-on-surface">My delegations</h2>
       {data.mine.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">You have no delegations.</p> : (
         <table className="w-full font-body-sm text-body-sm mt-space-sm">
+          <caption className="sr-only">My delegations</caption>
           <thead>
             <tr className="text-left text-on-surface-variant font-label-sm">
               <th className="py-1 pr-3">Role</th>
               <th className="py-1 pr-3">From</th>
-              <th className="py-1 pr-3">To</th>
+              <th className="py-1 pr-3">Ends on (not included)</th>
               <th className="py-1 pr-3">Delegator</th>
               <th className="py-1 pr-3">Delegate</th>
               <th className="py-1 pr-3">State</th>
               <th className="py-1 pr-3">Uses</th>
               <th className="py-1 pr-3">Decided by</th>
-              <th className="py-1" />
+              <th className="py-1"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -283,17 +288,17 @@ function PendingRow({ item, data, onChanged, onRefresh }: { item: Delegation; da
 
   return (
     <li className="font-body-sm border border-outline-variant rounded-lg p-space-sm" data-testid={`del-pending-${item.id}`}>
-      <p>{item.delegator} · {item.delegate} · {roleWord(item.role)} · {item.validFrom} · {item.validTo} · {item.reason}</p>
-      <p className="mt-1" data-testid={`del-confirm-${item.id}`}>This lets {item.delegate} act as {roleWord(item.role)} from {item.validFrom} until {item.validTo} for {item.delegator}.</p>
+      <p>{item.delegator} · {item.delegate} · {roleWord(item.role)} · from {item.validFrom}, ends on {item.validTo} (not included) · {item.reason}</p>
+      <p className="mt-1" data-testid={`del-confirm-${item.id}`}>This lets {item.delegate} act as {roleWord(item.role)} from {item.validFrom} to the day before {item.validTo} for {item.delegator}.</p>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         Reason for a rejection
         <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid={`del-note-${item.id}`} aria-describedby={`del-note-help-${item.id}`} />
       </label>
-      {text.length < 1 ? <p id={`del-note-help-${item.id}`} className="font-body-sm text-on-surface-variant mt-1">A reason of 1 to 500 characters is needed to reject.</p> : null}
+      <p id={`del-note-help-${item.id}`} className="font-body-sm text-on-surface-variant mt-1">{text.length < 1 ? "A reason of 1 to 500 characters is needed to reject." : "Reason entered."}</p>
       <CommandOutcome state={command.state} errorTestId="del-decide-error" signInReturnTo={delegationsHref()} />
       <div className="mt-space-sm flex flex-wrap gap-space-sm">
         <button type="button" disabled={command.state.phase === "busy"} onClick={() => void act("approve")} className="border border-primary text-primary py-2 px-4 rounded-lg font-label-md disabled:opacity-50" data-testid={`del-approve-${item.id}`}>Approve</button>
-        <button type="button" disabled={command.state.phase === "busy" || text.length < 1 || text.length > 500} onClick={() => void act("reject")} className="border border-primary text-primary py-2 px-4 rounded-lg font-label-md disabled:opacity-50" data-testid={`del-reject-${item.id}`}>Reject</button>
+        <button type="button" disabled={command.state.phase === "busy" || text.length < 1 || text.length > 500} aria-describedby={`del-note-help-${item.id}`} onClick={() => void act("reject")} className="border border-primary text-primary py-2 px-4 rounded-lg font-label-md disabled:opacity-50" data-testid={`del-reject-${item.id}`}>Reject</button>
       </div>
     </li>
   );
@@ -307,7 +312,7 @@ function History({ data }: { data: DelegationsView }) {
         <ul className="mt-space-sm space-y-space-sm">
           {data.decided.map((item) => (
             <li key={item.id} className="font-body-sm" data-testid={`del-history-${item.id}`} data-state={item.state}>
-              {stateWord(item)} · {roleWord(item.role)} · {item.delegator} · {item.delegate} · {item.validFrom} · {item.validTo} · {item.decidedBy ?? item.revokedBy ?? ""} · {item.decidedAt ?? item.revokedAt ?? ""}
+              {stateWord(item)} · {roleWord(item.role)} · {item.delegator} · {item.delegate} · from {item.validFrom}, ends on {item.validTo} (not included) · {item.decidedBy ?? item.revokedBy ?? ""} · {item.decidedAt ?? item.revokedAt ?? ""}
               {item.decisionNote ? ` · ${item.decisionNote}` : ""}
               {item.revokeNote ? ` · ${item.revokeNote}` : ""}
             </li>
@@ -323,9 +328,8 @@ function CommandOutcome<T>({ state, errorTestId, signInReturnTo }: { state: Comm
   const failure = state.failure;
   const advice = commandAdvice(failure);
   return (
-    <div className="mt-space-sm" data-testid={errorTestId} data-failure-code={"code" in failure ? failure.code : failure.kind}>
+    <div className="mt-space-sm" role="alert" data-testid={errorTestId} data-failure-code={"code" in failure ? failure.code : failure.kind}>
       <p className="text-error font-body-sm">{failure.message}</p>
-      {advice.reload ? <button type="button" className="mt-1 text-primary font-label-md">Reload the latest version</button> : null}
       {advice.signIn ? <Link href={`/api/auth/login?returnTo=${signInReturnTo}`} className="mt-1 inline-block text-primary font-label-md">Sign in</Link> : null}
     </div>
   );

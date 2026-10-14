@@ -115,6 +115,8 @@ describe("registration reviews", () => {
     expect(screen.getByTestId("rev-trail-0").textContent).toContain("Finance");
     expect(screen.getByTestId("rev-recommend")).toBeTruthy();
     expect((screen.getByTestId("rev-return") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId("rev-note-help").textContent).toContain("1 to 500 characters");
+    expect(screen.getByTestId("rev-note").getAttribute("aria-describedby")).toBe("rev-note-help");
     expect(screen.queryByTestId("rev-approve")).toBeNull();
     const before = deferredFetches().length;
     fireEvent.click(screen.getByTestId("rev-return"));
@@ -236,6 +238,7 @@ describe("registration reviews", () => {
     expect((screen.getByTestId("reg-resubmit") as HTMLButtonElement).disabled).toBe(false);
     fireEvent.change(screen.getByTestId("reg-brand-name"), { target: { value: "Acme Colder" } });
     expect((screen.getByTestId("reg-resubmit") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId("reg-resubmit-help").textContent).toContain("Save or discard");
     fireEvent.change(screen.getByTestId("reg-brand-name"), { target: { value: "Acme Cool" } });
     await act(async () => {
       fireEvent.click(screen.getByTestId("reg-resubmit"));
@@ -262,5 +265,30 @@ describe("registration reviews", () => {
     await resolveAt(1, docs);
     expect(screen.getByTestId("reg-rejected").textContent).toContain("Rejected.");
     expect(screen.getByTestId("reg-rejected").textContent).toContain("The period overlaps an authorisation.");
+  });
+
+  it("says a returned request was returned even when the trail has no reason", async () => {
+    identity.role = "manufacturer";
+    mount(<RegistrationRequest {...frame} />);
+    await resolveAt(0, registration({ state: "returned" }));
+    await resolveAt(1, docs);
+    expect(screen.getByTestId("reg-returned").textContent).toContain("Returned for changes");
+    expect(screen.getByTestId("reg-resubmit")).toBeTruthy();
+  });
+
+  it("shows a Director return as the latest reason", async () => {
+    identity.role = "manufacturer";
+    mount(<RegistrationRequest {...frame} />);
+    await resolveAt(0, registration({
+      state: "returned",
+      trail: [
+        { action: "return", actorRole: "programme", fromState: "programme_review", toState: "returned", note: "First.", at: "2026-10-14T08:00:00Z" },
+        { action: "resubmit", actorRole: "manufacturer", fromState: "returned", toState: "programme_review", at: "2026-10-14T09:00:00Z" },
+        { action: "return", actorRole: "director", fromState: "director_approval", toState: "returned", note: "Second.", at: "2026-10-14T10:00:00Z" },
+      ],
+    }));
+    await resolveAt(1, docs);
+    expect(screen.getByTestId("reg-returned").textContent).toContain("Returned by the Director");
+    expect(screen.getByTestId("reg-returned-reason").textContent).toBe("Second.");
   });
 });

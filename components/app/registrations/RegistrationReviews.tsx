@@ -99,7 +99,7 @@ function matches(tab: Tab, state: RegistrationState, waiting: Set<RegistrationSt
 
 function TabButton({ id, selected, onSelect, children }: { id: string; selected: boolean; onSelect: () => void; children: string }) {
   return (
-    <button type="button" onClick={onSelect} data-testid={id} data-selected={selected ? "true" : "false"} className="border border-primary text-primary py-1.5 px-3 rounded-lg font-label-sm">
+    <button type="button" aria-pressed={selected} onClick={onSelect} data-testid={id} data-selected={selected ? "true" : "false"} className="border border-primary text-primary py-1.5 px-3 rounded-lg font-label-sm">
       {children}
     </button>
   );

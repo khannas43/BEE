@@ -147,9 +147,11 @@ function RequestBody({
       {registration.state === "programme_review" ? (
         <p data-testid="reg-fee-confirmed">Fee confirmed. Waiting for Programme review.</p>
       ) : null}
-      {registration.state === "returned" && returned ? (
+      {registration.state === "returned" ? (
         <p data-testid="reg-returned">
-          Returned by {REGISTRATION_ACTOR_LABEL[returned.actorRole] ?? returned.actorRole}: <span data-testid="reg-returned-reason">{returned.note ?? ""}</span>
+          {returned
+            ? <>Returned by {REGISTRATION_ACTOR_LABEL[returned.actorRole] ?? returned.actorRole}: <span data-testid="reg-returned-reason">{returned.note ?? "No reason was recorded."}</span></>
+            : "Returned for changes. No reason is shown; ask the reviewer."}
         </p>
       ) : null}
       {registration.state === "approved" ? (
@@ -372,14 +374,17 @@ function DecisionPanel({
       <p className="font-body-sm text-on-surface-variant mt-1">Provisional local rules, not BEE rules.</p>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         Reason or note
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="rev-note" />
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="rev-note" aria-describedby="rev-note-help" />
       </label>
       {confirms ? (
         <p className="font-body-sm mt-space-sm" data-testid="rev-confirm">
           {registration.kind === "brand" ? `This registers the brand for ${registration.organisation}.` : "This records the agency's authorisation."}
         </p>
       ) : null}
-      <CommandOutcome state={command.state} errorTestId="rev-decision-error" reloadTestId="rev-decision-reload" onReload={onReload} signInReturnTo={registrationRequestHref(registration.id)} />
+      {actions.some((a) => REASON_ACTIONS.has(a)) && text.length < 1 ? (
+        <p className="font-body-sm text-on-surface-variant mt-1" id="rev-note-help" data-testid="rev-note-help">A reason of 1 to 500 characters is needed to return{actions.includes("reject") ? " or reject" : ""} a request.</p>
+      ) : null}
+      <CommandOutcome state={command.state} errorTestId="rev-decision-error" reloadTestId="rev-decision-reload" onReload={() => { command.reset(); onReload(); }} signInReturnTo={registrationRequestHref(registration.id)} />
       <div className="mt-space-sm flex flex-wrap gap-space-sm">
         {actions.map((action) => (
           <button
@@ -411,10 +416,12 @@ function Resubmit({ registration, dirty, onDone, onReload }: { registration: Reg
     <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="reg-resubmit-panel">
       <h2 className="font-title-md text-title-md text-on-surface">Resubmit</h2>
       <p className="font-body-sm text-on-surface-variant mt-1">The fee already confirmed is not charged again. Provisional local rules, not BEE rules.</p>
-      <CommandOutcome state={command.state} errorTestId="reg-resubmit-error" reloadTestId="reg-resubmit-reload" onReload={onReload} signInReturnTo={registrationRequestHref(registration.id)} />
+      {dirty ? <p className="font-body-sm text-on-surface-variant mt-1" id="reg-resubmit-help" data-testid="reg-resubmit-help">Save or discard your edits before resubmitting.</p> : null}
+      <CommandOutcome state={command.state} errorTestId="reg-resubmit-error" reloadTestId="reg-resubmit-reload" onReload={() => { command.reset(); onReload(); }} signInReturnTo={registrationRequestHref(registration.id)} />
       <button
         type="button"
         disabled={dirty || command.state.phase === "busy"}
+        aria-describedby={dirty ? "reg-resubmit-help" : undefined}
         onClick={() => void send()}
         className="mt-space-sm w-full border border-primary text-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
         data-testid="reg-resubmit"

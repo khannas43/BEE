@@ -1,6 +1,6 @@
 # Cursor briefs
 
-Thirteen tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HANDOFF.md](../kit/AGENT_HANDOFF.md)). Each is frontend or tooling only, touches files the others and Claude's backend work do not, and ends with a hand-back.
+Fourteen tasks for Cursor, handed over by Claude one at a time (see [../kit/AGENT_HANDOFF.md](../kit/AGENT_HANDOFF.md)). Each is frontend or tooling only, touches files the others and Claude's backend work do not, and ends with a hand-back.
 
 **How a task runs.** Claude writes [CURRENT_TASK.md](CURRENT_TASK.md) (which brief, the `cursor/<task>` branch, any overrides, the acceptance commands), checks out the branch and sets `.baton`. You then run **`/bee-run-task`** in Cursor's Agent chat; Cursor does the task and ends with **`/bee-handback`**. Claude reviews and merges.
 
@@ -19,5 +19,6 @@ Thirteen tasks for Cursor, handed over by Claude one at a time (see [../kit/AGEN
 | 11 | One identity strip, and a calmer notification refresh | `cursor/identity-strip-and-refresh` | BL-089 | `components/app/kit/IdentityStrip.tsx`, `ModelDashboard.tsx`, `NewModelApplication.tsx`, the notification bell and page | yes (the task runs the runtime itself) |
 | 12 | The Business settings screen (hand over after the WP08.1h backend merges) | `cursor/business-settings-screen` | WP08.1h (BL-064, BL-065, BL-085, BL-106) | `components/app/admin/BusinessSettings.tsx` (new), `lib/client/runtimeBusinessSettings.ts` (new), the page and menu entry | `local:business-settings` if present |
 | 13 | The applicant screens for brand and agency registration (hand over after WP04.2b-1 merges) | `cursor/registration-applicant-screens` | WP04.2b (R1) | `lib/client/runtimeRegistrations.ts` (new), `components/app/registrations/*` (new), the pages under `app/app/registrations/`, `lib/runtimeRoutes.ts` rows | after, by Claude |
+| 14 | The review screens for brand and agency registration, and the applicant's returned path (hand over after WP04.2b-2 merges) | `cursor/registration-review-screens` | WP04.2b (R1) | `lib/client/runtimeRegistrations.ts`, `components/app/registrations/*`, the page under `app/app/registrations/reviews`, `lib/runtimeRoutes.ts` rows | after, by Claude |
 
 Not briefed on purpose, because they change the contract or the backend and so belong to Claude: the Wave 1 commands (IAME recommendation onward), the OpenAPI split, the scaffolder's extensions, the WP06.2 blob work, and the lint-baseline clean-up (BL-035, which touches too many files to run beside other work).

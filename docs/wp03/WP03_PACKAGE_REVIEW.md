@@ -24,5 +24,6 @@ Not blocking, recorded in docs/BACKLOG.md: BL-167 (no contract-only check), BL-2
 
 ## Evidence
 
-- `web:test` 240/0 (including the new escaped-exception test); `SpringContractTest` 36/0 on the 0.32.1 artifact.
-- The full `local:check` on the final tree is recorded below.
+- `web:test` 240/0 (including the new escaped-exception test, which also proves the health probe and the auth routes keep Next's own error); `SpringContractTest` 36/0 on the 0.32.2 artifact.
+- A second, focused independent review of the corrections found no high defect; its fixes are in (the 502 answer limited to the operations that document it, the RT1 and A9 claims softened, the empty budget cells), and the version-history sentence was checked against the pin history.
+- The full `local:check` on the final tree: **2175 passed, 0 failed** (migrations V1 to V50, contract 0.32.2).

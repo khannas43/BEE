@@ -158,4 +158,36 @@ public class RegistrationRepository {
             + "AND brand_id = ? AND state <> 'rejected' AND (?::uuid IS NULL OR id <> ?::uuid))", Boolean.class, organisationId, brandId, except, except);
         return Boolean.TRUE.equals(b);
     }
+
+    public record Confirmed(int versionAfter, java.time.Instant confirmedAt) {
+    }
+
+    /** The account that submitted the request. */
+    public Optional<UUID> submitter(UUID applicationId) {
+        return jdbc.queryForList("SELECT actor_account_id FROM registration_submission_event WHERE application_id = ?", UUID.class, applicationId)
+            .stream().findFirst();
+    }
+
+    public Optional<UUID> feeSnapshotId(UUID applicationId) {
+        return jdbc.queryForList("SELECT id FROM registration_fee_snapshot WHERE application_id = ?", UUID.class, applicationId).stream().findFirst();
+    }
+
+    /** fee_due to programme_review with the transition event and the confirmation record; empty if the state or version has moved. */
+    public Optional<Confirmed> confirmFee(UUID applicationId, int expectedVersion, UUID actorAccountId, UUID feeSnapshotId, BigDecimal amountInr,
+                                          String receiptReference, LocalDate receivedOn) {
+        int n = jdbc.update("UPDATE registration_application SET state = 'programme_review', version = version + 1 "
+            + "WHERE id = ? AND state = 'fee_due' AND version = ?", applicationId, expectedVersion);
+        if (n != 1) {
+            return Optional.empty();
+        }
+        int after = expectedVersion + 1;
+        UUID eventId = UUID.randomUUID();
+        java.sql.Timestamp at = jdbc.queryForObject("INSERT INTO registration_transition_event (id, application_id, action, from_state, to_state, "
+            + "actor_account_id, actor_role, version_after) VALUES (?, ?, 'confirm_fee', 'fee_due', 'programme_review', ?, 'finance', ?) RETURNING occurred_at",
+            java.sql.Timestamp.class, eventId, applicationId, actorAccountId, after);
+        jdbc.update("INSERT INTO registration_fee_confirmation (id, application_id, transition_event_id, fee_snapshot_id, amount_inr, receipt_reference, "
+            + "received_on, confirmed_by_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", UUID.randomUUID(), applicationId, eventId, feeSnapshotId,
+            amountInr, receiptReference, java.sql.Date.valueOf(receivedOn), actorAccountId);
+        return Optional.of(new Confirmed(after, at.toInstant()));
+    }
 }

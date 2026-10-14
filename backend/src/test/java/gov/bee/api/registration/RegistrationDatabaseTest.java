@@ -66,6 +66,7 @@ class RegistrationDatabaseTest {
     static JdbcTemplate db;
     static RegistrationService service;
     static RegistrationDocumentService documentService;
+    static RegistrationFeeService feeService;
     static int appRegistrationTablesBefore;
 
     static String env(String k, String d) {
@@ -101,6 +102,8 @@ class RegistrationDatabaseTest {
         var documentRepo = new RegistrationDocumentRepository(db);
         var idem = new IdempotencyRepository(db);
         service = new RegistrationService(registrationRepo, new MasterDataRepository(db), idem, JSON);
+        feeService = new RegistrationFeeService(registrationRepo, idem, new gov.bee.api.settings.BusinessSettingService(
+            new gov.bee.api.settings.BusinessSettingRepository(db), idem, JSON), JSON);
         documentService = new RegistrationDocumentService(registrationRepo, documentRepo, new RegistrationDocumentRecorder(documentRepo, idem),
             new gov.bee.api.document.LocalSha256FileStore(props), idem, JSON);
         assertEquals(43, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V43");
@@ -373,5 +376,45 @@ class RegistrationDatabaseTest {
         ok(service.submit(NOVA, id, key(), json("{\"version\":0,\"expectedFee\":{\"amountInr\":\"5000.00\",\"feeRuleKey\":\"REG:brand_registration\",\"feeRuleVersion\":1}}")), 200);
         refused(documentService.upload(NOVA, id, key(), pdf("late.pdf", "late"), null), 403, "not_editable");
         assertEquals(200, documentService.list(FINANCE, id).getStatusCode().value());
+    }
+
+    @Test
+    void financeConfirmsTheRegistrationFeeUnderTheModelFeeRules() {
+        var draft = draftBrand("Fathom Cool");
+        UUID id = UUID.fromString((String) draft.get("id"));
+        addLicence(id);
+        ok(service.submit(NOVA, id, key(), json("{\"version\":0,\"expectedFee\":{\"amountInr\":\"5000.00\",\"feeRuleKey\":\"REG:brand_registration\",\"feeRuleVersion\":1}}")), 200);
+        String body = "{\"version\":1,\"receiptReference\":\"RCPT-2026-001\",\"receivedOn\":\"" + TODAY + "\",\"amountInr\":\"5000.00\"}";
+
+        refused(feeService.confirm(NOVA, id, key(), json(body)), 403, "role_not_permitted");
+        refused(feeService.confirm(PROGRAMME, id, key(), json(body)), 403, "role_not_permitted");
+        refused(feeService.confirm(FINANCE, id, null, json(body)), 422, "idempotency_key_required");
+        // The payer's own organisation and the person who submitted cannot confirm, whatever role they hold.
+        var payerFinance = new Caller(FINANCE_USER, "bee.finance", List.of(new RoleGrant("finance", "all")), Set.of(NOVA_ORG));
+        refused(feeService.confirm(payerFinance, id, key(), json(body)), 403, "segregation_refused");
+        var submitterFinance = new Caller(NOVA_USER, "nova.applicant", List.of(new RoleGrant("finance", "all")), Set.of(BEE_ORG));
+        refused(feeService.confirm(submitterFinance, id, key(), json(body)), 403, "segregation_refused");
+
+        refused(feeService.confirm(FINANCE, id, key(), json(body.replace("5000.00", "4999.00"))), 422, "amount_mismatch");
+        refused(feeService.confirm(FINANCE, id, key(), json(body.replace(TODAY.toString(), TODAY.plusDays(1).toString()))), 422, "validation_failed");
+        refused(feeService.confirm(FINANCE, id, key(), json(body.replace("RCPT-2026-001", "bad<receipt"))), 422, "validation_failed");
+        refused(feeService.confirm(FINANCE, id, key(), json(body.replace("\"version\":1", "\"version\":0"))), 409, "version_conflict");
+        refused(feeService.confirm(FINANCE, UUID.randomUUID(), key(), json(body)), 404, "not_found");
+
+        String k = key();
+        var receipt = ok(feeService.confirm(FINANCE, id, k, json(body)), 200);
+        assertEquals("programme_review", receipt.get("toState"));
+        assertEquals(2, receipt.get("version"));
+        assertEquals("RCPT-2026-001", receipt.get("receiptReference"));
+        assertEquals("programme_review", ok(service.get(PROGRAMME, id), 200).get("state"));
+        refused(service.get(FINANCE, id), 404, "not_found");
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM registration_fee_confirmation WHERE application_id = ?", Integer.class, id));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM registration_transition_event WHERE application_id = ? AND action = 'confirm_fee'", Integer.class, id));
+
+        var replay = feeService.confirm(FINANCE, id, k, json(body));
+        assertEquals("true", replay.getHeaders().getFirst("Idempotency-Replayed"));
+        refused(feeService.confirm(FINANCE, id, k, json(body.replace("5000.00", "5000.01"))), 409, "idempotency_key_conflict");
+        refused(feeService.confirm(FINANCE, id, key(), json(body.replace("\"version\":1", "\"version\":2"))), 404, "not_found");
+        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_fee_confirmation SET amount_inr = 1 WHERE application_id = ?", id));
     }
 }

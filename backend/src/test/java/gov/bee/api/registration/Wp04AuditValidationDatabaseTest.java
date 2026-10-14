@@ -200,7 +200,11 @@ class Wp04AuditValidationDatabaseTest {
         assertThrows(DataAccessException.class, () -> owner.update("DELETE FROM registration_submission_event WHERE application_id = ?", id));
         assertThrows(DataAccessException.class, () -> owner.update("UPDATE register_status_event SET reason = 'x' WHERE brand_id = ?", brand));
         assertThrows(DataAccessException.class, () -> owner.update("DELETE FROM register_status_event WHERE brand_id = ?", brand));
-        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO register_status_event (brand_id, to_status, source, registration_id, actor_account_id) VALUES (?, 'revoked', 'registration', ?, ?)", brand, id, DIRECTOR_USER));
+        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO register_status_event (brand_id, to_status, source, registration_id, actor_account_id) VALUES (?, 'revoked', 'registration', ?, ?)", brand, id, DIRECTOR_USER),
+            "the runtime login cannot write the trail");
+        // Even the owner cannot write a row that breaks the pairing of source and request, or that names neither or both records.
+        assertThrows(DataAccessException.class, () -> owner.update("INSERT INTO register_status_event (brand_id, to_status, source, actor_account_id) VALUES (?, 'revoked', 'registration', ?)", brand, DIRECTOR_USER));
+        assertThrows(DataAccessException.class, () -> owner.update("INSERT INTO register_status_event (to_status, source, registration_id, actor_account_id) VALUES ('active', 'registration', ?, ?)", id, DIRECTOR_USER));
 
         // An agency authorisation on that brand, then the brand is revoked by two people: the cascade is recorded row by row.
         UUID auth = owner.queryForObject("INSERT INTO agency_authorisation (agency_organisation_id, principal_organisation_id, brand_id, valid_from, status, source_reference, "
@@ -251,14 +255,24 @@ class Wp04AuditValidationDatabaseTest {
         // The period ends today: half-open, so it is already over today.
         owner.update("UPDATE registration_application SET valid_to = ? WHERE id = ?", TODAY, id);
         refused(act(DIRECTOR, id, "approve", 3, null), 422, "validation_failed");
-        // Ending tomorrow it is fine, and it applies from its first day.
-        owner.update("UPDATE registration_application SET valid_from = ?, valid_to = ? WHERE id = ?", TODAY, TODAY.plusDays(1), id);
+        // Ending in five days it is fine, and it applies from its first day.
+        owner.update("UPDATE registration_application SET valid_from = ?, valid_to = ? WHERE id = ?", TODAY, TODAY.plusDays(5), id);
         var done = ok(act(DIRECTOR, id, "approve", 3, null), 200);
         UUID auth = UUID.fromString((String) done.get("registeredAuthorisationId"));
         var bounds = owner.queryForMap("SELECT valid_from::text AS f, valid_to::text AS t FROM agency_authorisation WHERE id = ?", auth);
         assertEquals(TODAY.toString(), bounds.get("f"));
-        assertEquals(TODAY.plusDays(1).toString(), bounds.get("t"));
-        assertEquals(1, owner.queryForObject("SELECT count(*) FROM register_status_event WHERE authorisation_id = ? AND source = 'registration' AND valid_to_after = ?", Integer.class, auth, TODAY.plusDays(1)));
+        assertEquals(TODAY.plusDays(5).toString(), bounds.get("t"));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM register_status_event WHERE authorisation_id = ? AND source = 'registration' AND valid_to_after = ?", Integer.class, auth, TODAY.plusDays(5)));
+
+        // Closing it earlier is its own event: the status stays, the end date moves, and the trail says so.
+        var close = ok(revocation.propose(PROGRAMME, key(), json("{\"targetKind\":\"authorisation\",\"targetId\":\"" + auth + "\",\"action\":\"close\",\"closeOn\":\"" + TODAY.plusDays(2) + "\",\"reason\":\"Ends early\"}")), 201);
+        ok(revocation.decide(DIRECTOR, UUID.fromString((String) close.get("id")), key(), json("{\"decision\":\"approve\"}")), 200);
+        var closed = owner.queryForMap("SELECT from_status, to_status, valid_to_before::text AS before, valid_to_after::text AS after, cascaded FROM register_status_event WHERE authorisation_id = ? AND source = 'revocation'", auth);
+        assertEquals("active", closed.get("from_status"));
+        assertEquals("active", closed.get("to_status"));
+        assertEquals(TODAY.plusDays(2).toString(), closed.get("after"));
+        assertEquals(TODAY.plusDays(5).toString(), closed.get("before"));
+        assertEquals(false, closed.get("cascaded"));
     }
 
     @Test

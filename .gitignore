@@ -57,3 +57,7 @@ next-env.d.ts
 
 # Who holds the folder: claude or cursor (docs/kit/AGENT_HANDOFF.md). Local and advisory, never committed.
 /.baton
+
+# Python bytecode
+__pycache__/
+*.pyc

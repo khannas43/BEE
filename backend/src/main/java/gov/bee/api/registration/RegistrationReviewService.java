@@ -169,7 +169,11 @@ public class RegistrationReviewService {
                 versionAfter = moved.get().versionAfter();
                 at = moved.get().at();
             } catch (DataIntegrityViolationException e) {
-                // The database refused the second-person rule or an illegal move; the transaction is spent, so roll it back whole.
+                String why = String.valueOf(e.getMostSpecificCause().getMessage());
+                if (!why.contains("cannot review") && !why.contains("cannot approve")) {
+                    throw e;
+                }
+                // The database refused the second-person rule; the transaction is spent, so roll it back whole.
                 try {
                     TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
                 } catch (org.springframework.transaction.NoTransactionException none) {

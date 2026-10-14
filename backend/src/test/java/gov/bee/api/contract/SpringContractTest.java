@@ -2563,7 +2563,7 @@ class SpringContractTest {
             409, "version_conflict");
         when(registrationRepo.transition(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         conforms(T, send.apply(token("programme")), 409, "version_conflict");
-        when(registrationRepo.transition(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenThrow(new org.springframework.dao.DataIntegrityViolationException("second person"));
+        when(registrationRepo.transition(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenThrow(new org.springframework.dao.DataIntegrityViolationException("second person", new RuntimeException("the person who filed a registration cannot review it")));
         conforms(T, send.apply(token("programme")), 403, "segregation_refused");
         org.mockito.Mockito.doReturn(Optional.of(moved)).when(registrationRepo).transition(any(), anyInt(), any(), any(), any(), any(), any(), any());
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));

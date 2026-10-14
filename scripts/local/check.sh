@@ -175,6 +175,20 @@ read -r b_pass b_fail <<<"$(sed -nE 's/^browser checks: ([0-9]+) passed, ([0-9]+
 if [[ -z "${b_pass:-}" ]]; then check "browser.run" 0 "browser-check did not complete: $(tail -1 <<<"$br_out")"
 else pass=$((pass + b_pass)); fail=$((fail + b_fail)); fi
 
+# ---- WP02.4 complete denial evidence N1 to N10 and A7 (scripts/local/denial-suite-check.cjs)
+dn_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/denial-suite-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$dn_out"
+read -r dn_pass dn_fail <<<"$(sed -nE 's/^denial checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$dn_out")"
+if [[ -z "${dn_pass:-}" ]]; then check "denial.run" 0 "denial-suite-check did not complete: $(tail -1 <<<"$dn_out")"
+else pass=$((pass + dn_pass)); fail=$((fail + dn_fail)); fi
+
+# ---- WP02.4 Keycloak brute-force detection (scripts/local/bruteforce-check.cjs)
+bf_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/bruteforce-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$bf_out"
+read -r bf_pass bf_fail <<<"$(sed -nE 's/^bruteforce checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$bf_out")"
+if [[ -z "${bf_pass:-}" ]]; then check "bruteforce.run" 0 "bruteforce-check did not complete: $(tail -1 <<<"$bf_out")"
+else pass=$((pass + bf_pass)); fail=$((fail + bf_fail)); fi
+
 # ---- WP02.3 local TOTP: enrollment, challenge, rejection, logout (scripts/local/mfa-check.cjs)
 mf_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/mfa-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$mf_out"

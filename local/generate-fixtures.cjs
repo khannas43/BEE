@@ -120,6 +120,9 @@ const AUTH_FLOWS = [
   },
 ];
 const amrRef = (alias, value) => ({ alias, config: { "default.reference.value": value, "default.reference.maxAge": "36000" } });
+/** Keycloak brute-force detection (WP02.4): temporary lockout after repeated failures. Provisional local values, not a BEE rule. */
+const BRUTE_FORCE = { bruteForceProtected: true, permanentLockout: false, failureFactor: 10, maxDeltaTimeSeconds: 900, waitIncrementSeconds: 60,
+  maxFailureWaitSeconds: 900, minimumQuickLoginWaitSeconds: 1, quickLoginCheckMilliSeconds: 1 };
 const AUTH_CONFIG = [amrRef("bee-amr-pwd", "pwd"), amrRef("bee-amr-otp", "otp"), amrRef("bee-amr-pwd-grant", "pwd"), amrRef("bee-amr-otp-grant", "otp")];
 
 const realm = {
@@ -131,6 +134,7 @@ const realm = {
   verifyEmail: false,
   accessTokenLifespan: 300,
   ...OTP_POLICY,
+  ...BRUTE_FORCE,
   browserFlow: "bee browser with otp",
   directGrantFlow: "bee direct grant with otp",
   authenticationFlows: AUTH_FLOWS,
@@ -321,4 +325,4 @@ if (require.main === module) {
   if (!CHECK) console.log(`wrote ${OUT.length} fixture files (${ORGS.length} organisations, ${USERS.length} Keycloak users, ${dbUsers.length} Spring accounts, ${BRANDS.length} brands, ${AGENCY_AUTHORISATIONS.length} agency authorisations)`);
 }
 
-module.exports = { ORGS, USERS, APPLICATIONS, ASSIGNMENTS, MASTERS, BRANDS, AGENCY_AUTHORISATIONS, usr, org, app, brand, auth, REALM, DEV_PASSWORD };
+module.exports = { BRUTE_FORCE, ORGS, USERS, APPLICATIONS, ASSIGNMENTS, MASTERS, BRANDS, AGENCY_AUTHORISATIONS, usr, org, app, brand, auth, REALM, DEV_PASSWORD };

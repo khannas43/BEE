@@ -59,6 +59,11 @@ public class DelegationService {
 
     /** The roles this caller can delegate: delegable and held through their own assignment. */
     private List<String> delegableRoles(Caller caller) {
+        // A person who holds a second stage role would act at one stage while the delegate acts for them at the other: they cannot delegate.
+        long stageRoles = caller.ownRoles().stream().map(g -> g.role()).filter(DelegationRepository.STAGE_ROLES::contains).distinct().count();
+        if (stageRoles != 1) {
+            return List.of();
+        }
         return DelegationRepository.DELEGABLE.stream().sorted().filter(r -> caller.holdsOwn(r, "all")).toList();
     }
 
@@ -153,6 +158,11 @@ public class DelegationService {
         if (found.isEmpty()) {
             return error(HttpStatus.NOT_FOUND, "not_found");
         }
+        boolean delegator = found.get().delegatorId().equals(caller.accountId());
+        boolean approver = mayApprove(caller);
+        if (!delegator && !approver) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         if (body == null || !body.isObject() || !body.hasNonNull("decision") || !body.get("decision").isTextual()
             || !List.of("approve", "reject", "withdraw", "revoke").contains(body.get("decision").asText())) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
@@ -168,8 +178,6 @@ public class DelegationService {
         if ("reject".equals(decision) && note == null) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
-        boolean delegator = found.get().delegatorId().equals(caller.accountId());
-        boolean approver = mayApprove(caller);
         boolean allowed = switch (decision) {
             case "withdraw" -> delegator;
             case "revoke" -> delegator || approver;

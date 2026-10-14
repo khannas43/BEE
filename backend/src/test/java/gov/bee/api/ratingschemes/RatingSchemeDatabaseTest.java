@@ -76,7 +76,7 @@ class RatingSchemeDatabaseTest {
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         repo = new RatingSchemeRepository(db);
         ratings = new RatingRepository(db);
-        assertEquals(49, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V49");
+        assertEquals(50, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V50");
     }
 
     @AfterAll

@@ -104,7 +104,7 @@ class DelegationDatabaseTest {
         repo = new DelegationRepository(db);
         identity = new gov.bee.api.identity.IdentityRepository(db);
         service = new DelegationService(repo, new gov.bee.api.application.IdempotencyRepository(db), JSON);
-        assertEquals(49, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V49");
+        assertEquals(50, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V50");
     }
 
     @AfterAll
@@ -310,5 +310,41 @@ class DelegationDatabaseTest {
         var withoutDelegation = new Caller(FINANCE_USER, "bee.finance", List.of(new RoleGrant("finance", "all")), Set.of(BEE_ORG));
         assertEquals("role_not_permitted", gov.bee.api.policy.SlicePolicy.check(gov.bee.api.policy.SliceAction.COMPUTE_RATING, withoutDelegation, facts).reason());
         ok(decide(ADMIN, delegation, "revoke", "Done"), 200);
+    }
+
+    @Test
+    void segregationCannotBeUndoneByDelegatingToAPartnerOrFromTwoStageRoles() {
+        // A delegator who holds a second stage role cannot delegate: the delegate would act at one stage while the delegator acts at the other.
+        UUID two = UUID.fromString("00000000-0000-4000-a000-0000000000e3");
+        owner.update("INSERT INTO user_account (id, keycloak_subject, username, display_name) VALUES (?, ?, 'two.stage', 'Two Stage')", two, two);
+        owner.update("INSERT INTO role_assignment (user_id, role, scope) VALUES (?, 'programme', 'all'), (?, 'finance', 'all')", two, two);
+        owner.update("INSERT INTO organisation_membership (user_id, organisation_id) VALUES (?, ?)", two, BEE_ORG);
+        var twoStage = new Caller(two, "two.stage", List.of(new RoleGrant("programme", "all"), new RoleGrant("finance", "all")), Set.of(BEE_ORG));
+        assertEquals(List.of(), ok(service.read(twoStage), 200).get("delegableRoles"));
+        refused(service.propose(twoStage, key(), json(ask(DIRECTOR_USER, "programme", TODAY, TODAY.plusDays(5)))), 403, "role_not_permitted");
+        // The database holds the same line at approval, whatever the service let through: a request inserted directly is refused as not eligible.
+        UUID direct = owner.queryForObject("INSERT INTO delegation (delegator_id, delegate_id, role, reason, valid_from, valid_to) VALUES (?, ?, 'programme', 'x', ?, ?) RETURNING id",
+            UUID.class, two, DIRECTOR_USER, TODAY, TODAY.plusDays(5));
+        refused(decide(ADMIN, direct, "approve", null), 409, "delegate_not_eligible");
+        ok(decide(ADMIN, direct, "reject", "Two stage roles"), 200);
+
+        // A partner (here an applicant in Nova's organisation, sharing a Nova delegator) cannot receive a stage role.
+        UUID novaOfficer = UUID.fromString("00000000-0000-4000-a000-0000000000e4");
+        owner.update("INSERT INTO user_account (id, keycloak_subject, username, display_name) VALUES (?, ?, 'nova.officer', 'Nova Officer')", novaOfficer, novaOfficer);
+        owner.update("INSERT INTO role_assignment (user_id, role, scope) VALUES (?, 'director', 'all')", novaOfficer);
+        owner.update("INSERT INTO organisation_membership (user_id, organisation_id) VALUES (?, ?)", novaOfficer, NOVA_ORG);
+        var novaDirector = new Caller(novaOfficer, "nova.officer", List.of(new RoleGrant("director", "all")), Set.of(NOVA_ORG));
+        @SuppressWarnings("unchecked") List<Map<String, Object>> colleagues = (List<Map<String, Object>>) ok(service.read(novaDirector), 200).get("colleagues");
+        assertTrue(colleagues.stream().noneMatch(c -> NOVA_USER.toString().equals(c.get("id"))), "an applicant is not offered as a delegate");
+        refused(service.propose(novaDirector, key(), json(ask(NOVA_USER, "director", TODAY, TODAY.plusDays(5)))), 409, "delegate_not_eligible");
+        UUID partner = owner.queryForObject("INSERT INTO delegation (delegator_id, delegate_id, role, reason, valid_from, valid_to) VALUES (?, ?, 'director', 'x', ?, ?) RETURNING id",
+            UUID.class, novaOfficer, NOVA_USER, TODAY, TODAY.plusDays(5));
+        refused(decide(ADMIN, partner, "approve", null), 409, "delegate_not_eligible");
+        ok(decide(ADMIN, partner, "reject", "Applicant"), 200);
+
+        // A stranger gets 403 whatever the body (no probing of a real id with a bad body).
+        var d = ok(service.propose(PROGRAMME, key(), json(ask(FINANCE_USER, "programme", TODAY, TODAY.plusDays(3)))), 201);
+        refused(service.decide(NOVA, UUID.fromString((String) d.get("id")), key(), json("{}")), 403, "role_not_permitted");
+        ok(decide(PROGRAMME, d.get("id"), "withdraw", null), 200);
     }
 }

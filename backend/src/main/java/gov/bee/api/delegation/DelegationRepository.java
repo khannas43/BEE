@@ -22,6 +22,8 @@ public class DelegationRepository {
     public static final String APPROVE = "delegation_approve";
     /** The roles that can be delegated: stage roles held for all records. Never the Secretary, an administrative role, or an assigned-scope role. */
     public static final Set<String> DELEGABLE = Set.of("programme", "director", "finance");
+    /** Every role that acts at a stage: a delegator may hold only the one they delegate, or the delegate would act where the delegator also acts. */
+    public static final Set<String> STAGE_ROLES = Set.of("programme", "director", "secretary", "finance", "iame", "reviewer");
 
     public record Delegation(UUID id, UUID delegatorId, String delegator, UUID delegateId, String delegate, String role, String reason, LocalDate validFrom,
                              LocalDate validTo, String state, Instant requestedAt, String decidedBy, Instant decidedAt, String decisionNote,
@@ -92,7 +94,9 @@ public class DelegationRepository {
         var rows = jdbc.query("SELECT DISTINCT u.id, u.display_name FROM user_account u JOIN organisation_membership b ON b.user_id = u.id AND b.active "
             + "AND b.valid_from <= now() AND now() < b.valid_to JOIN organisation_membership a ON a.organisation_id = b.organisation_id AND a.user_id = ? AND a.active "
             + "AND a.valid_from <= now() AND now() < a.valid_to WHERE u.status = 'active' AND u.id <> ? AND EXISTS (SELECT 1 FROM role_assignment ra "
-            + "WHERE ra.user_id = u.id AND ra.active AND ra.valid_from <= now() AND now() < ra.valid_to) ORDER BY u.display_name",
+            + "WHERE ra.user_id = u.id AND ra.active AND ra.valid_from <= now() AND now() < ra.valid_to) AND NOT EXISTS (SELECT 1 FROM role_assignment pr "
+            + "WHERE pr.user_id = u.id AND pr.active AND pr.valid_from <= now() AND now() < pr.valid_to AND pr.role IN ('manufacturer', 'agency', 'sda', 'laboratory')) "
+            + "ORDER BY u.display_name",
             (rs, i) -> new Colleague(rs.getObject("id", UUID.class), rs.getString("display_name"), List.of()), delegator, delegator);
         return rows.stream().map(c -> new Colleague(c.id(), c.displayName(), jdbc.queryForList("SELECT role FROM role_assignment WHERE user_id = ? AND active "
             + "AND valid_from <= now() AND now() < valid_to ORDER BY role", String.class, c.id()))).toList();

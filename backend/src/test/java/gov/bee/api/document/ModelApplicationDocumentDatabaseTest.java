@@ -119,7 +119,7 @@ class ModelApplicationDocumentDatabaseTest {
         txManager = new DataSourceTransactionManager(rt);
         tx = new TransactionTemplate(txManager);
         Integer max = migrate.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class);
-        assertEquals(49, max, "throwaway schema migrated V1 through V49");
+        assertEquals(50, max, "throwaway schema migrated V1 through V50");
     }
 
     @AfterAll

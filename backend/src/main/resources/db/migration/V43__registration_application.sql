@@ -271,6 +271,13 @@ DO $$
 DECLARE
   home_schema text := current_schema();
 BEGIN
+  -- The local maintenance login removes the rows of a throwaway live check (it alone may delete append-only records, as for model applications).
+  IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_local_maint') THEN
+    EXECUTE format('GRANT SELECT, DELETE ON %I.registration_application, %I.registration_submission_event, %I.registration_fee_snapshot, '
+                   || '%I.registration_transition_event, %I.registration_fee_confirmation, %I.registration_document, %I.registration_document_version '
+                   || 'TO bee_local_maint', home_schema, home_schema, home_schema, home_schema, home_schema, home_schema, home_schema);
+  END IF;
+
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_runtime') THEN
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO bee_runtime', home_schema);
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON %I.registration_application TO bee_runtime', home_schema);

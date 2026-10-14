@@ -24901,35 +24901,6 @@
               "no_read_scope"
             ]
           },
-          "405": {
-            "description": "Method not supported on this route.",
-            "headers": {
-              "X-Correlation-Id": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "examples": {
-                  "method_not_allowed": {
-                    "value": {
-                      "error": "method_not_allowed",
-                      "message": "This method is not supported for this resource."
-                    }
-                  }
-                }
-              }
-            },
-            "x-error-codes": [
-              "method_not_allowed"
-            ]
-          },
           "502": {
             "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
             "headers": {
@@ -25726,35 +25697,6 @@
             },
             "x-error-codes": [
               "not_found"
-            ]
-          },
-          "405": {
-            "description": "Method not supported on this route.",
-            "headers": {
-              "X-Correlation-Id": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "examples": {
-                  "method_not_allowed": {
-                    "value": {
-                      "error": "method_not_allowed",
-                      "message": "This method is not supported for this resource."
-                    }
-                  }
-                }
-              }
-            },
-            "x-error-codes": [
-              "method_not_allowed"
             ]
           },
           "502": {

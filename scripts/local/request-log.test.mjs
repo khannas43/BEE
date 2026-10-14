@@ -58,6 +58,13 @@ before(async () => {
     reversals: await import("../../app/api/runtime/fee-corrections/reversals/route.ts"),
     reversalDecision: await import("../../app/api/runtime/fee-corrections/reversals/[id]/decision/route.ts"),
     notifications: await import("../../app/api/runtime/notifications/route.ts"),
+    registrations: await import("../../app/api/runtime/registrations/route.ts"),
+    registrationBrands: await import("../../app/api/runtime/registrations/eligible-brands/route.ts"),
+    registration: await import("../../app/api/runtime/registrations/[id]/route.ts"),
+    registrationSubmit: await import("../../app/api/runtime/registrations/[id]/submit/route.ts"),
+    registrationFee: await import("../../app/api/runtime/registrations/[id]/fee-confirmation/route.ts"),
+    registrationDocuments: await import("../../app/api/runtime/registrations/[id]/documents/route.ts"),
+    registrationDocumentContent: await import("../../app/api/runtime/registrations/[id]/documents/[documentId]/versions/[versionId]/content/route.ts"),
     notificationRead: await import("../../app/api/runtime/notifications/[id]/read/route.ts"),
     notificationReadAll: await import("../../app/api/runtime/notifications/read-all/route.ts"),
   };
@@ -594,3 +601,47 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
   files = readdirSync(dir).sort();
   assert.deepEqual(files, ["web-requests.1.jsonl", "web-requests.3.jsonl", "web-requests.jsonl"]);
 });
+
+/* WP04.2b-1: each registration operation answers 401 session_expired when Keycloak refuses the refresh (unit evidence for the pair). */
+{
+  const REG_ID = "00000000-0000-4000-f000-000000000001";
+  const DOC = "00000000-0000-4000-e000-000000000001";
+  const VER = "00000000-0000-4000-e000-000000000002";
+  const json = { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123470" };
+  const ops = [
+    ["GET", "/api/runtime/registrations", "registrations", "GET", "/api/runtime/registrations", {}, null],
+    ["POST", "/api/runtime/registrations", "registrations", "POST", "/api/runtime/registrations", json, "{}"],
+    ["GET", "/api/runtime/registrations/eligible-brands", "registrationBrands", "GET", "/api/runtime/registrations/eligible-brands", {}, null],
+    ["GET", "/api/runtime/registrations/{id}", "registration", "GET", `/api/runtime/registrations/${REG_ID}`, {}, null],
+    ["PATCH", "/api/runtime/registrations/{id}", "registration", "PATCH", `/api/runtime/registrations/${REG_ID}`, json, "{}"],
+    ["GET", "/api/runtime/registrations/{id}/submit", "registrationSubmit", "GET", `/api/runtime/registrations/${REG_ID}/submit`, {}, null],
+    ["POST", "/api/runtime/registrations/{id}/submit", "registrationSubmit", "POST", `/api/runtime/registrations/${REG_ID}/submit`, json, "{}"],
+    ["POST", "/api/runtime/registrations/{id}/fee-confirmation", "registrationFee", "POST", `/api/runtime/registrations/${REG_ID}/fee-confirmation`, json, "{}"],
+    ["GET", "/api/runtime/registrations/{id}/documents", "registrationDocuments", "GET", `/api/runtime/registrations/${REG_ID}/documents`, {}, null],
+    ["GET", "/api/runtime/registrations/{id}/documents/{documentId}/versions/{versionId}/content", "registrationDocumentContent", "GET", `/api/runtime/registrations/${REG_ID}/documents/${DOC}/versions/${VER}/content`, {}, null],
+  ];
+  for (const [method, route, handler, verb, url, headers, body] of ops) {
+    test(`unit-evidence: ${method} ${route} 401 session_expired | Keycloak refusing refresh on ${url.replace(REG_ID, "{id}")}`, async () => {
+      refreshRefusedStub();
+      const cookie = nearExpiry();
+      const res = await routes[handler][verb](req(url, `unit-registration-${handler}-${method.toLowerCase()}-refresh-refused`, cookie, { method: verb, headers, ...(body ? { body } : {}) }),
+        { params: Promise.resolve({ id: REG_ID, documentId: DOC, versionId: VER }) });
+      assert.equal(res.status, 401);
+      assert.equal((await res.json()).error, "session_expired");
+    });
+  }
+  // The multipart upload: the refresh is refused before the body is read.
+  test("unit-evidence: POST /api/runtime/registrations/{id}/documents 401 session_expired | Keycloak refusing refresh on a trade-licence upload", async () => {
+    refreshRefusedStub();
+    const cookie = nearExpiry();
+    const boundary = "----beeUnitRegistration";
+    const body = `--${boundary}\r\nContent-Disposition: form-data; name="label"\r\n\r\nx\r\n--${boundary}--\r\n`;
+    const res = await routes.registrationDocuments.POST(req(`/api/runtime/registrations/${REG_ID}/documents`, "unit-registration-upload-refresh-refused", cookie, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}`, "Content-Length": String(Buffer.byteLength(body)), "Idempotency-Key": "0123456789abcdef0123471" },
+      body,
+    }), { params: Promise.resolve({ id: REG_ID }) });
+    assert.equal(res.status, 401);
+    assert.equal((await res.json()).error, "session_expired");
+  });
+}

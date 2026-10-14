@@ -50,6 +50,9 @@ class ModelApplicationControllerSecurityTest {
     MockMvc mvc;
 
     @MockitoBean
+    gov.bee.api.delegation.DelegationRepository delegationRepository;
+
+    @MockitoBean
     IdentityRepository identity;
 
     @MockitoBean
@@ -159,6 +162,7 @@ class ModelApplicationControllerSecurityTest {
             var r = mvc.perform(get("/api/model-applications/" + id).with(token("agency")))
                 .andExpect(status().isNotFound()).andExpect(content().json(NOT_FOUND, true))
                 .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andReturn().getResponse();
             bodies.add(r.getContentAsString() + "|" + r.getContentType());
         }

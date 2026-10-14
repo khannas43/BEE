@@ -70,13 +70,13 @@ function VerifyInner() {
 
 function Result({ result }: { result: VerificationResult | "loading" }) {
   if (result === "loading") {
-    return <p className="mt-space-lg text-center font-body-md text-on-surface-variant" data-testid="verify-result" data-outcome="loading">Checking…</p>;
+    return <p className="mt-space-lg text-center font-body-md text-on-surface-variant" role="status" data-testid="verify-result" data-outcome="loading">Checking…</p>;
   }
   if (result.outcome === "found") {
     const c = result.certificate;
     const tone = c.status === "valid" ? "border-primary/40 bg-primary/5" : "border-error/40 bg-error/5";
     return (
-      <div className={`mt-space-lg rounded-xl border ${tone} p-space-lg`} data-testid="verify-result" data-outcome={c.status}>
+      <div role="status" className={`mt-space-lg rounded-xl border ${tone} p-space-lg`} data-testid="verify-result" data-outcome={c.status}>
         <p className="font-title-lg text-title-lg text-on-surface" data-testid="verify-status">{VERIFICATION_COPY.statusText[c.status]}</p>
         <p className="font-mono font-title-md text-title-md mt-1" data-testid="verify-registration">{c.registrationId}</p>
         <dl className="grid grid-cols-2 gap-x-space-lg gap-y-space-xs mt-space-md font-body-md text-body-md">
@@ -104,7 +104,7 @@ function Result({ result }: { result: VerificationResult | "loading" }) {
           ? `${VERIFICATION_COPY.rateLimited}${result.retryAfter ? ` (about ${result.retryAfter} seconds)` : ""}`
           : VERIFICATION_COPY.unavailable;
   return (
-    <div className="mt-space-lg rounded-xl border border-error/40 bg-error/5 p-space-lg" data-testid="verify-result" data-outcome={result.outcome}>
+    <div role="status" className="mt-space-lg rounded-xl border border-error/40 bg-error/5 p-space-lg" data-testid="verify-result" data-outcome={result.outcome}>
       <p className="font-body-md text-body-md" data-testid="verify-message">{text}</p>
       <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-sm">{VERIFICATION_COPY.demo}</p>
     </div>

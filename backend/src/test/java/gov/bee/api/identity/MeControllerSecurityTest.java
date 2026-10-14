@@ -32,6 +32,9 @@ class MeControllerSecurityTest {
     MockMvc mvc;
 
     @MockitoBean
+    gov.bee.api.delegation.DelegationRepository delegationRepository;
+
+    @MockitoBean
     IdentityRepository identity;
 
     @Test

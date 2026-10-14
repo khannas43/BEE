@@ -93,7 +93,7 @@ public class RegistrationDocumentService {
             }
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + DocumentService.asciiHeaderFilename(version.get().originalFilename()) + "\"")
-                .header(HttpHeaders.CACHE_CONTROL, "no-store").body(bytes.get());
+                .header(HttpHeaders.CACHE_CONTROL, "no-store").header("X-Content-Type-Options", "nosniff").body(bytes.get());
         } catch (IOException e) {
             return error(HttpStatus.SERVICE_UNAVAILABLE, "service_unavailable");
         }

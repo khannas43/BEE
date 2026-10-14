@@ -42,6 +42,13 @@ export type WebRoute =
   | "/api/runtime/business-settings"
   | "/api/runtime/business-settings/proposals"
   | "/api/runtime/business-settings/proposals/{id}/decision"
+  | "/api/runtime/registrations"
+  | "/api/runtime/registrations/eligible-brands"
+  | "/api/runtime/registrations/{id}"
+  | "/api/runtime/registrations/{id}/submit"
+  | "/api/runtime/registrations/{id}/fee-confirmation"
+  | "/api/runtime/registrations/{id}/documents"
+  | "/api/runtime/registrations/{id}/documents/{documentId}/versions/{versionId}/content"
   | "/api/runtime/fee-corrections"
   | "/api/runtime/fee-corrections/proposals"
   | "/api/runtime/fee-corrections/proposals/{id}/decision"
@@ -80,6 +87,13 @@ export type SpringRoute =
   | "/api/business-settings"
   | "/api/business-settings/proposals"
   | "/api/business-settings/proposals/{id}/decision"
+  | "/api/registrations"
+  | "/api/registrations/eligible-brands"
+  | "/api/registrations/{id}"
+  | "/api/registrations/{id}/submit"
+  | "/api/registrations/{id}/fee-confirmation"
+  | "/api/registrations/{id}/documents"
+  | "/api/registrations/{id}/documents/{documentId}/versions/{versionId}/content"
   | "/api/fee-corrections"
   | "/api/fee-corrections/proposals"
   | "/api/fee-corrections/proposals/{id}/decision"
@@ -113,6 +127,12 @@ export function springRoute(path: string): SpringRoute {
   const p = path.split("?")[0];
   if (p === "/api/me" || p === "/api/model-applications" || p === "/api/model-applications/eligible-brands" || p === "/actuator/health") return p;
   if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/business-settings" || p === "/api/business-settings/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/fee-corrections/reversals" || p === "/api/public/verification" || p === "/api/notifications" || p === "/api/notifications/read-all") return p;
+  if (p === "/api/registrations" || p === "/api/registrations/eligible-brands") return p;
+  if (/^\/api\/registrations\/[^/]+\/submit$/.test(p)) return "/api/registrations/{id}/submit";
+  if (/^\/api\/registrations\/[^/]+\/fee-confirmation$/.test(p)) return "/api/registrations/{id}/fee-confirmation";
+  if (/^\/api\/registrations\/[^/]+\/documents$/.test(p)) return "/api/registrations/{id}/documents";
+  if (/^\/api\/registrations\/[^/]+\/documents\/[^/]+\/versions\/[^/]+\/content$/.test(p)) return "/api/registrations/{id}/documents/{documentId}/versions/{versionId}/content";
+  if (/^\/api\/registrations\/[^/]+$/.test(p)) return "/api/registrations/{id}";
   if (/^\/api\/notifications\/[^/]+\/read$/.test(p)) return "/api/notifications/{id}/read";
   if (/^\/api\/fee-corrections\/proposals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/proposals/{id}/decision";
   if (/^\/api\/fee-corrections\/reversals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/reversals/{id}/decision";

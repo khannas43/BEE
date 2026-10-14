@@ -20,7 +20,7 @@ public class RegistrationRepository {
     }
 
     public record FeeRow(UUID id, BigDecimal amountInr, BigDecimal taxRatePercent, BigDecimal taxInr, BigDecimal totalInr, String feeRuleKey,
-                         int feeRuleVersion, String verificationStatus) {
+                         int feeRuleVersion, String verificationStatus, String sourceReference) {
     }
 
     public record SubmissionResult(Row application, UUID eventId, FeeRow fee) {
@@ -49,7 +49,7 @@ public class RegistrationRepository {
     private static FeeRow fee(ResultSet rs, int i) throws SQLException {
         return new FeeRow(rs.getObject("id", UUID.class), rs.getBigDecimal("amount_inr"), rs.getBigDecimal("tax_rate_percent"),
             rs.getBigDecimal("tax_inr"), rs.getBigDecimal("total_inr"), rs.getString("fee_rule_key"), rs.getInt("fee_rule_version"),
-            rs.getString("verification_status"));
+            rs.getString("verification_status"), rs.getString("source_reference"));
     }
 
     public String nextReference(int year) {
@@ -117,7 +117,7 @@ public class RegistrationRepository {
     }
 
     public Optional<FeeRow> feeSnapshot(UUID applicationId) {
-        return jdbc.query("SELECT id, amount_inr, tax_rate_percent, tax_inr, total_inr, fee_rule_key, fee_rule_version, verification_status "
+        return jdbc.query("SELECT id, amount_inr, tax_rate_percent, tax_inr, total_inr, fee_rule_key, fee_rule_version, verification_status, source_reference "
             + "FROM registration_fee_snapshot WHERE application_id = ?", RegistrationRepository::fee, applicationId).stream().findFirst();
     }
 

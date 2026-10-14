@@ -228,7 +228,7 @@ class RegistrationDatabaseTest {
         var done = ok(service.submit(NOVA, id, k, json(body)), 200);
         assertEquals("fee_due", done.get("state"));
         assertEquals(1, done.get("version"));
-        @SuppressWarnings("unchecked") Map<String, Object> fee = (Map<String, Object>) done.get("fee");
+        @SuppressWarnings("unchecked") Map<String, Object> fee = (Map<String, Object>) done.get("submissionFee");
         assertEquals("5000.00", fee.get("amountInr"));
         assertEquals("5000.00", fee.get("totalInr"));
         assertEquals(1, owner.queryForObject("SELECT count(*) FROM registration_submission_event WHERE application_id = ?", Integer.class, id));

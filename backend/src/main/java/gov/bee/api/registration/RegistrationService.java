@@ -122,7 +122,7 @@ public class RegistrationService {
         boolean met = gates.stream().allMatch(g -> Boolean.TRUE.equals(g.get("met")));
         m.put("ready", met && fee.isPresent());
         m.put("version", row.get().version());
-        m.put("note", NOTE);
+        m.put("intakeNote", NOTE);
         m.put("gates", gates);
         fee.ifPresent(f -> m.put("submissionFee", feeView(f)));
         return ResponseEntity.ok(m);
@@ -448,15 +448,7 @@ public class RegistrationService {
         m.put("version", r.version());
         m.put("tradeLicenceUploaded", documents > 0);
         if (fee != null) {
-            Map<String, Object> f = new LinkedHashMap<>();
-            f.put("amountInr", fee.amountInr().toPlainString());
-            f.put("taxRatePercent", fee.taxRatePercent().toPlainString());
-            f.put("taxInr", fee.taxInr().toPlainString());
-            f.put("totalInr", fee.totalInr().toPlainString());
-            f.put("feeRuleKey", fee.feeRuleKey());
-            f.put("feeRuleVersion", fee.feeRuleVersion());
-            f.put("verificationStatus", fee.verificationStatus());
-            m.put("fee", f);
+            m.put("submissionFee", snapshotView(fee));
         }
         return m;
     }
@@ -465,11 +457,34 @@ public class RegistrationService {
         MasterVersion v = fee.version();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("amountInr", fee.amountInr().toPlainString());
-        m.put("taxRatePercent", fee.taxRatePercent().toPlainString());
-        m.put("feeRuleKey", v.ruleKey());
-        m.put("feeRuleVersion", v.version());
-        m.put("verificationStatus", v.verification().name().toLowerCase());
+        m.put("taxRatePercent", fee.taxRatePercent().setScale(2).toPlainString());
+        m.put("taxInr", fee.taxInr().toPlainString());
+        m.put("totalInr", fee.totalInr().toPlainString());
+        putFeeCommon(m, v.ruleKey(), v.version(), v.verification().name().toLowerCase(), !v.beeVerified(), v.sourceReference());
         return m;
+    }
+
+    private static Map<String, Object> snapshotView(RegistrationRepository.FeeRow fee) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("amountInr", fee.amountInr().toPlainString());
+        m.put("taxRatePercent", fee.taxRatePercent().setScale(2).toPlainString());
+        m.put("taxInr", fee.taxInr().toPlainString());
+        m.put("totalInr", fee.totalInr().toPlainString());
+        putFeeCommon(m, fee.feeRuleKey(), fee.feeRuleVersion(), fee.verificationStatus(), !"verified".equals(fee.verificationStatus()), fee.sourceReference());
+        return m;
+    }
+
+    /** The fields every fee view shares, in the shape of the contract's SubmissionFee. */
+    private static void putFeeCommon(Map<String, Object> m, String key, int version, String verification, boolean localDemo, String source) {
+        m.put("currency", "INR");
+        m.put("feeRuleKey", key);
+        m.put("feeRuleVersion", version);
+        m.put("verificationStatus", verification);
+        m.put("localDemoFee", localDemo);
+        m.put("label", localDemo ? "Local demo fee (not BEE-approved)" : "Fee from BEE-approved rule");
+        if (source != null) {
+            m.put("sourceReference", source);
+        }
     }
 
     private String write(Map<String, Object> view) {

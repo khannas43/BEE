@@ -90,6 +90,15 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         if (path.equals("/api/business-settings")) return "/api/business-settings";
         if (path.equals("/api/business-settings/proposals")) return "/api/business-settings/proposals";
         if (path.matches("/api/business-settings/proposals/[^/]+/decision")) return "/api/business-settings/proposals/{id}/decision";
+        if (path.equals("/api/registrations")) return "/api/registrations";
+        if (path.equals("/api/registrations/eligible-brands")) return "/api/registrations/eligible-brands";
+        if (path.matches("/api/registrations/[^/]+/submit")) return "/api/registrations/{id}/submit";
+        if (path.matches("/api/registrations/[^/]+/fee-confirmation")) return "/api/registrations/{id}/fee-confirmation";
+        if (path.matches("/api/registrations/[^/]+/documents")) return "/api/registrations/{id}/documents";
+        if (path.matches("/api/registrations/[^/]+/documents/[^/]+/versions/[^/]+/content")) {
+            return "/api/registrations/{id}/documents/{documentId}/versions/{versionId}/content";
+        }
+        if (path.matches("/api/registrations/[^/]+")) return "/api/registrations/{id}";
         if (path.equals("/api/notifications")) return "/api/notifications";
         if (path.equals("/api/notifications/read-all")) return "/api/notifications/read-all";
         if (path.startsWith("/api/notifications/") && path.endsWith("/read")) return "/api/notifications/{id}/read";

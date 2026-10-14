@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.27.0";
+export const CONTRACT_VERSION = "0.28.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -49,6 +49,9 @@ export const ERROR_MESSAGES = {
   laboratory_not_accredited: "The laboratory must hold an active accreditation for this category on the test date.",
   standard_not_available: "No applicable standard is in force on the test date.",
   duplicate_model: "Another application already holds this brand and model number.",
+  brand_name_taken: "A brand with this name is already registered.",
+  duplicate_registration: "A registration request for this brand has already been filed by your organisation.",
+  document_required: "A trade licence must be uploaded before the registration request can be submitted.",
   version_conflict: "The record has changed since it was loaded.",
   fee_preview_conflict: "The provisional fee changed since it was reviewed.",
   idempotency_key_required: "An Idempotency-Key header is required for this request.",

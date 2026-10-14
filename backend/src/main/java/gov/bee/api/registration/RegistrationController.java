@@ -104,7 +104,7 @@ public class RegistrationController {
         return uuid == null ? ApiErrors.response(HttpStatus.NOT_FOUND, "not_found") : registrations.get(resolved.caller(), uuid);
     }
 
-    @GetMapping("/api/registrations/{id}/submission-preview")
+    @GetMapping("/api/registrations/{id}/submit")
     public ResponseEntity<Map<String, Object>> preview(@AuthenticationPrincipal Jwt jwt, @PathVariable("id") String id) {
         var resolved = callers.resolve(jwt);
         if (resolved.caller() == null) {

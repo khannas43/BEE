@@ -19,6 +19,7 @@ export default defineConfig({
       "components/app/workflow/__tests__/**/*.test.{ts,tsx}",
       "components/app/admin/__tests__/**/*.test.tsx",
       "components/app/registrations/__tests__/**/*.test.tsx",
+      "components/app/delegations/__tests__/**/*.test.tsx",
       "components/app/__tests__/**/*.test.tsx",
       "components/i18n/__tests__/**/*.test.tsx",
       "components/public/__tests__/**/*.test.tsx",

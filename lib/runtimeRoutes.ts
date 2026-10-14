@@ -206,6 +206,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     navRoles: ["director", "secretary"],
     implemented: ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)", "Return to the applicant", "Reject permanently", "See the earlier steps and notes"],
   },
+  {
+    href: "/app/delegations",
+    en: "Delegations",
+    hi: "प्रत्यायोजन",
+    icon: "group",
+    navRoles: ["programme", "director", "finance", "admin"],
+    implemented: ["Ask to delegate a role", "Withdraw or revoke your delegation", "Approve or reject a request", "See what you hold and until when"],
+  },
 ];
 
 export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {

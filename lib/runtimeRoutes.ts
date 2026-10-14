@@ -116,7 +116,15 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "पंजीकरण अनुरोध विवरण",
     icon: "description",
     navRoles: [],
-    implemented: ["See the request", "Upload the trade licence", "See the fee and submit", "Follow the request until Programme review"],
+    implemented: ["See the request", "Upload the trade licence", "See the fee and submit", "Follow the request until Programme review", "Recommend or return", "Approve, return or reject", "See why it was returned and resubmit"],
+  },
+  {
+    href: "/app/registrations/reviews",
+    en: "Registration reviews",
+    hi: "पंजीकरण समीक्षा",
+    icon: "rate_review",
+    navRoles: ["programme", "director"],
+    implemented: ["List requests waiting for you", "Recommend or return", "Approve, return or reject", "Read the trail"],
   },
   {
     href: "/app/model-label/model-dashboard",

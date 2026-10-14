@@ -1,30 +1,46 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
-import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
+import { CommandPanel, useCommand, type CommandState } from "@/components/app/kit/CommandPanel";
 import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { FailureBanner, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { RegistrationForm } from "@/components/app/registrations/RegistrationForm";
-import { REGISTRATION_FEE_STATE, REGISTRATION_GATE_LABEL, REGISTRATION_KIND_LABEL, REGISTRATION_STATE_LABEL, indiaToday } from "@/components/app/registrations/labels";
+import {
+  REASON_ACTIONS,
+  REGISTRATION_ACTION_LABEL,
+  REGISTRATION_ACTOR_LABEL,
+  REGISTRATION_FEE_STATE,
+  REGISTRATION_GATE_LABEL,
+  REGISTRATION_KIND_LABEL,
+  REGISTRATION_STATE_LABEL,
+  applicantMayRevise,
+  indiaToday,
+  reviewActionsFor,
+} from "@/components/app/registrations/labels";
 import {
   type Registration,
   type RegistrationDocumentList,
   type RegistrationSubmitPreview,
+  type RegistrationTransitionReceipt,
   listRegistrationDocuments,
   previewRegistrationSubmit,
   readRegistration,
   registrationContentPath,
   registrationRequestHref,
+  registrationReviewsHref,
   runSubmitRegistration,
+  runTransitionRegistration,
   runUploadLicence,
   submitRegistrationSignature,
+  transitionRegistrationSignature,
   uploadLicenceSignature,
 } from "@/lib/client/runtimeRegistrations";
-import { gateRead } from "@/lib/client/runtimeHttp";
+import { commandAdvice, gateRead } from "@/lib/client/runtimeHttp";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
@@ -34,9 +50,9 @@ const loadDocs = (id: string) => listRegistrationDocuments(id);
 const loadPreview = (target: string) => previewRegistrationSubmit(target.slice(0, target.lastIndexOf(":")));
 
 /**
- * One registration request: its facts, the trade licence, and — while it is a draft — the submit review.
- * A submitted request stops at fee due, then at "Fee confirmed. Waiting for Programme review." Review and
- * approval are a later package. Provisional local rules, not BEE rules; the fee label comes from the service.
+ * One registration request. An applicant files, revises a return and reads the end state. Programme and the Director
+ * take the step their role is offered in this state. Spring decides whether that person may take it.
+ * Provisional local rules, not BEE rules; the fee label comes from the service.
  */
 export function RegistrationRequest({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
@@ -46,7 +62,9 @@ export function RegistrationRequest({ module, screen }: { module: Module; screen
   const read = gateRead(identity.status, useRuntimeRead(id, loadOne, revalidation));
   const documents = gateRead(identity.status, useRuntimeRead(id, loadDocs, revalidation));
   const [dirty, setDirty] = useState(false);
+  const [result, setResult] = useState<RegistrationTransitionReceipt | null>(null);
   const onDirtyChange = useCallback((next: boolean) => setDirty(next), []);
+  const roles = identity.status === "signed-in" ? identity.me.effectiveRoles.map((r) => r.role) : [];
 
   return (
     <ScreenChrome module={module} screen={screen} subtitle="One registration request" implemented={runtimeRouteFor("/app/registrations/request")?.implemented}>
@@ -67,6 +85,9 @@ export function RegistrationRequest({ module, screen }: { module: Module; screen
                 registration={r.registration}
                 documents={documents}
                 dirty={dirty}
+                roles={roles}
+                result={result}
+                onResult={setResult}
                 onDirtyChange={onDirtyChange}
                 onChanged={revalidation.refresh}
                 revalidation={revalidation}
@@ -83,6 +104,9 @@ function RequestBody({
   registration,
   documents,
   dirty,
+  roles,
+  result,
+  onResult,
   onDirtyChange,
   onChanged,
   revalidation,
@@ -90,13 +114,21 @@ function RequestBody({
   registration: Registration;
   documents: { ok: true; documents: RegistrationDocumentList } | { ok: false; failure: { message: string; kind: string } } | null;
   dirty: boolean;
+  roles: string[];
+  result: RegistrationTransitionReceipt | null;
+  onResult: (receipt: RegistrationTransitionReceipt) => void;
   onDirtyChange: (dirty: boolean) => void;
   onChanged: () => void;
   revalidation: ReturnType<typeof useRevalidation>;
 }) {
   const today = indiaToday();
   const draft = registration.state === "draft";
+  const revising = applicantMayRevise(roles, registration.state);
+  const editable = draft || revising;
   const preview = useRuntimeRead(draft && !dirty ? `${registration.id}:${registration.version}` : null, loadPreview, revalidation);
+  const actions = reviewActionsFor(roles, registration.state);
+  const returned = [...(registration.trail ?? [])].reverse().find((step) => step.action === "return");
+  const rejected = [...(registration.trail ?? [])].reverse().find((step) => step.action === "reject");
 
   return (
     <div className="space-y-space-md">
@@ -115,7 +147,29 @@ function RequestBody({
       {registration.state === "programme_review" ? (
         <p data-testid="reg-fee-confirmed">Fee confirmed. Waiting for Programme review.</p>
       ) : null}
-      {draft ? (
+      {registration.state === "returned" && returned ? (
+        <p data-testid="reg-returned">
+          Returned by {REGISTRATION_ACTOR_LABEL[returned.actorRole] ?? returned.actorRole}: <span data-testid="reg-returned-reason">{returned.note ?? ""}</span>
+        </p>
+      ) : null}
+      {registration.state === "approved" ? (
+        <p data-testid="reg-registered">
+          Registered. {registration.kind === "brand" ? registration.brandName : `${registration.brandName}${registration.validFrom ? ` from ${registration.validFrom}` : ""}${registration.validTo ? ` to ${registration.validTo}` : ""}`}
+          {registration.registeredBrandId ? ` · ${registration.registeredBrandId}` : ""}
+          {registration.registeredAuthorisationId ? ` · ${registration.registeredAuthorisationId}` : ""}
+        </p>
+      ) : null}
+      {registration.state === "rejected" ? (
+        <p data-testid="reg-rejected">Rejected. {rejected?.note ?? ""}</p>
+      ) : null}
+      {result ? (
+        <p data-testid="rev-result">
+          {REGISTRATION_STATE_LABEL[result.toState]}
+          {" · "}
+          <Link href={registrationReviewsHref()} className="text-primary">Back to the queue</Link>
+        </p>
+      ) : null}
+      {editable ? (
         <RegistrationForm
           key={`${registration.id}-${registration.version}`}
           kind={registration.kind}
@@ -126,7 +180,12 @@ function RequestBody({
           onDirtyChange={onDirtyChange}
         />
       ) : null}
-      <LicenceCard registrationId={registration.id} editable={draft} documents={documents} onUploaded={onChanged} />
+      <LicenceCard registrationId={registration.id} editable={editable} documents={documents} onUploaded={onChanged} />
+      {registration.trail ? <Trail steps={registration.trail} /> : null}
+      {actions.length > 0 ? (
+        <DecisionPanel registration={registration} actions={actions} onReload={onChanged} onDone={(receipt) => { onResult(receipt); onChanged(); }} />
+      ) : null}
+      {revising ? <Resubmit registration={registration} dirty={dirty} onReload={onChanged} onDone={(receipt) => { onResult(receipt); onChanged(); }} /> : null}
       {draft && !dirty && preview && !preview.ok ? (
         <FailureBanner failure={preview.failure} testId="reg-preview-error" signInReturnTo={registrationRequestHref(registration.id)} />
       ) : null}
@@ -254,5 +313,137 @@ function SubmitReview({ registration, preview, onDone }: { registration: Registr
         signInReturnTo={registrationRequestHref(registration.id)}
       />
     </section>
+  );
+}
+
+const ACTION_BUTTON: Record<"recommend" | "return" | "approve" | "reject", { label: string; testId: string }> = {
+  recommend: { label: "Recommend", testId: "rev-recommend" },
+  return: { label: "Return", testId: "rev-return" },
+  approve: { label: "Approve", testId: "rev-approve" },
+  reject: { label: "Reject", testId: "rev-reject" },
+};
+
+function Trail({ steps }: { steps: NonNullable<Registration["trail"]> }) {
+  return (
+    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="rev-trail">
+      <h2 className="font-title-md text-title-md text-on-surface">Trail</h2>
+      <ul className="mt-space-sm space-y-1 font-body-sm">
+        {steps.map((step, index) => (
+          <li key={`${step.action}-${step.at}-${index}`} data-testid={`rev-trail-${index}`}>
+            {REGISTRATION_ACTION_LABEL[step.action] ?? step.action}
+            {" · "}
+            {REGISTRATION_ACTOR_LABEL[step.actorRole] ?? step.actorRole}
+            {step.note ? ` · ${step.note}` : ""}
+            {` · ${step.at}`}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function DecisionPanel({
+  registration,
+  actions,
+  onDone,
+  onReload,
+}: {
+  registration: Registration;
+  actions: ("recommend" | "return" | "approve" | "reject")[];
+  onDone: (receipt: RegistrationTransitionReceipt) => void;
+  onReload: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const command = useCommand(runTransitionRegistration, transitionRegistrationSignature);
+  const text = note.trim();
+  const withinLimit = text.length <= 500;
+  const confirms = actions.includes("approve") || actions.includes("reject");
+
+  async function act(action: "recommend" | "return" | "approve" | "reject") {
+    if (REASON_ACTIONS.has(action) && (text.length < 1 || text.length > 500)) return;
+    if (!withinLimit) return;
+    const result = await command.execute({ id: registration.id, action, version: registration.version, ...(text ? { note: text } : {}) });
+    if (result?.ok) onDone(result.value);
+  }
+
+  return (
+    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="rev-decision">
+      <h2 className="font-title-md text-title-md text-on-surface">Decision</h2>
+      <p className="font-body-sm text-on-surface-variant mt-1">Provisional local rules, not BEE rules.</p>
+      <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
+        Reason or note
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="rev-note" />
+      </label>
+      {confirms ? (
+        <p className="font-body-sm mt-space-sm" data-testid="rev-confirm">
+          {registration.kind === "brand" ? `This registers the brand for ${registration.organisation}.` : "This records the agency's authorisation."}
+        </p>
+      ) : null}
+      <CommandOutcome state={command.state} errorTestId="rev-decision-error" reloadTestId="rev-decision-reload" onReload={onReload} signInReturnTo={registrationRequestHref(registration.id)} />
+      <div className="mt-space-sm flex flex-wrap gap-space-sm">
+        {actions.map((action) => (
+          <button
+            key={action}
+            type="button"
+            disabled={command.state.phase === "busy" || !withinLimit || (REASON_ACTIONS.has(action) && text.length < 1)}
+            onClick={() => void act(action)}
+            className="border border-primary text-primary py-2.5 px-4 rounded-lg font-label-md disabled:opacity-50"
+            data-testid={ACTION_BUTTON[action].testId}
+          >
+            {command.state.phase === "busy" ? "Sending…" : ACTION_BUTTON[action].label}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Resubmit({ registration, dirty, onDone, onReload }: { registration: Registration; dirty: boolean; onDone: (receipt: RegistrationTransitionReceipt) => void; onReload: () => void }) {
+  const command = useCommand(runTransitionRegistration, transitionRegistrationSignature);
+
+  async function send() {
+    if (dirty) return;
+    const result = await command.execute({ id: registration.id, action: "resubmit", version: registration.version });
+    if (result?.ok) onDone(result.value);
+  }
+
+  return (
+    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="reg-resubmit-panel">
+      <h2 className="font-title-md text-title-md text-on-surface">Resubmit</h2>
+      <p className="font-body-sm text-on-surface-variant mt-1">The fee already confirmed is not charged again. Provisional local rules, not BEE rules.</p>
+      <CommandOutcome state={command.state} errorTestId="reg-resubmit-error" reloadTestId="reg-resubmit-reload" onReload={onReload} signInReturnTo={registrationRequestHref(registration.id)} />
+      <button
+        type="button"
+        disabled={dirty || command.state.phase === "busy"}
+        onClick={() => void send()}
+        className="mt-space-sm w-full border border-primary text-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
+        data-testid="reg-resubmit"
+      >
+        {command.state.phase === "busy" ? "Resubmitting…" : "Resubmit"}
+      </button>
+    </section>
+  );
+}
+
+function CommandOutcome<T>({ state, errorTestId, reloadTestId, onReload, signInReturnTo }: {
+  state: CommandState<T>;
+  errorTestId: string;
+  reloadTestId: string;
+  onReload: () => void;
+  signInReturnTo: string;
+}) {
+  if (state.phase !== "failed") return null;
+  const failure = state.failure;
+  const advice = commandAdvice(failure);
+  return (
+    <div className="mt-space-sm" data-testid={errorTestId} data-failure-code={"code" in failure ? failure.code : failure.kind}>
+      <p className="text-error font-body-sm">{failure.message}</p>
+      {advice.reload ? (
+        <button type="button" onClick={onReload} className="mt-1 text-primary font-label-md hover:underline" data-testid={reloadTestId}>Reload the latest version</button>
+      ) : null}
+      {advice.signIn ? (
+        <Link href={`/api/auth/login?returnTo=${signInReturnTo}`} className="mt-1 inline-block text-primary font-label-md hover:underline">Sign in</Link>
+      ) : null}
+    </div>
   );
 }

@@ -18,6 +18,8 @@ import {
 export type RegistrationState = "draft" | "fee_due" | "programme_review" | "director_approval" | "approved" | "returned" | "rejected";
 export type RegistrationKind = "brand" | "agency";
 export type RegistrationGateCode = "trade_licence_uploaded" | "start_date_set" | "brand_active" | "brand_name_free";
+export type RegistrationAction = "recommend" | "return" | "reject" | "approve" | "resubmit";
+export type RegistrationTrailAction = "confirm_fee" | RegistrationAction;
 
 export type SubmissionFee = {
   amountInr: string;
@@ -46,6 +48,32 @@ export type Registration = {
   version: number;
   tradeLicenceUploaded: boolean;
   submissionFee?: SubmissionFee;
+  /** The register entry an approved request made. Present only after approval. */
+  registeredBrandId?: string;
+  registeredAuthorisationId?: string;
+  /** Steps after filing, oldest first. A single read sends the steps the caller may see. */
+  trail?: RegistrationTrailItem[];
+};
+
+export type RegistrationTrailItem = {
+  action: RegistrationTrailAction;
+  actorRole: string;
+  fromState: RegistrationState;
+  toState: RegistrationState;
+  note?: string;
+  at: string;
+};
+
+export type RegistrationTransitionReceipt = {
+  registrationId: string;
+  reference: string;
+  action: RegistrationAction;
+  fromState: RegistrationState;
+  toState: RegistrationState;
+  version: number;
+  actedAt: string;
+  registeredBrandId?: string;
+  registeredAuthorisationId?: string;
 };
 
 export type RegistrationList = { items: Registration[]; count: number; authority: "spring-database" };
@@ -96,12 +124,14 @@ export const REGISTRATION_BRANDS_PATH = "/api/runtime/registrations/eligible-bra
 export const registrationPath = (id: string) => `${REGISTRATIONS_PATH}/${encodeURIComponent(id)}`;
 export const registrationSubmitPath = (id: string) => `${registrationPath(id)}/submit`;
 export const registrationDocumentsPath = (id: string) => `${registrationPath(id)}/documents`;
+export const registrationTransitionPath = (id: string) => `${registrationPath(id)}/transition`;
 export const registrationContentPath = (id: string, documentId: string, versionId: string) =>
   `${registrationDocumentsPath(id)}/${encodeURIComponent(documentId)}/versions/${encodeURIComponent(versionId)}/content`;
 
 export const registrationListHref = () => "/app/registrations/requests";
 export const registrationNewHref = () => "/app/registrations/new";
 export const registrationRequestHref = (id: string) => `/app/registrations/request?id=${encodeURIComponent(id)}`;
+export const registrationReviewsHref = () => "/app/registrations/reviews";
 
 const parseRegistration = (body: unknown): Registration | null =>
   body && typeof body === "object" && "id" in body && "reference" in body && "state" in body && "version" in body ? (body as Registration) : null;
@@ -124,6 +154,11 @@ const parseDocument = (body: unknown): RegistrationDocument | null =>
 
 const parseDocumentList = (body: unknown): RegistrationDocumentList | null =>
   body && typeof body === "object" && Array.isArray((body as RegistrationDocumentList).items) ? (body as RegistrationDocumentList) : null;
+
+const parseReceipt = (body: unknown): RegistrationTransitionReceipt | null =>
+  body && typeof body === "object" && "registrationId" in body && "action" in body && "toState" in body && "version" in body
+    ? (body as RegistrationTransitionReceipt)
+    : null;
 
 export type RegistrationRead = { ok: true; registration: Registration } | { ok: false; failure: ReadFailure };
 export type RegistrationListRead = { ok: true; list: RegistrationList } | { ok: false; failure: ReadFailure };
@@ -202,6 +237,17 @@ export function runUploadLicence(p: UploadLicenceInput, idempotencyKey: string) 
 }
 
 export const uploadLicenceSignature = (p: UploadLicenceInput) => [p.id, p.file.name, p.file.size, p.file.lastModified, p.label ?? ""];
+
+export type TransitionRegistrationInput = { id: string; action: RegistrationAction; version: number; note?: string };
+
+/** Sends the action and the version the person saw. A note goes only when there is one; resubmit never sends one. */
+export function runTransitionRegistration(p: TransitionRegistrationInput, idempotencyKey: string) {
+  const body: { action: RegistrationAction; version: number; note?: string } = { action: p.action, version: p.version };
+  if (p.action !== "resubmit" && p.note) body.note = p.note;
+  return runtimeCommand(registrationTransitionPath(p.id), "POST", body, idempotencyKey, parseReceipt);
+}
+
+export const transitionRegistrationSignature = (p: TransitionRegistrationInput) => [p.id, p.action, p.version, p.action === "resubmit" ? "" : (p.note ?? "")];
 
 export async function fetchRegistrationContent(id: string, documentId: string, versionId: string, fetchImpl: FetchLike = fetch) {
   let res: Response;

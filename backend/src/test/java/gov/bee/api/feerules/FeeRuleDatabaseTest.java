@@ -206,7 +206,7 @@ class FeeRuleDatabaseTest {
     @Test
     void theMenuLearnsThePermissionsFromTheRolesThatHoldThem() {
         var identity = new gov.bee.api.identity.IdentityRepository(db);
-        assertEquals(java.util.List.of("business_setting_manage", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin")));
+        assertEquals(java.util.List.of("business_setting_manage", "delegation_approve", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin")));
         assertEquals(java.util.List.of("fee_confirmation_correct"), identity.capabilities(java.util.List.of("finance")), "Finance holds only the right to correct a fee confirmation until a permission is given to it");
         assertEquals(java.util.List.of(), identity.capabilities(java.util.List.of()));
         grantFinance();

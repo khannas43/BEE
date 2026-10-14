@@ -2506,6 +2506,120 @@ class SpringContractTest {
         assertEquals(pin.path("sha256").asText(), sha, "artifact content changed without a version bump and a new pin (scripts/local/contract-pin.json)");
     }
 
+    /** WP04.2b-2: every documented status and code of the registration review step, through the real chain with the repositories mocked. */
+    @Test
+    void registrationTransitionDocumentedPairs() throws Exception {
+        final String T = "/api/registrations/{id}/transition";
+        final UUID REG = UUID.fromString("00000000-0000-4000-f000-000000000001");
+        final String path = "/api/registrations/" + REG + "/transition";
+        final UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("programme"))));
+        final String rec = "{\"action\":\"recommend\",\"version\":2}";
+        final String approve = "{\"action\":\"approve\",\"version\":3}";
+        final String resubmit = "{\"action\":\"resubmit\",\"version\":3}";
+        var review = new RegistrationRepository.Row(REG, "REG-2026-10001", "brand", NOVA, "NOVA", null, null, "Zephyr Cool", null, null, "programme_review", 2);
+        var director = new RegistrationRepository.Row(REG, "REG-2026-10001", "brand", NOVA, "NOVA", null, null, "Zephyr Cool", null, null, "director_approval", 3);
+        var returned = new RegistrationRepository.Row(REG, "REG-2026-10001", "brand", NOVA, "NOVA", null, null, "Zephyr Cool", null, null, "returned", 3);
+        var agencyReturned = new RegistrationRepository.Row(REG, "REG-2026-10002", "agency", NOVA, "NOVA", NOVA, NOVA_COOL, "Nova Cool",
+            LocalDate.now().plusDays(10), null, "returned", 3);
+        var moved = new RegistrationRepository.Moved(3, Instant.parse("2026-10-14T10:00:00Z"));
+
+        java.util.function.Function<RequestPostProcessor, MockHttpServletRequestBuilder> send =
+            rp -> post(path).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(rec);
+        java.util.function.Supplier<Boolean> fresh = () -> {
+            reset(identity, idempotency, registrationRepo);
+            when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+            when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
+            when(registrationRepo.find(REG)).thenReturn(Optional.of(review));
+            when(registrationRepo.submitter(REG)).thenReturn(Optional.of(UUID.randomUUID()));
+            when(registrationRepo.transition(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(Optional.of(moved));
+            return true;
+        };
+        java.util.function.Consumer<String> staffAs = role -> {
+            account(role, "all");
+            when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(staff));
+            when(identity.activeMemberships(USER)).thenReturn(List.of(new IdentityRepository.Membership("BEE", "bee", "BEE staff (synthetic)")));
+        };
+
+        // Identity and scope denials.
+        fresh.get();
+        account("programme", "all");
+        conforms(T, send.apply(r -> r), 401, "unauthenticated");
+        conforms(T, send.apply(pwdOnly), 403, "mfa_required");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(T, send.apply(token("programme")), 403, "no_active_account");
+        account("programme", "all");
+        conforms(T, send.apply(token("finance")), 403, "no_effective_role");
+        account("auditor", "all");
+        conforms(T, send.apply(token("auditor")), 403, "role_not_permitted");
+
+        // Programme recommends.
+        fresh.get();
+        staffAs.accept("programme");
+        conforms(T, post(path).with(token("programme")).contentType("application/json").content(rec), 422, "idempotency_key_required");
+        conforms(T, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        conforms(T, send.apply(token("programme")), 200, null);
+        conforms(T, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(rec.replace("\"version\":2", "\"version\":1")),
+            409, "version_conflict");
+        when(registrationRepo.transition(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        conforms(T, send.apply(token("programme")), 409, "version_conflict");
+        when(registrationRepo.transition(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenThrow(new org.springframework.dao.DataIntegrityViolationException("second person", new RuntimeException("the person who filed a registration cannot review it")));
+        conforms(T, send.apply(token("programme")), 403, "segregation_refused");
+        org.mockito.Mockito.doReturn(Optional.of(moved)).when(registrationRepo).transition(any(), anyInt(), any(), any(), any(), any(), any(), any());
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
+        conforms(T, send.apply(token("programme")), 409, "idempotency_in_progress");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
+        when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
+        conforms(T, send.apply(token("programme")), 409, "idempotency_key_conflict");
+        when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        account("programme", "all"); // the applicant's own organisation
+        conforms(T, send.apply(token("programme")), 403, "segregation_refused");
+        staffAs.accept("director");
+        conforms(T, send.apply(token("director")), 403, "role_not_permitted");
+        staffAs.accept("programme");
+        when(registrationRepo.find(REG)).thenReturn(Optional.empty());
+        conforms(T, send.apply(token("programme")), 404, "not_found");
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).find(REG);
+        conforms(T, send.apply(token("programme")), 503, "service_unavailable");
+
+        // The Director approves; the database function may refuse.
+        fresh.get();
+        staffAs.accept("director");
+        when(registrationRepo.find(REG)).thenReturn(Optional.of(director));
+        when(registrationRepo.lastEventAt(REG)).thenReturn(Instant.parse("2026-10-14T10:00:00Z"));
+        var ok = new RegistrationRepository.Approved("approved", 4, UUID.randomUUID(), null);
+        when(registrationRepo.approve(any(), any(), anyInt(), any())).thenReturn(ok);
+        java.util.function.Function<String, MockHttpServletRequestBuilder> asDirector = body ->
+            post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(body);
+        conforms(T, asDirector.apply(approve), 200, null);
+        for (var refusal : List.of(new String[] {"version_conflict", "409"}, new String[] {"brand_name_taken", "409"}, new String[] {"authorisation_overlap", "409"},
+            new String[] {"segregation_refused", "403"}, new String[] {"brand_not_permitted", "403"}, new String[] {"not_permitted", "403"})) {
+            when(registrationRepo.approve(any(), any(), anyInt(), any())).thenReturn(new RegistrationRepository.Approved(refusal[0], null, null, null));
+            conforms(T, asDirector.apply(approve), Integer.parseInt(refusal[1]), "not_permitted".equals(refusal[0]) ? "role_not_permitted" : refusal[0]);
+        }
+        when(registrationRepo.approve(any(), any(), anyInt(), any())).thenReturn(new RegistrationRepository.Approved("not_found", null, null, null));
+        conforms(T, asDirector.apply(approve), 404, "not_found");
+        conforms(T, asDirector.apply("{\"action\":\"reject\",\"version\":3}"), 422, "validation_failed");
+        conforms(T, asDirector.apply("{\"action\":\"reject\",\"version\":3,\"note\":\"Name too close to a registered brand\"}"), 200, null);
+
+        // The applicant resubmits a returned request.
+        fresh.get();
+        account("manufacturer", "own-org");
+        when(registrationRepo.find(REG)).thenReturn(Optional.of(returned));
+        java.util.function.Supplier<MockHttpServletRequestBuilder> asApplicant = () ->
+            post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(resubmit);
+        when(registrationRepo.documentCount(REG)).thenReturn(0);
+        conforms(T, asApplicant.get(), 422, "document_required");
+        when(registrationRepo.documentCount(REG)).thenReturn(1);
+        conforms(T, asApplicant.get(), 200, null);
+        when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(true);
+        conforms(T, asApplicant.get(), 409, "brand_name_taken");
+        when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(false);
+        when(registrationRepo.find(REG)).thenReturn(Optional.of(agencyReturned));
+        when(registrationRepo.activeBrand(NOVA_COOL)).thenReturn(Optional.empty());
+        conforms(T, asApplicant.get(), 403, "brand_not_permitted");
+    }
+
     /** WP04.2b-1: every documented status and code of the registration routes, through the real chain with the repositories mocked. */
     @Test
     void registrationOperationsDocumentedPairs() throws Exception {

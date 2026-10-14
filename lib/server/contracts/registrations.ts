@@ -25,6 +25,36 @@ export interface Registration {
   version: number;
   tradeLicenceUploaded: boolean;
   submissionFee?: SubmissionFee;
+  /** The register entry an approved request made (WP04.2b-2). */
+  registeredBrandId?: string;
+  registeredAuthorisationId?: string;
+  /** Steps after filing, oldest first; present on a single read only. The applicant sees decisions, reviewers see every step. */
+  trail?: RegistrationTrailItem[];
+}
+
+export const REGISTRATION_ACTIONS = ["recommend", "return", "reject", "approve", "resubmit"] as const;
+export type RegistrationAction = (typeof REGISTRATION_ACTIONS)[number];
+const TRAIL_ACTIONS = ["confirm_fee", ...REGISTRATION_ACTIONS] as const;
+
+export interface RegistrationTrailItem {
+  action: (typeof TRAIL_ACTIONS)[number];
+  actorRole: string;
+  fromState: RegistrationState;
+  toState: RegistrationState;
+  note?: string;
+  at: string;
+}
+
+export interface RegistrationTransitionReceipt {
+  registrationId: string;
+  reference: string;
+  action: RegistrationAction;
+  fromState: RegistrationState;
+  toState: RegistrationState;
+  version: number;
+  actedAt: string;
+  registeredBrandId?: string;
+  registeredAuthorisationId?: string;
 }
 
 export interface RegistrationList {
@@ -104,8 +134,17 @@ const isUuid = (v: unknown): v is string => isString(v) && UUID.test(v);
 const isDate = (v: unknown): v is string => isString(v) && DATE.test(v);
 const isCount = (v: unknown) => Number.isInteger(v) && (v as number) >= 0;
 
+const isState = (v: unknown) => (REGISTRATION_STATES as readonly unknown[]).includes(v);
+
+function validTrailItem(i: unknown): boolean {
+  if (!exactKeys(i, ["action", "actorRole", "fromState", "toState", "at"], ["note"])) return false;
+  const t = i as Record<string, unknown>;
+  return (TRAIL_ACTIONS as readonly unknown[]).includes(t.action) && isString(t.actorRole) && isState(t.fromState) && isState(t.toState) &&
+    isString(t.at) && !Number.isNaN(Date.parse(t.at)) && (t.note === undefined || (isString(t.note) && t.note.length >= 1 && t.note.length <= 500));
+}
+
 export const validateRegistration: Validator<Registration> = (body) => {
-  if (!exactKeys(body, ["id", "reference", "kind", "organisation", "brandName", "state", "version", "tradeLicenceUploaded"], ["brandId", "validFrom", "validTo", "submissionFee"])) return null;
+  if (!exactKeys(body, ["id", "reference", "kind", "organisation", "brandName", "state", "version", "tradeLicenceUploaded"], ["brandId", "validFrom", "validTo", "submissionFee", "registeredBrandId", "registeredAuthorisationId", "trail"])) return null;
   const b = body;
   const ok =
     isUuid(b.id) && isString(b.reference) && /^REG-\d{4}-\d+$/.test(b.reference) &&
@@ -117,6 +156,9 @@ export const validateRegistration: Validator<Registration> = (body) => {
     (b.validFrom === undefined || isDate(b.validFrom)) &&
     (b.validTo === undefined || isDate(b.validTo)) &&
     (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null) &&
+    (b.registeredBrandId === undefined || (isUuid(b.registeredBrandId) && b.kind === "brand" && b.state === "approved")) &&
+    (b.registeredAuthorisationId === undefined || (isUuid(b.registeredAuthorisationId) && b.kind === "agency" && b.state === "approved")) &&
+    (b.trail === undefined || (Array.isArray(b.trail) && b.trail.every(validTrailItem))) &&
     // A brand request carries none of the agency fields; an agency request names its brand.
     (b.kind === "agency" ? b.brandId !== undefined : b.brandId === undefined && b.validFrom === undefined && b.validTo === undefined);
   return ok ? (b as unknown as Registration) : null;
@@ -158,6 +200,24 @@ export const validateRegistrationFeeReceipt: Validator<RegistrationFeeReceipt> =
     Number.isInteger(b.version) && (b.version as number) >= 1 && isString(b.receiptReference) && isString(b.amountInr) &&
     isDate(b.receivedOn) && isString(b.confirmedAt) && !Number.isNaN(Date.parse(b.confirmedAt));
   return ok ? (b as unknown as RegistrationFeeReceipt) : null;
+};
+
+export const validateRegistrationTransitionReceipt: Validator<RegistrationTransitionReceipt> = (body) => {
+  if (!exactKeys(body, ["registrationId", "reference", "action", "fromState", "toState", "version", "actedAt"], ["registeredBrandId", "registeredAuthorisationId"])) return null;
+  const b = body;
+  const ok =
+    isUuid(b.registrationId) && isString(b.reference) && /^REG-\d{4}-\d+$/.test(b.reference) &&
+    (REGISTRATION_ACTIONS as readonly unknown[]).includes(b.action) && isState(b.fromState) && isState(b.toState) &&
+    Number.isInteger(b.version) && (b.version as number) >= 1 && isString(b.actedAt) && !Number.isNaN(Date.parse(b.actedAt)) &&
+    (b.registeredBrandId === undefined || (isUuid(b.registeredBrandId) && b.action === "approve")) &&
+    (b.registeredAuthorisationId === undefined || (isUuid(b.registeredAuthorisationId) && b.action === "approve")) &&
+    // The moves the workflow allows, per action.
+    ((b.action === "recommend" && b.fromState === "programme_review" && b.toState === "director_approval") ||
+      (b.action === "return" && (b.fromState === "programme_review" || b.fromState === "director_approval") && b.toState === "returned") ||
+      (b.action === "reject" && b.fromState === "director_approval" && b.toState === "rejected") ||
+      (b.action === "approve" && b.fromState === "director_approval" && b.toState === "approved") ||
+      (b.action === "resubmit" && b.fromState === "returned" && b.toState === "programme_review"));
+  return ok ? (b as unknown as RegistrationTransitionReceipt) : null;
 };
 
 const validateVersion: Validator<RegistrationDocumentVersion> = (body) => {
@@ -233,6 +293,14 @@ export const SPRING_REGISTRATION_FEE_ERRORS: UpstreamErrors = {
   ...SPRING_FEE_CONFIRMATION_ERRORS,
   409: ["version_conflict", ...IDEMPOTENCY],
 };
+export const SPRING_REGISTRATION_TRANSITION_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: [...RESOLVER_DENIALS, "role_not_permitted", "segregation_refused", "brand_not_permitted"],
+  404: ["not_found"],
+  409: ["version_conflict", ...IDEMPOTENCY, "brand_name_taken", "authorisation_overlap"],
+  422: ["validation_failed", "idempotency_key_required", "document_required"],
+  503: ["service_unavailable"],
+};
 export const SPRING_REGISTRATION_DOC_UPLOAD_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
   403: [...WRITE, "not_editable"],
@@ -250,6 +318,7 @@ export const SPRING_REGISTRATION_PATCH = { errors: SPRING_REGISTRATION_PATCH_ERR
 export const SPRING_REGISTRATION_PREVIEW = { errors: SPRING_REGISTRATION_PREVIEW_ERRORS, validate: validateRegistrationSubmitPreview };
 export const SPRING_REGISTRATION_SUBMIT = { errors: SPRING_REGISTRATION_SUBMIT_ERRORS, validate: validateRegistration, successStatuses: [200] as const };
 export const SPRING_REGISTRATION_FEE = { errors: SPRING_REGISTRATION_FEE_ERRORS, validate: validateRegistrationFeeReceipt, successStatuses: [200] as const };
+export const SPRING_REGISTRATION_TRANSITION = { errors: SPRING_REGISTRATION_TRANSITION_ERRORS, validate: validateRegistrationTransitionReceipt, successStatuses: [200] as const };
 export const SPRING_REGISTRATION_DOC_LIST = { errors: SPRING_REGISTRATION_READ_ERRORS, validate: validateRegistrationDocumentList };
 export const SPRING_REGISTRATION_DOC_UPLOAD = { errors: SPRING_REGISTRATION_DOC_UPLOAD_ERRORS, validate: validateRegistrationDocument, successStatuses: [201] as const };
 /** No JSON success: fromUpstream maps only the documented JSON errors; sessionReadBinary handles the 200 PDF. */

@@ -303,6 +303,13 @@ read -r reg_pass reg_fail <<<"$(sed -nE 's/^registration checks: ([0-9]+) passed
 if [[ -z "${reg_pass:-}" ]]; then check "registrations.run" 0 "registration-browser-check did not complete: $(tail -1 <<<"$reg_out")"
 else pass=$((pass + reg_pass)); fail=$((fail + reg_fail)); fi
 
+# ---- WP04.2b-2: review and approval of a registration (records the runtime transition pairs)
+rev_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/registration-review-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$rev_out"
+read -r rev_pass rev_fail <<<"$(sed -nE 's/^registration review checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$rev_out")"
+if [[ -z "${rev_pass:-}" ]]; then check "registrationreview.run" 0 "registration-review-browser-check did not complete: $(tail -1 <<<"$rev_out")"
+else pass=$((pass + rev_pass)); fail=$((fail + rev_fail)); fi
+
 # ---- WP08.1h / Brief 12: the Business settings screen, driven in the portal
 bsu_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/business-settings-ui-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$bsu_out"

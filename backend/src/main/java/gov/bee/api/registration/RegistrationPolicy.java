@@ -4,6 +4,7 @@ import gov.bee.api.application.ModelDraftPolicy;
 import gov.bee.api.identity.Caller;
 import gov.bee.api.identity.IdentityRepository.RoleGrant;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -15,6 +16,11 @@ public final class RegistrationPolicy {
     public static final String AGENCY = "agency";
 
     private RegistrationPolicy() {
+    }
+
+    /** A request can be edited by its applicant while it is a draft, or after Programme or the Director returned it. */
+    public static boolean editable(String state) {
+        return "draft".equals(state) || "returned".equals(state);
     }
 
     /** The kind of request the caller may file: a manufacturer registers a brand, an agency asks to act for one. */
@@ -35,7 +41,7 @@ public final class RegistrationPolicy {
         return kindFor(caller).isPresent() ? ModelDraftPolicy.filingOrganisation(caller) : Optional.empty();
     }
 
-    /** What a caller reads: their own organisation's requests, and the stage each reviewing role works at. */
+    /** What a caller reads: their own organisation's requests, and for each reviewing role the stages it works at and the decisions that followed. */
     public record ReadScope(Set<UUID> organisations, Set<String> stages) {
         public boolean isEmpty() {
             return organisations.isEmpty() && stages.isEmpty();
@@ -55,9 +61,9 @@ public final class RegistrationPolicy {
             } else if ("finance".equals(g.role()) && "all".equals(g.scope())) {
                 stages.add("fee_due");
             } else if ("programme".equals(g.role()) && "all".equals(g.scope())) {
-                stages.add("programme_review");
+                stages.addAll(List.of("programme_review", "director_approval", "approved", "returned", "rejected"));
             } else if ("director".equals(g.role()) && "all".equals(g.scope())) {
-                stages.add("director_approval");
+                stages.addAll(List.of("director_approval", "approved", "returned", "rejected"));
             }
         }
         return new ReadScope(orgs, stages);

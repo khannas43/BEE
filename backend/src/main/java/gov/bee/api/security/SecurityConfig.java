@@ -84,7 +84,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/registrations", "/api/registrations/eligible-brands", "/api/registrations/*",
                     "/api/registrations/*/submit", "/api/registrations/*/documents", "/api/registrations/*/documents/*/versions/*/content").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/registrations", "/api/registrations/*/submit", "/api/registrations/*/fee-confirmation",
-                    "/api/registrations/*/documents").authenticated()
+                    "/api/registrations/*/transition", "/api/registrations/*/documents").authenticated()
                 .requestMatchers(HttpMethod.PATCH, "/api/registrations/*").authenticated()
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o -> o

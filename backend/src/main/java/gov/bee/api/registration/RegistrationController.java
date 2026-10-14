@@ -29,14 +29,16 @@ public class RegistrationController {
     private final RegistrationService registrations;
     private final RegistrationDocumentService documents;
     private final RegistrationFeeService fees;
+    private final RegistrationReviewService reviews;
     private final ObjectMapper json;
 
     public RegistrationController(CallerResolver callers, RegistrationService registrations, RegistrationDocumentService documents,
-                                  RegistrationFeeService fees, ObjectMapper json) {
+                                  RegistrationFeeService fees, RegistrationReviewService reviews, ObjectMapper json) {
         this.callers = callers;
         this.registrations = registrations;
         this.documents = documents;
         this.fees = fees;
+        this.reviews = reviews;
         this.json = json;
     }
 
@@ -51,6 +53,19 @@ public class RegistrationController {
         JsonNode body = body(raw);
         return body == null ? ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed")
             : fees.confirm(resolved.caller(), idOrNil(id), key, body);
+    }
+
+    @PostMapping("/api/registrations/{id}/transition")
+    public ResponseEntity<Map<String, Object>> transition(@AuthenticationPrincipal Jwt jwt, @PathVariable("id") String id,
+                                                          @RequestHeader(value = "Idempotency-Key", required = false) String key,
+                                                          @RequestBody(required = false) String raw) {
+        var resolved = callers.resolve(jwt);
+        if (resolved.caller() == null) {
+            return denied(resolved.denial());
+        }
+        JsonNode body = body(raw);
+        return body == null ? ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed")
+            : reviews.transition(resolved.caller(), idOrNil(id), key, body);
     }
 
     @GetMapping("/api/registrations/{id}/documents")

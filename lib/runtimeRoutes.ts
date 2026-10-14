@@ -46,6 +46,15 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["See every rating scheme and when it starts", "Propose a scheme from a date", "Approve or reject a colleague's proposal", "Withdraw your own proposal"],
   },
   {
+    href: "/app/administration/business-settings",
+    en: "Business settings",
+    hi: "व्यवसाय सेटिंग",
+    icon: "tune",
+    navRoles: [],
+    navCapabilities: ["business_setting_manage"],
+    implemented: ["See every business number and the value in force", "Propose a change from a date", "Approve or reject a colleague's proposal", "Withdraw your own proposal"],
+  },
+  {
     href: "/app/workflow/personal-inbox",
     en: "My work",
     hi: "मेरा कार्य",

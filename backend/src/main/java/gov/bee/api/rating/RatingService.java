@@ -44,9 +44,12 @@ public class RatingService {
     private final RatingRepository repository;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
+    private final gov.bee.api.settings.BusinessSettingService settings;
 
     public RatingService(ModelApplicationRepository applications, RatingRepository repository,
-                                     IdempotencyRepository idempotency, ObjectMapper json) {
+                                     IdempotencyRepository idempotency, ObjectMapper json,
+                                     gov.bee.api.settings.BusinessSettingService settings) {
+        this.settings = settings;
         this.applications = applications;
         this.repository = repository;
         this.idempotency = idempotency;
@@ -93,6 +96,13 @@ public class RatingService {
         }
         if (row.declaredIseer() == null) {
             return error(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error");
+        }
+        // The verified figure may differ from the declared one by no more than the tolerance in force (a business setting, WP08.1h; the
+        // default accepts any difference, as before). A refused rating leaves the application where it is; the officer can return it.
+        java.math.BigDecimal tolerance = settings.valueOn(gov.bee.api.settings.BusinessSettingService.ISEER_VERIFY_TOLERANCE,
+            LocalDate.now(gov.bee.api.application.ModelDraftPolicy.IST));
+        if (input.get().verifiedIseer().subtract(row.declaredIseer()).abs().compareTo(tolerance) > 0) {
+            return error(HttpStatus.UNPROCESSABLE_ENTITY, "iseer_outside_tolerance");
         }
         // The local demonstration scheme in force today (India date). No scheme means no rating, and nothing is written.
         List<RatingRepository.Band> bands = repository.bandsInForce(row.category(), LocalDate.now(gov.bee.api.application.ModelDraftPolicy.IST));

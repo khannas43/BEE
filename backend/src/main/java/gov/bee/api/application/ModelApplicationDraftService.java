@@ -37,10 +37,13 @@ public class ModelApplicationDraftService {
     private final BrandAuthService brandService;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
+    private final gov.bee.api.settings.BusinessSettingService settings;
 
     public ModelApplicationDraftService(IdentityRepository identity, ModelApplicationRepository applications,
                                         BrandAuthRepository brands, BrandAuthService brandService,
-                                        IdempotencyRepository idempotency, ObjectMapper json) {
+                                        IdempotencyRepository idempotency, ObjectMapper json,
+                                        gov.bee.api.settings.BusinessSettingService settings) {
+        this.settings = settings;
         this.identity = identity;
         this.applications = applications;
         this.brands = brands;
@@ -239,7 +242,7 @@ public class ModelApplicationDraftService {
 
     /** Well-formed evidence fields whose laboratory (if set) is an active laboratory organisation; empty otherwise. */
     private Optional<ModelApplicationRepository.EvidenceUpdate> evidenceFor(JsonNode body, LocalDate today) {
-        Optional<ModelApplicationRepository.EvidenceUpdate> parsed = DraftRequestSupport.evidence(body, today);
+        Optional<ModelApplicationRepository.EvidenceUpdate> parsed = DraftRequestSupport.evidence(body, today, settings.valueOn(gov.bee.api.settings.BusinessSettingService.DECLARED_ISEER_MAX, today));
         if (parsed.isPresent() && parsed.get().setLaboratory() && parsed.get().laboratoryCode() != null
             && !applications.laboratoryExists(parsed.get().laboratoryCode())) {
             return Optional.empty();

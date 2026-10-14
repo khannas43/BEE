@@ -289,6 +289,20 @@ read -r rs_pass rs_fail <<<"$(sed -nE 's/^rating-schemes checks: ([0-9]+) passed
 if [[ -z "${rs_pass:-}" ]]; then check "ratingschemes.run" 0 "rating-schemes-browser-check did not complete: $(tail -1 <<<"$rs_out")"
 else pass=$((pass + rs_pass)); fail=$((fail + rs_fail)); fi
 
+# ---- WP08.1h: business settings (records the runtime business-setting pairs)
+bs_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/business-settings-browser-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$bs_out"
+read -r bs_pass bs_fail <<<"$(sed -nE 's/^business-settings checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$bs_out")"
+if [[ -z "${bs_pass:-}" ]]; then check "businesssettings.run" 0 "business-settings-browser-check did not complete: $(tail -1 <<<"$bs_out")"
+else pass=$((pass + bs_pass)); fail=$((fail + bs_fail)); fi
+
+# ---- WP08.1h / Brief 12: the Business settings screen, driven in the portal
+bsu_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/business-settings-ui-check.cjs" 2>&1)"
+grep -E '^(PASS|FAIL) ' <<<"$bsu_out"
+read -r bsu_pass bsu_fail <<<"$(sed -nE 's/^business-settings-ui checks: ([0-9]+) passed, ([0-9]+) failed$/\1 \2/p' <<<"$bsu_out")"
+if [[ -z "${bsu_pass:-}" ]]; then check "businesssettingsui.run" 0 "business-settings-ui-check did not complete: $(tail -1 <<<"$bsu_out")"
+else pass=$((pass + bsu_pass)); fail=$((fail + bsu_fail)); fi
+
 # ---- Wave 2: fee-confirmation corrections (records the runtime fee-correction pairs)
 fcx_out="$(AUTH_RESULTS="$RESULTS" node "$ROOT/scripts/local/fee-corrections-browser-check.cjs" 2>&1)"
 grep -E '^(PASS|FAIL) ' <<<"$fcx_out"

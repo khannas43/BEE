@@ -167,7 +167,7 @@ Each decision below gives what the system does today, the realistic options, a r
 - **Owner's assumption, 4 October 2026 (not BEE's decision).** The recommendation: a team view for a supervisor role only, who may also reassign. **The supervisor role is not named yet**; no team queue is built until it is (BL-129, BL-135).
 
 ### D7 — Registration ID, validity and when the certificate is issued
-- **Owner's assumption, 5 October 2026 (not BEE's decision).** (1) Registration ID: `BEE/<category>/<year>/<number>`, numbered per category and year from 10001 (the fixtures use `BEE/RAC/2026/10016`). (2) Validity: 3 years from the approval date (the fixture shows Jan 2026 to Dec 2028); renewal is not built. (3) The certificate is issued **automatically in the same step as the Secretary's final approval**; if issuing fails, the approval does not happen.
+- **Owner's assumption, 5 October 2026 (not BEE's decision).** (1) Registration ID: `BEE/<category>/<year>/<number>`, numbered per category and year from 10001 (the fixtures use `BEE/RAC/2026/10016`). (2) Validity: 3 years from the approval date (the fixture shows Jan 2026 to Dec 2028); renewal is not built. **Configurable since WP08.1h** (`certificate_validity_years`, 1 to 10, default 3; certificates already issued never change). (3) The certificate is issued **automatically in the same step as the Secretary's final approval**; if issuing fails, the approval does not happen.
 
 ### D8 — What the public may see when verifying a certificate
 - **Owner's assumption, 5 October 2026 (not BEE's decision).** The public verification page shows the registration ID, brand, model, category, star rating, efficiency figure (ISEER), validity dates, status and the manufacturer's legal name. It shows no personal names, addresses or internal notes, and it gives the same answer for every registration that does not exist. Status is valid or expired, worked out from the dates; revoked is designed in but not built.
@@ -224,15 +224,15 @@ Each decision below gives what the system does today, the realistic options, a r
 | A5 | Fee by submission date; standard and accreditation by test date | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | B1 | (a) required before submit | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | B2 | (a) as built; source and suspension rule not stated | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
-| B3 | Maximum age recommended; number not given | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B3 | Maximum age recommended; number not given. **Configurable** (WP08.1h): default 1095 days, changed by two Administrators | Owner's assumption | Owner, 4 Oct 2026 and 13 Oct 2026 (not BEE) |
 | B4 | As built; families not in scope until stated | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
-| B5 | Declared, then verified by scrutiny; range not stated | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B5 | Declared, then verified by scrutiny; range not stated. **Configurable** (WP08.1h): highest figure 99.99, tolerance between declared and verified (default: any difference accepted) | Owner's assumption | Owner, 4 Oct 2026 and 13 Oct 2026 (not BEE) |
 | B6 | List per application type recommended; none given | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | B7 | Allowed while returned, never after resubmission | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | B8 | IAME records verified or not verified with a note | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | B9 (D1, D2, D5) | D1 as the 4 Oct assumption; D2 round-robin; D5 one IAME step | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | B11 | (a) manual, plus a correction route with a second Finance approver | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
-| B12 | Tolerance not given; exact match stays | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
+| B12 | Tolerance not given; exact match stays. **Configurable** (WP08.1h): payment tolerance in rupees, default 0.00 | Owner's assumption | Owner, 4 Oct 2026 and 13 Oct 2026 (not BEE) |
 | B10 | Yes, the applicant's own record of their models | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | B13 | Keep the built rule | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | B14 | Per stage, working days, clock stopped while returned; days not given | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |

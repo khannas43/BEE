@@ -49,6 +49,12 @@ GRANT SELECT, DELETE ON app.rating_scheme_proposal TO ${BEE_MAINT_DB_USER};
 SQL
 fi
 
+if psql_super -d bee_app -c "SELECT to_regclass('app.business_setting_proposal') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT SELECT, DELETE ON app.business_setting_proposal TO ${BEE_MAINT_DB_USER};
+SQL
+fi
+
 if psql_super -d bee_app -c "SELECT to_regclass('app.fee_rule_proposal') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 GRANT SELECT, DELETE ON app.fee_rule_proposal TO ${BEE_MAINT_DB_USER};

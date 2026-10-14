@@ -46,15 +46,14 @@ public final class DraftRequestSupport {
 
     private static final Pattern LABORATORY_CODE = Pattern.compile("^[A-Z0-9_-]{1,32}$");
     private static final Pattern ISO_DATE = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
-    private static final BigDecimal MAX_ISEER = new BigDecimal("99.99");
 
     /**
      * The optional WP05.1d evidence fields of a draft write. A field that is absent keeps its stored value, an explicit
      * null clears it, and a present value must be well formed: a laboratory code, an ISO test date not after today
-     * (India date), and a positive efficiency figure with at most two decimals. Whether the laboratory exists and is
+     * (India date), and a positive efficiency figure with at most two decimals, not above the maximum in force (a business setting). Whether the laboratory exists and is
      * accredited is checked by the service and at submit. Empty means the body carried a malformed value.
      */
-    public static Optional<ModelApplicationRepository.EvidenceUpdate> evidence(JsonNode body, LocalDate today) {
+    public static Optional<ModelApplicationRepository.EvidenceUpdate> evidence(JsonNode body, LocalDate today, BigDecimal maxIseer) {
         boolean setLab = body.has("laboratoryCode");
         String lab = null;
         if (setLab && !body.get("laboratoryCode").isNull()) {
@@ -88,7 +87,7 @@ public final class DraftRequestSupport {
                 return Optional.empty();
             }
             iseer = n.decimalValue();
-            if (iseer.signum() <= 0 || iseer.stripTrailingZeros().scale() > 2 || iseer.compareTo(MAX_ISEER) > 0) {
+            if (iseer.signum() <= 0 || iseer.stripTrailingZeros().scale() > 2 || iseer.compareTo(maxIseer) > 0) {
                 return Optional.empty();
             }
         }

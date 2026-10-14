@@ -63,7 +63,7 @@ const REVIEWER_UPSTREAM = {
 // First slice step 5 (Programme computes the rating). Keep equal to lib/server/contracts/rating.ts and the artifact.
 const RATING_ROUTE = "/api/runtime/model-applications/{id}/rating";
 const RATING_UPSTREAM = {
-  POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required", "rule_not_available", "rating_below_threshold"], 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: ["mfa_required", "no_active_account", "no_effective_role", "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["version_conflict", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required", "rule_not_available", "iseer_outside_tolerance", "rating_below_threshold"], 503: ["service_unavailable"] },
 };
 // First slice step 6 (the Director recommends). Keep equal to lib/server/contracts/director-recommendation.ts and the artifact.
 const DIRECTOR_ROUTE = "/api/runtime/model-applications/{id}/director-recommendation";
@@ -108,6 +108,13 @@ const SCHEME_DECISION_ROUTE = "/api/runtime/rating-schemes/proposals/{id}/decisi
 const SCHEMES_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: FEE_DENIALS, 503: ["service_unavailable"] } };
 const SCHEME_PROPOSAL_UPSTREAM = FEE_PROPOSAL_UPSTREAM;
 const SCHEME_DECISION_UPSTREAM = FEE_DECISION_UPSTREAM;
+// Business settings (WP08.1h). Keep equal to lib/server/contracts/business-settings.ts and the artifact.
+const SETTINGS_ROUTE = "/api/runtime/business-settings";
+const SETTING_PROPOSAL_ROUTE = "/api/runtime/business-settings/proposals";
+const SETTING_DECISION_ROUTE = "/api/runtime/business-settings/proposals/{id}/decision";
+const SETTINGS_UPSTREAM = SCHEMES_UPSTREAM;
+const SETTING_PROPOSAL_UPSTREAM = FEE_PROPOSAL_UPSTREAM;
+const SETTING_DECISION_UPSTREAM = FEE_DECISION_UPSTREAM;
 // Fee-confirmation corrections. Keep equal to lib/server/contracts/fee-corrections.ts and the artifact.
 const CORRECTIONS_ROUTE = "/api/runtime/fee-corrections";
 const CORRECTION_PROPOSAL_ROUTE = "/api/runtime/fee-corrections/proposals";
@@ -548,6 +555,9 @@ async function nextChecks(jar, novaToken) {
     [SCHEMES_ROUTE, "/api/runtime/rating-schemes", "GET", "schemes-anon-get", undefined],
     [SCHEME_PROPOSAL_ROUTE, "/api/runtime/rating-schemes/proposals", "POST", "scheme-proposal-anon-post", "{}"],
     [SCHEME_DECISION_ROUTE, `/api/runtime/rating-schemes/proposals/${NOVA_APP}/decision`, "POST", "scheme-decision-anon-post", "{}"],
+    [SETTINGS_ROUTE, "/api/runtime/business-settings", "GET", "settings-anon-get", undefined],
+    [SETTING_PROPOSAL_ROUTE, "/api/runtime/business-settings/proposals", "POST", "setting-proposal-anon-post", "{}"],
+    [SETTING_DECISION_ROUTE, `/api/runtime/business-settings/proposals/${NOVA_APP}/decision`, "POST", "setting-decision-anon-post", "{}"],
     [NOTIFICATIONS_ROUTE, "/api/runtime/notifications", "GET", "notifications-anon-get", undefined],
     [NOTIFICATION_READ_ROUTE, `/api/runtime/notifications/${NOVA_APP}/read`, "POST", "notification-read-anon-post", undefined],
     [NOTIFICATION_READ_ALL_ROUTE, "/api/runtime/notifications/read-all", "POST", "notification-read-all-anon-post", undefined],
@@ -717,6 +727,9 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(SCHEMES_ROUTE, "/api/runtime/rating-schemes", "GET", sessionJar, SCHEMES_UPSTREAM);
     await exerciseStandInPairs(SCHEME_PROPOSAL_ROUTE, "/api/runtime/rating-schemes/proposals", "POST", sessionJar, SCHEME_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(SCHEME_DECISION_ROUTE, `/api/runtime/rating-schemes/proposals/${NOVA_APP}/decision`, "POST", sessionJar, SCHEME_DECISION_UPSTREAM);
+    await exerciseStandInPairs(SETTINGS_ROUTE, "/api/runtime/business-settings", "GET", sessionJar, SETTINGS_UPSTREAM);
+    await exerciseStandInPairs(SETTING_PROPOSAL_ROUTE, "/api/runtime/business-settings/proposals", "POST", sessionJar, SETTING_PROPOSAL_UPSTREAM);
+    await exerciseStandInPairs(SETTING_DECISION_ROUTE, `/api/runtime/business-settings/proposals/${NOVA_APP}/decision`, "POST", sessionJar, SETTING_DECISION_UPSTREAM);
     await exerciseStandInPairs(CORRECTIONS_ROUTE, "/api/runtime/fee-corrections", "GET", sessionJar, CORRECTIONS_UPSTREAM);
     await exerciseStandInPairs(CORRECTION_PROPOSAL_ROUTE, "/api/runtime/fee-corrections/proposals", "POST", sessionJar, CORRECTION_PROPOSAL_UPSTREAM);
     await exerciseStandInPairs(CORRECTION_DECISION_ROUTE, `/api/runtime/fee-corrections/proposals/${NOVA_APP}/decision`, "POST", sessionJar, CORRECTION_DECISION_UPSTREAM);

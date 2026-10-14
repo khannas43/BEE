@@ -83,7 +83,8 @@ class ModelApplicationEvidenceDatabaseTest {
         db = new JdbcTemplate(runtime);
         applications = new ModelApplicationRepository(db);
         documents = new DocumentRepository(db);
-        evidence = new ModelApplicationEvidence(documents, new MasterDataService(new MasterDataRepository(db)), applications);
+        evidence = new ModelApplicationEvidence(documents, new MasterDataService(new MasterDataRepository(db)), applications,
+            new gov.bee.api.settings.BusinessSettingService(new gov.bee.api.settings.BusinessSettingRepository(db), null, null));
     }
 
     @AfterAll
@@ -219,6 +220,31 @@ class ModelApplicationEvidenceDatabaseTest {
             assertEquals(c.accredited(), !unmet.contains(Gate.LABORATORY_NOT_ACCREDITED), c.why());
             assertEquals(c.standard(), !unmet.contains(Gate.STANDARD_NOT_AVAILABLE), c.why());
         }
+    }
+
+    @Test
+    void theBusinessSettingsChangeTheTestAgeAndTheDeclaredFigureGatesFromTheirStartDate() {
+        UUID id = draft("GATE-SETTINGS");
+        uploadReport(id);
+        evidenceFields(id, "LAB", LocalDate.of(2026, 9, 1), "4.50");
+        // The versions start in the future, so no other test sees them; the gates are read for that later day.
+        LocalDate later = TODAY.plusDays(400);
+        assertTrue(evidence.evaluate(row(id), later).firstUnmet().isEmpty() || !unmetOn(id, later).contains(Gate.TEST_DATE_INVALID), "the default age is three years");
+        owner.update("INSERT INTO business_setting_version (setting_key, effective_from, value, source_reference, reason) VALUES ('test_report_max_age_days', ?, 30, 'test', 'test')", java.sql.Date.valueOf(later));
+        owner.update("INSERT INTO business_setting_version (setting_key, effective_from, value, source_reference, reason) VALUES ('declared_iseer_max', ?, 4.00, 'test', 'test')", java.sql.Date.valueOf(later));
+        assertFalse(unmetOn(id, later.minusDays(1)).contains(Gate.TEST_DATE_INVALID), "before the start date the default applies");
+        assertFalse(unmetOn(id, later.minusDays(1)).contains(Gate.DECLARED_EFFICIENCY_REQUIRED));
+        assertTrue(unmetOn(id, later).contains(Gate.TEST_DATE_INVALID), "a test 400 days old is older than the 30 days now allowed");
+        assertTrue(unmetOn(id, later).contains(Gate.DECLARED_EFFICIENCY_REQUIRED), "a saved 4.50 is above the new maximum of 4.00");
+        evidenceFields(id, "LAB", later.minusDays(30), "4.00");
+        assertFalse(unmetOn(id, later).contains(Gate.TEST_DATE_INVALID), "exactly 30 days old is allowed");
+        assertFalse(unmetOn(id, later).contains(Gate.DECLARED_EFFICIENCY_REQUIRED), "exactly the maximum is allowed");
+        evidenceFields(id, "LAB", later.minusDays(31), "4.00");
+        assertTrue(unmetOn(id, later).contains(Gate.TEST_DATE_INVALID), "31 days old is refused");
+    }
+
+    private static List<Gate> unmetOn(UUID id, LocalDate day) {
+        return evidence.evaluate(row(id), day).gates().stream().filter(g -> !g.met()).map(ModelApplicationEvidence.GateResult::gate).toList();
     }
 
     @Test

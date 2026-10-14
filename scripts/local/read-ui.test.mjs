@@ -294,6 +294,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
     "/app/administration/fee-rules",
     "/app/finance/receipt",
     "/app/administration/rating-formula",
+    "/app/administration/business-settings",
     "/app/workflow/personal-inbox",
     "/app/workflow/my-approvals",
     "/app/workflow/application-review",
@@ -324,6 +325,8 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.equal(runtimeNavFor([{ role: "programme", scope: "all" }]).some((r) => r.href === "/app/model-label/director-approval"), false, "Programme never gets the Director entry");
   assert.deepEqual(runtimeNavFor([{ role: "admin", scope: "all" }]).map((r) => r.href), [], "a role alone no longer brings the fee-rule or rating-scheme entry");
   assert.deepEqual(runtimeNavFor([{ role: "admin", scope: "all" }], ["fee_rule_manage", "rating_scheme_manage"]).map((r) => r.href), ["/app/administration/fee-rules", "/app/administration/rating-formula"], "the Administrator, who holds both permissions, gets both screens");
+  assert.deepEqual(runtimeNavFor([{ role: "admin", scope: "all" }], ["business_setting_manage"]).map((r) => r.href), ["/app/administration/business-settings"], "the business-settings permission brings only that screen");
+  assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_rule_manage", "rating_scheme_manage"]).some((r) => r.href === "/app/administration/business-settings"), false, "the other administration permissions do not bring Business settings");
   assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_rule_manage"]).map((r) => r.href), ["/app/administration/fee-rules", "/app/workflow/personal-inbox", "/app/finance/finance-queue"], "a role given the permission later gets the entry, in menu order, beside its own entries");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }], ["rating_scheme_manage"]).some((r) => r.href === "/app/administration/fee-rules"), false, "one permission does not bring the other screen");
   assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_confirmation_correct"]).map((r) => r.href), ["/app/finance/receipt", "/app/workflow/personal-inbox", "/app/finance/finance-queue"], "Finance, which holds the correction permission, gets the receipts screen");
@@ -343,6 +346,11 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.ok(runtimeRouteFor("/app/model-label/director-approval"));
   assert.ok(runtimeRouteFor("/app/administration/fee-rules"));
   assert.ok(runtimeRouteFor("/app/administration/rating-formula"));
+  assert.ok(runtimeRouteFor("/app/administration/business-settings"));
+  assert.deepEqual([...(runtimeRouteFor("/app/administration/business-settings").navRoles)], []);
+  assert.deepEqual([...(runtimeRouteFor("/app/administration/business-settings").navCapabilities)], ["business_setting_manage"]);
+  assert.equal(runtimeRouteFor("/app/administration/business-settings").en, "Business settings");
+  assert.equal(runtimeRouteFor("/app/administration/business-settings").hi, "व्यवसाय सेटिंग");
   assert.ok(runtimeRouteFor("/app/finance/receipt"));
   assert.ok(runtimeRouteFor("/app/model-label/label-preview"));
   assert.ok(runtimeRouteFor("/app/workflow/personal-inbox"));

@@ -4,7 +4,7 @@
  * step route on every seeded application, nothing changes, and the history of each application is identical afterwards.
  *
  * The matrix is every persona x every command route x every seeded application, minus the few combinations where the persona is the
- * entitled actor at that stage (those are the happy paths proved by the activity checks). Each denied call must answer 403 or 404 (a 401 would mean an expired token, not a denial) and
+ * entitled actor at that stage (those are the happy paths proved by the activity checks). Each denied call must answer 403 or 404 (a 401 would mean an expired token, not a denial; tokens are replaced after 240 s) and
  * no application, submission event or transition event may differ afterwards (A7). The cases that need a live multi-stage application
  * (N6 superseded rating, N8 the same person at two stages) are proved by the activity checks named in docs/wp02/WP02.4_DENIAL_EVIDENCE.md.
  *
@@ -47,9 +47,14 @@ const ROUTE_CASES = {
   "": { m: "PATCH", body: { version: 0, category: "RAC", modelNumber: "DENIAL-PROBE" }, legit: (p, s) => p === "nova.applicant" && s === "draft" },
 };
 
+// A token lives 300 s and a new one needs an unused one-time code (up to 30 s each), so tokens are reused while younger than 240 s.
 const tokens = {};
+const mintedAt = {};
 async function token(u) {
-  if (!(u in tokens)) tokens[u] = await totp.accessToken(ids.name(u));
+  if (!(u in tokens) || Date.now() - mintedAt[u] > 240_000) {
+    tokens[u] = await totp.accessToken(ids.name(u));
+    mintedAt[u] = Date.now();
+  }
   return tokens[u];
 }
 async function call(u, method, path, body) {
@@ -93,7 +98,6 @@ async function main() {
   let denied = 0, total = 0, extra = 0;
   const wrong = [];
   for (const [route, c] of Object.entries(ROUTE_CASES)) {
-    for (const k of Object.keys(tokens)) delete tokens[k]; // a fresh token per route: a 300 s token cannot expire mid-matrix
     perRoute[route || "patch"] = { total: 0, denied: 0 };
     for (const a of apps) {
       for (const p of PERSONAS) {
@@ -148,6 +152,50 @@ async function main() {
   const historyAfter = await history();
   check("denial.A7-nothing-changed", before === after, `applications, submission events, transition events and fee snapshots identical after ${total + extra} denied calls`);
   check("denial.A7-history-unchanged", apps.every((a) => historyBefore[a.ref] === historyAfter[a.ref]), `the history of all ${apps.length} applications is byte-identical before and after`);
+
+  /* The other API routes, by persona (WP02 package review): administration, fees, registration, the register and the request to delegate. Every
+     persona not entitled to a route is denied (403 or 404); the entitled personas reach it (a read answers 200; a write is not exercised). */
+  const ALL = ["nova.applicant", "pixel.applicant", "bee.finance", "iame.officer", "bee.reviewer", "bee.programme", "bee.director", "bee.secretary", "bee.admin", "bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer", "inactive.role", "role.mismatch"];
+  const OTHER = [
+    { m: "GET", path: "/api/fee-rules", who: ["bee.admin"] },
+    { m: "GET", path: "/api/rating-schemes", who: ["bee.admin"] },
+    { m: "GET", path: "/api/business-settings", who: ["bee.admin"] },
+    { m: "GET", path: "/api/fee-corrections", who: ["bee.finance"] },
+    { m: "GET", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant", "bee.finance", "bee.programme", "bee.director"] },
+    { m: "GET", path: "/api/registrations/eligible-brands", who: ["nova.applicant", "pixel.applicant"] },
+    { m: "GET", path: "/api/register-revocations", who: ["bee.programme", "bee.director"] },
+    { m: "POST", path: "/api/fee-rules/proposals", who: ["bee.admin"] },
+    { m: "POST", path: "/api/rating-schemes/proposals", who: ["bee.admin"] },
+    { m: "POST", path: "/api/business-settings/proposals", who: ["bee.admin"] },
+    { m: "POST", path: "/api/fee-corrections/proposals", who: ["bee.finance"] },
+    { m: "POST", path: "/api/fee-corrections/reversals", who: ["bee.finance"] },
+    { m: "POST", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant"] },
+    { m: "POST", path: "/api/register-revocations", who: ["bee.programme"] },
+    { m: "POST", path: "/api/delegations", who: ["bee.programme", "bee.director", "bee.finance"] },
+  ];
+  const otherSnapshot = () => sql(`SELECT (SELECT count(*) FROM app.fee_rule_proposal) || '|' || (SELECT count(*) FROM app.rating_scheme_proposal) || '|' || (SELECT count(*) FROM app.business_setting_proposal) || '|' || (SELECT count(*) FROM app.fee_correction_proposal) || '|' || (SELECT count(*) FROM app.registration_application) || '|' || (SELECT count(*) FROM app.register_revocation_proposal) || '|' || (SELECT count(*) FROM app.delegation) || '|' || (SELECT count(*) FROM app.fee_reversal_proposal)`);
+  const otherBefore = otherSnapshot();
+  let otherDenied = 0, otherTotal = 0;
+  const otherWrong = [];
+  const otherControls = [];
+  for (const r of OTHER) {
+    for (const p of ALL) {
+      if (r.who.includes(p) && r.m !== "GET") continue; // an entitled writer is not exercised: nothing is created or recorded
+      let res;
+      try { res = await call(p, r.m, r.path, r.m === "GET" ? undefined : {}); } catch (e) { otherWrong.push(`${p} ${r.m} ${r.path}: ${e.message}`); continue; }
+      if (r.who.includes(p)) {
+        if (r.m === "GET") otherControls.push(res.status === 200 ? null : `${p} ${r.path} -> ${res.status}`);
+        continue;
+      }
+      otherTotal++;
+      if ([403, 404].includes(res.status)) otherDenied++;
+      else otherWrong.push(`${p} ${r.m} ${r.path} -> ${res.status} ${res.json?.error ?? ""}`);
+    }
+  }
+  check("denial.other-routes-matrix", otherWrong.length === 0, `${otherDenied} of ${otherTotal} calls by personas not entitled to administration, fee, registration and register routes were denied (403 or 404)${otherWrong.length ? "; ALLOWED: " + otherWrong.slice(0, 5).join("; ") : ""}`);
+  const badControls = otherControls.filter(Boolean);
+  check("denial.other-routes-controls", badControls.length === 0, `the entitled personas reach every read route (200)${badControls.length ? "; NOT: " + badControls.join("; ") : ""}`);
+  check("denial.other-routes-nothing-changed", otherSnapshot() === otherBefore, "no proposal, request or delegation was created by a denied call");
 
   /* N8: a person who already acted at another stage of one application is refused at this one, whatever the role. A seeded application is moved
      to the stage and an earlier step by the same twin is written (the local maintenance login removes it again). */

@@ -14,7 +14,7 @@
 - **Acceptance commands** (run in `~/Developer/BEE`):
   - `npx tsc --noEmit`
   - `npx eslint . --max-warnings 0` (zero)
-  - `npm run web:test` (current total 215 plus none from you; it must not drop)
+  - `npm run web:test` (run it first on the clean branch and note the total; it must not drop)
   - `npm run web:test:ui` (the current total plus your tests)
   - `npm run build`
 - **Live checks:** you may start the runtime yourself (`npm run local:up`, `npm run local:seed`) and run `npm run local:fee-rules` (80) and `npm run local:rating-schemes` (78); their totals must not change. `npm run local:business-settings` (74 over two runs, API level) must pass too. Stop the runtime with `npm run local:down` before `/bee-handback`. Do **not** run `npm run local:check`: Claude runs the full gate at merge.

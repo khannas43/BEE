@@ -40,6 +40,7 @@ const routeOf = (path) => {
 };
 
 function record(method, path, r) {
+  if (!path.includes("/registrations")) return; // other routes (the model drafts) are recorded by their own checks
   const route = routeOf(path);
   const faux = r.fauxOverride ?? contract.observationFromBrowserFetch(r);
   contract.record({ route, method, status: r.status, code: r.status >= 400 ? (r.body?.error ?? "-") : "-", ok: contract.conforms(doc, route, method, faux).length === 0 });
@@ -109,7 +110,14 @@ const today = () => sqlApp(`SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date::te
 const plusDays = (d, n) => sqlApp(`SELECT (DATE '${d}' + ${n})::text`);
 const counts = () => sqlApp(`SELECT (SELECT count(*) FROM app.brand) || '|' || (SELECT count(*) FROM app.agency_authorisation) || '|' || (SELECT count(*) FROM app.model_application)`);
 
-function cleanup(refs, twinIds, brandNames, probeBrand) {
+const MODEL = "/api/runtime/model-applications";
+
+function cleanup(refs, twinIds, brandNames, probeBrand, modelIds = [], probeBrands = []) {
+  if (modelIds.length) {
+    const arr = modelIds.map((id) => `'${id}'`).join(",");
+    sqlMaint(`SELECT set_config('bee.cleanup_schema', 'app', true); INSERT INTO app.local_disposable_application (application_id) SELECT unnest(ARRAY[${arr}]::uuid[]) ON CONFLICT DO NOTHING`);
+    sqlMaint(`SELECT set_config('bee.cleanup_schema', 'app', true); SELECT app.app_disposable_model_cleanup(ARRAY[${arr}]::uuid[])`);
+  }
   if (refs.length) {
     const apps = `SELECT id FROM app.registration_application WHERE reference IN (${refs.map((x) => `'${x}'`).join(",")})`;
     sqlMaint(`DELETE FROM app.registration_fee_confirmation WHERE application_id IN (${apps});
@@ -120,13 +128,13 @@ function cleanup(refs, twinIds, brandNames, probeBrand) {
       DELETE FROM app.registration_document WHERE application_id IN (${apps});
       DELETE FROM app.registration_application WHERE id IN (${apps})`);
   }
-  if (probeBrand) {
-    sqlMaint(`DELETE FROM app.agency_authorisation WHERE brand_id = '${probeBrand}'`);
+  for (const b of [probeBrand, ...probeBrands].filter(Boolean)) {
+    sqlMaint(`DELETE FROM app.agency_authorisation WHERE brand_id = '${b}'`);
   }
   if (brandNames.length) {
     sqlMaint(`DELETE FROM app.brand WHERE name IN (${brandNames.map((x) => `'${x}'`).join(",")}) AND source_reference LIKE 'REG-%'`);
   }
-  if (probeBrand) sqlMaint(`DELETE FROM app.brand WHERE id = '${probeBrand}'`);
+  for (const b of [probeBrand, ...probeBrands].filter(Boolean)) sqlMaint(`DELETE FROM app.brand WHERE id = '${b}'`);
   sqlApp(`DELETE FROM app.idempotency_record WHERE account_id IN (${twinIds})`);
 }
 
@@ -138,6 +146,8 @@ async function runChecks(run, P) {
   const refs = [];
   const brandNames = [];
   let probeBrand = null;
+  const probeBrands = [];
+  const modelIds = [];
 
   /** Files a brand request with a licence, submits it and has Finance confirm the fee: ready for Programme at version 3. */
   async function toProgrammeReview(name) {
@@ -283,8 +293,46 @@ async function runChecks(run, P) {
     check(`${run}.pixel.sees-its-authorisation`, r.status === 200 && r.body?.state === "approved" && r.body?.registeredAuthorisationId === authId, `${r.status} ${r.body?.state}`);
     r = await api(P.finance, "GET", `${WEB}${R}/${areg.id}`, null, null);
     check(`${run}.finance.cannot-read-a-decided-request`, r.status === 404, `${r.status}`);
+
+    // 4. The register feeds the model flow: a registered brand can be filed on; an agency can file only inside its authorised period.
+    const modelNo = (x) => `RV-${tag}-${x}`.toUpperCase();
+    r = await api(P.nova, "GET", `${WEB}${MODEL}/eligible-brands`, null, null);
+    check(`${run}.model.registered-brand-is-offered-to-its-owner`, r.status === 200 && r.body?.items?.some((b) => b.brandId === brandId), `${r.status} ${r.body?.count}`);
+    r = await api(P.nova, "POST", `${WEB}${MODEL}`, { brandId, category: "RAC", modelNumber: modelNo("A") }, key());
+    if (r.body?.id) modelIds.push(r.body.id);
+    check(`${run}.model.owner-files-a-draft-on-the-registered-brand`, r.status === 201 && r.body?.state === "draft" && r.body?.brandId === brandId, `${r.status} ${r.body?.state}`);
+    r = await api(P.pixel, "POST", `${WEB}${MODEL}`, { brandId, category: "RAC", modelNumber: modelNo("B") }, key());
+    check(`${run}.model.agency-without-authorisation-is-refused`, r.status === 403 && r.body?.error === "brand_not_permitted", `${r.status} ${r.body?.error}`);
+    r = await api(P.pixel, "POST", `${WEB}${MODEL}`, { brandId: probeBrand, category: "RAC", modelNumber: modelNo("C") }, key());
+    check(`${run}.model.authorisation-starting-tomorrow-is-not-yet-usable`, r.status === 403 && r.body?.error === "brand_not_permitted", `${r.status} ${r.body?.error}`);
+
+    // An authorisation that starts today, approved through the same workflow, is usable at once; revoked, it is not.
+    const probe2 = sqlApp(`INSERT INTO app.brand (name, owner_organisation_id, status, source_reference, verification_status, note) VALUES ('Probe2 ${tag}', '${NOVA_ORG}', 'active', 'live check', 'synthetic', 'probe') RETURNING id`).split("\n")[0];
+    probeBrands.push(probe2);
+    r = await api(P.pixel, "POST", `${WEB}${R}`, { brandId: probe2, validFrom: t }, key());
+    const b2 = r.body;
+    if (b2?.reference) refs.push(b2.reference);
+    await api(P.pixel, "PATCH", `${WEB}${R}/${b2.id}`, { version: 0, brandId: probe2, validFrom: t }, key());
+    await upload(P.pixel, b2.id, minPdf(`${run}-agency2`), key(), { label: "Agency licence" });
+    r = await api(P.pixel, "GET", `${WEB}${R}/${b2.id}/submit`, null, null);
+    const f2 = r.body?.submissionFee;
+    await api(P.pixel, "POST", `${WEB}${R}/${b2.id}/submit`, { version: 1, expectedFee: { amountInr: f2.amountInr, feeRuleKey: f2.feeRuleKey, feeRuleVersion: f2.feeRuleVersion } }, key());
+    await api(P.finance, "POST", `${WEB}${R}/${b2.id}/fee-confirmation`, { version: 2, receiptReference: `RCPT-B-${tag}`, receivedOn: "2026-10-01", amountInr: f2.totalInr }, key());
+    await step("programme", b2.id, "recommend", 3);
+    r = await step("director", b2.id, "approve", 4);
+    check(`${run}.model.second-authorisation-approved`, r.status === 200 && !!r.body?.registeredAuthorisationId, `${r.status}`);
+    r = await api(P.pixel, "GET", `${WEB}${MODEL}/eligible-brands`, null, null);
+    check(`${run}.model.agency-is-offered-the-authorised-brand`, r.status === 200 && r.body?.items?.some((b) => b.brandId === probe2), `${r.status} ${r.body?.count}`);
+    r = await api(P.pixel, "POST", `${WEB}${MODEL}`, { brandId: probe2, category: "RAC", modelNumber: modelNo("D") }, key());
+    if (r.body?.id) modelIds.push(r.body.id);
+    check(`${run}.model.agency-files-inside-its-period`, r.status === 201 && r.body?.brandId === probe2, `${r.status} ${r.body?.state}`);
+    sqlApp(`UPDATE app.agency_authorisation SET status = 'revoked' WHERE brand_id = '${probe2}'`);
+    r = await api(P.pixel, "POST", `${WEB}${MODEL}`, { brandId: probe2, category: "RAC", modelNumber: modelNo("E") }, key());
+    check(`${run}.model.revoked-authorisation-is-refused`, r.status === 403 && r.body?.error === "brand_not_permitted", `${r.status} ${r.body?.error}`);
+    r = await api(P.pixel, "GET", `${WEB}${MODEL}/eligible-brands`, null, null);
+    check(`${run}.model.revoked-brand-is-no-longer-offered`, r.status === 200 && !r.body?.items?.some((b) => b.brandId === probe2), `${r.status} ${r.body?.count}`);
   } finally {
-    cleanup(refs, twinIds, brandNames, probeBrand);
+    cleanup(refs, twinIds, brandNames, probeBrand, modelIds, probeBrands);
   }
   check(`${run}.db.cleaned-up`, counts() === before, counts());
 }

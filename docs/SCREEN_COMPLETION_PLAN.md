@@ -142,7 +142,7 @@ Generated from the screen matrix. Status is as of 3 October 2026. "Not started" 
 | 3 | `/app/qr/batch` | QR batch workspace | Labels, QR and certificates | Not started: standalone / static-fixture → WP08 |
 | 3 | `/app/audit/integration-correlation` | Integration correlation | Insights and administration | Not started: deep / cert-store → WP09 |
 | 3 | `/directory` | Appliance directory | Public (no login) | Not started: public / none |
-| 3 | `/verify` | Public verification | Public (no login) | Not started: public / lifecycle-store → WP08 |
+| 3 | `/verify` | Public verification | Public (no login) | Real: built as WP09.1c and d (local verifier with rate limit); revoked and pending states not built |
 | 4 | `/app/production/quarterly-submission` | Quarterly submission | Production and finance | Not started: scaffold / scaffold |
 | 4 | `/app/production/bulk-upload` | Bulk upload | Production and finance | Not started: scaffold / scaffold |
 | 4 | `/app/production/reconciliation` | Reconciliation | Production and finance | Not started: scaffold / scaffold |

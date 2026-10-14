@@ -77,7 +77,7 @@ TAB2_ROWS = [
     ("Cursor brief", "BRIEF-14", "Registration review screens and applicant's returned path", "Done", 100),
     ("Cursor brief", "BRIEF-15", "Register screen: propose and decide closing or revoking an entry", "Done", 100),
     ("Cursor brief", "BRIEF-16", "Delegation screen (ask, approve, revoke, my delegations)", "Done", 100),
-    ("Work package", "WP02", "Identity, session, MFA, model-application policy", "In progress", 92),
+    ("Work package", "WP02", "Identity, session, MFA, delegation, policy (package accepted 14 Oct 2026; escalation R12 waits for BEE B14)", "Done", 100),
     ("Work package", "WP02.4a", "Keycloak brute-force detection (temporary lockout)", "Done", 100),
     ("Work package", "WP02.4b", "Complete denial evidence: cases N1 to N10 and A7", "Done", 100),
     ("Work package", "WP02.4c", "Delegation (maker-checker, expiry, revocation, audit)", "Done", 100),

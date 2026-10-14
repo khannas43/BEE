@@ -26,4 +26,5 @@ Not blocking, recorded in docs/BACKLOG.md: BL-200 (Origin check on BFF writes), 
 ## Evidence
 
 - `denial-suite-check` 33/33 (601 + 201 denied calls, N8 live, A7); `bruteforce-check` 8/8; `local:mfa` 31/0; `auth-check` 31/0; `local:delegation` 106/0; `SlicePolicyTest` 36; `SpringContractTest` 36/0.
-- The full `local:check` on the final tree is recorded below.
+- A second, focused independent review of the corrections found no high defect; its fixes are in (a stale status line, entitled writers not exercised, the delegation request added to the matrix, counts).
+- The full `local:check` on the final tree: **2175 passed, 0 failed** (migrations V1 to V50, contract 0.32.0). The counts above are those of that run.

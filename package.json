@@ -38,6 +38,7 @@
     "local:inbox": "bash -c 'source scripts/local/lib.sh && node scripts/local/inbox-browser-check.cjs'",
     "local:fee-rules": "bash -c 'source scripts/local/lib.sh && node scripts/local/fee-rules-browser-check.cjs'",
     "local:business-settings": "bash -c 'source scripts/local/lib.sh && node scripts/local/business-settings-browser-check.cjs'",
+    "local:business-settings-ui": "bash -c 'source scripts/local/lib.sh && node scripts/local/business-settings-ui-check.cjs'",
     "local:rating-schemes": "bash -c 'source scripts/local/lib.sh && node scripts/local/rating-schemes-browser-check.cjs'",
     "local:fee-corrections": "bash -c 'source scripts/local/lib.sh && node scripts/local/fee-corrections-browser-check.cjs'",
     "local:model-submit": "bash -c 'source scripts/local/lib.sh && node scripts/local/model-submit-browser-check.cjs'",

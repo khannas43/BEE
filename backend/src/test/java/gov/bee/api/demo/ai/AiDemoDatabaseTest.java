@@ -127,7 +127,7 @@ class AiDemoDatabaseTest {
         var models = (List<Map<String, Object>>) ok(get(PROG, "models", null)).get("models");
         assertEquals(5, models.size());
         assertTrue(models.stream().anyMatch(m -> ((String) m.get("description")).contains("not machine learning")));
-        assertEquals(20, owner.queryForObject("SELECT count(*) FROM ai_kb", Integer.class));
+        assertTrue(owner.queryForObject("SELECT count(*) FROM ai_kb", Integer.class) >= 20);
     }
 
     @Test

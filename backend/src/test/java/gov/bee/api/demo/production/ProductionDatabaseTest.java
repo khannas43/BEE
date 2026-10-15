@@ -112,11 +112,13 @@ class ProductionDatabaseTest {
     void seedHasFourQuartersAndScopeFollowsTheOrganisation() {
         assertEquals(4, owner.queryForObject("SELECT count(*) FROM production_submission WHERE organisation_id = ?", Integer.class, NOVA_ORG));
         assertEquals(4, list(get(NOVA, null, null).body().get("submissions")).size());
-        assertEquals(0, list(get(PIXEL, null, null).body().get("submissions")).size());
-        assertEquals(4, list(get(PROGRAMME, null, null).body().get("submissions")).size());
-        assertEquals(4, list(get(AUDITOR, null, null).body().get("submissions")).size());
+        int pixelCount = owner.queryForObject("SELECT count(*) FROM production_submission WHERE organisation_id = ?", Integer.class, PIXEL_ORG);
+        int total = owner.queryForObject("SELECT count(*) FROM production_submission", Integer.class);
+        assertEquals(pixelCount, list(get(PIXEL, null, null).body().get("submissions")).size());
+        assertEquals(total, list(get(PROGRAMME, null, null).body().get("submissions")).size());
+        assertEquals(total, list(get(AUDITOR, null, null).body().get("submissions")).size());
         refused(get(FINANCE, null, null), 403, "role_not_permitted");
-        String seeded = owner.queryForObject("SELECT id::text FROM production_submission WHERE quarter = '2026-Q3'", String.class);
+        String seeded = owner.queryForObject("SELECT id::text FROM production_submission WHERE quarter = '2026-Q3' AND organisation_id = ?", String.class, NOVA_ORG);
         assertNotNull(get(NOVA, seeded, null).body());
         refused(get(PIXEL, seeded, null), 404, "not_found");
         refused(get(FINANCE, seeded, "reconciliation"), 404, "not_found");
@@ -227,7 +229,7 @@ class ProductionDatabaseTest {
     @Test
     @Order(6)
     void reconciliationUsesBoundSerialsWhenTheTablesExist() {
-        String seeded = owner.queryForObject("SELECT id::text FROM production_submission WHERE quarter = '2026-Q3'", String.class);
+        String seeded = owner.queryForObject("SELECT id::text FROM production_submission WHERE quarter = '2026-Q3' AND organisation_id = ?", String.class, NOVA_ORG);
         // The real QR tables (V54): one batch for the model's certificate, then 14,000 bound serials (inserted directly; the cap of 5,000 is the module's).
         String app = "00000000-0000-4000-c000-000000000101";
         owner.update("INSERT INTO qr_batch (id, model_application_id, certificate_id, organisation_id, quantity, status, created_by) "

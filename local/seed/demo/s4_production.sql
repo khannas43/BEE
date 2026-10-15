@@ -189,7 +189,7 @@ BEGIN
             OR (m.model_number = 'PX-RAC-10A' AND q.quarter = '2025-Q4');
       FOR mo IN 0..2 LOOP
         p_start := (q.first_day + (mo || ' months')::interval)::date;
-        u := CASE WHEN spike AND mo = 2 THEN 6400 ELSE 320 + mo * 20 END;
+        u := CASE WHEN spike AND mo = 2 THEN 6400 ELSE 80 + mo * 5 END;
         INSERT INTO production_row (submission_id, model_application_id, units, period_start, period_end, registration_id)
           VALUES (sid, m.id, u, p_start, (p_start + interval '1 month' - interval '1 day')::date, m.registration_id);
       END LOOP;

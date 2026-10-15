@@ -296,3 +296,7 @@ INSERT INTO ai_audit_event (id, run_id, action, actor_account_id, actor_role, de
   ('00000000-0000-4000-c000-00000000a626', '00000000-0000-4000-c000-00000000a606', 'disposition', '00000000-0000-4000-a000-000000000005', 'reviewer', 'Rejected', now() - interval '1 day' + interval '1 hour')
 ON CONFLICT (id) DO NOTHING;
 COMMIT;
+
+-- Declared values on two seeded applications so Document extraction shows matches and a difference, not only "not declared".
+UPDATE model_application SET laboratory_code = 'LAB', tested_on = DATE '2026-08-14', declared_iseer = 4.55 WHERE reference = 'LOCAL-MA-0004';
+UPDATE model_application SET laboratory_code = 'LAB', tested_on = DATE '2026-03-12', declared_iseer = 4.48 WHERE reference = 'LOCAL-MA-0001';

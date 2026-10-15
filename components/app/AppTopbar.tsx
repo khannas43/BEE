@@ -6,6 +6,7 @@ import { ROLES, RoleKey } from "@/lib/roles";
 import { countForRole } from "@/lib/screens";
 import { ROLE_PREVIEW_ENABLED, useRole } from "./RoleContext";
 import { NotificationBell } from "./notifications/NotificationBell";
+import { TopbarSearch } from "./TopbarSearch";
 import { SessionBadge } from "./SessionBadge";
 import { useDemoMode } from "@/lib/client/useDemoMode";
 import { useLang } from "@/components/i18n/LangProvider";
@@ -21,28 +22,11 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
         <Icon name="menu" size={24} />
       </button>
 
-      <div className="hidden md:flex items-center gap-space-sm bg-surface-container-low px-space-md py-space-xs rounded-lg flex-1 max-w-md">
-        <Icon name="search" className="text-outline" size={20} />
-        <input
-          className="bg-transparent border-none outline-none font-body-sm text-body-sm text-on-surface w-full placeholder:text-outline"
-          placeholder={t("app.search")}
-          aria-label={t("app.search")}
-        />
-      </div>
+      <TopbarSearch />
 
-      <div className="flex-1 md:hidden" />
+      <div className="flex-1" />
 
       <div className="flex items-center gap-space-md">
-        {/* Language toggle */}
-        <button
-          onClick={toggle}
-          className="bg-primary-container text-on-primary font-bold px-2.5 py-1.5 rounded-lg text-label-sm hover:bg-forest-dark transition-colors"
-          type="button"
-          aria-label="Toggle language"
-        >
-          {lang === "en" ? "हिन्दी" : "English"}
-        </button>
-
         {/* Role switcher — development preview only; local display state, never a server session */}
         {ROLE_PREVIEW_ENABLED && (
         <div data-preview-role className={demo ? "flex items-center" : "flex items-center gap-space-sm bg-solar-gold-light border border-dashed border-solar-gold px-space-sm py-1.5 rounded-lg"} title={t("app.previewRoleHint")}>
@@ -69,6 +53,16 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
         )}
 
         <NotificationBell />
+
+        {/* Language toggle */}
+        <button
+          onClick={toggle}
+          className={`bg-primary-container text-on-primary font-bold px-2.5 py-1.5 rounded-lg text-label-sm hover:bg-forest-dark transition-colors`}
+          type="button"
+          aria-label="Toggle language"
+        >
+          {lang === "en" ? "हिन्दी" : "English"}
+        </button>
 
         {/* The only identity shown here is the signed-in one, as Spring reports it. */}
         <SessionBadge

@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -39,10 +41,22 @@ public class ProductionModule implements DemoModule {
     static final String NOTE = "Local demonstration: simulated, not a BEE system. Provisional rules.";
     private static final List<String> READ_ALL = List.of("programme", "admin", "auditor", "director");
 
-    private final JdbcTemplate jdbc;
+    private final ObjectProvider<JdbcTemplate> jdbcProvider;
+    private JdbcTemplate fixed;
 
-    public ProductionModule(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+    /** Resolved on first use so the web-layer tests (no database) can start the context without a JdbcTemplate. */
+    @Autowired
+    public ProductionModule(ObjectProvider<JdbcTemplate> jdbcProvider) {
+        this.jdbcProvider = jdbcProvider;
+    }
+
+    ProductionModule(JdbcTemplate jdbc) {
+        this.jdbcProvider = null;
+        this.fixed = jdbc;
+    }
+
+    private JdbcTemplate jdbc() {
+        return fixed != null ? fixed : jdbcProvider.getObject();
     }
 
     @Override
@@ -124,7 +138,7 @@ public class ProductionModule implements DemoModule {
 
     private Map<String, Object> load(UUID id) {
         try {
-            return jdbc.queryForMap("SELECT * FROM production_submission WHERE id = ?", id);
+            return jdbc().queryForMap("SELECT * FROM production_submission WHERE id = ?", id);
         } catch (EmptyResultDataAccessException e) {
             return null;
         }
@@ -157,8 +171,8 @@ public class ProductionModule implements DemoModule {
             + "(SELECT count(*) FROM production_evidence e WHERE e.submission_id = s.id) AS evidence_count "
             + "FROM production_submission s JOIN organisation o ON o.id = s.organisation_id ";
         List<Map<String, Object>> found = seesAll(caller)
-            ? jdbc.queryForList(sql + "ORDER BY s.quarter DESC, o.legal_name")
-            : jdbc.query(sql + "WHERE s.organisation_id = ANY (?) ORDER BY s.quarter DESC",
+            ? jdbc().queryForList(sql + "ORDER BY s.quarter DESC, o.legal_name")
+            : jdbc().query(sql + "WHERE s.organisation_id = ANY (?) ORDER BY s.quarter DESC",
                 ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", caller.organisationIds().toArray())), (rs, i) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     for (String c : List.of("id", "organisation_id", "quarter", "state", "version", "review_note", "submitted_at", "reviewed_at",
@@ -182,13 +196,13 @@ public class ProductionModule implements DemoModule {
     private DemoResult detail(Map<String, Object> sub) {
         UUID id = (UUID) sub.get("id");
         Map<String, Object> out = summary(sub);
-        out.put("organisationName", jdbc.queryForObject("SELECT legal_name FROM organisation WHERE id = ?", String.class, sub.get("organisation_id")));
-        out.put("rows", jdbc.queryForList(
+        out.put("organisationName", jdbc().queryForObject("SELECT legal_name FROM organisation WHERE id = ?", String.class, sub.get("organisation_id")));
+        out.put("rows", jdbc().queryForList(
             "SELECT r.id::text AS id, r.registration_id AS \"registrationId\", m.model_number AS \"modelNumber\", m.brand_name AS \"brandName\", r.units, "
                 + "r.period_start::text AS \"periodStart\", r.period_end::text AS \"periodEnd\" FROM production_row r "
                 + "JOIN model_application m ON m.id = r.model_application_id WHERE r.submission_id = ? ORDER BY m.model_number, r.period_start", id));
         out.put("evidence", evidenceList(id, false));
-        out.put("events", jdbc.queryForList(
+        out.put("events", jdbc().queryForList(
             "SELECT e.action, e.from_state AS \"fromState\", e.to_state AS \"toState\", u.username AS actor, e.actor_role AS \"actorRole\", e.note, "
                 + "e.occurred_at::text AS \"occurredAt\" FROM production_event e JOIN user_account u ON u.id = e.actor_account_id "
                 + "WHERE e.submission_id = ? ORDER BY e.occurred_at, e.id", id));
@@ -198,7 +212,7 @@ public class ProductionModule implements DemoModule {
     }
 
     private List<Map<String, Object>> evidenceList(UUID id, boolean withContent) {
-        List<Map<String, Object>> list = jdbc.queryForList(
+        List<Map<String, Object>> list = jdbc().queryForList(
             "SELECT e.id::text AS id, e.file_name AS \"fileName\", e.media_type AS \"mediaType\", e.size_bytes AS \"sizeBytes\", e.sha256, "
                 + "e.ca_name AS \"caName\", e.ca_membership_no AS \"caMembershipNo\", e.statement, u.username AS \"uploadedBy\", "
                 + "e.uploaded_at::text AS \"uploadedAt\", e.content FROM production_evidence e JOIN user_account u ON u.id = e.uploaded_by "
@@ -219,7 +233,7 @@ public class ProductionModule implements DemoModule {
 
     private DemoResult reconciliation(Map<String, Object> sub, Map<String, String> query) {
         UUID id = (UUID) sub.get("id");
-        double margin = jdbc.query("SELECT value FROM production_setting WHERE key = 'reconciliation_margin_percent'",
+        double margin = jdbc().query("SELECT value FROM production_setting WHERE key = 'reconciliation_margin_percent'",
             (rs, i) -> rs.getDouble(1)).stream().findFirst().orElse(10.0);
         String m = query.get("margin");
         if (m != null) {
@@ -233,14 +247,14 @@ public class ProductionModule implements DemoModule {
                 return DemoResult.invalid("margin must be a number.");
             }
         }
-        boolean qr = Boolean.TRUE.equals(jdbc.queryForObject("SELECT to_regclass('qr_serial') IS NOT NULL AND to_regclass('qr_batch') IS NOT NULL", Boolean.class));
-        List<Map<String, Object>> declared = jdbc.queryForList(
+        boolean qr = Boolean.TRUE.equals(jdbc().queryForObject("SELECT to_regclass('qr_serial') IS NOT NULL AND to_regclass('qr_batch') IS NOT NULL", Boolean.class));
+        List<Map<String, Object>> declared = jdbc().queryForList(
             "SELECT r.model_application_id AS mid, m.model_number AS \"modelNumber\", min(r.registration_id) AS \"registrationId\", sum(r.units) AS declared "
                 + "FROM production_row r JOIN model_application m ON m.id = r.model_application_id WHERE r.submission_id = ? "
                 + "GROUP BY r.model_application_id, m.model_number ORDER BY m.model_number", id);
         Map<UUID, Long> bound = new LinkedHashMap<>();
         if (qr) {
-            jdbc.query("SELECT b.model_application_id AS mid, count(*) AS n FROM qr_serial s JOIN qr_batch b ON b.id = s.batch_id "
+            jdbc().query("SELECT b.model_application_id AS mid, count(*) AS n FROM qr_serial s JOIN qr_batch b ON b.id = s.batch_id "
                 + "WHERE s.state = 'bound' GROUP BY b.model_application_id", rs -> {
                     bound.put(rs.getObject("mid", UUID.class), rs.getLong("n"));
                 });
@@ -284,7 +298,7 @@ public class ProductionModule implements DemoModule {
     // ---------------------------------------------------------------- writes
 
     private void event(UUID sub, String action, String from, String to, Caller c, String role, String note) {
-        jdbc.update("INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note) VALUES (?,?,?,?,?,?,?)",
+        jdbc().update("INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note) VALUES (?,?,?,?,?,?,?)",
             sub, action, from, to, c.accountId(), role, note);
     }
 
@@ -307,13 +321,13 @@ public class ProductionModule implements DemoModule {
         } else {
             return DemoResult.invalid("organisationId is required when you belong to more than one organisation.");
         }
-        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM production_submission WHERE organisation_id = ? AND quarter = ?)",
+        if (Boolean.TRUE.equals(jdbc().queryForObject("SELECT EXISTS (SELECT 1 FROM production_submission WHERE organisation_id = ? AND quarter = ?)",
             Boolean.class, org, quarter))) {
             return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "There is already a submission for " + quarter + ".");
         }
         UUID id;
         try {
-            id = jdbc.queryForObject("INSERT INTO production_submission (organisation_id, quarter, created_by) VALUES (?,?,?) RETURNING id",
+            id = jdbc().queryForObject("INSERT INTO production_submission (organisation_id, quarter, created_by) VALUES (?,?,?) RETURNING id",
                 UUID.class, org, quarter, caller.accountId());
         } catch (DuplicateKeyException e) {
             return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "There is already a submission for " + quarter + ".");
@@ -374,7 +388,7 @@ public class ProductionModule implements DemoModule {
         UUID sid = (UUID) sub.get("id");
         UUID org = (UUID) sub.get("organisation_id");
         Set<String> existing = new HashSet<>();
-        jdbc.query("SELECT model_application_id, period_start, period_end FROM production_row WHERE submission_id = ?", rs -> {
+        jdbc().query("SELECT model_application_id, period_start, period_end FROM production_row WHERE submission_id = ?", rs -> {
             Date a = rs.getDate(2);
             Date b = rs.getDate(3);
             existing.add(ProductionValidator.key(rs.getObject(1, UUID.class), a == null ? LocalDate.EPOCH : a.toLocalDate(),
@@ -385,7 +399,7 @@ public class ProductionModule implements DemoModule {
         boolean stored = commit && bad == 0;
         if (stored) {
             for (RowResult r : results) {
-                jdbc.update("INSERT INTO production_row (submission_id, model_application_id, units, period_start, period_end, registration_id) VALUES (?,?,?,?,?,?)",
+                jdbc().update("INSERT INTO production_row (submission_id, model_application_id, units, period_start, period_end, registration_id) VALUES (?,?,?,?,?,?)",
                     sid, r.modelId(), r.units(), r.periodStart(), r.periodEnd(), r.registrationId());
             }
             event(sid, "rows_added", null, null, caller, submitterRole(caller), results.size() + " row(s)");
@@ -421,7 +435,7 @@ public class ProductionModule implements DemoModule {
     }
 
     private CertInfo cert(String registrationId) {
-        return jdbc.query("SELECT m.id, m.organisation_id, m.state FROM certificate c JOIN model_application m ON m.id = c.application_id "
+        return jdbc().query("SELECT m.id, m.organisation_id, m.state FROM certificate c JOIN model_application m ON m.id = c.application_id "
             + "WHERE c.registration_id = ?", (rs, i) -> new CertInfo(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
             "approved".equals(rs.getString(3))), registrationId).stream().findFirst().orElse(null);
     }
@@ -460,7 +474,7 @@ public class ProductionModule implements DemoModule {
         }
         String sha = sha256(content);
         UUID sid = (UUID) sub.get("id");
-        UUID eid = jdbc.queryForObject("INSERT INTO production_evidence (submission_id, file_name, media_type, size_bytes, sha256, content, ca_name, "
+        UUID eid = jdbc().queryForObject("INSERT INTO production_evidence (submission_id, file_name, media_type, size_bytes, sha256, content, ca_name, "
             + "ca_membership_no, statement, uploaded_by) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id", UUID.class,
             sid, fileName, mediaType.toLowerCase(), content.length, sha, content, caName, caNo, statement, caller.accountId());
         event(sid, "evidence_added", null, null, caller, submitterRole(caller), fileName + " sha256 " + sha);
@@ -483,9 +497,9 @@ public class ProductionModule implements DemoModule {
 
     private int move(UUID sid, String from, String to, Caller c, boolean review, String note) {
         return review
-            ? jdbc.update("UPDATE production_submission SET state = ?, version = version + 1, reviewed_by = ?, reviewed_at = now(), review_note = ? WHERE id = ? AND state = ?",
+            ? jdbc().update("UPDATE production_submission SET state = ?, version = version + 1, reviewed_by = ?, reviewed_at = now(), review_note = ? WHERE id = ? AND state = ?",
                 to, c.accountId(), note, sid, from)
-            : jdbc.update("UPDATE production_submission SET state = ?, version = version + 1, submitted_by = ?, submitted_at = now() WHERE id = ? AND state = ?",
+            : jdbc().update("UPDATE production_submission SET state = ?, version = version + 1, submitted_by = ?, submitted_at = now() WHERE id = ? AND state = ?",
                 to, c.accountId(), sid, from);
     }
 
@@ -495,8 +509,8 @@ public class ProductionModule implements DemoModule {
             return denied;
         }
         UUID sid = (UUID) sub.get("id");
-        int rows = jdbc.queryForObject("SELECT count(*) FROM production_row WHERE submission_id = ?", Integer.class, sid);
-        int ev = jdbc.queryForObject("SELECT count(*) FROM production_evidence WHERE submission_id = ?", Integer.class, sid);
+        int rows = jdbc().queryForObject("SELECT count(*) FROM production_row WHERE submission_id = ?", Integer.class, sid);
+        int ev = jdbc().queryForObject("SELECT count(*) FROM production_evidence WHERE submission_id = ?", Integer.class, sid);
         if (rows < 1 || ev < 1) {
             return DemoResult.invalid("Add at least one row and the CA evidence before submitting.");
         }

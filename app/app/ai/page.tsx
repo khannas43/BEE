@@ -6,6 +6,7 @@ import { AI_USECASES, HEALTH_META, AIDisclaimer } from "@/components/app/ai/AISc
 
 export default function AIInsightsLanding() {
   return (
+    <div className="insights-screen">
     <div className="p-space-md lg:p-space-lg space-y-space-md">
       {/* Header */}
       <div className="flex items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
@@ -76,6 +77,7 @@ export default function AIInsightsLanding() {
           </div>
         </Link>
       </div>
+    </div>
     </div>
   );
 }

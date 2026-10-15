@@ -50,14 +50,6 @@ const card = "bg-surface-card rounded-xl shadow-sm p-space-md";
 const th = "py-1 pr-3";
 const inr = (v: string) => `INR ${v}`;
 
-function Notice() {
-  return (
-    <p className="font-body-sm text-on-surface-variant" data-testid="pay-simulated">
-      Local demonstration: simulated, not a BEE system. There is no real payment gateway or money; the fee and tax shown are synthetic and provisional.
-    </p>
-  );
-}
-
 function ReceiptView({ receipt }: { receipt: Receipt }) {
   return (
     <section className={card} aria-label={`Receipt ${receipt.receiptNumber}`} data-testid="pay-receipt">
@@ -151,7 +143,6 @@ export function PaymentsDemo() {
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-payments">
       <h1 className="font-headline-md text-headline-md text-on-surface">Payments (simulated)</h1>
-      <Notice />
       {error ? <p role="alert" className="font-body-sm text-error" data-testid="pay-error">{error}</p> : null}
       {status ? <p role="status" className="font-body-sm text-on-surface" data-testid="pay-status">{status}</p> : null}
 

@@ -64,9 +64,6 @@ export function QrDemo() {
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-qr">
       <h1 className="font-headline-md text-headline-md text-on-surface">QR batches and serials</h1>
-      <p className="font-body-sm text-on-surface-variant" data-testid="qr-simulated">
-        Local demonstration: simulated, not a BEE system. Provisional rules; serials are synthetic and the certificates are local demonstration certificates.
-      </p>
       {error ? <p role="alert" className="rounded-lg border border-error/40 bg-error/5 p-space-sm font-body-md" data-testid="qr-error">{error}</p> : null}
       {notice ? <p role="status" className="rounded-lg border border-primary/40 bg-primary/5 p-space-sm font-body-md" data-testid="qr-notice">{notice}</p> : null}
 

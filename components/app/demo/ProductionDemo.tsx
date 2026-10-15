@@ -147,9 +147,6 @@ export function ProductionDemo() {
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-production">
       <h1 className="font-headline-md text-headline-md text-on-surface">Quarterly production</h1>
-      <p className="font-body-md text-on-surface-variant" data-testid="prod-note">
-        Local demonstration: simulated, not a BEE system. Provisional rules on synthetic data. A person decides every outcome.
-      </p>
       {error && (
         <p role="alert" className="rounded bg-error-container p-space-sm text-on-error-container">
           {error}

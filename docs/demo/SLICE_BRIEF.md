@@ -1,0 +1,30 @@
+# Brief for a demo slice (read first, then your slice section below)
+
+You are building ONE slice of a client demonstration due in about 13 hours. Context: docs/demo/DEMO_WORK_PLAN.md (read it). The repo is a Next.js portal (breaking-change version: read node_modules/next/dist/docs/ before writing Next code) over a Spring Boot API and PostgreSQL. Everything you build is a **local demonstration on provisional rules, not BEE rules**, and the screens must say what is simulated. Be fast and pragmatic; a working, honest demo beats a complete design.
+
+## Where you work
+- Your own git worktree (the path and branch are in your task). Commit on your branch when done and when at useful checkpoints. **Do not push, do not merge, do not touch the main checkout at /Users/sameerkhanna/Developer/BEE or other worktrees.** `node_modules` is symlinked from the main checkout.
+- **Do not start the local runtime** (`local:up`, `next dev`, the API) and never run `npm run local:check`: ports are shared and the integrator owns them. PostgreSQL is already running for database tests. Test with: `npx tsc --noEmit`, `npx eslint . --max-warnings 0`, `npm run web:test`, `npm run web:test:ui`, and in `backend/`: `mvn -o test -Dtest=<YourTest>` (non-database tests), and database tests with `mvn -o test -Dgroups=db -Dbee.test.excludedGroups=none -Dtest=<YourDatabaseTest>`. Copy the pattern of a small existing database test (for example `backend/src/test/java/gov/bee/api/notifications/*DatabaseTest.java` or `settings/BusinessSettingDatabaseTest.java`): throwaway schema, real migrations.
+- Never edit AGENTS.md, CLAUDE.md or any existing Flyway migration. Never edit the migration-count assertions in other tests (the integrator fixes them). Do not edit shared registries: `SecurityConfig`, `CorrelationIdFilter`, `lib/server/requestLog.ts`, `docs/wp03/*`, `lib/runtimeRoutes.ts`, `lib/screenMatrix.ts`, `package.json`. If you truly need a change there, say so in your report.
+
+## How a slice plugs in (already built)
+- Spring: implement `gov.bee.api.demo.DemoModule` as a `@Component` in package `gov.bee.api.demo.<yourname>`. Routes `/api/demo/{module}[/{id}[/{action}]]`, GET and POST only, are dispatched to the module whose `name()` matches. See `DemoModule`, `DemoResult`, `DemoController`. The dispatcher already requires a signed-in person with an effective role (`Caller`: `roles()`, `holds(...)`, `organisationIds()`, `accountId()`); **your module must decide who may do what** (role, organisation scope, record state), return `DemoResult.denied()` / `notFound()` (same answer for out-of-scope and unknown ids) / `invalid(detail)`, and write an audit row in the same transaction for every state change. Use JdbcTemplate/repository classes like the existing code (`NotificationRepository`, `DelegationRepository`); the runtime database login is restricted, so look at how earlier migrations grant `bee_runtime` (INSERT/SELECT only, writes through functions or specific grants; V23, V25, V39, V46 are examples) and grant exactly what you need.
+- Migrations: only your own range, files `backend/src/main/resources/db/migration/V<nn>__<name>.sql`. Make them idempotent-safe and add `GRANT`s for `bee_runtime`.
+- Browser: `lib/client/runtimeDemo.ts` (`demoGet`, `demoPost`, `demoPath`). Screen: replace the placeholder component named in your section (`components/app/demo/<Name>Demo.tsx`); the page and menu entry exist. Use the kit (docs/kit/SCREEN_KIT.md, components under `components/app/...`, copy the look of `components/app/delegations/Delegations.tsx` or a lifecycle screen). Errors `role="alert"`, results `role="status"`, headings real headings, labels on inputs. Show a visible note "Local demonstration: simulated, not a BEE system" where something is simulated.
+- Reuse existing error codes only (`validation_failed`, `role_not_permitted`, `not_found`, `segregation_refused`, `version_conflict`).
+- Demo seed: put idempotent SQL in `local/seed/demo/<slice>.sql` (look at `local/seed/seed.sql` for people, organisations (NOVA, PIXEL), roles and applications; roles are `manufacturer`, `agency`, `finance`, `iame`, `reviewer`, `programme`, `director`, `secretary`, `admin`, `auditor`, `helpdesk`). The integrator wires seed files in. Seed enough realistic data for a 5-minute demo of your slice.
+- Tests: a database test for your repository/module (authorisation denials included: cross-organisation read, wrong role, wrong state), a unit test for any pure logic, and one UI test if cheap. Keep them fast.
+
+## Shared data names (other slices rely on them; keep exactly)
+- `payment(id, application_id, amount_inr, status initiated|paid|failed, gateway_ref unique, created_at)`; `payment_callback(id, gateway_ref, payload_sha256 unique, received_at)`.
+- `qr_batch(id, model_application_id, certificate_id, quantity, status)`; `qr_serial(serial unique, batch_id, certificate_id, state allocated|bound|void)`.
+- `ledger_tx(id, certificate_id, seq, kind issue|amend|revoke, state pending|committed|failed, prev_hash, hash, created_at, committed_at)`.
+- `production_submission(id, organisation_id, quarter, state)`, `production_row(submission_id, model_application_id, units)`.
+- `ai_run(id, use_case, model_version, data_version, input_ref, output jsonb, confidence, created_at)`, `ai_disposition(run_id, actor_account_id, decision accept|override|reject, reason, at)`.
+Use `to_regclass('public.<table>')` guards if you read a table another slice owns, so your code works before and after integration.
+
+## Honesty rules
+No claim of real Fabric, real payment gateway, real AI inference or BEE rules; say "simulated", "local demonstration", "synthetic data". No personal data. No automatic adverse decision anywhere. A human decides.
+
+## Deliver
+Commit on your branch. Your final report (under 40 lines): what is real vs simulated, the routes and screens, the migration files and numbers, the demo steps (persona by persona), test results (counts), anything you needed from a shared file, and what you cut. Also write `docs/demo/<slice>.md` (10 lines: what is real, what is simulated, how to demo).

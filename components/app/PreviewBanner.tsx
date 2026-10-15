@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useDemoMode } from "@/lib/client/useDemoMode";
 import { Icon } from "@/components/ui/Icon";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { previewRoleOf, useRole } from "./RoleContext";
@@ -14,15 +14,7 @@ import { orgsText, rolesText, useSpringIdentity } from "./SessionBadge";
  */
 export function PreviewBanner() {
   // Demo sign-in mode (BEE_DEMO_LOGIN=1) hides the bar for the client demo; the "Preview as" selector stays in the top bar. Unknown or failed lookups keep the bar.
-  const [demo, setDemo] = useState<"unknown" | "on" | "off">("unknown");
-  useEffect(() => {
-    let live = true;
-    fetch("/api/runtime/demo/login", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((b) => live && setDemo(b && b.enabled === true ? "on" : "off"))
-      .catch(() => live && setDemo("off"));
-    return () => { live = false; };
-  }, []);
+  const demo = useDemoMode();
   const { role } = useRole();
   const id = useSpringIdentity();
   const runtime = !!runtimeRouteFor(usePathname());

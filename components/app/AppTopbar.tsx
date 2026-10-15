@@ -7,11 +7,13 @@ import { countForRole } from "@/lib/screens";
 import { ROLE_PREVIEW_ENABLED, useRole } from "./RoleContext";
 import { NotificationBell } from "./notifications/NotificationBell";
 import { SessionBadge } from "./SessionBadge";
+import { useDemoMode } from "@/lib/client/useDemoMode";
 import { useLang } from "@/components/i18n/LangProvider";
 
 export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
   const { role, setRole } = useRole();
   const { t, lang, toggle } = useLang();
+  const demo = useDemoMode() === "on";
 
   return (
     <header className="h-[60px] shrink-0 bg-surface-container-lowest border-b border-border-subtle flex items-center gap-space-md px-space-md">
@@ -43,13 +45,13 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
 
         {/* Role switcher — development preview only; local display state, never a server session */}
         {ROLE_PREVIEW_ENABLED && (
-        <div data-preview-role className="flex items-center gap-space-sm bg-solar-gold-light border border-dashed border-solar-gold px-space-sm py-1.5 rounded-lg" title={t("app.previewRoleHint")}>
-          <Icon name="visibility" size={16} className="text-solar-gold-dark" />
-          <span className="font-label-sm text-label-sm text-solar-gold-dark uppercase tracking-wide">{t("app.previewRole")}</span>
+        <div data-preview-role className={demo ? "flex items-center" : "flex items-center gap-space-sm bg-solar-gold-light border border-dashed border-solar-gold px-space-sm py-1.5 rounded-lg"} title={t("app.previewRoleHint")}>
+          {!demo && <Icon name="visibility" size={16} className="text-solar-gold-dark" />}
+          {!demo && <span className="font-label-sm text-label-sm text-solar-gold-dark uppercase tracking-wide">{t("app.previewRole")}</span>}
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as RoleKey)}
-            className="bg-transparent outline-none font-label-md text-label-md text-forest-dark font-semibold cursor-pointer"
+            className={demo ? "bg-surface-container-lowest border border-border-subtle rounded-lg px-space-sm py-1.5 outline-none focus:ring-2 focus:ring-primary font-label-md text-label-md text-on-surface cursor-pointer" : "bg-transparent outline-none font-label-md text-label-md text-forest-dark font-semibold cursor-pointer"}
             aria-label={t("app.previewRole")}
           >
             <optgroup label={t("role.internal")}>

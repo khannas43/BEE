@@ -379,6 +379,12 @@ read -r v_pass v_fail <<<"$(sed -nE 's/^coverage checks: ([0-9]+) passed, ([0-9]
 if [[ -z "${v_pass:-}" ]]; then check "coverage.run" 0 "contract-coverage did not complete: $(tail -1 <<<"$cv_out")"
 else pass=$((pass + v_pass)); fail=$((fail + v_fail)); fi
 
+# ---- BL-219: the default backend suite (every non-database test: controller security, policy, contract) must pass, not only SpringContractTest
+JAVA_HOME="$(/usr/libexec/java_home -v 17)" mvn -B -f "$ROOT/backend/pom.xml" test > "$RUN_DIR/backend-unit-test.log" 2>&1
+bu_rc=$?
+bu="$(grep -E '^\[(INFO|ERROR|WARNING)\] Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+, Skipped: [0-9]+$' "$RUN_DIR/backend-unit-test.log" | tail -1)"
+check "backend.unit-tests" "$(ok test "$bu_rc" = 0 -a -n "$bu" -a "$(grep -c 'Failures: 0, Errors: 0' <<<"$bu")" = 1)" "default backend suite: ${bu:-no summary} (exit $bu_rc)"
+
 # ---- WP04.1 master resolution, overlap, gap, immutability, supersession, rollback, seeding and reset tests (real PostgreSQL, throwaway schemas)
 JAVA_HOME="$(/usr/libexec/java_home -v 17)" mvn -q -B -f "$ROOT/backend/pom.xml" test -Dgroups=db -Dbee.test.excludedGroups=none -Dsurefire.failIfNoSpecifiedTests=false > "$RUN_DIR/masters-test.log" 2>&1
 mt_rc=$?

@@ -47,6 +47,37 @@ interface Disposition { id: string; actor: string; role: string; decision: strin
 interface AuditRow { action: string; actor: string; role: string; detail: string; at: string }
 interface RunDetail extends RunSummary { output: Record<string, unknown> & { evidence: Evidence[]; summary?: string; note?: string }; dispositions: Disposition[]; audit: AuditRow[] }
 
+/** Business wording for an evidence source. The technical table or column name stays available as the cell's tooltip. */
+const SOURCE_LABELS: [RegExp, string | ((m: RegExpMatchArray) => string)][] = [
+  [/^model_application_return$/, "Application history: returned applications"],
+  [/^model_application_rejection$/, "Application history: rejected applications"],
+  [/^model_application_rating \(declared_iseer, verified_iseer\)$/, "Rating records: declared against verified efficiency"],
+  [/^model_application_fee_confirmation/, "Fee records: payment received to fee confirmed"],
+  [/^model_application_resubmission$/, "Application history: resubmissions"],
+  [/^production_row/, "Quarterly production submissions"],
+  [/^ai_demo_production/, "Sample production data (synthetic)"],
+  [/^ai_demo_entity/, "Sample manufacturer profile (synthetic)"],
+  [/^model_application_rating\.verified_iseer/, "Rating records: verified efficiency (live and sample)"],
+  [/^model_application_rating\.stars/, "Rating records: awarded stars (live and sample)"],
+  [/^ai_kb\.id (\d+)/, (m) => `Helpdesk knowledge base, article ${m[1]}`],
+  [/^report text: laboratory$/, "Test report: laboratory name"],
+  [/^report text: testDate$/, "Test report: test date"],
+  [/^report text: efficiency$/, "Test report: efficiency"],
+  [/^model_application_document_version\.laboratory_name/, "Application: declared laboratory"],
+  [/^model_application\.tested_on$/, "Application: declared test date"],
+  [/^model_application\.declared_iseer$/, "Application: declared efficiency (ISEER)"],
+];
+export function businessSource(source: string): string {
+  for (const [re, label] of SOURCE_LABELS) {
+    const m = source.match(re);
+    if (m) return typeof label === "function" ? label(m) : label;
+  }
+  const plain = source.replace(/\(.*?\)/g, "").replace(/[._]+/g, " ").trim();
+  return plain.charAt(0).toUpperCase() + plain.slice(1);
+}
+/** Notes written by the service mention sample tables by name; show them in business words. */
+const plainNote = (t: string) =>
+  t.replaceAll("ai_demo_entity", "the sample manufacturer profiles").replaceAll("ai_demo_production", "the sample production data").replaceAll("ai_demo_rating", "the sample rating data").replaceAll("ai_kb", "the helpdesk knowledge base");
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 const pct = (c: number) => `${Math.round(c * 100)}%`;
 const cell = "px-space-sm py-1 text-left align-top";
@@ -310,7 +341,7 @@ function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; 
         </div>
         <p role="status" className="ai-summary mt-3" data-testid="ai-summary">{String(out.summary ?? "")}</p>
         <Output run={run} />
-        {out.note ? <p className="mt-space-sm font-body-sm text-on-surface-variant">{String(out.note)}</p> : null}
+        {out.note ? <p className="mt-space-sm font-body-sm text-on-surface-variant">{plainNote(String(out.note))}</p> : null}
       </Box>
       <Box title="Evidence" icon="fact_check" testId="ai-evidence">
         <table className="w-full font-body-sm">
@@ -318,7 +349,7 @@ function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; 
           <tbody>
             {out.evidence.map((e, i) => (
               <tr key={i} className="border-t border-outline-variant">
-                <td className={cell}><code>{e.source}</code></td><td className={cell}>{e.field}</td>
+                <td className={cell} title={`Technical source: ${e.source}`}>{businessSource(e.source)}</td><td className={cell}>{e.field}</td>
                 <td className={cell}>{typeof e.value === "object" ? JSON.stringify(e.value) : String(e.value)}{e.rows ? ` (${e.rows})` : ""}</td>
               </tr>
             ))}
@@ -461,7 +492,7 @@ function Output({ run }: { run: RunDetail }) {
     const series = (o.series as SeriesRow[]) ?? [];
     return (
       <div className="mt-4 space-y-3" data-testid="ai-output-anomaly">
-        {o.synthetic ? <p className="font-body-sm font-semibold">Synthetic production rows are shown (ai_demo_production): the live production table is absent or empty.</p> : null}
+        {o.synthetic ? <p className="font-body-sm font-semibold">Sample production data is shown because there are no live production submissions yet.</p> : null}
         <div className="grid gap-3 lg:grid-cols-2">
           {series.map((s) => {
             const flaggedIdx = s.quarters.map((q, i) => (s.flags.some((f) => f.quarter === q.quarter) ? i : -1)).filter((i) => i >= 0);

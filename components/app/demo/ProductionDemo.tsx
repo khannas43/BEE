@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Pill } from "./DemoShell";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
 
 type Submission = {
@@ -179,7 +180,7 @@ export function ProductionDemo() {
               <tr key={s.id}>
                 <td>{s.quarter}</td>
                 <td>{s.organisationName}</td>
-                <td>{STATE_WORD[s.state] ?? s.state}</td>
+                <td><Pill>{STATE_WORD[s.state] ?? s.state}</Pill></td>
                 <td>{s.rowCount}</td>
                 <td>{s.totalUnits}</td>
                 <td>{s.evidenceCount}</td>

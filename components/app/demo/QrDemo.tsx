@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Pill } from "./DemoShell";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
 
 type Counts = { allocated: number; bound: number; void: number; remaining: number };
@@ -132,7 +133,7 @@ function BatchTable({ items, selected, onSelect }: { items: QrBatch[]; selected:
               <td>{b.allocated}</td>
               <td>{b.bound}</td>
               <td>{b.void}</td>
-              <td>{b.status}</td>
+              <td><Pill>{b.status}</Pill></td>
               <td><button type="button" onClick={() => onSelect(b.id)} className="text-primary underline" data-testid="qr-open">Open {b.modelNumber}</button></td>
             </tr>
           ))}
@@ -221,7 +222,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
             {detail.serials.map((s) => (
               <tr key={s.serial} data-testid="qr-serial-row">
                 <td className="font-mono">{s.serial}</td>
-                <td>{s.state}</td>
+                <td><Pill>{s.state}</Pill></td>
                 <td>{s.voidReason ?? ""}</td>
                 <td className="space-x-space-sm">
                   <button type="button" onClick={() => void copy(s.serial)} className="text-primary underline" aria-label={`Copy ${s.serial}`}>{copied === s.serial ? "Copied" : "Copy"}</button>

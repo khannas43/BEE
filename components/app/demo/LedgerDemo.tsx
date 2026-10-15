@@ -1,5 +1,6 @@
 "use client";
 
+import { Pill } from "./DemoShell";
 import { useCallback, useEffect, useState } from "react";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
 
@@ -133,7 +134,7 @@ export function LedgerDemo() {
                   <td className="py-1 pr-3">{c.registrationId}</td>
                   <td className="py-1 pr-3">{c.brandName} {c.modelNumber}</td>
                   <td className="py-1 pr-3">{c.manufacturer}</td>
-                  <td className="py-1 pr-3" data-testid={`ledger-status-${c.registrationId}`}>{STATUS_LABEL[c.ledgerStatus] ?? c.ledgerStatus}{c.pendingKind && c.ledgerStatus !== "pending" ? ` (${c.pendingKind} pending)` : ""}</td>
+                  <td className="py-1 pr-3" data-testid={`ledger-status-${c.registrationId}`}><Pill>{`${STATUS_LABEL[c.ledgerStatus] ?? c.ledgerStatus}${c.pendingKind && c.ledgerStatus !== "pending" ? ` (${c.pendingKind} pending)` : ""}`}</Pill></td>
                   <td className="py-1 pr-3">{c.lastTx ? `${c.lastTx.kind} · ${c.lastTx.state}` : "none"}</td>
                   <td className="py-1"><button type="button" onClick={() => { setSelected(c.certificateId); setStatus(null); setError(null); setForm(null); void loadDetail(c.certificateId); }} className="text-primary underline" aria-label={`Open ledger panel for ${c.registrationId}`}>Open</button></td>
                 </tr>
@@ -169,7 +170,7 @@ export function LedgerDemo() {
                 <tr key={t.id} className="border-t border-outline-variant align-top">
                   <td className="py-1 pr-3">{t.blockNo}</td><td className="py-1 pr-3">{t.seq}</td>
                   <td className="py-1 pr-3">{t.kind}{t.attempt > 1 ? ` (attempt ${t.attempt})` : ""}</td>
-                  <td className="py-1 pr-3">{t.state}</td>
+                  <td className="py-1 pr-3"><Pill>{t.state}</Pill></td>
                   <td className="py-1 pr-3"><Hash value={t.hash} /></td><td className="py-1 pr-3"><Hash value={t.prevHash} /></td>
                   <td className="py-1">{t.failureReason ?? t.reason ?? ""}{t.seededNote ? <span className="block font-semibold">Seeded mismatch</span> : null}<span className="block text-on-surface-variant">by {t.submittedBy}{t.decidedBy ? `, decided by ${t.decidedBy}` : ""}</span></td>
                 </tr>
@@ -227,7 +228,7 @@ export function LedgerDemo() {
             {blocks.map((t) => (
               <tr key={t.id} className="border-t border-outline-variant">
                 <td className="py-1 pr-3">{t.blockNo}</td><td className="py-1 pr-3">{t.registrationId}</td><td className="py-1 pr-3">{t.kind}{t.attempt > 1 ? ` #${t.attempt}` : ""}</td>
-                <td className="py-1 pr-3">{t.state}</td><td className="py-1 pr-3"><Hash value={t.hash} /></td><td className="py-1 pr-3"><Hash value={t.prevHash} /></td>
+                <td className="py-1 pr-3"><Pill>{t.state}</Pill></td><td className="py-1 pr-3"><Hash value={t.hash} /></td><td className="py-1 pr-3"><Hash value={t.prevHash} /></td>
                 <td className="py-1">{t.createdAt.slice(0, 19).replace("T", " ")}</td>
               </tr>
             ))}

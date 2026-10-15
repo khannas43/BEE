@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Pill } from "./DemoShell";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
 
 type Receipt = {
@@ -222,7 +223,7 @@ export function PaymentsDemo() {
                 {payments.map((p) => (
                   <tr key={p.id}>
                     <td className={th}>{p.applicationReference}</td>{finance ? <td className={th}>{p.organisationCode}</td> : null}
-                    <td className={th}>{inr(p.amountInr)}</td><td className={th}>{p.status}</td><td className={th}><code>{p.gatewayRef}</code></td>
+                    <td className={th}>{inr(p.amountInr)}</td><td className={th}><Pill>{p.status}</Pill></td><td className={th}><code>{p.gatewayRef}</code></td>
                     {finance ? <td className={th}>{p.feeConfirmed ? `Yes (${p.feeConfirmationReference})` : p.status === "paid" ? "Not yet: use the gateway reference as the receipt reference" : "No"}</td> : (
                       <td className={th}>{p.receiptNumber ? <button type="button" className={btn} onClick={() => setReceiptId(receiptId === p.id ? null : p.id)}>{receiptId === p.id ? "Hide receipt" : `Receipt ${p.receiptNumber}`}</button> : "-"}</td>
                     )}

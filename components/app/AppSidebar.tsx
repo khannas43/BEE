@@ -1,10 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { Emblem } from "@/components/chrome/Emblem";
 import { categoriesForRole, categoryForPath } from "@/lib/categories";
 import { useRole } from "./RoleContext";
 import { useSpringIdentity } from "./SessionBadge";
@@ -29,12 +29,10 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light">
-      <Link href="/app" className="flex items-center gap-space-sm px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate}>
-        <Emblem size={34} invert />
-        <div className="leading-tight">
-          <div className="font-title-lg text-title-lg text-on-primary">BEE S&L</div>
-          <div className="font-label-sm text-label-sm text-forest-light/70">{t("app.officerConsole")}</div>
-        </div>
+      <Link href="/app" className="flex items-center justify-center px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={`BEE S&L ${t("app.officerConsole")}`}>
+        <span className="flex items-center justify-center bg-white rounded-lg px-4 h-11">
+          <Image src="/images/bee-logo.png" alt="Bureau of Energy Efficiency" width={1260} height={308} priority className="h-9 w-auto object-contain" />
+        </span>
       </Link>
 
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">

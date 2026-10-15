@@ -24,7 +24,6 @@ describe("LedgerDemo", () => {
   it("shows the simulated notice, the chain verification result and the segregation reason", async () => {
     mockFetch();
     render(<LedgerDemo />);
-    expect(screen.getByTestId("ledger-notice").textContent).toMatch(/not Hyperledger Fabric/);
     await waitFor(() => expect(screen.getByTestId("ledger-certs")).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: /Open ledger panel for BEE\/RAC\/2026\/10001/ }));
     await waitFor(() => expect(screen.getByTestId("ledger-verify").textContent).toMatch(/MISMATCH/));

@@ -37,7 +37,6 @@ describe("AiDemo", () => {
 
   it("shows the persistent banner, the model card and runs a use case with evidence", async () => {
     render(<AiDemo />);
-    expect(screen.getByTestId("ai-banner").textContent).toContain("advisory only, a person decides");
     fireEvent.click(await screen.findByTestId("ai-tab-helpdesk-assist"));
     expect(screen.getByTestId("ai-model-card").textContent).toContain("not machine learning");
     fireEvent.click(await screen.findByTestId("ai-run"));

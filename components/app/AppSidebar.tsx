@@ -23,6 +23,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const activeCat = categoryForPath(pathname)?.id ?? categories[0]?.id ?? null;
   // The category the current route belongs to opens by itself; a manual toggle is kept until the route moves to another category.
   const [toggle, setToggle] = useState<{ cat: string | null; open: string | null } | null>(null);
+  const [recordsOpen, setRecordsOpen] = useState(true);
   const open = toggle?.cat === activeCat ? toggle.open : activeCat;
   const setOpen = (next: string | null) => setToggle({ cat: activeCat, open: next });
 
@@ -39,8 +40,16 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">
         {runtimeNav.length > 0 && (
           <div className="pb-space-sm mb-space-sm border-b border-white/10" data-testid="runtime-nav">
-            <div className="px-space-md py-1 font-label-sm text-label-sm uppercase tracking-wide text-forest-light/60">Your BEE records</div>
-            {runtimeNav.map((r) => (
+            <button
+              type="button"
+              onClick={() => setRecordsOpen((v) => !v)}
+              aria-expanded={recordsOpen}
+              className="w-full flex items-center px-space-md py-1.5 text-left font-label-sm text-label-sm uppercase tracking-wide text-forest-light/70 hover:text-on-primary transition-colors"
+            >
+              <span className="flex-1">Your BEE records</span>
+              <Icon name={recordsOpen ? "expand_less" : "expand_more"} size={18} />
+            </button>
+            {recordsOpen && runtimeNav.map((r) => (
               <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} />
             ))}
           </div>

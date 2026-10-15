@@ -44,13 +44,14 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
               type="button"
               onClick={() => setRecordsOpen((v) => !v)}
               aria-expanded={recordsOpen}
-              className="w-full flex items-center px-space-md py-1.5 text-left font-label-sm text-label-sm uppercase tracking-wide text-forest-light/70 hover:text-on-primary transition-colors"
+              className="w-full flex items-center gap-space-sm px-space-md py-2 text-left text-forest-light hover:text-on-primary transition-colors"
             >
-              <span className="flex-1">Your BEE records</span>
+              <Icon name="folder_open" size={20} />
+              <span className="flex-1 font-label-lg text-label-lg">Your BEE records</span>
               <Icon name={recordsOpen ? "expand_less" : "expand_more"} size={18} />
             </button>
             {recordsOpen && runtimeNav.map((r) => (
-              <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} />
+              <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} compact />
             ))}
           </div>
         )}
@@ -113,10 +114,25 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarLink({
-  href, icon, label, active, onNavigate, testId,
+  href, icon, label, active, onNavigate, testId, compact,
 }: {
-  href: string; icon: string; label: string; active: boolean; onNavigate?: () => void; testId?: string;
+  href: string; icon: string; label: string; active: boolean; onNavigate?: () => void; testId?: string; compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <Link
+        href={href}
+        onClick={onNavigate}
+        data-testid={testId}
+        className={`flex items-center gap-space-sm pl-[30px] pr-space-md py-1.5 font-body-sm text-body-sm transition-colors ${
+          active ? "bg-primary-container text-on-primary font-semibold" : "text-forest-light/80 hover:text-on-primary hover:bg-white/5"
+        }`}
+      >
+        <Icon name={icon} size={16} className={active ? "text-solar-gold" : "text-forest-light/40"} fill={active} />
+        <span className="flex-1">{label}</span>
+      </Link>
+    );
+  }
   return (
     <Link
       href={href}

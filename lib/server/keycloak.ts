@@ -92,6 +92,10 @@ async function tokenRequest(operation: "token.code" | "token.refresh", params: R
 export const exchangeCode = (code: string, codeVerifier: string, correlationId: string) =>
   tokenRequest("token.code", { grant_type: "authorization_code", code, code_verifier: codeVerifier, redirect_uri: AUTH.redirectUri }, correlationId);
 
+/** Demonstration sign-in only (BEE_DEMO_LOGIN): the password grant, with no authenticator code. Logged as the code exchange it replaces. */
+export const passwordGrant = (username: string, password: string, correlationId: string) =>
+  tokenRequest("token.code", { grant_type: "password", username, password, scope: "openid" }, correlationId);
+
 export const refreshTokens = (refreshToken: string, correlationId: string) =>
   tokenRequest("token.refresh", { grant_type: "refresh_token", refresh_token: refreshToken }, correlationId);
 

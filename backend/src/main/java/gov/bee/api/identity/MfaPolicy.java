@@ -14,7 +14,16 @@ public final class MfaPolicy {
 
     public static final List<String> REQUIRED = List.of("pwd", "otp");
 
+    /**
+     * Off only when the environment says {@code BEE_MFA_REQUIRED=false}, which the demonstration deployment sets together with the portal's
+     * BEE_DEMO_LOGIN (docs/demo/DEMO_WORK_PLAN.md). Anything else, including no setting, keeps the policy on.
+     */
+    private static final boolean ENFORCED = !"false".equalsIgnoreCase(System.getenv("BEE_MFA_REQUIRED"));
+
     public static boolean satisfied(Jwt jwt) {
+        if (!ENFORCED) {
+            return true;
+        }
         Object amr = jwt.getClaims().get("amr");
         return amr instanceof Collection<?> methods && REQUIRED.stream().allMatch(methods::contains);
     }

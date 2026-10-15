@@ -56,7 +56,8 @@ export interface Jwk extends JsonWebKey {
 export interface IdTokenExpectations {
   issuer: string;
   clientId: string;
-  nonce: string;
+  /** Absent only for the demonstration password sign-in (BEE_DEMO_LOGIN), which has no browser round trip to bind a nonce to. */
+  nonce?: string;
   jwks: Jwk[];
   nowSeconds?: number;
   clockSkewSeconds?: number;
@@ -113,7 +114,7 @@ export function verifyIdToken(idToken: string, e: IdTokenExpectations): IdTokenC
   if (c.azp !== undefined && c.azp !== e.clientId) throw new IdTokenError("authorised party mismatch");
   if (typeof c.exp !== "number" || c.exp + skew < now) throw new IdTokenError("expired");
   if (typeof c.iat !== "number" || c.iat - skew > now) throw new IdTokenError("issued in the future");
-  if (typeof c.nonce !== "string" || !safeEqual(c.nonce, e.nonce)) throw new IdTokenError("nonce mismatch");
+  if (e.nonce !== undefined && (typeof c.nonce !== "string" || !safeEqual(c.nonce, e.nonce))) throw new IdTokenError("nonce mismatch");
   if (typeof c.sub !== "string" || !c.sub) throw new IdTokenError("missing subject");
   return c;
 }

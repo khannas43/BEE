@@ -219,7 +219,7 @@ function ConfirmationsTable({ rows: allRows, selectedId, onSelect, reversingId, 
     const on = sort?.key === k ? sort.dir : "none";
     return (
       <th key={k} className="py-1 pr-3" aria-sort={on === "asc" ? "ascending" : on === "desc" ? "descending" : "none"}>
-        <button type="button" onClick={() => sortBy(k)} className="inline-flex items-center gap-1 uppercase tracking-wide" data-testid={`corrections-sort-${k}`}>
+        <button type="button" onClick={() => sortBy(k)} className="list-sort inline-flex items-center gap-1 uppercase tracking-wide" data-testid={`corrections-sort-${k}`}>
           {label}
           <Icon name={on === "asc" ? "arrow_upward" : on === "desc" ? "arrow_downward" : "unfold_more"} size={14} />
         </button>

@@ -705,7 +705,9 @@ export function ScreenChrome({
   const { t } = useLang();
   const codes = accessCodesFor(role, module, screen);
 
-  return (
+  // Screens backed by the service (implemented is given) carry the shared look and no developer notes under the title.
+  const runtime = Boolean(implemented);
+  const body = (
     <div className="p-space-md lg:p-space-lg space-y-space-md">
       <div className="flex flex-col gap-space-md">
         <div className="flex items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
@@ -722,7 +724,7 @@ export function ScreenChrome({
             </span>
             <div>
               <h1 className="font-headline-md text-headline-md text-on-surface">{screen.name}</h1>
-              <div className="flex items-center gap-space-sm mt-1 flex-wrap">
+              <div className={`flex items-center gap-space-sm mt-1 flex-wrap${runtime ? " sr-only" : ""}`} data-testid="screen-meta">
                 <span className="font-label-sm text-label-sm text-on-surface-variant">{subtitle ?? `${screen.archetype} ${t("app.screenSuffix")}`}</span>
                 <span className="text-on-surface-variant/40">•</span>
                 {implemented ? (
@@ -753,6 +755,7 @@ export function ScreenChrome({
       )}
     </div>
   );
+  return runtime ? <div className="insights-screen">{body}</div> : body;
 }
 
 /* ------------------------------------------------------------------ *

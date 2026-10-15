@@ -9,7 +9,9 @@ import { type IdentityState, orgsText, rolesText } from "@/components/app/Sessio
  * preview role is not an identity and grants nothing; say so on every runtime screen.
  */
 export function IdentityStrip({ identity, testId }: { identity: IdentityState; testId: string }) {
+  // Kept in the page for assistive technology and tests, but not shown: the header's role selector and sign-out already say who is signed in.
   return (
+    <div className="sr-only">
     <Card>
       <div className="flex items-start gap-space-sm" data-testid={testId}>
         <Icon name="badge" size={20} className="text-primary shrink-0 mt-0.5" />
@@ -33,5 +35,6 @@ export function IdentityStrip({ identity, testId }: { identity: IdentityState; t
         </div>
       </div>
     </Card>
+    </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Pill } from "./DemoShell";
+import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
 
 type Receipt = {
@@ -64,6 +65,49 @@ function ReceiptView({ receipt }: { receipt: Receipt }) {
       </dl>
       <p className="font-body-sm text-on-surface-variant mt-1">{receipt.note}</p>
     </section>
+  );
+}
+
+type PaymentCols = PaymentRow & { createdAt?: string };
+
+function PaymentsTable({ payments, finance, receiptId, onToggleReceipt }: { payments: PaymentRow[]; finance: boolean; receiptId: string | null; onToggleReceipt: (id: string) => void }) {
+  const rows = payments as PaymentCols[];
+  const tools = useListTools({
+    rows,
+    text: (p) => `${p.applicationReference} ${p.organisationCode ?? ""} ${p.brandName ?? ""} ${p.modelNumber ?? ""} ${p.status} ${p.gatewayRef}`,
+    date: (p) => p.createdAt?.slice(0, 10),
+    sortValue: (p, k) => (k === "app" ? p.applicationReference : k === "org" ? p.organisationCode ?? "" : k === "amount" ? Number(p.amountInr) : k === "status" ? p.status : k === "gw" ? p.gatewayRef : k === "date" ? p.createdAt ?? "" : p.receiptNumber ?? ""),
+  });
+  return (
+    <div className="space-y-space-sm mt-space-sm">
+      <ListToolbar tools={tools} searchLabel="Search by application" placeholder="Application, organisation or gateway reference" dateLabel="Created" />
+      {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No payments match.</p> : (
+        <>
+          <table className="w-full font-body-sm">
+            <caption className="sr-only">Payments</caption>
+            <thead><tr className="text-left text-on-surface-variant font-label-sm">
+              <SortableTh tools={tools} k="app" className={th}>Application</SortableTh>{finance ? <SortableTh tools={tools} k="org" className={th}>Organisation</SortableTh> : null}
+              <SortableTh tools={tools} k="amount" className={th}>Amount</SortableTh><SortableTh tools={tools} k="status" className={th}>Status</SortableTh>
+              <SortableTh tools={tools} k="gw" className={th}>Gateway reference</SortableTh><SortableTh tools={tools} k="date" className={th}>Created</SortableTh>
+              {finance ? <th className={th}>Fee confirmed</th> : <SortableTh tools={tools} k="receipt" className={th}>Receipt</SortableTh>}
+            </tr></thead>
+            <tbody>
+              {tools.paged.pageRows.map((p) => (
+                <tr key={p.id}>
+                  <td className={th}>{p.applicationReference}</td>{finance ? <td className={th}>{p.organisationCode}</td> : null}
+                  <td className={th}>{inr(p.amountInr)}</td><td className={th}><Pill>{p.status}</Pill></td><td className={th}><code>{p.gatewayRef}</code></td>
+                  <td className={th}>{p.createdAt ? p.createdAt.slice(0, 10) : ""}</td>
+                  {finance ? <td className={th}>{p.feeConfirmed ? `Yes (${p.feeConfirmationReference})` : p.status === "paid" ? "Not yet: use the gateway reference as the receipt reference" : "No"}</td> : (
+                    <td className={th}>{p.receiptNumber ? <button type="button" className={btn} onClick={() => onToggleReceipt(p.id)}>{receiptId === p.id ? "Hide receipt" : `Receipt ${p.receiptNumber}`}</button> : "-"}</td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ListPager tools={tools} />
+        </>
+      )}
+    </div>
   );
 }
 
@@ -204,24 +248,7 @@ export function PaymentsDemo() {
         <section className={card} aria-labelledby="pay-list-h" data-testid="pay-list">
           <h2 id="pay-list-h" className="font-title-md text-title-md text-on-surface">{finance ? "All payments" : "My organisation's payments"}</h2>
           {payments.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">No payments yet.</p> : (
-            <table className="w-full font-body-sm mt-space-sm">
-              <caption className="sr-only">Payments</caption>
-              <thead><tr className="text-left text-on-surface-variant font-label-sm">
-                <th className={th}>Application</th>{finance ? <th className={th}>Organisation</th> : null}<th className={th}>Amount</th><th className={th}>Status</th>
-                <th className={th}>Gateway reference</th>{finance ? <th className={th}>Fee confirmed</th> : <th className={th}>Receipt</th>}
-              </tr></thead>
-              <tbody>
-                {payments.map((p) => (
-                  <tr key={p.id}>
-                    <td className={th}>{p.applicationReference}</td>{finance ? <td className={th}>{p.organisationCode}</td> : null}
-                    <td className={th}>{inr(p.amountInr)}</td><td className={th}><Pill>{p.status}</Pill></td><td className={th}><code>{p.gatewayRef}</code></td>
-                    {finance ? <td className={th}>{p.feeConfirmed ? `Yes (${p.feeConfirmationReference})` : p.status === "paid" ? "Not yet: use the gateway reference as the receipt reference" : "No"}</td> : (
-                      <td className={th}>{p.receiptNumber ? <button type="button" className={btn} onClick={() => setReceiptId(receiptId === p.id ? null : p.id)}>{receiptId === p.id ? "Hide receipt" : `Receipt ${p.receiptNumber}`}</button> : "-"}</td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <PaymentsTable payments={payments} finance={finance} receiptId={receiptId} onToggleReceipt={(id) => setReceiptId(receiptId === id ? null : id)} />
           )}
           {finance ? <p className="font-body-sm text-on-surface-variant mt-space-sm">Finance still confirms the fee in the Finance queue. This simulation never changes the application.</p> : null}
         </section>

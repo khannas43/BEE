@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { RegistrationsTable } from "@/components/app/registrations/RegistrationsTable";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
-import { REGISTRATION_FEE_STATE, REGISTRATION_KIND_LABEL, REGISTRATION_STATE_LABEL } from "@/components/app/registrations/labels";
-import { readRegistrationList, registrationListHref, registrationNewHref, registrationRequestHref } from "@/lib/client/runtimeRegistrations";
+import { readRegistrationList, registrationListHref, registrationNewHref } from "@/lib/client/runtimeRegistrations";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
@@ -46,37 +46,7 @@ export function RegistrationList({ module, screen }: { module: Module; screen: S
           resultAction={() => newRequest}
         >
           {(r) => (
-            <table className="w-full font-body-sm text-body-sm" data-testid="reg-list-table">
-              <thead>
-                <tr className="text-left text-on-surface-variant font-label-sm">
-                  <th className="py-1 pr-3">Reference</th>
-                  <th className="py-1 pr-3">Kind</th>
-                  <th className="py-1 pr-3">Brand</th>
-                  <th className="py-1 pr-3">State</th>
-                  <th className="py-1 pr-3">Fee</th>
-                  <th className="py-1" />
-                </tr>
-              </thead>
-              <tbody>
-                {r.list.items.map((item) => (
-                  <tr key={item.id} data-testid={`reg-row-${item.reference}`} data-state={item.state}>
-                    <td className="py-1 pr-3">{item.reference}</td>
-                    <td className="py-1 pr-3">{REGISTRATION_KIND_LABEL[item.kind]}</td>
-                    <td className="py-1 pr-3">{item.brandName}</td>
-                    <td className="py-1 pr-3">{REGISTRATION_STATE_LABEL[item.state]}</td>
-                    <td className="py-1 pr-3">
-                      {REGISTRATION_FEE_STATE[item.state]}
-                      {item.submissionFee ? ` · INR ${item.submissionFee.totalInr} · ${item.submissionFee.label}` : ""}
-                    </td>
-                    <td className="py-1">
-                      <Link href={registrationRequestHref(item.id)} className="text-primary" data-testid={`reg-open-${item.reference}`}>
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <RegistrationsTable items={r.list.items} variant="mine" />
           )}
         </ReadPanel>
       </div>

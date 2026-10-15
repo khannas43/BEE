@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Pill } from "./DemoShell";
+import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
 
 type Counts = { allocated: number; bound: number; void: number; remaining: number };
@@ -113,16 +114,29 @@ function CreateBatch({ eligible, onDone }: { eligible: Eligible[]; onDone: (r: D
 }
 
 function BatchTable({ items, selected, onSelect }: { items: QrBatch[]; selected: string | null; onSelect: (id: string) => void }) {
+  const tools = useListTools({
+    rows: items,
+    text: (b) => `${b.brandName} ${b.modelNumber} ${b.registrationId} ${b.status}`,
+    date: (b) => b.createdAt?.slice(0, 10),
+    sortValue: (b, k) => (k === "model" ? `${b.brandName} ${b.modelNumber}` : k === "registration" ? b.registrationId : k === "status" ? b.status : k === "created" ? b.createdAt : Number(b[k as "quantity" | "allocated" | "bound" | "void"])),
+  });
   if (items.length === 0) return <p data-testid="qr-empty">No batches yet.</p>;
   return (
-    <div className="rounded-xl bg-surface-card shadow-md p-space-md overflow-x-auto">
+    <div className="rounded-xl bg-surface-card shadow-md p-space-md overflow-x-auto space-y-space-sm">
       <h2 className="font-title-md text-title-md mb-space-sm">Batches</h2>
+      <ListToolbar tools={tools} searchLabel="Search by model or registration" placeholder="Model, brand or registration" dateLabel="Created" />
+      {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No batches match.</p> : (
+      <>
       <table className="w-full text-left font-body-sm" data-testid="qr-batches">
         <thead>
-          <tr><th scope="col">Model</th><th scope="col">Registration</th><th scope="col">Quantity</th><th scope="col">Allocated</th><th scope="col">Bound</th><th scope="col">Void</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Open</span></th></tr>
+          <tr>
+            <SortableTh tools={tools} k="model">Model</SortableTh><SortableTh tools={tools} k="registration">Registration</SortableTh><SortableTh tools={tools} k="quantity">Quantity</SortableTh>
+            <SortableTh tools={tools} k="allocated">Allocated</SortableTh><SortableTh tools={tools} k="bound">Bound</SortableTh><SortableTh tools={tools} k="void">Void</SortableTh>
+            <SortableTh tools={tools} k="status">Status</SortableTh><SortableTh tools={tools} k="created">Created</SortableTh><th scope="col"><span className="sr-only">Open</span></th>
+          </tr>
         </thead>
         <tbody>
-          {items.map((b) => (
+          {tools.paged.pageRows.map((b) => (
             <tr key={b.id} data-testid="qr-batch-row" aria-selected={selected === b.id}>
               <td>{b.brandName} {b.modelNumber}</td>
               <td className="font-mono">{b.registrationId}</td>
@@ -131,11 +145,15 @@ function BatchTable({ items, selected, onSelect }: { items: QrBatch[]; selected:
               <td>{b.bound}</td>
               <td>{b.void}</td>
               <td><Pill>{b.status}</Pill></td>
+              <td>{b.createdAt ? b.createdAt.slice(0, 10) : ""}</td>
               <td><button type="button" onClick={() => onSelect(b.id)} className="text-primary underline" data-testid="qr-open">Open {b.modelNumber}</button></td>
             </tr>
           ))}
         </tbody>
       </table>
+      <ListPager tools={tools} />
+      </>
+      )}
     </div>
   );
 }

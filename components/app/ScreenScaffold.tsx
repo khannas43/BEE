@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
+import { ListPager, ListToolbar, SortableTh, nodeText, sortableText, useListTools } from "@/components/app/kit/listTools";
 import { Icon } from "@/components/ui/Icon";
 import { Module, Screen } from "@/lib/screens";
 import { ACCESS_CODES, RoleKey, isExternalRole, splitCodes } from "@/lib/roles";
@@ -77,27 +79,56 @@ function Card({ title, action, children }: { title?: string; action?: React.Reac
   );
 }
 
+const DATE_TEXT = /^\d{4}-\d{2}-\d{2}/;
+const TOOLS_FROM_ROWS = 6; // a short table stays plain; a longer list gets search, date filter, sort and paging
+
 function FakeTable({ columns, rows }: { columns: string[]; rows: (string | React.ReactNode)[][] }) {
+  const cells = useMemo(() => rows.map((r) => r.map((c) => nodeText(c).trim())), [rows]);
+  const dateCol = useMemo(() => {
+    const idx = columns.findIndex((_, j) => cells.length > 0 && cells.filter((r) => DATE_TEXT.test(r[j] ?? "")).length >= cells.length / 2);
+    return idx;
+  }, [columns, cells]);
+  const indexed = useMemo(() => rows.map((r, i) => ({ r, i })), [rows]);
+  const tools = useListTools({
+    rows: indexed,
+    text: (x) => cells[x.i].join(" "),
+    date: dateCol >= 0 ? (x) => (DATE_TEXT.test(cells[x.i][dateCol] ?? "") ? cells[x.i][dateCol].slice(0, 10) : undefined) : undefined,
+    sortValue: (x, key) => sortableText(cells[x.i][Number(key)] ?? ""),
+  });
+  const rich = rows.length >= TOOLS_FROM_ROWS;
+  const shown = rich ? tools.paged.pageRows : indexed;
   return (
-    <div className="overflow-x-auto app-scroll">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-border-subtle">
-            {columns.map((c) => (
-              <th key={c} className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide py-2 pr-space-md whitespace-nowrap">{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-b border-border-subtle/60 hover:bg-surface-container-low">
-              {r.map((cell, j) => (
-                <td key={j} className="py-2.5 pr-space-md font-body-sm text-body-sm text-on-surface whitespace-nowrap">{cell}</td>
+    <div className="space-y-space-sm">
+      {rich ? <ListToolbar tools={tools} placeholder="Search this list" dateLabel={dateCol >= 0 ? columns[dateCol] : "Date"} /> : null}
+      {rich && tools.visible.length === 0 ? (
+        <p className="font-body-sm text-body-sm text-on-surface-variant" data-testid="list-none">No rows match.</p>
+      ) : (
+        <div className="overflow-x-auto app-scroll">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border-subtle">
+                {columns.map((c, j) =>
+                  rich && c ? (
+                    <SortableTh key={c + j} tools={tools} k={String(j)} className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide py-2 pr-space-md whitespace-nowrap">{c}</SortableTh>
+                  ) : (
+                    <th key={c + j} className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide py-2 pr-space-md whitespace-nowrap">{c}</th>
+                  ),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map(({ r, i }) => (
+                <tr key={i} className="border-b border-border-subtle/60 hover:bg-surface-container-low">
+                  {r.map((cell, j) => (
+                    <td key={j} className="py-2.5 pr-space-md font-body-sm text-body-sm text-on-surface whitespace-nowrap">{cell}</td>
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </tbody>
+          </table>
+        </div>
+      )}
+      {rich && tools.visible.length > 0 ? <ListPager tools={tools} /> : null}
     </div>
   );
 }

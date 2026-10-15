@@ -1,6 +1,6 @@
 # Client demonstration: presenter script (40 minutes)
 
-Written from a full rehearsal on 15 October 2026. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username; do not use the "Demo accounts" chips if the page is slow). Sign out with the arrow icon at the top right of any console page.
+Written from a full rehearsal on 15 October 2026. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username; do not use the "Demo accounts" chips if the page is slow). Sign out with the arrow icon at the top right of any console page. **Shortcut:** the role dropdown in the header switches to that role's demo account in one step (it signs in as that account and opens its landing screen), so you do not need to sign out and in between parts. The dropdown names map to the accounts in the cheat sheet; the left menu and screens change with it.
 
 **Say once at the start:** "This is a local demonstration. The data is synthetic, nothing here is a BEE record, and three things are simulated: the Fabric network, the payment gateway, and the AI models are rules and statistics, advisory only. Everything else (roles, approvals, audit trail, database, hash chains) is real code running here."
 
@@ -26,7 +26,7 @@ Keep three minutes spare. If you are running late, drop the second half of any p
 ## 0-3 min: Opening
 1. Open `/login`. Point out the left panel: what the demonstration covers, and "Password for every demo account: demo123".
 2. Sign in as `bee.director`. You land on the **MIS dashboard**. Say: "We will come back here; first the journey a manufacturer follows." (Skip ahead if you prefer MIS first.)
-3. Point at the "Preview as" box: "It only changes what the prototype screens show; the signed-in identity at top right is what the service actually uses."
+3. Point at the role dropdown at the top right: "Choosing a role signs in as that demo user, so we can switch hats during the demo."
 
 ## 3-9 min: Payment simulation
 **Sign out, sign in as `nova.applicant` (manufacturer).** Menu: **Payments (simulated)**.

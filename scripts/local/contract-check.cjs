@@ -342,6 +342,7 @@ function inventory() {
   const codeRoutes = {};
   for (const f of routes) {
     const route = "/" + path.relative(path.join(ROOT, "app"), path.dirname(f)).split(path.sep).join("/").replace(/\[(\w+)\]/g, "{$1}");
+    if (route.startsWith("/api/runtime/demo/")) continue; // the demonstration family is outside the documented contract on purpose (BL-220)
     const src = fs.readFileSync(f, "utf8");
     if (METHODS.some((m) => new RegExp(`export (async )?function ${m}\\b`).test(src))) problems.push(`${route} exports an unlogged handler function`);
     /* every method export is logged("<template>", handler), logged("<template>", methodNotAllowed(...)) or an alias of one */
@@ -382,7 +383,7 @@ function inventory() {
     for (const m of src.matchAll(/@(?:Get|Post|Patch)Mapping\(\s*(?:path\s*=\s*)?"([^"]+)"/g)) mappings.add(m[1]);
   }
   const security = fs.readFileSync(path.join(ROOT, "backend/src/main/java/gov/bee/api/security/SecurityConfig.java"), "utf8");
-  const allowed = [...security.matchAll(/requestMatchers\(HttpMethod\.(\w+), ([^)]+)\)/g)].flatMap((m) => [...m[2].matchAll(/"([^"]+)"/g)].map((x) => `${m[1]} ${x[1]}`));
+  const allowed = [...security.matchAll(/requestMatchers\(HttpMethod\.(\w+), ([^)]+)\)/g)].flatMap((m) => [...m[2].matchAll(/"([^"]+)"/g)].map((x) => `${m[1]} ${x[1]}`)).filter((x) => !x.includes(" /api/demo/")); // BL-220
   const internalPaths = internal.map(([r]) => r).sort();
   const springPaths = [...mappings, "/actuator/health"].sort();
   if (springPaths.join() !== internalPaths.join()) problems.push(`Spring mappings ${springPaths} vs contract ${internalPaths}`);

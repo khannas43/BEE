@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
+import { useDemoMode } from "@/lib/client/useDemoMode";
 
 export interface SpringIdentity {
   displayName: string;
@@ -59,11 +60,13 @@ export const orgsText = (me: SpringIdentity) => me.organisations.map((o) => o.co
 
 export function SessionBadge({ signedOut }: { signedOut?: React.ReactNode }) {
   const id = useSpringIdentity();
+  const demo = useDemoMode() === "on";
   if (id.status !== "signed-in") return <>{signedOut}</>;
   const orgs = orgsText(id.me);
   return (
     <div className="flex items-center gap-space-sm" data-testid="session-badge">
-      <div className="hidden md:block leading-tight text-right">
+      {/* Demo sign-in mode shows only the sign-out icon; the identity is still readable by assistive tech in the button's label. */}
+      <div className={demo ? "sr-only" : "hidden md:block leading-tight text-right"}>
         <div className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide">Signed in</div>
         <div className="font-label-md text-label-md text-on-surface font-semibold">{id.me.displayName}</div>
         <div className="font-label-sm text-label-sm text-on-surface-variant">
@@ -72,7 +75,7 @@ export function SessionBadge({ signedOut }: { signedOut?: React.ReactNode }) {
         </div>
       </div>
       <form action="/api/auth/logout" method="post">
-        <button type="submit" className="text-on-surface-variant hover:text-error flex items-center" title="Sign out">
+        <button type="submit" className="text-on-surface-variant hover:text-error flex items-center" title="Sign out" aria-label={demo ? `Sign out ${id.me.displayName}` : undefined}>
           <Icon name="logout" size={20} />
         </button>
       </form>

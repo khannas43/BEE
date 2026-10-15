@@ -50,7 +50,7 @@ public class PublicVerificationController {
         String serial = id.toUpperCase(java.util.Locale.ROOT);
         if (QR_SERIAL.matcher(serial).matches()) {
             // Unknown, unbound and void serials get the same 404 as an unknown registration.
-            return repository.findBySerial(serial).map(c -> ResponseEntity.ok(view(c, LocalDate.now(INDIA))))
+            return repository.findBySerial(serial).map(c -> ResponseEntity.ok(view(c, LocalDate.now(INDIA), repository.ledgerOverride(c.registrationId()))))
                 .orElseGet(() -> ApiErrors.response(HttpStatus.NOT_FOUND, "not_found"));
         }
         if (!REGISTRATION_ID.matcher(id).matches()) {
@@ -60,6 +60,11 @@ public class PublicVerificationController {
     }
 
     static Map<String, Object> view(PublicVerificationRepository.PublicCertificate c, LocalDate today) {
+        return view(c, today, null);
+    }
+
+    /** {@code ledger} is the simulated ledger's override ("revoked" or "pending") or null; it wins over the dates. */
+    static Map<String, Object> view(PublicVerificationRepository.PublicCertificate c, LocalDate today, String ledger) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("registrationId", c.registrationId());
         m.put("manufacturer", c.manufacturer());
@@ -70,7 +75,7 @@ public class PublicVerificationController {
         m.put("verifiedIseer", c.verifiedIseer().toPlainString());
         m.put("validFrom", c.validFrom().toString());
         m.put("validTo", c.validTo().toString());
-        m.put("status", today.isAfter(c.validTo()) ? "expired" : today.isBefore(c.validFrom()) ? "not_yet_valid" : "valid");
+        m.put("status", ledger != null ? ledger : today.isAfter(c.validTo()) ? "expired" : today.isBefore(c.validFrom()) ? "not_yet_valid" : "valid");
         m.put("localDemoCertificate", true);
         return m;
     }

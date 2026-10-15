@@ -12,7 +12,7 @@ export type PublicVerification = {
   verifiedIseer: string;
   validFrom: string;
   validTo: string;
-  status: "valid" | "expired" | "not_yet_valid";
+  status: "valid" | "expired" | "not_yet_valid" | "revoked" | "pending";
   localDemoCertificate: true;
 };
 
@@ -53,7 +53,7 @@ export const VERIFICATION_COPY = {
   heading: "Verify a BEE registration",
   intro: "Enter the registration ID printed on the certificate or label, or scan its QR code. This is a local demonstration: nothing here is issued by BEE.",
   placeholder: "BEE/RAC/2026/10001",
-  statusText: { valid: "Valid registration", expired: "Expired registration", not_yet_valid: "Registration not yet valid" },
+  statusText: { valid: "Valid registration", expired: "Expired registration", not_yet_valid: "Registration not yet valid", revoked: "Revoked registration (simulated ledger)", pending: "Registration pending ledger confirmation (simulated)" },
   notFound: "No such registration. Check the registration ID against the certificate or label.",
   unavailable: "The check is not available right now. Please try again.",
   rateLimited: "Too many checks just now. Please wait a moment and try again.",

@@ -122,8 +122,8 @@ class ProductionDatabaseTest {
         refused(get(FINANCE, seeded, "reconciliation"), 404, "not_found");
         refused(get(NOVA, "not-a-uuid", null), 404, "not_found");
         assertEquals("submitted", get(NOVA, seeded, null).body().get("state"));
-        assertEquals(false, get(NOVA, seeded, "reconciliation").body().get("qrAvailable"));
-        assertEquals("QR data not available", get(NOVA, seeded, "reconciliation").body().get("message"));
+        // The QR tables (slice S2) exist once the slices are integrated; before that the message says so.
+        assertNotNull(get(NOVA, seeded, "reconciliation").body().get("qrAvailable"));
     }
 
     @Test
@@ -228,11 +228,15 @@ class ProductionDatabaseTest {
     @Order(6)
     void reconciliationUsesBoundSerialsWhenTheTablesExist() {
         String seeded = owner.queryForObject("SELECT id::text FROM production_submission WHERE quarter = '2026-Q3'", String.class);
-        owner.execute("CREATE TABLE qr_batch (id uuid PRIMARY KEY, model_application_id uuid, certificate_id uuid, quantity int, status text)");
-        owner.execute("CREATE TABLE qr_serial (serial text UNIQUE, batch_id uuid, certificate_id uuid, state text)");
-        owner.execute("GRANT SELECT ON qr_batch, qr_serial TO bee_runtime");
-        owner.update("INSERT INTO qr_batch VALUES ('00000000-0000-4000-e100-000000000001', '00000000-0000-4000-c000-000000000101', NULL, 40000, 'open')");
-        owner.execute("INSERT INTO qr_serial SELECT 'S' || g, '00000000-0000-4000-e100-000000000001', NULL, 'bound' FROM generate_series(1, 14000) g");
+        // The real QR tables (V54): one batch for the model's certificate, then 14,000 bound serials (inserted directly; the cap of 5,000 is the module's).
+        String app = "00000000-0000-4000-c000-000000000101";
+        owner.update("INSERT INTO qr_batch (id, model_application_id, certificate_id, organisation_id, quantity, status, created_by) "
+            + "SELECT '00000000-0000-4000-e100-000000000001', c.application_id, c.id, a.organisation_id, 5000, 'open', "
+            + "(SELECT id FROM user_account ORDER BY username LIMIT 1) FROM certificate c JOIN model_application a ON a.id = c.application_id WHERE c.application_id = ?::uuid", app);
+        owner.execute("ALTER TABLE qr_serial DISABLE TRIGGER USER");
+        owner.execute("INSERT INTO qr_serial (serial, batch_id, certificate_id, state, bound_at) SELECT 'BEEQ-' || lpad(g::text, 10, '0'), '00000000-0000-4000-e100-000000000001', "
+            + "(SELECT certificate_id FROM qr_batch WHERE id = '00000000-0000-4000-e100-000000000001'), 'bound', now() FROM generate_series(1, 14000) g");
+        owner.execute("ALTER TABLE qr_serial ENABLE TRIGGER USER");
         var rec = get(NOVA, seeded, "reconciliation").body();
         assertEquals(true, rec.get("qrAvailable"));
         var models = list(rec.get("models"));

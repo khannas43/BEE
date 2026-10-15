@@ -107,6 +107,7 @@ function TaskTable({ prefix, tasks }: { prefix: string; tasks: WorkTask[] }) {
     },
     { key: "state", header: "Stage", sortValue: (t) => t.application.state, render: (t) => stateLabel(t.application.state) },
     { key: "action", header: "To do", sortValue: (t) => t.action, render: (t) => t.action },
+    { key: "submitted", header: "Submitted on", sortValue: (t) => t.application.submittedAt ?? "", render: (t) => (t.application.submittedAt ? t.application.submittedAt.slice(0, 10) : "—") },
     {
       key: "open",
       header: "",
@@ -123,6 +124,8 @@ function TaskTable({ prefix, tasks }: { prefix: string; tasks: WorkTask[] }) {
   ];
   return (
     <DataTable
+      dateOf={(t) => t.application.submittedAt}
+      dateLabel="Submitted on"
       columns={columns}
       rows={tasks}
       rowKey={(t) => t.application.id}

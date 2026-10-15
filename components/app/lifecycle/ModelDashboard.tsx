@@ -184,6 +184,7 @@ function ApplicationTable({ items, selectedId }: { items: ModelApplication[]; se
       sortValue: (a) => a.state,
       render: (a) => <span className="capitalize">{stateLabel(a.state)}</span>,
     },
+    { key: "submitted", header: "Submitted on", sortValue: (a) => a.submittedAt ?? "", render: (a) => (a.submittedAt ? a.submittedAt.slice(0, 10) : "—") },
     {
       key: "actions",
       header: "",
@@ -212,6 +213,8 @@ function ApplicationTable({ items, selectedId }: { items: ModelApplication[]; se
 
   return (
     <DataTable
+      dateOf={(a) => a.submittedAt}
+      dateLabel="Submitted on"
       columns={columns}
       rows={items}
       rowKey={(a) => a.id}

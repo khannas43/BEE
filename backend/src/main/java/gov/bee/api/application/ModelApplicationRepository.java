@@ -4,6 +4,7 @@ import gov.bee.api.policy.SlicePolicy.ReadScope;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,13 +26,21 @@ public class ModelApplicationRepository {
     public record Row(UUID id, String reference, UUID organisationId, String organisationCode, String brandName,
                       String category, String modelNumber, String state, int version, Set<String> assignedStagesForCaller,
                       UUID principalOrganisationId, UUID brandId, String principalOrganisationCode,
-                      String laboratoryCode, LocalDate testedOn, BigDecimal declaredIseer) {
+                      String laboratoryCode, LocalDate testedOn, BigDecimal declaredIseer, Instant submittedAt) {
+        /** A row without the submission time (rows and tests that predate it). */
+        public Row(UUID id, String reference, UUID organisationId, String organisationCode, String brandName, String category,
+                   String modelNumber, String state, int version, Set<String> assignedStagesForCaller, UUID principalOrganisationId,
+                   UUID brandId, String principalOrganisationCode, String laboratoryCode, LocalDate testedOn, BigDecimal declaredIseer) {
+            this(id, reference, organisationId, organisationCode, brandName, category, modelNumber, state, version,
+                assignedStagesForCaller, principalOrganisationId, brandId, principalOrganisationCode, laboratoryCode, testedOn, declaredIseer, null);
+        }
+
         /** A row without the WP05.1d evidence fields (legacy rows and tests that predate them). */
         public Row(UUID id, String reference, UUID organisationId, String organisationCode, String brandName, String category,
                    String modelNumber, String state, int version, Set<String> assignedStagesForCaller, UUID principalOrganisationId,
                    UUID brandId, String principalOrganisationCode) {
             this(id, reference, organisationId, organisationCode, brandName, category, modelNumber, state, version,
-                assignedStagesForCaller, principalOrganisationId, brandId, principalOrganisationCode, null, null, null);
+                assignedStagesForCaller, principalOrganisationId, brandId, principalOrganisationCode, null, null, null, null);
         }
     }
 
@@ -53,6 +62,7 @@ public class ModelApplicationRepository {
         SELECT a.id, a.reference, a.organisation_id, o.code, a.brand_name, a.category, a.model_number, a.state, a.version,
                a.principal_organisation_id, a.brand_id, po.code AS principal_code,
                a.laboratory_code, a.tested_on, a.declared_iseer,
+               (SELECT min(e.occurred_at) FROM model_application_submission_event e WHERE e.application_id = a.id) AS submitted_at,
                COALESCE((SELECT string_agg(s.stage, ',') FROM assignment s
                           WHERE s.subject_type = 'model_application' AND s.subject_id = a.id AND s.user_id = ? AND s.active AND s.stage = a.state), '') AS stages
         FROM model_application a JOIN organisation o ON o.id = a.organisation_id
@@ -157,7 +167,8 @@ public class ModelApplicationRepository {
             rs.getString("state"), rs.getInt("version"),
             stages.isEmpty() ? Set.of() : Set.copyOf(Arrays.asList(stages.split(","))),
             rs.getObject("principal_organisation_id", UUID.class), rs.getObject("brand_id", UUID.class), rs.getString("principal_code"),
-            rs.getString("laboratory_code"), rs.getObject("tested_on", LocalDate.class), rs.getBigDecimal("declared_iseer"));
+            rs.getString("laboratory_code"), rs.getObject("tested_on", LocalDate.class), rs.getBigDecimal("declared_iseer"),
+            rs.getTimestamp("submitted_at") == null ? null : rs.getTimestamp("submitted_at").toInstant());
     }
 
     /** Sets only the evidence fields the write carried; never touches state or version. */

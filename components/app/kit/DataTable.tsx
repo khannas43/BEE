@@ -43,6 +43,9 @@ export type DataTableProps<TRow> = {
   noMatchTestId?: string;
   rangeLiveTestId?: string;
   paginationTestId?: string;
+  /** The date a row is filtered by (YYYY-MM-DD or an ISO time); when given, a from/to date range is offered. */
+  dateOf?: (row: TRow) => string | undefined;
+  dateLabel?: string;
 };
 
 type SortState = { columnKey: string; direction: SortDirection };
@@ -81,15 +84,24 @@ export function DataTable<TRow>({
   noMatchTestId,
   rangeLiveTestId,
   paginationTestId,
+  dateOf,
+  dateLabel = "Date",
 }: DataTableProps<TRow>) {
   const [filterQuery, setFilterQuery] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
 
-  const filtered = useMemo(
-    () => filterRows(rows, filterQuery, (row) => rowFilterText(columns, row)),
-    [rows, filterQuery, columns],
-  );
+  const filtered = useMemo(() => {
+    const byText = filterRows(rows, filterQuery, (row) => rowFilterText(columns, row));
+    if (!dateOf || (!from && !to)) return byText;
+    return byText.filter((row) => {
+      const d = (dateOf(row) ?? "").slice(0, 10);
+      return d !== "" && (!from || d >= from) && (!to || d <= to);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, filterQuery, columns, from, to]);
 
   const sorted = useMemo(() => {
     if (!sort || sort.direction === "none") return filtered;
@@ -110,6 +122,11 @@ export function DataTable<TRow>({
       if (direction === "none") return null;
       return { columnKey, direction };
     });
+    setPage(1);
+  }
+
+  function onDateChange(set: (v: string) => void, value: string) {
+    set(value);
     setPage(1);
   }
 
@@ -139,6 +156,19 @@ export function DataTable<TRow>({
           data-testid={filterTestId}
         />
       </label>
+      {dateOf ? (
+        <div className="flex flex-wrap items-end gap-space-md" data-testid="datatable-dates">
+          <label className="flex flex-col font-label-sm text-label-sm text-on-surface-variant">
+            {dateLabel} from
+            <input type="date" value={from} max={to || undefined} onChange={(e) => onDateChange(setFrom, e.target.value)} className="mt-1 rounded-lg border border-outline-variant px-3 py-1.5 font-body-sm text-body-sm bg-surface-card" data-testid="datatable-from" />
+          </label>
+          <label className="flex flex-col font-label-sm text-label-sm text-on-surface-variant">
+            {dateLabel} to
+            <input type="date" value={to} min={from || undefined} onChange={(e) => onDateChange(setTo, e.target.value)} className="mt-1 rounded-lg border border-outline-variant px-3 py-1.5 font-body-sm text-body-sm bg-surface-card" data-testid="datatable-to" />
+          </label>
+          {from || to ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={() => { setFrom(""); setTo(""); setPage(1); }}>Clear dates</button> : null}
+        </div>
+      ) : null}
 
       <div className="sr-only" aria-live="polite" aria-atomic="true" data-testid={rangeLiveTestId}>
         {rangeText}

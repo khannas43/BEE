@@ -46,11 +46,13 @@ public class PublicVerificationRepository {
      */
     public String ledgerOverride(String registrationId) {
         try {
-            return jdbc.query(
+            // The status is NULL for an active certificate, so read the list directly: Stream.findFirst() throws on a null element.
+            java.util.List<String> rows = jdbc.query(
                 "SELECT CASE WHEN bool_or(l.kind = 'revoke' AND l.state = 'committed') THEN 'revoked' "
                     + "WHEN bool_or(l.kind = 'issue' AND l.state = 'committed') THEN NULL ELSE 'pending' END "
                     + "FROM ledger_tx l JOIN certificate c ON c.id = l.certificate_id WHERE c.registration_id = ? HAVING count(*) > 0",
-                (rs, i) -> rs.getString(1), registrationId).stream().findFirst().orElse(null);
+                (rs, i) -> rs.getString(1), registrationId);
+            return rows.isEmpty() ? null : rows.get(0);
         } catch (org.springframework.dao.DataAccessException e) {
             return null;
         }

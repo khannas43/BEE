@@ -97,6 +97,7 @@ TAB2_ROWS = [
     ("Work package", "WP06.1a", "Document intake and storage", "Done", 100),
     ("Work package", "WP06", "Package review: accepted on narrowed scope (test-report intake, versions, scoped retrieval for drafts)", "Done", 100),
     ("Work package", "HARDEN-1", "Review hardening: nosniff on PDF downloads, /verify status region, certificate heading, two repaired WebMvc test classes (BL-216 to BL-219)", "Done", 100),
+    ("Work package", "BL-219", "Gate runs the default backend suite (backend.unit-tests); gate 2176 passed, 0 failed", "Done", 100),
     ("Work package", "WP06.2", "Blob retention, orphans, limits (BL-001–003)", "Not started", 0),
     ("Work package", "WP07", "Package review: accepted on narrowed scope (stage workflow, manual fee confirmation/correction/reversal); payment simulation, production, CA not built", "Done", 100),
     ("Work package", "WP07.1a", "Finance fee confirmation", "Done", 100),

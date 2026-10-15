@@ -15,7 +15,7 @@ export interface PublicVerification {
   verifiedIseer: string;
   validFrom: string;
   validTo: string;
-  status: "valid" | "expired" | "not_yet_valid";
+  status: "valid" | "expired" | "not_yet_valid" | "revoked" | "pending";
   localDemoCertificate: true;
 }
 
@@ -29,7 +29,7 @@ export const validatePublicVerification: Validator<PublicVerification> = (body) 
     isString(b.registrationId) && REGISTRATION_ID.test(b.registrationId) && isString(b.manufacturer) && isString(b.brandName) && isString(b.modelNumber) && isString(b.category) &&
     Number.isInteger(b.stars) && (b.stars as number) >= 1 && (b.stars as number) <= 5 && isString(b.verifiedIseer) &&
     isString(b.validFrom) && DATE.test(b.validFrom) && isString(b.validTo) && DATE.test(b.validTo) && b.validTo > b.validFrom &&
-    (b.status === "valid" || b.status === "expired" || b.status === "not_yet_valid") && b.localDemoCertificate === true;
+    (b.status === "valid" || b.status === "expired" || b.status === "not_yet_valid" || b.status === "revoked" || b.status === "pending") && b.localDemoCertificate === true;
   return ok ? (b as unknown as PublicVerification) : null;
 };
 

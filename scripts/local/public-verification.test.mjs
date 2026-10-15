@@ -10,13 +10,14 @@ const OK = {
 
 test("a public answer carries exactly the public fields", () => {
   assert.ok(validatePublicVerification(OK));
-  for (const status of ["expired", "not_yet_valid"]) assert.ok(validatePublicVerification({ ...OK, status }));
+  // revoked and pending come from the simulated demonstration ledger (docs/demo/S3.md)
+  for (const status of ["expired", "not_yet_valid", "revoked", "pending"]) assert.ok(validatePublicVerification({ ...OK, status }));
 });
 
 test("anything else is refused, including any private field", () => {
   const bad = (over) => validatePublicVerification({ ...OK, ...over });
   assert.equal(bad({ applicantEmail: "a@b.c" }), null);
-  assert.equal(bad({ status: "revoked" }), null);
+  assert.equal(bad({ status: "suspended" }), null);
   assert.equal(bad({ stars: 0 }), null);
   assert.equal(bad({ stars: 6 }), null);
   assert.equal(bad({ validTo: "2026-10-06" }), null);

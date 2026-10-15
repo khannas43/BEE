@@ -196,6 +196,13 @@ class SpringContractTest {
     @MockitoBean
     RegistrationDocumentRepository registrationDocumentRepo;
 
+    /** Demo S6 (AI) beans reach the database; the contract test needs none of them. */
+    @MockitoBean
+    gov.bee.api.demo.ai.AiStore aiStore;
+
+    @MockitoBean
+    gov.bee.api.demo.ai.AiEngines aiEngines;
+
     /** Every other operation reads its business settings through the service; the defaults are the catalogue's (V42). */
     @org.junit.jupiter.api.BeforeEach
     void businessSettingDefaults() {
@@ -541,7 +548,15 @@ class SpringContractTest {
         when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
         ids[2] = conforms("/api/model-applications/{id}/submit", get(path(DETAIL) + "/submit").with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
         ids[3] = conforms(ME, get(ME).with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
-        String log = Files.readString(file);
+        // The request log rolls over by size, and a long run can roll it mid-test: read the current file and every rolled file, with no file-time filter (BL-221).
+        StringBuilder all = new StringBuilder();
+        try (var files = Files.list(file.getParent())) {
+            for (Path f : files.filter(f -> f.getFileName().toString().startsWith("api-requests")).sorted().toList()) {
+                String text = Files.readString(f);
+                all.append(text).append(text.endsWith("\n") ? "" : "\n");
+            }
+        }
+        String log = all.toString();
         assertFalse(log.contains(PLANTED), "planted value in api-requests.jsonl");
         assertFalse(log.contains("nova.applicant") || log.contains("Nova Applicant"), "personal data in api-requests.jsonl");
         String[][] want = {{"/api/model-applications/{id}", "404", "not_found"}, {"/api/model-applications", "401", "unauthenticated"}, {"/api/model-applications/{id}/submit", "200", "ok"}, {"/api/me", "200", "ok"}};

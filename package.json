@@ -14,6 +14,7 @@
     "local:up": "bash scripts/local/up.sh",
     "local:health": "bash scripts/local/health.sh",
     "local:seed": "bash scripts/local/seed.sh",
+    "demo:seed": "bash scripts/demo/seed-demo.sh",
     "local:reset": "bash scripts/local/reset.sh",
     "local:reset:identity": "bash scripts/local/reset-identity.sh",
     "local:check": "bash scripts/local/check.sh",
@@ -65,6 +66,7 @@
     "api:test:brand-auth": "JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -q -B -f backend/pom.xml test -Dtest=BrandAuthDatabaseTest -Dgroups=db -Dbee.test.excludedGroups=none -Dsurefire.failIfNoSpecifiedTests=false"
   },
   "dependencies": {
+    "@fontsource-variable/material-symbols-outlined": "^5.3.9",
     "next": "16.3.5",
     "qrcode-generator": "2.0.4",
     "react": "19.2.8",

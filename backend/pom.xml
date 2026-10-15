@@ -82,6 +82,10 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <excludedGroups>${bee.test.excludedGroups}</excludedGroups>
+          <!-- The gate exports BEE_LOG_DIR for the live API; tests must log to target/logs, not into the live API's log (BL-221). -->
+          <environmentVariables>
+            <BEE_LOG_DIR>target/logs</BEE_LOG_DIR>
+          </environmentVariables>
         </configuration>
       </plugin>
     </plugins>

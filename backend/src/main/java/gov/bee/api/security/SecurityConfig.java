@@ -90,6 +90,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/delegations", "/api/delegations/*/decision").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/register-revocations").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/register-revocations", "/api/register-revocations/*/decision").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/demo/*", "/api/demo/*/*", "/api/demo/*/*/*").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/demo/*", "/api/demo/*/*", "/api/demo/*/*/*").authenticated()
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o -> o
                 .jwt(Customizer.withDefaults())

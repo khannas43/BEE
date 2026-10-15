@@ -29,10 +29,11 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light">
-      <Link href="/app" className="flex items-center justify-center px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={`BEE S&L ${t("app.officerConsole")}`}>
-        <span className="flex items-center justify-center bg-white rounded-lg px-4 h-11">
-          <Image src="/images/bee-logo.png" alt="Bureau of Energy Efficiency" width={1260} height={308} priority className="h-9 w-auto object-contain" />
+      <Link href="/app" className="flex flex-col items-center justify-center gap-0.5 px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={`BEE S&L ${t("app.officerConsole")}`}>
+        <span className="flex items-center justify-center bg-white rounded-md px-3 h-[36px]">
+          <Image src="/images/bee-logo.png" alt="Bureau of Energy Efficiency" width={1260} height={308} priority className="h-[28px] w-auto object-contain" />
         </span>
+        <span className="font-label-sm text-label-sm uppercase tracking-[0.18em] text-forest-light/80 leading-[12px]">{t("app.officerConsole")}</span>
       </Link>
 
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">

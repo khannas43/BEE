@@ -16,7 +16,7 @@ type Certificate = NonNullable<ModelApplication["certificate"]>;
 export function CertificateCard({ certificate, applicationId, testIdPrefix = "model-app-certificate" }: { certificate: Certificate; applicationId?: string; testIdPrefix?: string }) {
   return (
     <div className="mt-space-md rounded-lg border border-primary/40 bg-primary/5 p-space-md" data-testid={testIdPrefix} data-status={certificate.status}>
-      <p className="font-label-md text-label-md text-on-surface">{CERTIFICATE_COPY.heading}</p>
+      <h3 className="font-label-md text-label-md text-on-surface">{CERTIFICATE_COPY.heading}</h3>
       <p className="font-title-md text-title-md text-on-surface mt-1 font-mono" data-testid={`${testIdPrefix}-registration`}>{certificate.registrationId}</p>
       <p className="font-body-sm text-body-sm mt-1" data-testid={`${testIdPrefix}-validity`}>
         {CERTIFICATE_COPY.statusLabel[certificate.status]} · valid from {certificate.validFrom} to {certificate.validTo}

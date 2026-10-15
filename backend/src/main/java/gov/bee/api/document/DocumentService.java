@@ -115,6 +115,7 @@ public class DocumentService {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header("X-Content-Type-Options", "nosniff")
                 .body(bytes.get());
         } catch (IOException e) {
             return error(HttpStatus.SERVICE_UNAVAILABLE, "service_unavailable");

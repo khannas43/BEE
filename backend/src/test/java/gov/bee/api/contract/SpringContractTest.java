@@ -196,6 +196,13 @@ class SpringContractTest {
     @MockitoBean
     RegistrationDocumentRepository registrationDocumentRepo;
 
+    /** Demo S6 (AI) beans reach the database; the contract test needs none of them. */
+    @MockitoBean
+    gov.bee.api.demo.ai.AiStore aiStore;
+
+    @MockitoBean
+    gov.bee.api.demo.ai.AiEngines aiEngines;
+
     /** Every other operation reads its business settings through the service; the defaults are the catalogue's (V42). */
     @org.junit.jupiter.api.BeforeEach
     void businessSettingDefaults() {

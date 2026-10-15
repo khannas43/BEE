@@ -41,4 +41,18 @@ class PublicVerificationSerialTest {
         verify(repo, never()).findBySerial("BEEQ-IIIIIIIIII");
         verify(repo, never()).find("BEEQ-IIIIIIIIII");
     }
+
+    /** The simulated ledger's word (docs/demo/S3.md) wins over the dates, by registration ID and by serial alike. */
+    @Test
+    void aLedgerRevocationOrPendingStateShowsOnBothLookups() {
+        when(repo.find("BEE/RAC/2026/10901")).thenReturn(Optional.of(cert));
+        when(repo.findBySerial("BEEQ-S2D0000001")).thenReturn(Optional.of(cert));
+        when(repo.ledgerOverride("BEE/RAC/2026/10901")).thenReturn("revoked");
+        assertEquals("revoked", controller.verify("BEE/RAC/2026/10901").getBody().get("status"));
+        assertEquals("revoked", controller.verify("BEEQ-S2D0000001").getBody().get("status"));
+        when(repo.ledgerOverride("BEE/RAC/2026/10901")).thenReturn("pending");
+        assertEquals("pending", controller.verify("BEE/RAC/2026/10901").getBody().get("status"));
+        when(repo.ledgerOverride("BEE/RAC/2026/10901")).thenReturn(null);
+        assertEquals(PublicVerificationController.view(cert, LocalDate.now()).get("status"), controller.verify("BEE/RAC/2026/10901").getBody().get("status"));
+    }
 }

@@ -56,7 +56,7 @@ public class PublicVerificationController {
         if (!REGISTRATION_ID.matcher(id).matches()) {
             return ApiErrors.response(HttpStatus.NOT_FOUND, "not_found");
         }
-        return repository.find(id).map(c -> ResponseEntity.ok(view(c, LocalDate.now(INDIA)))).orElseGet(() -> ApiErrors.response(HttpStatus.NOT_FOUND, "not_found"));
+        return repository.find(id).map(c -> ResponseEntity.ok(view(c, LocalDate.now(INDIA), repository.ledgerOverride(c.registrationId())))).orElseGet(() -> ApiErrors.response(HttpStatus.NOT_FOUND, "not_found"));
     }
 
     static Map<String, Object> view(PublicVerificationRepository.PublicCertificate c, LocalDate today) {

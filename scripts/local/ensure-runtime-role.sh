@@ -122,3 +122,37 @@ GRANT INSERT, SELECT ON app.model_application_document TO ${BEE_RUNTIME_DB_USER}
 GRANT INSERT, SELECT ON app.model_application_document_version TO ${BEE_RUNTIME_DB_USER};
 SQL
 fi
+
+# ---- Demonstration slices (docs/demo/DEMO_WORK_PLAN.md): the blanket grants above are re-applied on every start, so each slice's function
+# execute rights and append-only tables are restated here, as its migration set them.
+if psql_super -d bee_app -c "SELECT to_regclass('app.ledger_tx') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.ledger_effective_valid_to(uuid), app.ledger_submit(uuid, uuid), app.ledger_decide(uuid, uuid, uuid[], text, text),
+  app.ledger_retry(uuid, uuid), app.ledger_change(uuid, uuid, text, date, text) TO ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.ledger_tx, app.ledger_event FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+if psql_super -d bee_app -c "SELECT to_regclass('app.payment_event') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+REVOKE UPDATE, DELETE, TRUNCATE ON app.payment_event, app.payment_callback FROM ${BEE_RUNTIME_DB_USER};
+REVOKE DELETE, TRUNCATE ON app.payment FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+if psql_super -d bee_app -c "SELECT to_regclass('app.qr_event') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+REVOKE UPDATE, DELETE, TRUNCATE ON app.qr_event FROM ${BEE_RUNTIME_DB_USER};
+REVOKE DELETE, TRUNCATE ON app.qr_batch, app.qr_serial FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+if psql_super -d bee_app -c "SELECT to_regclass('app.production_event') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+REVOKE UPDATE, DELETE, TRUNCATE ON app.production_event, app.production_evidence FROM ${BEE_RUNTIME_DB_USER};
+REVOKE UPDATE, DELETE, TRUNCATE ON app.production_row FROM ${BEE_RUNTIME_DB_USER};
+REVOKE DELETE, TRUNCATE ON app.production_submission FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+if psql_super -d bee_app -c "SELECT to_regclass('app.ai_run') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+REVOKE UPDATE, DELETE, TRUNCATE ON app.ai_model, app.ai_run, app.ai_disposition, app.ai_audit_event FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi

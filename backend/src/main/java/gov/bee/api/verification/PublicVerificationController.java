@@ -24,6 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicVerificationController {
 
     private static final Pattern REGISTRATION_ID = Pattern.compile("^BEE/[A-Z]{2,10}/[0-9]{4}/[0-9]{5,}$");
+    /** A QR serial (demo slice S2): BEEQ- and ten Crockford base32 characters. Resolved through a bound serial to its certificate. */
+    private static final Pattern QR_SERIAL = Pattern.compile("^BEEQ-[0-9A-HJKMNP-TV-Z]{10}$");
     private static final ZoneId INDIA = ZoneId.of("Asia/Kolkata");
 
     private final PublicVerificationRepository repository;
@@ -45,6 +47,12 @@ public class PublicVerificationController {
             return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
         String id = reg.trim();
+        String serial = id.toUpperCase(java.util.Locale.ROOT);
+        if (QR_SERIAL.matcher(serial).matches()) {
+            // Unknown, unbound and void serials get the same 404 as an unknown registration.
+            return repository.findBySerial(serial).map(c -> ResponseEntity.ok(view(c, LocalDate.now(INDIA))))
+                .orElseGet(() -> ApiErrors.response(HttpStatus.NOT_FOUND, "not_found"));
+        }
         if (!REGISTRATION_ID.matcher(id).matches()) {
             return ApiErrors.response(HttpStatus.NOT_FOUND, "not_found");
         }

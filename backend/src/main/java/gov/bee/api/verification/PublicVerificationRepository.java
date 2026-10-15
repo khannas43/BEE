@@ -28,4 +28,14 @@ public class PublicVerificationRepository {
                 rs.getString("category_code"), rs.getInt("stars"), rs.getBigDecimal("verified_iseer"), rs.getDate("valid_from").toLocalDate(), rs.getDate("valid_to").toLocalDate()),
             registrationId).stream().findFirst();
     }
+
+    /** The certificate of a bound QR serial (view public_qr_serial: bound serials only). Same shape as {@link #find}. */
+    public Optional<PublicCertificate> findBySerial(String serial) {
+        return jdbc.query(
+            "SELECT p.registration_id, p.manufacturer, p.brand_name, p.model_number, p.category_code, p.stars, p.verified_iseer, p.valid_from, p.valid_to "
+                + "FROM public_qr_serial q JOIN public_certificate p ON p.registration_id = q.registration_id WHERE q.serial = ?",
+            (rs, i) -> new PublicCertificate(rs.getString("registration_id"), rs.getString("manufacturer"), rs.getString("brand_name"), rs.getString("model_number"),
+                rs.getString("category_code"), rs.getInt("stars"), rs.getBigDecimal("verified_iseer"), rs.getDate("valid_from").toLocalDate(), rs.getDate("valid_to").toLocalDate()),
+            serial).stream().findFirst();
+    }
 }

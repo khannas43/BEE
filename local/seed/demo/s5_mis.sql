@@ -282,26 +282,26 @@ BEGIN
     ('00000000-0000-4000-c000-00000000d004', 'DEMO-Q-0004', pixel, 'Aurora Air (synthetic principal)', 'RAC', 'AU-RAC-QDIR', 'director_review', 4, now() - interval '7 days')
   ON CONFLICT (id) DO NOTHING;
   INSERT INTO model_application_submission_event (id, application_id, from_state, to_state, actor_account_id, actor_role, filing_organisation_id, occurred_at)
-  SELECT ('00000000-0000-4000-c000-00000000d10' || n)::uuid, ('00000000-0000-4000-c000-00000000d00' || n)::uuid, 'draft', 'fee_due',
-         CASE WHEN n = 4 THEN '00000000-0000-4000-a000-000000000002'::uuid ELSE applicant END,
-         CASE WHEN n = 4 THEN 'agency' ELSE 'manufacturer' END,
-         CASE WHEN n = 4 THEN pixel ELSE nova END, now() - interval '20 days'
-  FROM generate_series(1, 4) AS n
+  SELECT ('00000000-0000-4000-c000-00000000d10' || q)::uuid, ('00000000-0000-4000-c000-00000000d00' || q)::uuid, 'draft', 'fee_due',
+         CASE WHEN q = 4 THEN '00000000-0000-4000-a000-000000000002'::uuid ELSE applicant END,
+         CASE WHEN q = 4 THEN 'agency' ELSE 'manufacturer' END,
+         CASE WHEN q = 4 THEN pixel ELSE nova END, now() - interval '20 days'
+  FROM generate_series(1, 4) AS g(q)
   ON CONFLICT (id) DO NOTHING;
   INSERT INTO model_application_fee_snapshot (id, application_id, submission_event_id, amount_inr, tax_rate_percent, fee_rule_key, fee_rule_version, verification_status, source_reference, note)
-  SELECT ('00000000-0000-4000-c000-00000000d20' || n)::uuid, ('00000000-0000-4000-c000-00000000d00' || n)::uuid, ('00000000-0000-4000-c000-00000000d10' || n)::uuid,
+  SELECT ('00000000-0000-4000-c000-00000000d20' || q)::uuid, ('00000000-0000-4000-c000-00000000d00' || q)::uuid, ('00000000-0000-4000-c000-00000000d10' || q)::uuid,
          10000, 18, 'rac-model-registration', 1, 'synthetic', 'S5 queue seed', 'Synthetic demonstration fee'
-  FROM generate_series(1, 4) AS n
+  FROM generate_series(1, 4) AS g(q)
   ON CONFLICT (id) DO NOTHING;
   INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after, occurred_at)
-  SELECT ('00000000-0000-4000-c000-00000000d30' || n)::uuid, ('00000000-0000-4000-c000-00000000d00' || n)::uuid, 'confirm_fee', 'fee_due', 'iame_scrutiny',
+  SELECT ('00000000-0000-4000-c000-00000000d30' || q)::uuid, ('00000000-0000-4000-c000-00000000d00' || q)::uuid, 'confirm_fee', 'fee_due', 'iame_scrutiny',
          finance, 'finance', 1, now() - interval '16 days'
-  FROM generate_series(1, 4) AS n
+  FROM generate_series(1, 4) AS g(q)
   ON CONFLICT (id) DO NOTHING;
   INSERT INTO model_application_fee_confirmation (id, application_id, transition_event_id, fee_snapshot_id, amount_inr, receipt_reference, received_on, confirmed_by_account_id, confirmed_at)
-  SELECT ('00000000-0000-4000-c000-00000000d40' || n)::uuid, ('00000000-0000-4000-c000-00000000d00' || n)::uuid, ('00000000-0000-4000-c000-00000000d30' || n)::uuid,
-         ('00000000-0000-4000-c000-00000000d20' || n)::uuid, 11800, 'SYN-RCPT-Q000' || n, (now() AT TIME ZONE 'Asia/Kolkata')::date - 16, finance, now() - interval '16 days'
-  FROM generate_series(1, 4) AS n
+  SELECT ('00000000-0000-4000-c000-00000000d40' || q)::uuid, ('00000000-0000-4000-c000-00000000d00' || q)::uuid, ('00000000-0000-4000-c000-00000000d30' || q)::uuid,
+         ('00000000-0000-4000-c000-00000000d20' || q)::uuid, 11800, 'SYN-RCPT-Q000' || q, (now() AT TIME ZONE 'Asia/Kolkata')::date - 16, finance, now() - interval '16 days'
+  FROM generate_series(1, 4) AS g(q)
   ON CONFLICT (id) DO NOTHING;
 
   -- Two Nova brand registrations sitting with Programme and the Director, so those lists are not empty.

@@ -35,16 +35,20 @@
 3. Demo seed design: `local/seed/demo-seed.sql` frame with the shared people and the approved models every slice builds on (Nova: 3 approved models with certificates; Pixel: 1; payments; 4 quarters of production).
 4. Slice worktrees created.
 
-### Route inventory (fixed up front)
+### Route design (Phase 0, done)
 
-| Slice | Routes |
-| --- | --- |
-| S1 | POST `/api/model-applications/{id}/payments` (start), POST `/api/payments/callback` (simulated gateway, signed, idempotent), GET `/api/payments`, GET `/api/payments/reconciliation` |
-| S2 | POST/GET `/api/qr-batches`, GET `/api/qr-batches/{id}`, POST `/api/qr-batches/{id}/serials`; public: GET `/api/public/verification?serial=` |
-| S3 | GET `/api/certificates`, GET `/api/certificates/{id}`, POST `/api/certificates/{id}/ledger/commit`, `/ledger/retry`, `/amend`, `/revoke`; GET `/api/ledger/transactions` |
-| S4 | POST/GET `/api/production-submissions`, POST `/api/production-submissions/{id}/rows` (bulk CSV), POST `/api/production-submissions/{id}/evidence`, GET `/api/production-submissions/{id}/reconciliation` |
-| S5 | GET `/api/mis/summary`, `/api/mis/applications`, `/api/mis/finance`, `/api/mis/production`, `/api/mis/certificates` |
-| S6 | GET `/api/ai/models`, GET `/api/ai/{useCase}/runs`, POST `/api/ai/{useCase}/runs`, POST `/api/ai/runs/{id}/disposition` (accept, override, reject; reason required); use cases: `compliance-risk`, `production-anomaly`, `document-extraction`, `helpdesk-assist`, `rating-trends` |
+Instead of about 20 individually registered routes (each costs about 12 registry edits), every demo area sits behind **one family**: Spring `/api/demo/{module}[/{id}[/{action}]]` (GET and POST) and the browser path `/api/runtime/demo/**`. Registered once (security allowlist, correlation filter, request-log types and schema, BFF catch-all, wiring-check exemption). It is **outside the documented API contract on purpose (BL-220)**; the documented contract and its gate are unchanged.
+
+A slice adds one Spring bean `implements DemoModule` (`name()` = payments, qr, ledger, production, mis or ai; `handle(caller, method, id, action, query, body)`), in its own package `gov.bee.api.demo.<name>`. The module checks role, scope and state itself and writes its audit rows in the same transaction. Browser: `lib/client/runtimeDemo.ts` (`demoGet`, `demoPost`, `demoPath`). Screens: replace the placeholder `components/app/demo/<Name>Demo.tsx` (pages `app/app/demo/<slug>/page.tsx` and menu entries already exist in `lib/runtimeRoutes.ts`). Reuse the closed error codes in `ApiErrors` (`validation_failed`, `role_not_permitted`, `not_found`, `segregation_refused`, `version_conflict`); `DemoResult.error(...)` can add a short `detail` text the screen shows.
+
+| Slice | Module name | Placeholder screen | Suggested routes (inside the family) |
+| --- | --- | --- | --- |
+| S1 | `payments` | `PaymentsDemo` | POST `payments` (start for an application), POST `payments/{id}/callback` (simulated gateway, idempotent), GET `payments`, GET `payments/reconciliation` |
+| S2 | `qr` | `QrDemo` | POST/GET `qr`, GET `qr/{id}`, POST `qr/{id}/serials`; plus the public verifier accepting a serial |
+| S3 | `ledger` | `LedgerDemo` | GET `ledger`, GET `ledger/{certId}`, POST `ledger/{certId}/commit`, `/retry`, `/amend`, `/revoke` |
+| S4 | `production` | `ProductionDemo` | POST/GET `production`, POST `production/{id}/rows`, POST `production/{id}/evidence`, GET `production/{id}/reconciliation` |
+| S5 | `mis` | `MisDemo` | GET `mis/summary`, `mis/applications`, `mis/finance`, `mis/production`, `mis/certificates` |
+| S6 | `ai` | `AiDemo` | GET `ai/models`, GET/POST `ai/{useCase}/runs`, POST `ai/runs/{id}/disposition` |
 
 ### Shared data contract (so parallel slices agree)
 
@@ -84,7 +88,7 @@ Container mode on the demo laptop only (`npm run local:app:up`), separate clone 
 
 ## Risks
 
-1. The contract gate (route coverage 1606 pairs, denial-by-default, wiring) is the biggest schedule risk for 20 new routes; Phase 0 exists to take it once. If the gate cannot be made green by hour 12.5, the demo runs from the branch (labelled), and main is updated after the demo.
+1. The contract gate was the biggest schedule risk for about 20 new routes; the single `/api/demo` family (BL-220) removes it. The cost is that demo endpoints are not in the documented contract; after the demo they are either documented or retired.
 2. Parallel slices touching shared screens (`runtimeRoutes`, `screenMatrix`, menus): the integrator owns these.
 3. Seed data coupling across slices (S4 needs S2 serials; S5, S6 read everything): the shared data contract above is fixed and not changed by slices.
 4. One-time-code enrolment of each demo person must be done before the demo.

@@ -289,7 +289,11 @@ test("detail href stays on model-dashboard; state labels are humanised", () => {
 });
 
 test("runtime routes: Spring identity menu for dashboard, draft form and finance queue, not the preview role", async () => {
-  const { RUNTIME_ROUTES, runtimeNavFor, runtimeRouteFor } = await import("../../lib/runtimeRoutes.ts");
+  const { RUNTIME_ROUTES: ALL_ROUTES, runtimeNavFor: navForAll, runtimeRouteFor } = await import("../../lib/runtimeRoutes.ts");
+  // The demonstration areas (docs/demo/DEMO_WORK_PLAN.md) have their own menu entries; this test is about the documented screens.
+  const isDemo = (r) => r.href.startsWith("/app/demo/");
+  const RUNTIME_ROUTES = ALL_ROUTES.filter((r) => !isDemo(r));
+  const runtimeNavFor = (...a) => navForAll(...a).filter((r) => !isDemo(r));
   assert.deepEqual(RUNTIME_ROUTES.map((r) => r.href), [
     "/app/administration/fee-rules",
     "/app/finance/receipt",

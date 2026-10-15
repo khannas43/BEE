@@ -103,6 +103,7 @@ const documented = new Set(Object.keys(doc.paths));
 for (const [union, routes] of [["WebRoute", runtimeRoutes], ["SpringRoute", springRoutes]]) {
   for (const r of routes) {
     if (!r.startsWith("/") || r.includes("{unmatched}")) continue; // "unmatched" / "unmapped" sentinels, not routes
+    if (r === "/api/demo" || r === "/api/runtime/demo") continue; // the demonstration family is outside the documented contract on purpose (BL-220)
     check(`${union} ${r} documented`, documented.has(r), "listed in requestLog.ts but not a path in the OpenAPI artifact");
   }
 }

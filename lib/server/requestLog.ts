@@ -62,7 +62,8 @@ export type WebRoute =
   | "/api/runtime/verification"
   | "/api/runtime/notifications"
   | "/api/runtime/notifications/read-all"
-  | "/api/runtime/notifications/{id}/read";
+  | "/api/runtime/notifications/{id}/read"
+  | "/api/runtime/demo";
 
 export type SpringRoute =
   | "/actuator/health"
@@ -112,7 +113,8 @@ export type SpringRoute =
   | "/api/public/verification"
   | "/api/notifications"
   | "/api/notifications/read-all"
-  | "/api/notifications/{id}/read";
+  | "/api/notifications/{id}/read"
+  | "/api/demo";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
 
@@ -147,6 +149,7 @@ export function springRoute(path: string): SpringRoute {
   if (/^\/api\/registrations\/[^/]+\/documents$/.test(p)) return "/api/registrations/{id}/documents";
   if (/^\/api\/registrations\/[^/]+\/documents\/[^/]+\/versions\/[^/]+\/content$/.test(p)) return "/api/registrations/{id}/documents/{documentId}/versions/{versionId}/content";
   if (/^\/api\/registrations\/[^/]+$/.test(p)) return "/api/registrations/{id}";
+  if (p.startsWith("/api/demo/")) return "/api/demo";
   if (/^\/api\/notifications\/[^/]+\/read$/.test(p)) return "/api/notifications/{id}/read";
   if (/^\/api\/fee-corrections\/proposals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/proposals/{id}/decision";
   if (/^\/api\/fee-corrections\/reversals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/reversals/{id}/decision";

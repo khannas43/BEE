@@ -104,6 +104,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             return "/api/registrations/{id}/documents/{documentId}/versions/{versionId}/content";
         }
         if (path.matches("/api/registrations/[^/]+")) return "/api/registrations/{id}";
+        if (path.startsWith("/api/demo/")) return "/api/demo";
         if (path.equals("/api/notifications")) return "/api/notifications";
         if (path.equals("/api/notifications/read-all")) return "/api/notifications/read-all";
         if (path.startsWith("/api/notifications/") && path.endsWith("/read")) return "/api/notifications/{id}/read";

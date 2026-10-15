@@ -192,3 +192,27 @@ export async function sessionReadBinary(request: NextRequest, springPath: string
   const error = (out.body as { error?: unknown } | null)?.error;
   return isErrorCode(error) ? setOutcome(res, error) : res;
 }
+
+/**
+ * The demonstration areas (/api/demo/**, BL-220): a signed-in GET or POST passed to Spring as it is. The answer must be a JSON object with a
+ * status Spring is known to use; an error keeps its code and the short detail the demo screen shows. No Idempotency-Key is required (the
+ * demo modules make their own writes repeatable). Outside the documented contract on purpose; Spring still decides who may do what.
+ */
+export async function sessionDemo(request: NextRequest, method: "GET" | "POST", springPath: string, body?: string) {
+  const correlationId = correlationIdOf(request);
+  const cookie = sessionCookieOf(request);
+  const active = await activeSession(cookie, correlationId);
+  if (!active.ok) {
+    const res = errorResponse(active.reason, active.reason === "identity_unavailable" ? 503 : 401, correlationId);
+    if (cookie && active.reason !== "identity_unavailable") clearSessionCookie(res);
+    return res;
+  }
+  const api = await callBeeApi(springPath, { correlationId, accessToken: active.session.accessToken, method, body });
+  const payload = api.body as Record<string, unknown> | null;
+  const isObject = typeof payload === "object" && payload !== null && !Array.isArray(payload);
+  if (api.status === 503 && (payload as { error?: unknown } | null)?.error === "api_unreachable") return errorResponse("api_unreachable", 503, correlationId);
+  if (!isObject || ![200, 201, 400, 401, 403, 404, 409, 422].includes(api.status)) return errorResponse("api_error", 502, correlationId);
+  const res = jsonResponse(payload, api.status, correlationId);
+  const error = (payload as { error?: unknown }).error;
+  return isErrorCode(error) ? setOutcome(res, error) : res;
+}

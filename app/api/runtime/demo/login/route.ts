@@ -10,6 +10,26 @@ import { createSession, destroySession, sessionCookieOf, setSessionCookie } from
 
 export const dynamic = "force-dynamic";
 
+/** Where each role lands: a live screen that suits it, not the generic prototype dashboard. */
+const LANDING: Record<string, string> = {
+  manufacturer: "/app/model-label/model-dashboard",
+  agency: "/app/model-label/model-dashboard",
+  finance: "/app/finance/finance-queue",
+  iame: "/app/model-label/iame-scrutiny",
+  reviewer: "/app/model-label/bee-scrutiny",
+  programme: "/app/demo/mis",
+  director: "/app/demo/mis",
+  secretary: "/app/demo/mis",
+  admin: "/app/demo/mis",
+  auditor: "/app/demo/mis",
+  helpdesk: "/app/demo/ai",
+};
+function landingFor(me: unknown): string {
+  const roles = (me as { effectiveRoles?: { role?: unknown }[] } | null)?.effectiveRoles;
+  for (const r of Array.isArray(roles) ? roles : []) if (typeof r?.role === "string" && LANDING[r.role]) return LANDING[r.role];
+  return "/app";
+}
+
 const json = (body: object, status: number, correlationId: string) => withContractHeaders(NextResponse.json(body, { status }), correlationId);
 
 /** Whether the demonstration sign-in is on, so the login page knows which form to show. Reveals nothing else. */
@@ -53,7 +73,7 @@ export const POST = logged("/api/runtime/demo", async (request: NextRequest) => 
 
   destroySession(sessionCookieOf(request));
   const { cookie } = createSession(claims.sub, claims.preferred_username ?? claims.sub, tokens, authMethods(claims));
-  const res = json({ ok: true, returnTo: "/app" }, 200, correlationId);
+  const res = json({ ok: true, returnTo: landingFor(me.body) }, 200, correlationId);
   setSessionCookie(res, cookie);
   return setOutcome(res, "ok");
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
@@ -8,6 +8,7 @@ import { Emblem } from "@/components/chrome/Emblem";
 import { ROLES, RoleKey } from "@/lib/roles";
 import { countForRole } from "@/lib/screens";
 import { persistRole, ROLE_PREVIEW_ENABLED } from "@/components/app/RoleContext";
+import { DemoLoginForm } from "@/components/login/DemoLoginForm";
 
 const SIGN_IN_ERRORS: Record<string, string> = {
   no_active_account: "Your identity was confirmed, but there is no active BEE portal account for it.",
@@ -41,6 +42,20 @@ export default function LoginPage() {
   const [role, setRole] = useState<RoleKey>("admin");
   const search = useSyncExternalStore(noSubscribe, () => window.location.search, () => "");
   const notice = noticeFor(new URLSearchParams(search));
+  // The demonstration sign-in (username and password only) exists only when the deployment turns it on; otherwise today's page is unchanged.
+  const [demo, setDemo] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/runtime/demo/login", { credentials: "include", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { enabled?: boolean } | null) => {
+        if (live && b?.enabled === true) setDemo(true);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
 
   /** Preview only: sets a local display role. No identity check and no server session. */
   function openPreview() {
@@ -61,18 +76,28 @@ export default function LoginPage() {
           </div>
         </Link>
         <div className="relative z-10">
-          <h1 className="font-display-lg text-display-lg font-bold leading-tight">Stakeholder & officer sign-in</h1>
+          <h1 className="font-display-lg text-display-lg font-bold leading-tight">{demo ? "Demonstration environment" : "Stakeholder & officer sign-in"}</h1>
           <p className="font-body-lg text-body-lg text-forest-light/85 mt-space-md max-w-md">
-            Local development build. What this sign-in does today:
+            {demo ? "Local data only: nothing here is a BEE record. What you will see:" : "Local development build. What this sign-in does today:"}
           </p>
           {/* Only controls implemented and checked now (WP02.1, WP02.3 local TOTP); add others when they are demonstrated. */}
           <ul className="mt-space-md space-y-space-xs" data-testid="implemented-controls">
-            {[
-              { icon: "login", t: "Sign-in through the BEE identity service (Keycloak, authorization code with PKCE)" },
-              { icon: "pin", t: "Password plus an authenticator-app code (TOTP) on every sign-in; no SMS or email codes" },
-              { icon: "cookie", t: "Session kept on the server; the browser holds only an opaque, httpOnly cookie" },
-              { icon: "badge", t: "Roles and organisation read from BEE records, not from the sign-in token" },
-            ].map((f) => (
+            {(demo
+              ? [
+                  { icon: "app_registration", t: "Brand and agency registration, and model applications through every approval stage" },
+                  { icon: "payments", t: "Payment simulation with idempotent callbacks, receipts and reconciliation" },
+                  { icon: "qr_code_2", t: "QR batches and serials with duplicate blocking, verified on the public page" },
+                  { icon: "link", t: "Certificates on a simulated Fabric ledger: commit, retry, amend, revoke" },
+                  { icon: "factory", t: "Quarterly production submissions with bulk validation and CA evidence" },
+                  { icon: "monitoring", t: "MIS dashboard on live data, and five AI use cases with human disposition" },
+                ]
+              : [
+                  { icon: "login", t: "Sign-in through the BEE identity service (Keycloak, authorization code with PKCE)" },
+                  { icon: "pin", t: "Password plus an authenticator-app code (TOTP) on every sign-in; no SMS or email codes" },
+                  { icon: "cookie", t: "Session kept on the server; the browser holds only an opaque, httpOnly cookie" },
+                  { icon: "badge", t: "Roles and organisation read from BEE records, not from the sign-in token" },
+                ]
+            ).map((f) => (
               <li key={f.t} className="flex items-start gap-1.5 font-label-md text-label-md text-forest-light/90">
                 <Icon name={f.icon} size={18} className="mt-0.5 shrink-0" /> {f.t}
               </li>
@@ -92,13 +117,19 @@ export default function LoginPage() {
 
           <h2 className="font-headline-md text-headline-md text-on-surface">Sign in</h2>
           <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 mb-space-lg">
-            You sign in with the BEE identity service (Keycloak). Your roles and organisation come from the BEE portal&apos;s own records.
+            {demo
+              ? "Enter your username and password to continue."
+              : "You sign in with the BEE identity service (Keycloak). Your roles and organisation come from the BEE portal's own records."}
           </p>
           {notice && (
             <div role={notice.kind === "error" ? "alert" : "status"} className={`mb-space-md rounded-lg px-3 py-2 font-body-sm text-body-sm ${notice.kind === "error" ? "bg-error-container text-on-error-container" : "bg-forest-light text-forest-dark"}`}>
               {notice.text}
             </div>
           )}
+          {demo ? (
+            <DemoLoginForm />
+          ) : (
+            <>
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a route handler that redirects to Keycloak, so a full navigation is required */}
           <a
             href="/api/auth/login?returnTo=/app"
@@ -107,7 +138,10 @@ export default function LoginPage() {
             <Icon name="login" size={18} /> Sign in with BEE identity
           </a>
 
-          {ROLE_PREVIEW_ENABLED && (
+            </>
+          )}
+
+          {ROLE_PREVIEW_ENABLED && !demo && (
             <div className="mt-space-lg pt-space-md border-t border-border-subtle">
               <p className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide mb-1">Development preview only</p>
               <p className="font-body-sm text-body-sm text-on-surface-variant mb-space-md">

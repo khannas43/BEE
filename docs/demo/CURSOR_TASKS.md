@@ -1,5 +1,7 @@
 # Tasks for Cursor (demo build, 15 October 2026)
 
+**Update:** Tasks 1 (login page) and 3 (offline fonts) were done by Claude on `demo-pack` (components/login/DemoLoginForm.tsx, self-hosted icon font). Only Task 2, the presenter script, is still open; skip Tasks 1 and 3.
+
 Work in your OWN clone (`~/Developer/BEE-demo`), not in the shared checkout, and do not take the baton. Start with:
 
 ```

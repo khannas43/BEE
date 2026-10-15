@@ -25,10 +25,23 @@ class MisRepository {
     private static final String APPROVED_AT = "SELECT application_id, min(occurred_at) AS at FROM model_application_transition_event "
         + "WHERE to_state = 'approved' GROUP BY application_id";
 
-    private final JdbcTemplate jdbc;
+    private final org.springframework.beans.factory.ObjectProvider<JdbcTemplate> jdbcProvider;
+    private final JdbcTemplate fixed;
+
+    /** Lazy, so a web slice test that scans the demo modules without a database still starts. */
+    @org.springframework.beans.factory.annotation.Autowired
+    MisRepository(org.springframework.beans.factory.ObjectProvider<JdbcTemplate> jdbc) {
+        this.jdbcProvider = jdbc;
+        this.fixed = null;
+    }
 
     MisRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+        this.jdbcProvider = null;
+        this.fixed = jdbc;
+    }
+
+    private JdbcTemplate jdbc() {
+        return fixed != null ? fixed : jdbcProvider.getObject();
     }
 
     private static String mon(String col) {
@@ -38,7 +51,7 @@ class MisRepository {
     // ---------------------------------------------------------------- helpers
 
     private List<List<Object>> rows(String sql, Object... args) {
-        return jdbc.query(sql, (rs, i) -> {
+        return jdbc().query(sql, (rs, i) -> {
             ResultSetMetaData md = rs.getMetaData();
             List<Object> row = new ArrayList<>();
             for (int c = 1; c <= md.getColumnCount(); c++) {
@@ -64,7 +77,7 @@ class MisRepository {
     }
 
     private long count(String table) {
-        Long n = jdbc.queryForObject("SELECT count(*) FROM " + table, Long.class);
+        Long n = jdbc().queryForObject("SELECT count(*) FROM " + table, Long.class);
         return n == null ? 0 : n;
     }
 
@@ -76,13 +89,13 @@ class MisRepository {
 
     /** The table exists, the runtime login may read it, and it has every column used. */
     private boolean available(String table, String... columns) {
-        Boolean there = jdbc.queryForObject("SELECT to_regclass(?) IS NOT NULL AND has_table_privilege(to_regclass(?), 'SELECT')", Boolean.class,
+        Boolean there = jdbc().queryForObject("SELECT to_regclass(?) IS NOT NULL AND has_table_privilege(to_regclass(?), 'SELECT')", Boolean.class,
             table, table);
         if (!Boolean.TRUE.equals(there)) {
             return false;
         }
         for (String c : columns) {
-            Boolean has = jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            Boolean has = jdbc().queryForObject("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
                 + "AND table_name = ? AND column_name = ?)", Boolean.class, table, c);
             if (!Boolean.TRUE.equals(has)) {
                 return false;

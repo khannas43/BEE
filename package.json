@@ -14,6 +14,7 @@
     "local:up": "bash scripts/local/up.sh",
     "local:health": "bash scripts/local/health.sh",
     "local:seed": "bash scripts/local/seed.sh",
+    "demo:seed": "bash scripts/demo/seed-demo.sh",
     "local:reset": "bash scripts/local/reset.sh",
     "local:reset:identity": "bash scripts/local/reset-identity.sh",
     "local:check": "bash scripts/local/check.sh",

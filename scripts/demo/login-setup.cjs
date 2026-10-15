@@ -67,8 +67,8 @@ async function apply() {
 
 async function undo() {
   const client = await clientRep();
-  const overrides = { ...(client.authenticationFlowBindingOverrides || {}) };
-  delete overrides.direct_grant;
+  // Keycloak keeps a binding unless it is overwritten with an empty value; an absent key is ignored.
+  const overrides = { ...(client.authenticationFlowBindingOverrides || {}), direct_grant: "" };
   await raw("PUT", `/clients/${client.id}`, { ...client, directAccessGrantsEnabled: false, authenticationFlowBindingOverrides: overrides });
   const flow = (await admin("/authentication/flows")).find((f) => f.alias === FLOW);
   if (flow) await raw("DELETE", `/authentication/flows/${flow.id}`);
@@ -77,6 +77,11 @@ async function undo() {
     const found = (await admin(`/users?username=${encodeURIComponent(u.username)}&exact=true`))[0];
     if (!found) continue;
     await raw("PUT", `/users/${found.id}/reset-password`, { type: "password", value: DEV_PASSWORD, temporary: false });
+    // apply cleared the pending authenticator setup; give it back to anyone who has not enrolled (as the seed had it)
+    const creds = await admin(`/users/${found.id}/credentials`);
+    const enrolled = Array.isArray(creds) && creds.some((c) => c.type === "otp");
+    const fresh = (await admin(`/users/${found.id}`)) || found;
+    await raw("PUT", `/users/${found.id}`, { ...fresh, requiredActions: enrolled ? [] : ["CONFIGURE_TOTP"] });
     done++;
   }
   console.log(`demo sign-in removed: ${done} people back on the seeded password; flow and client binding deleted`);

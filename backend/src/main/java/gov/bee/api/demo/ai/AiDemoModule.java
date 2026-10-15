@@ -27,11 +27,11 @@ import org.springframework.stereotype.Component;
 public class AiDemoModule implements DemoModule {
 
     static final Map<String, Set<String>> RUN = Map.of(
-        "compliance-risk", Set.of("programme", "reviewer", "admin"),
-        "production-anomaly", Set.of("programme", "reviewer", "admin"),
+        "compliance-risk", Set.of("programme", "reviewer", "admin", "director", "secretary"),
+        "production-anomaly", Set.of("programme", "reviewer", "admin", "director", "secretary"),
         "rating-trends", Set.of("programme", "director", "secretary", "admin"),
-        "helpdesk-assist", Set.of("helpdesk", "programme", "reviewer", "admin"),
-        "document-extraction", Set.of("reviewer", "programme", "admin"));
+        "helpdesk-assist", Set.of("helpdesk", "programme", "reviewer", "admin", "director", "secretary"),
+        "document-extraction", Set.of("reviewer", "programme", "admin", "director", "secretary"));
     static final Map<String, Set<String>> READ_EXTRA = Map.of(
         "compliance-risk", Set.of("director", "secretary", "auditor"),
         "production-anomaly", Set.of("director", "auditor"),

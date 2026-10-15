@@ -270,3 +270,4 @@ textarea:focus-visible,
 .demo-screen table[data-testid="ledger-certs"] { display: block; max-height: 330px; overflow: auto; }
 .demo-screen table[data-testid="ledger-certs"] thead, .demo-screen table[data-testid="ledger-certs"] tbody { display: table; width: 100%; table-layout: fixed; }
 .demo-screen table[data-testid="ledger-certs"] th { position: sticky; top: 0; z-index: 1; }
+.demo-screen p[data-testid="ai-summary"]:empty { display: none; }

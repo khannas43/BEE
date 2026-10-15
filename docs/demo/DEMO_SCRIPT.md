@@ -94,7 +94,7 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 
 **Sign in as `bee.reviewer`.**
 5. **Document extraction**: run for LOCAL-MA-0004, confirm each extracted field.
-6. Reload the page: the history and dispositions persist. `bee.auditor` can read but not record.
+6. Reload the page: the history and dispositions persist. `bee.auditor` can read but not run or record; `bee.director` and `bee.secretary` can run everything except none of the writes to records (AI is advisory only).
 
 ## Closing (1 minute)
 "Registration, payment, QR, ledger, production and MIS all sit on one audited database with role scoping and segregation of duties. What is simulated here (Fabric, gateway, AI models) is replaced by the real integrations in the next phase."

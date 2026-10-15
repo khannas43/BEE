@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
@@ -12,11 +13,22 @@ import { orgsText, rolesText, useSpringIdentity } from "./SessionBadge";
  * signed-in identity, which only the BEE service (Spring) reports.
  */
 export function PreviewBanner() {
+  // Demo sign-in mode (BEE_DEMO_LOGIN=1) hides the bar for the client demo; the "Preview as" selector stays in the top bar. Unknown or failed lookups keep the bar.
+  const [demo, setDemo] = useState<"unknown" | "on" | "off">("unknown");
+  useEffect(() => {
+    let live = true;
+    fetch("/api/runtime/demo/login", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => live && setDemo(b && b.enabled === true ? "on" : "off"))
+      .catch(() => live && setDemo("off"));
+    return () => { live = false; };
+  }, []);
   const { role } = useRole();
   const id = useSpringIdentity();
   const runtime = !!runtimeRouteFor(usePathname());
+  if (demo === "on") return null;
   return (
-    <div role="note" data-testid="preview-banner" className="shrink-0 bg-solar-gold-light border-b border-solar-gold/50 px-space-md py-1.5 flex flex-wrap items-center gap-x-space-md gap-y-1 font-body-sm text-body-sm text-on-surface">
+    <div role="note" data-testid="preview-banner" className={`${demo === "unknown" ? "invisible " : ""}shrink-0 bg-solar-gold-light border-b border-solar-gold/50 px-space-md py-1.5 flex flex-wrap items-center gap-x-space-md gap-y-1 font-body-sm text-body-sm text-on-surface`}>
       <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide text-solar-gold-dark">
         <Icon name="science" size={16} /> Development preview
       </span>

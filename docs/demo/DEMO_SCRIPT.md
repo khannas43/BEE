@@ -12,9 +12,9 @@ Follow `docs/demo/DEMO_DAY_CHECKLIST.md`. Quick check: `/login` shows the userna
 | Min | Part | Who | Screen |
 |---|---|---|---|
 | 0-3 | Opening and sign-in | any | /login |
-| 3-9 | Payment simulation | nova.applicant, bee.finance | Payments (simulated) |
+| 3-9 | Payment simulation | nova.applicant, bee.finance | Payments |
 | 9-16 | QR batch and serial, public check | nova.applicant, public | QR batches and serials, /verify |
-| 16-24 | Fabric certificate (simulated ledger) | bee.secretary, bee.admin | Certificate ledger (simulated Fabric) |
+| 16-24 | Fabric certificate (simulated ledger) | bee.secretary, bee.admin | Certificate ledger |
 | 24-30 | Quarterly production submission | nova.applicant, bee.programme | Quarterly production |
 | 30-35 | MIS dashboard | bee.director, bee.finance | MIS dashboard |
 | 35-40 | Five AI use cases | bee.programme, bee.helpdesk, bee.reviewer | AI use cases |
@@ -29,7 +29,7 @@ Keep three minutes spare. If you are running late, drop the second half of any p
 3. Point at the role dropdown at the top right: "Choosing a role signs in as that demo user, so we can switch hats during the demo."
 
 ## 3-9 min: Payment simulation
-**Sign out, sign in as `nova.applicant` (manufacturer).** Menu: **Payments (simulated)**.
+**Sign out, sign in as `nova.applicant` (manufacturer).** Menu: **Payments**.
 1. Show "Applications waiting for the fee": DEMO-PAY-0001..3, fee INR 10,000 plus 18% tax = INR 11,800. Say: "The amount comes from the fee snapshot; the gateway cannot change it."
 2. Click **Pay at simulated gateway** on DEMO-PAY-0001. A panel appears with a gateway reference (`SIMGW-...`).
 3. Click **Pay now**. The screen says "callback received: paid, receipt SIMRCPT-...".
@@ -37,7 +37,7 @@ Keep three minutes spare. If you are running late, drop the second half of any p
 5. Scroll to "My organisation's payments": the paid row and a **Receipt** button. Open it.
 6. *If time:* **Decline** on another payment to show a failed payment.
 
-**Sign in as `bee.finance`.** Menu: **Payments (simulated)** (also Finance queue under Finance).
+**Sign in as `bee.finance`.** Menu: **Payments** (also Finance queue under Finance).
 7. Show all payments with gateway references and the reconciliation panel: paid versus confirmed. Say: "Finance confirms the fee with the gateway reference. The payer cannot confirm their own fee." Optional: confirm one in the Finance queue.
 
 ## 9-16 min: QR batch and serial
@@ -52,7 +52,7 @@ Keep three minutes spare. If you are running late, drop the second half of any p
 ## 16-24 min: Fabric certificate (simulated ledger)
 Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real database tables, a hash chain, and the same rules a network would apply."
 
-**Sign in as `bee.secretary`.** Menu: **Certificate ledger (simulated Fabric)**. (Not `bee.director`: the director cannot open this screen, by design.)
+**Sign in as `bee.secretary`.** Menu: **Certificate ledger**. (Not `bee.director`: the director cannot open this screen, by design.)
 1. The certificate list is long. Click **Open** on `BEE/RAC/2026/10101`, then scroll to the bottom: the ledger panel is below the list.
 2. Status "Not submitted". Click **Submit to ledger**. Status becomes **Pending, waiting for a peer**; the panel says "You submitted this transaction; a second person must commit or fail it". Commit is disabled. Say: "Segregation of duties: nobody commits their own submission."
 3. Click **Verify again**: chain verification **MATCH**.

@@ -533,7 +533,6 @@ class SpringContractTest {
         account("manufacturer", "own-org");
         JsonNode lineSchema = ContractSchema.read(ContractSchema.REQUEST_LOG).path("line");
         Path file = Path.of("target/logs/api-requests.jsonl");
-        long testStart = System.currentTimeMillis() - 2000;
         String[] ids = new String[4];
         ids[0] = conforms(DETAIL, get("/api/model-applications/" + PLANTED + "?code=" + PLANTED + "&state=" + PLANTED)
             .with(token("manufacturer")).header("Cookie", "bee_session=" + PLANTED), 404, "not_found").getHeader("X-Correlation-Id");
@@ -549,10 +548,10 @@ class SpringContractTest {
         when(documentRepo.listVersions(DOC_ID)).thenReturn(List.of(reportVersion()));
         ids[2] = conforms("/api/model-applications/{id}/submit", get(path(DETAIL) + "/submit").with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
         ids[3] = conforms(ME, get(ME).with(token("manufacturer")), 200, null).getHeader("X-Correlation-Id");
-        // The request log rolls over by size, and a long run can roll it mid-test: read the current file and any rolled file written during this test (BL-221).
+        // The request log rolls over by size, and a long run can roll it mid-test: read the current file and every rolled file, with no file-time filter (BL-221).
         StringBuilder all = new StringBuilder();
         try (var files = Files.list(file.getParent())) {
-            for (Path f : files.filter(f -> f.getFileName().toString().startsWith("api-requests") && f.toFile().lastModified() >= testStart).sorted().toList()) {
+            for (Path f : files.filter(f -> f.getFileName().toString().startsWith("api-requests")).sorted().toList()) {
                 String text = Files.readString(f);
                 all.append(text).append(text.endsWith("\n") ? "" : "\n");
             }

@@ -70,7 +70,7 @@ Keep three minutes spare. If you run late, drop the "if time" lines.
 **Neha's story.** Menu: **QR batches and serials**.
 1. "Neha has two batches already." Show allocated, bound and void counts.
 2. Create a batch: choose "Nova Cool NC-RAC-12D (BEE/RAC/2026/10101)", quantity 100, **Create batch**. Say: "Only an approved model with a certificate can have QR codes."
-3. Open the new batch. **Allocate** 5 serials (format `BEEQ-` plus ten characters). In "Serials to bind" paste one serial and **Bind to certificate**. Bind the same serial again: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
+3. Open the new batch. **Allocate** 5 serials (format `BEEQ-` plus ten characters). In "Serials to bind" paste one serial and **Bind to certificate** (the box clears after each bind; a blank box binds every allocated serial, so paste a serial each time). Paste the same serial again and bind: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
 4. Click **Verify this serial** on a bound serial: the public page confirms the certificate.
 
 **Imran's story.** Open `/verify` in a private window (no sign-in).
@@ -141,7 +141,7 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 4. **Helpdesk assist**: ask "How do I pay the fee?": a draft reply with ranked source articles and a confidence. Then ask a nonsense question: it escalates to a person instead of guessing.
 
 **Meera checks a test report** (`bee.reviewer`).
-5. **Document extraction**: run for `LOCAL-MA-0004`; confirm each extracted field. One field differs from the declaration (efficiency): that is the point.
+5. **Document extraction**: run for `LOCAL-MA-0004` (already filled in); read the extracted fields against the declared ones. One field differs (efficiency): that is the point. Then **Record disposition** (accept, override or reject) as Meera.
 6. Reload: the history and dispositions persist. The auditor (`bee.auditor`) can read but not run or record; the Director and Secretary can also run the models; the AI never writes to any record.
 
 ---

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Pill } from "./DemoShell";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
-import { csvFileName, saveCsv, toCsv } from "@/lib/client/csv";
+import { csvFileName, datedFileName, saveBytes, saveCsv, toCsv } from "@/lib/client/csv";
+import { buildXlsx, XLSX_TYPE } from "@/lib/client/xlsx";
 import { istStamp } from "@/lib/client/istTime";
 
 type Counts = { allocated: number; bound: number; void: number; remaining: number };
@@ -193,7 +194,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
   }
 
   /** Every serial of the batch (the service gives 200 at a time) as one CSV: what a print shop needs for the labels. */
-  async function exportSerials() {
+  async function exportSerials(excel = false) {
     const rows: Serial[] = [];
     for (let at = 0; at < 20000; at += 200) {
       const r = await demoGet<BatchDetail>(`${demoPath("qr", id)}?offset=${at}&limit=200`);
@@ -205,8 +206,11 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
       if (r.value.serials.length < 200) break;
     }
     const origin = window.location.origin;
-    saveCsv(csvFileName(`qr-serials-${detail?.registrationId.replace(/\//g, "-") ?? id}`), toCsv(["Serial", "State", "Allocated", "Bound", "Voided", "Void reason", "Public check link"],
-      rows.map((x) => [x.serial, x.state, istStamp(x.allocatedAt), istStamp(x.boundAt), istStamp(x.voidedAt), x.voidReason, `${origin}${verifyHref(x.serial)}`])));
+    const header = ["Serial", "State", "Allocated", "Bound", "Voided", "Void reason", "Public check link"];
+    const body = rows.map((x) => [x.serial, x.state, istStamp(x.allocatedAt), istStamp(x.boundAt), istStamp(x.voidedAt), x.voidReason, `${origin}${verifyHref(x.serial)}`]);
+    const stem = `qr-serials-${detail?.registrationId.replace(/\//g, "-") ?? id}`;
+    if (excel) saveBytes(datedFileName(stem, "xlsx"), buildXlsx("QR serials", header, body), XLSX_TYPE);
+    else saveCsv(csvFileName(stem), toCsv(header, body));
   }
 
   async function copy(serial: string) {
@@ -274,6 +278,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
         <span data-testid="qr-page">{detail.total === 0 ? "No serials yet" : `${offset + 1} to ${Math.min(offset + PAGE, detail.total)} of ${detail.total}`}</span>
         <button type="button" disabled={offset + PAGE >= detail.total} onClick={() => setOffset(offset + PAGE)} className="underline disabled:opacity-40">Next</button>
         <button type="button" disabled={detail.total === 0} onClick={() => void exportSerials()} className="ml-auto text-primary underline disabled:opacity-40" data-testid="qr-export-serials">Download all serials (CSV)</button>
+        <button type="button" disabled={detail.total === 0} onClick={() => void exportSerials(true)} className="text-primary underline disabled:opacity-40" data-testid="qr-export-serials-xlsx">Download all serials (Excel)</button>
       </div>
       <p className="font-label-sm text-on-surface-variant">A serial answers on the public check only once it is bound; a void or unbound serial is shown as not found.</p>
     </section>

@@ -10,6 +10,8 @@ import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntime
 import { QrCode } from "@/components/app/lifecycle/QrCode";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { verificationUrl } from "@/lib/client/qr";
+import { datedFileName, saveBytes } from "@/lib/client/csv";
+import { buildCertificatePdf, PDF_TYPE } from "@/lib/client/pdf";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { type ModelApplication, readModelApplication, readModelApplicationList } from "@/lib/client/runtimeModelApplications";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
@@ -109,8 +111,14 @@ function Documents({ application }: { application: ModelApplication }) {
   const stars = `${"★".repeat(cert.stars)}${"☆".repeat(5 - cert.stars)}`;
   return (
     <div className="space-y-space-md">
-      <div className="print-hidden">
-        <button type="button" onClick={() => window.print()} className="px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md" data-testid="certdocs-print">
+      <div className="print-hidden flex flex-wrap gap-space-sm">
+        <button type="button" onClick={() => saveBytes(datedFileName(`certificate-${cert.registrationId.replace(/\//g, "-")}`, "pdf"), buildCertificatePdf({
+          registrationId: cert.registrationId, organisation: application.organisation, brandName: application.brandName, modelNumber: application.modelNumber, category: application.category,
+          stars: cert.stars, verifiedIseer: cert.verifiedIseer, validFrom: cert.validFrom, validTo: cert.validTo, status: cert.status, schemeKey: cert.schemeKey, verifyUrl: url,
+        }), PDF_TYPE)} className="px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md" data-testid="certdocs-download-pdf">
+          Download PDF (certificate and label)
+        </button>
+        <button type="button" onClick={() => window.print()} className="px-space-md py-2 rounded-lg border border-primary text-primary font-label-md" data-testid="certdocs-print">
           Print or save as PDF
         </button>
       </div>

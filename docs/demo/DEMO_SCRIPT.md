@@ -18,6 +18,7 @@ Rehearsed end to end on 16 October 2026. Every account uses the password `demo12
 | **Ravi**, helpdesk agent at BEE | Answers manufacturers' questions | `bee.helpdesk` | "Can I reply faster without guessing?" |
 | **Meera**, technical reviewer at BEE | Checks test reports against declarations | `bee.reviewer` | "Does the report say what the application claims?" |
 | **Dr. Rao**, Director | Needs the whole picture | `bee.director` | "How is the programme doing, right now?" |
+| **Anil**, auditor at BEE | Checks that the records can be trusted | `bee.auditor` | "Can I prove who did what, and that nothing was altered?" |
 | **Imran**, a shopper (no sign-in) | Checks a label in a shop | public `/verify` | "Is this AC's rating real?" |
 | **Pixel's compliance manager** | Another manufacturer | `pixel.applicant` | (used once, to show data separation) |
 
@@ -33,7 +34,8 @@ Rehearsed end to end on 16 October 2026. Every account uses the password `demo12
 | 31-36 | UC5. The Director sees the programme at a glance | Dr. Rao, Farid |
 | 36-40 | UC6. Five AI helpers that advise, never decide | Priya, Ravi, Meera |
 | 40-43 | UC7. Everyone is told | Neha, Farid, Sunita, Arjun, Priya |
-| 43-45 | Exports | Neha |
+| 43-45 | Exports (CSV, Excel, PDF certificate) | Neha |
+| 45-47 | UC8. The auditor checks the trail | Anil |
 
 Keep three minutes spare. If you run late, drop the "if time" lines. UC1 to UC6 are unchanged; UC7 and the exports sit after them.
 
@@ -41,7 +43,7 @@ Keep three minutes spare. If you run late, drop the "if time" lines. UC1 to UC6 
 
 ## Opening (0-3 min). Persona: Dr. Rao, Director
 1. Open `/login`; point at the demo panel on the left and "Password for every demo account: demo123".
-2. Sign in as `bee.director`. You land on the MIS dashboard.
+2. Sign in as `bee.director`. You land on the **Director's dashboard**: six figures (awaiting approval, certificates issued, ledger needs a look, production with BEE, paid but fee not confirmed, highest compliance risk). Click **Highest compliance risk** (or any figure): the full list opens below with search, sort, **Download CSV** and **Download Excel**, and a link to the working screen. Say: "Every number is calculated at this moment, and each one opens the records behind it." The MIS dashboard (UC5) is one click away in the menu.
 3. Say: "Dr. Rao will see the whole programme at the end. First, the people whose work feeds it." Point at the role dropdown: "Choosing a role signs in as that person, so we change hats in one click."
 
 ---
@@ -166,12 +168,26 @@ Say clearly, once: "Simulated. No email and no text message is sent. Every addre
 ## Exports (43-45 min)
 **Persona: Neha** (`nova.applicant`), with one look at Priya's production list and Dr. Rao's MIS.
 **Problem today:** a list on screen is not a file the office can keep.
-**Take-away:** each list saves the rows the filters currently show, as a spreadsheet, and a label can be saved as a PDF.
+**Take-away:** each list saves the rows the filters currently show, as CSV or as a real Excel workbook, and the certificate with its label is a real PDF with a QR code a phone can scan.
 
-1. On **Payments**, **QR batches and serials**, **Certificate ledger** (both the certificate list and the block explorer) and **Quarterly production**, point at **Download CSV**. Type in the search box first. Say: "This file is what the filter shows, not only this page. It opens in Excel. It is saved to Downloads." Do not open the file on the projector unless someone asks.
+1. On **Payments**, **QR batches and serials**, **Certificate ledger** (both the certificate list and the block explorer) and **Quarterly production**, point at **Download CSV** and **Download Excel**. Type in the search box first. Say: "This file is what the filter shows, not only this page. The Excel file is a real workbook, with a bold header row and numbers as numbers. It is saved to Downloads." Do not open the file on the projector unless someone asks.
 2. Open one QR batch and click **Download all serials (CSV)**. Say: "This is the print shop's file. Every serial is in it, with the public check link for that serial."
-3. On the **MIS dashboard**, **Download CSV** is one file for the panel that is open, not for every chart at once.
-4. Menu: **Model label**, then **Label preview** (`/app/model-label/label-preview`). Pick an approved application. Use the browser's Print and choose **Save as PDF**. Say: "That PDF is the certificate with its QR code, for a file or a printer. It is not sent anywhere."
+3. On the **MIS dashboard**, **Download CSV** and **Download Excel** are one file for the panel that is open, not for every chart at once.
+4. Menu: **Model label**, then **Label preview** (`/app/model-label/label-preview`). Pick an approved application and click **Download PDF (certificate and label)**: page one is the certificate, page two the star label, each with a QR code that opens the public verification page when scanned. Say: "That PDF is for a file or a printer. It is not sent anywhere." **Print or save as PDF** still prints the on-screen layout.
+
+---
+
+## UC8. The auditor checks the trail (45-47 min)
+**Persona: Anil** (`bee.auditor`).
+**Problem today:** an auditor has to ask each office for its own records and trust the answers.
+**Take-away:** one screen shows whether every ledger chain still matches, who sent and who committed each change, where a person set aside an AI advice, and every recorded step in order.
+
+Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
+1. Click **Ledger chains**: the list puts the broken chain first, `BEE/RAC/2025/90037`, **MISMATCH** at transaction 1, and then every other certificate as **MATCH**. Say: "Every hash is recomputed now. This is the record that was altered in the seed."
+2. Click **Two-person commits**: "Committed by the same person who sent it: 0". Each row names the sender and the committer.
+3. Click **AI overrides and rejections**: each row has the person, their own value and the reason they gave.
+4. Click **All recorded activity**: payments, ledger, production and AI steps together, newest first. Type a name or a certificate in the search box, then **Download Excel**.
+5. Say: "The auditor can read everything and change nothing."
 
 ---
 
@@ -201,7 +217,8 @@ Say clearly, once: "Simulated. No email and no text message is sent. Every addre
 ## Cheat sheet (password for all: `demo123`)
 | Username | Persona | Use case |
 |---|---|---|
-| `bee.director` | Dr. Rao, Director | Opening, UC5 (lands on MIS), exports (MIS CSV) |
+| `bee.director` | Dr. Rao, Director | Opening (lands on the Director's dashboard), UC5 (MIS), exports (MIS CSV and Excel) |
+| `bee.auditor` | Anil, Auditor | UC8 (lands on the Auditor's dashboard) |
 | `nova.applicant` | Neha, manufacturer (Nova Cool) | UC1, UC2, UC4, UC7 (payment received, certificate on the ledger), exports |
 | `bee.finance` | Farid, Finance | UC1 (reconcile), UC5 (Finance tab), UC7 (Payment to confirm) |
 | `bee.secretary` | Sunita, Secretary | UC3 (submit, retry, amend, commit revoke), UC7 (second signature when she did not send it) |
@@ -209,10 +226,9 @@ Say clearly, once: "Simulated. No email and no text message is sent. Every addre
 | `bee.programme` | Priya, Programme officer | UC4 (review), UC6 (AI), UC7 (production figures to review) |
 | `bee.helpdesk` | Ravi, Helpdesk | UC6 (helpdesk assist) |
 | `bee.reviewer` | Meera, Reviewer | UC6 (document extraction) |
-| `bee.auditor` | Auditor | read only |
 | `pixel.applicant` | Manufacturer, other organisation | shows data separation (UC2) |
 | public | Imran, shopper | `/verify` in UC2, UC3 |
 
 The persona names are only for storytelling; the demo accounts carry no personal names.
 
-Order of screens: sign in as Dr. Rao (MIS) → Neha, Payments → QR batches and serials → Sunita then Arjun, Certificate ledger → Neha then Priya, Quarterly production → Dr. Rao, MIS dashboard → Priya, Ravi and Meera, AI use cases → Notifications (email and SMS) for the people named in UC7 → Download CSV on the lists, then Model label, Label preview, Save as PDF.
+Order of screens: sign in as Dr. Rao (Director's dashboard, then MIS) → Neha, Payments → QR batches and serials → Sunita then Arjun, Certificate ledger → Neha then Priya, Quarterly production → Dr. Rao, MIS dashboard → Priya, Ravi and Meera, AI use cases → Notifications (email and SMS) for the people named in UC7 → Download CSV on the lists, then Model label, Label preview, Save as PDF.

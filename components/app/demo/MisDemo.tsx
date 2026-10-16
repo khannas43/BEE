@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { demoGet, demoPath, type DemoResult } from "@/lib/client/runtimeDemo";
-import { saveCsv } from "@/lib/client/csv";
+import { datedFileName, parseCsvText, saveBytes, saveCsv } from "@/lib/client/csv";
+import { buildXlsx, XLSX_TYPE } from "@/lib/client/xlsx";
 
 /**
  * MIS dashboard on live data (demo slice S5). Read-only: every figure is a SQL aggregate computed by Spring on the live tables, with the time
@@ -195,6 +196,21 @@ export function MisDemo() {
   const data = result?.key === loadKey ? result.data : null;
   const error = listError ?? exportError ?? (result?.key === loadKey ? result.error : null);
 
+  const exportExcel = useCallback(async () => {
+    setNote(null);
+    setExportError(null);
+    const r = await demoGet<ExportBody>(demoPath("mis", "export") + `?panel=${encodeURIComponent(panel)}${query ? "&" + query.slice(1) : ""}`);
+    if (r.ok) {
+      // the same panel as the CSV: its comment lines and tables, one row each, as a workbook
+      const rows = parseCsvText(r.value.csv);
+      const file = datedFileName(r.value.filename.replace(/-\d{4}-\d{2}-\d{2}\.csv$/, ""), "xlsx");
+      saveBytes(file, buildXlsx(`MIS ${panel}`, rows[0] ?? [], rows.slice(1).map((x) => x.map((c) => (c !== "" && /^-?\d+(\.\d+)?$/.test(c) ? Number(c) : c)))), XLSX_TYPE);
+      setNote(`Downloaded ${file}.`);
+    } else {
+      setExportError(r.message);
+    }
+  }, [panel, query]);
+
   const exportCsv = useCallback(async () => {
     setNote(null);
     setExportError(null);
@@ -243,6 +259,7 @@ export function MisDemo() {
         <button type="button" onClick={() => { setFrom(""); setTo(""); }} className="px-space-md py-1 rounded bg-surface-container text-on-surface font-label-md" data-testid="mis-reset">Last 12 months</button>
         <button type="button" onClick={() => setReload((n) => n + 1)} className="px-space-md py-1 rounded bg-surface-container text-on-surface font-label-md" data-testid="mis-refresh">Refresh</button>
         <button type="button" onClick={exportCsv} disabled={!panel || !data} className="px-space-md py-1 rounded bg-primary text-on-primary font-label-md disabled:opacity-50" data-testid="mis-export">Download CSV</button>
+        <button type="button" onClick={exportExcel} disabled={!panel || !data} className="px-space-md py-1 rounded border border-primary text-primary font-label-md disabled:opacity-50" data-testid="mis-export-xlsx">Download Excel</button>
         <span className="font-label-sm text-label-sm text-on-surface-variant">The range applies to the monthly charts; headline figures are all time.</span>
       </form>
 

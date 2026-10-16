@@ -19,10 +19,10 @@ const LANDING: Record<string, string> = {
   iame: "/app/model-label/iame-scrutiny",
   reviewer: "/app/model-label/bee-scrutiny",
   programme: "/app/demo/mis",
-  director: "/app/demo/mis",
+  director: "/app/demo/director",
   secretary: "/app/demo/mis",
   admin: "/app/demo/mis",
-  auditor: "/app/demo/mis",
+  auditor: "/app/demo/auditor",
   helpdesk: "/app/demo/ai",
 };
 function landingFor(me: unknown): string {

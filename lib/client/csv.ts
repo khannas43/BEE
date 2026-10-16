@@ -32,3 +32,43 @@ export function saveCsv(filename: string, csv: string): void {
   // Some browsers cancel the save if the address is revoked at once, so it is released a little later.
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+/** Reads CSV text back into rows (quoted cells, doubled quotes, CRLF or LF). Numbers that were written plainly come back as numbers. */
+export function parseCsvText(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  const src = text.replace(/^\uFEFF/, "");
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (quoted) {
+      if (ch === '"' && src[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && src[i + 1] === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += ch;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+/** A file name safe on every system, with the given extension and the date. */
+export function datedFileName(name: string, extension: string, date: Date = new Date()): string {
+  const stem = name.replace(/\.[A-Za-z0-9]{2,5}$/, "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "export";
+  return `${stem}-${date.toISOString().slice(0, 10)}.${extension.replace(/^\./, "")}`;
+}
+
+/** Saves bytes as a file through the browser (a user action must have started it). The address is released a little later. */
+export function saveBytes(filename: string, bytes: Uint8Array, type: string): void {
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

@@ -307,7 +307,7 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     // BL-229: the simulated email and SMS routes. A message is placed for the applicant (in real use the audit-record triggers write it), read and marked
     // through the portal, and removed again.
     const M = "/api/runtime/messages";
-    const novaAccount = sql(`SELECT id FROM app.user_account WHERE username = 'nova.applicant'`).split("\n")[0].trim();
+    const novaAccount = ids.accountId("nova.applicant"); // the disposable twin the page is signed in as, not the seeded account
     const mailId = sql(`INSERT INTO app.demo_message (recipient_account_id, channel, address, event_kind, reference, subject, body) VALUES ('${novaAccount}', 'email', 'nova.applicant@bee-demo.invalid', 'check_probe', 'CHECK-PROBE', 'Contract check probe', 'Placed by the contract check. Simulated message: nothing was sent.') RETURNING id`).split("\n")[0].trim();
     try {
       const mList = await portal(nova, "GET", M, M);

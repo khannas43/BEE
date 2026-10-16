@@ -146,7 +146,6 @@ SQL
 fi
 if psql_super -d bee_app -c "SELECT to_regclass('app.production_event') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
-GRANT EXECUTE ON FUNCTION app.production_replace_rows(uuid, uuid) TO ${BEE_RUNTIME_DB_USER};
 REVOKE UPDATE, DELETE, TRUNCATE ON app.production_event, app.production_evidence FROM ${BEE_RUNTIME_DB_USER};
 REVOKE UPDATE, DELETE, TRUNCATE ON app.production_row FROM ${BEE_RUNTIME_DB_USER};
 REVOKE DELETE, TRUNCATE ON app.production_submission FROM ${BEE_RUNTIME_DB_USER};
@@ -156,6 +155,11 @@ if psql_super -d bee_app -c "SELECT to_regclass('app.demo_message') IS NOT NULL"
   psql_super -d bee_app <<SQL
 GRANT EXECUTE ON FUNCTION app.demo_message_mark_read(uuid, uuid), app.demo_message_mark_all_read(uuid) TO ${BEE_RUNTIME_DB_USER};
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.demo_message FROM ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+if psql_super -d bee_app -c "SELECT to_regprocedure('app.production_replace_rows(uuid, uuid)') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.production_replace_rows(uuid, uuid) TO ${BEE_RUNTIME_DB_USER};
 SQL
 fi
 if psql_super -d bee_app -c "SELECT to_regclass('app.ai_run') IS NOT NULL" | grep -q t; then

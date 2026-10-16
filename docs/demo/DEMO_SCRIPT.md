@@ -52,7 +52,7 @@ Keep three minutes spare. If you run late, drop the "if time" lines. UC1 to UC6 
 **What the audience should take away:** the amount is fixed by the system, a double gateway message cannot double-charge, and the payer cannot confirm their own fee.
 
 **Neha's story.** Menu: **Payments**.
-1. "Neha has three applications waiting for the fee." Show DEMO-PAY-0001 to 0003: fee INR 10,000 plus 18 percent tax is INR 11,800. Say: "The amount comes from the fee snapshot on the application. The gateway cannot change it."
+1. "Neha has several applications waiting for the fee." Point at DEMO-PAY-0001 to 0003 (the list also shows older ones): fee INR 10,000 plus 18 percent tax is INR 11,800. Say: "The amount comes from the fee snapshot on the application. The gateway cannot change it."
 2. On DEMO-PAY-0001 click **Pay at simulated gateway**; a panel shows a gateway reference (`SIMGW-...`). Click **Pay now**. The screen says "callback received: paid, receipt SIMRCPT-...".
 3. Click **Replay last callback**. Say: "Gateways sometimes deliver twice. The second one is recognised by its fingerprint and ignored, so there is no double payment."
 4. Scroll to "My organisation's payments": the paid row and a **Receipt** button.
@@ -70,9 +70,9 @@ Keep three minutes spare. If you run late, drop the "if time" lines. UC1 to UC6 
 **Take-away:** only an approved model with a certificate can get QR codes, duplicates are blocked in the database, and anyone can check a code without an account.
 
 **Neha's story.** Menu: **QR batches and serials**.
-1. "Neha has two batches already." Show allocated, bound and void counts.
+1. "Neha already has batches for her models, some partly used." Show allocated, bound and void counts (the newest are at the top).
 2. Create a batch: choose "Nova Cool NC-RAC-12D (BEE/RAC/2026/10101)", quantity 100, **Create batch**. Say: "Only an approved model with a certificate can have QR codes."
-3. Open the new batch. **Allocate** 5 serials (format `BEEQ-` plus ten characters). In "Serials to bind" paste one serial and **Bind to certificate** (the box clears after each bind; a blank box binds every allocated serial, so paste a serial each time). Paste the same serial again and bind: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
+3. Open the new batch. **Allocate** 5 serials (format `BEEQ-` plus ten characters). In "Serials to bind" paste one serial and click **Bind to certificate** (do not press Enter, it only adds a line; the box clears after each bind; a blank box binds every allocated serial, so paste a serial each time). Paste the same serial again and bind: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
 4. Click **Verify this serial** on a bound serial: the public page confirms the certificate.
 
 **Imran's story.** Open `/verify` in a private window (no sign-in).
@@ -137,7 +137,7 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 
 **Priya decides where to look first** (`bee.programme`, menu **AI use cases**).
 1. **Compliance risk**: **Run**; open the top row to show the weighted contributions and evidence; then choose **Override**, enter your own value (for example `medium`) and a reason, **Record disposition**.
-2. **Production anomaly**: flags the spiking series. 3. **Rating trends**: slope and 95 percent band.
+2. **Production anomaly**: flags series for a person to look at (about half of them in this data; open the one with the spike). 3. **Rating trends**: slope and 95 percent band.
 
 **Ravi answers a manufacturer faster** (`bee.helpdesk`).
 4. **Helpdesk assist**: ask "How do I pay the fee?": a draft reply with ranked source articles and a confidence. Then ask a nonsense question: it escalates to a person instead of guessing.

@@ -3,8 +3,10 @@ package gov.bee.api.demo.production;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -116,9 +118,20 @@ public final class ProductionValidator {
                                            Set<String> existingKeys) {
         LocalDate[] range = quarterRange(quarter);
         Set<String> seen = new HashSet<>(existingKeys);
+        Map<UUID, List<LocalDate[]>> periods = new HashMap<>();
+        for (String k : existingKeys) {
+            String[] parts = k.split("\\|");
+            if (parts.length == 3) {
+                try {
+                    periods.computeIfAbsent(UUID.fromString(parts[0]), x -> new ArrayList<>()).add(new LocalDate[] {LocalDate.parse(parts[1]), LocalDate.parse(parts[2])});
+                } catch (IllegalArgumentException | java.time.format.DateTimeParseException e) {
+                    // a key without a real period (the epoch placeholder is a real date, so this is only a malformed key): nothing to overlap
+                }
+            }
+        }
         List<RowResult> out = new ArrayList<>();
         for (RowInput r : rows) {
-            out.add(check(r, range, organisationId, lookup, seen));
+            out.add(check(r, range, organisationId, lookup, seen, periods));
         }
         return out;
     }
@@ -127,7 +140,8 @@ public final class ProductionValidator {
         return model + "|" + start + "|" + end;
     }
 
-    private static RowResult check(RowInput r, LocalDate[] range, UUID organisationId, Function<String, CertInfo> lookup, Set<String> seen) {
+    private static RowResult check(RowInput r, LocalDate[] range, UUID organisationId, Function<String, CertInfo> lookup, Set<String> seen,
+                                   Map<UUID, List<LocalDate[]>> periods) {
         if (r.units() != null && r.units().startsWith("#columns:")) {
             return bad(r, "Expected 4 columns (" + HEADER + "), found " + r.units().substring(9) + ".");
         }
@@ -172,6 +186,14 @@ public final class ProductionValidator {
         if (!seen.add(key(cert.modelId(), start, end))) {
             return bad(r, "Duplicate: this model already has a row for the same period.");
         }
+        // Two different periods of one model must not overlap: the same units would be counted twice in the totals and the reconciliation.
+        List<LocalDate[]> taken = periods.computeIfAbsent(cert.modelId(), x -> new ArrayList<>());
+        for (LocalDate[] t : taken) {
+            if (!start.isAfter(t[1]) && !end.isBefore(t[0])) {
+                return bad(r, "The period overlaps another row of this model (" + t[0] + " to " + t[1] + "); the same units would be counted twice.");
+            }
+        }
+        taken.add(new LocalDate[] {start, end});
         return new RowResult(r.line(), true, "OK", cert.modelId(), units, start, end, reg);
     }
 

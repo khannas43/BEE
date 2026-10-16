@@ -53,8 +53,16 @@ public class AiDemoModule implements DemoModule {
         return "ai";
     }
 
+    /** The Reviewer's scope is "assigned", so the Reviewer is handled apart (BL-231); every other role in the sets counts only when held for all records. */
     private static boolean has(Caller c, Set<String> roles) {
-        return c.roles().stream().anyMatch(g -> roles.contains(g.role()));
+        return gov.bee.api.demo.DemoAccess.holdsAll(c, roles);
+    }
+
+    /** What an assigned-scope Reviewer may run: the questions that need no organisation data, and the document check of an application assigned to them. */
+    static final Set<String> REVIEWER_RUNS = Set.of("helpdesk-assist", "document-extraction");
+
+    private static boolean isReviewer(Caller c) {
+        return gov.bee.api.demo.DemoAccess.holdsRole(c, Set.of("reviewer"));
     }
 
     private static String roleUsed(Caller c, Set<String> roles) {
@@ -62,11 +70,11 @@ public class AiDemoModule implements DemoModule {
     }
 
     static boolean canRun(Caller c, String useCase) {
-        return has(c, RUN.get(useCase));
+        return has(c, RUN.get(useCase)) || (isReviewer(c) && REVIEWER_RUNS.contains(useCase));
     }
 
     static boolean canRead(Caller c, String useCase) {
-        return canRun(c, useCase) || has(c, READ_EXTRA.get(useCase));
+        return canRun(c, useCase) || has(c, READ_EXTRA.get(useCase)) || (isReviewer(c) && "rating-trends".equals(useCase));
     }
 
     @Override
@@ -142,6 +150,16 @@ public class AiDemoModule implements DemoModule {
             return DemoResult.notFound();
         }
         String inputRef = text(body, "inputRef");
+        if (inputRef != null && inputRef.length() > 300) {
+            return DemoResult.invalid("inputRef is at most 300 characters.");
+        }
+        if ("document-extraction".equals(useCase) && !has(caller, RUN.get(useCase))) {
+            // an assigned-scope Reviewer may check only an application assigned to them; anything else is the same answer as an unknown one
+            String ref = text(body, "applicationRef") != null ? text(body, "applicationRef") : inputRef;
+            if (ref == null || !store.assignedTo(caller.accountId(), ref.trim())) {
+                return DemoResult.notFound();
+            }
+        }
         AiEngines.Computed result;
         try {
             result = switch (useCase) {
@@ -195,8 +213,14 @@ public class AiDemoModule implements DemoModule {
         String override = text(body, "overrideValue") == null ? null : text(body, "overrideValue").trim();
         Map<String, Object> fields = null;
         if (body.get("fieldDecisions") instanceof Map<?, ?> raw) {
+            if (raw.size() > 50) {
+                return DemoResult.invalid("At most 50 field decisions.");
+            }
             fields = new LinkedHashMap<>();
             for (Map.Entry<?, ?> e : raw.entrySet()) {
+                if (String.valueOf(e.getKey()).length() > 100 || String.valueOf(e.getValue()).length() > 200) {
+                    return DemoResult.invalid("A field decision is at most 100 characters for the field and 200 for the decision.");
+                }
                 fields.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
             }
         }

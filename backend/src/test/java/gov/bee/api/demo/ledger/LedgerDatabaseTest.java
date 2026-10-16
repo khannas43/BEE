@@ -168,6 +168,8 @@ class LedgerDatabaseTest {
         assertEquals(400, post(SECRETARY, cert, "amend", Map.of("validTo", "2029-06-30")).status().value(), "reason required");
         assertEquals(400, post(SECRETARY, cert, "amend", Map.of("reason", "r", "validTo", "2029-06-30", "stars", 5)).status().value(), "only validTo may change");
         assertEquals(400, post(SECRETARY, cert, "amend", Map.of("reason", "r", "validTo", "2020-01-01")).status().value(), "before valid-from");
+        assertEquals(400, post(SECRETARY, cert, "amend", Map.of("reason", "r", "validTo", "2999-01-01")).status().value(), "far beyond any real validity");
+        assertEquals(400, post(SECRETARY, cert, "amend", Map.of("reason", "r", "validTo", "+999999999-12-31")).status().value(), "an extreme date is refused, not an error");
         assertEquals(200, post(SECRETARY, cert, "amend", Map.of("reason", "Shorter validity agreed (demo)", "validTo", "2029-06-30")).status().value());
         assertEquals("active", status(cert), "a pending amendment does not change the status yet");
         assertEquals("amend", get(ADMIN, cert.toString(), null).body().get("pendingKind"));

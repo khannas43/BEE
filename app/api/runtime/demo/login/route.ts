@@ -4,7 +4,8 @@ import { callBeeApi } from "@/lib/server/beeApi";
 import { callbackOutcome } from "@/lib/server/apiContract";
 import { demoLoginEnabled } from "@/lib/server/demoLogin";
 import { correlationIdOf, errorResponse, logged, setOutcome, withContractHeaders } from "@/lib/server/http";
-import { passwordGrant, signingKeys } from "@/lib/server/keycloak";
+import { KeycloakError, passwordGrant, signingKeys } from "@/lib/server/keycloak";
+import { RateLimiter } from "@/lib/server/rateLimit";
 import { authMethods, verifyIdToken } from "@/lib/server/oidc";
 import { createSession, destroySession, sessionCookieOf, setSessionCookie } from "@/lib/server/session";
 
@@ -30,6 +31,10 @@ function landingFor(me: unknown): string {
   return "/app";
 }
 
+/** Sign-in attempts per person and in all, per minute: the password is known to the room, so a guessing loop must not be free (BL-233). */
+const PER_PERSON = new RateLimiter(10);
+const ALL_PEOPLE = new RateLimiter(120);
+
 const json = (body: object, status: number, correlationId: string) => withContractHeaders(NextResponse.json(body, { status }), correlationId);
 
 /** Whether the demonstration sign-in is on, so the login page knows which form to show. Reveals nothing else. */
@@ -52,12 +57,21 @@ export const POST = logged("/api/runtime/demo", async (request: NextRequest) => 
   const password = typeof body.password === "string" ? body.password : "";
   if (!username || username.length > 80 || !password || password.length > 200) return json({ error: "invalid_credentials" }, 400, correlationId);
 
+  const person = PER_PERSON.check(`user:${username}`);
+  const everyone = ALL_PEOPLE.check("all");
+  if (!person.allowed || !everyone.allowed) {
+    const res = json({ error: "rate_limited" }, 429, correlationId);
+    res.headers.set("Retry-After", String(Math.max(person.retryAfter, everyone.retryAfter)));
+    return res;
+  }
+
   let tokens;
   try {
     tokens = await passwordGrant(username, password, correlationId);
   } catch (e) {
-    const status = (e as { status?: number }).status;
-    return json({ error: status === 400 || status === 401 ? "invalid_credentials" : "identity_unavailable" }, status === 400 || status === 401 ? 401 : 503, correlationId);
+    // Only Keycloak's own "invalid_grant" is a wrong password; a disabled direct grant or a missing client is a set-up problem and must not look like one.
+    const wrongPassword = e instanceof KeycloakError && e.code === "invalid_grant";
+    return json({ error: wrongPassword ? "invalid_credentials" : "identity_unavailable" }, wrongPassword ? 401 : 503, correlationId);
   }
   let claims;
   try {

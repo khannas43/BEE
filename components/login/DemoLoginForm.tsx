@@ -25,6 +25,7 @@ export const DEMO_LOGIN_ERRORS: Record<string, string> = {
   identity_unavailable: "The sign-in service is not reachable. Try again.",
   api_unreachable: "The BEE service is not reachable, so access could not be checked.",
   service_unavailable: "The BEE service is temporarily unavailable. Try again.",
+  rate_limited: "Too many sign-in attempts. Wait a minute and try again.",
 };
 
 /** Username and password only (the demonstration sign-in, BEE_DEMO_LOGIN). Success goes to the returned address. */

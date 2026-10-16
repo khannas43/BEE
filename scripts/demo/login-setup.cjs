@@ -9,6 +9,8 @@
  * It does not change the realm's browser or direct-grant flows, the OTP policy or anyone's OTP credential, so the normal sign-in with the
  * authenticator code still works wherever BEE_DEMO_LOGIN is not set. The portal needs BEE_DEMO_LOGIN=1 and the API BEE_MFA_REQUIRED=false.
  */
+const fs = require("fs");
+const path = require("path");
 const { admin, adminToken } = require("../local/totp.cjs");
 const { USERS, DEV_PASSWORD } = require("../../local/generate-fixtures.cjs");
 
@@ -17,6 +19,8 @@ const FLOW = "bee demo direct grant";
 const CLIENT = "bee-web";
 const KC = `http://127.0.0.1:${process.env.BEE_KC_PORT || "8180"}`;
 const REALM = process.env.BEE_REALM || "bee-local";
+// What apply filled in on a person who had nothing there (name, email), so undo can put it back as it was. Git-ignored run state.
+const BACKUP = path.join(__dirname, "../../.local/run/demo-login-filled.json");
 
 async function raw(method, pathname, body) {
   const r = await fetch(`${KC}/admin/realms/${REALM}${pathname}`, {
@@ -42,7 +46,12 @@ async function ensureFlow() {
       await raw("POST", `/authentication/flows/${encodeURIComponent(FLOW)}/executions/execution`, { provider });
     }
   }
-  const execs = await admin(`/authentication/flows/${encodeURIComponent(FLOW)}/executions`);
+  // A run that stopped after creating the flow leaves it empty: add whichever of the two steps is missing, so a rerun repairs it.
+  let execs = await admin(`/authentication/flows/${encodeURIComponent(FLOW)}/executions`);
+  for (const provider of ["direct-grant-validate-username", "direct-grant-validate-password"]) {
+    if (!execs.some((e) => e.providerId === provider)) await raw("POST", `/authentication/flows/${encodeURIComponent(FLOW)}/executions/execution`, { provider });
+  }
+  execs = await admin(`/authentication/flows/${encodeURIComponent(FLOW)}/executions`);
   for (const e of execs) if (e.requirement !== "REQUIRED") await raw("PUT", `/authentication/flows/${encodeURIComponent(FLOW)}/executions`, { ...e, requirement: "REQUIRED" });
   return flow;
 }
@@ -54,14 +63,25 @@ async function apply() {
   const realm = await admin("");
   if (realm.passwordPolicy) await raw("PUT", "", { ...realm, passwordPolicy: "" });
   let done = 0;
+  let filled = {};
+  try { filled = JSON.parse(fs.readFileSync(BACKUP, "utf8")); } catch { /* first run */ }
   for (const u of USERS) {
     const found = (await admin(`/users?username=${encodeURIComponent(u.username)}&exact=true`))[0];
     if (!found) { console.log(`skip ${u.username} (not in Keycloak)`); continue; }
-    await raw("PUT", `/users/${found.id}`, { ...found, enabled: true, emailVerified: true, requiredActions: [], firstName: found.firstName || u.first, lastName: found.lastName || u.last, email: found.email || `${u.username}@example.invalid` });
+    const set = { firstName: found.firstName || u.first, lastName: found.lastName || u.last, email: found.email || `${u.username}@example.invalid` };
+    // remember only what this run adds to an empty field (a later run keeps the first record)
+    const mine = { ...(filled[u.username] || {}) };
+    if (!found.firstName && !mine.firstName) mine.firstName = set.firstName;
+    if (!found.lastName && !mine.lastName) mine.lastName = set.lastName;
+    if (!found.email && !mine.email) mine.email = set.email;
+    if (Object.keys(mine).length) filled[u.username] = mine;
+    await raw("PUT", `/users/${found.id}`, { ...found, enabled: true, emailVerified: true, requiredActions: [], ...set });
     await raw("PUT", `/users/${found.id}/reset-password`, { type: "password", value: DEMO_PASSWORD, temporary: false });
     await raw("DELETE", `/attack-detection/brute-force/users/${found.id}`);
     done++;
   }
+  fs.mkdirSync(path.dirname(BACKUP), { recursive: true });
+  fs.writeFileSync(BACKUP, JSON.stringify(filled, null, 2));
   console.log(`demo sign-in ready: ${done} people, password ${DEMO_PASSWORD}; flow "${FLOW}" bound to ${CLIENT} only; start the portal with BEE_DEMO_LOGIN=1 and the API with BEE_MFA_REQUIRED=false`);
 }
 
@@ -73,6 +93,8 @@ async function undo() {
   const flow = (await admin("/authentication/flows")).find((f) => f.alias === FLOW);
   if (flow) await raw("DELETE", `/authentication/flows/${flow.id}`);
   let done = 0;
+  let filled = {};
+  try { filled = JSON.parse(fs.readFileSync(BACKUP, "utf8")); } catch { /* nothing was recorded */ }
   for (const u of USERS) {
     const found = (await admin(`/users?username=${encodeURIComponent(u.username)}&exact=true`))[0];
     if (!found) continue;
@@ -81,9 +103,14 @@ async function undo() {
     const creds = await admin(`/users/${found.id}/credentials`);
     const enrolled = Array.isArray(creds) && creds.some((c) => c.type === "otp");
     const fresh = (await admin(`/users/${found.id}`)) || found;
-    await raw("PUT", `/users/${found.id}`, { ...fresh, requiredActions: enrolled ? [] : ["CONFIGURE_TOTP"] });
+    // names and email that apply added to empty fields go back to empty, unless someone has changed them since
+    const mine = filled[u.username] || {};
+    const back = {};
+    for (const k of ["firstName", "lastName", "email"]) if (mine[k] !== undefined && fresh[k] === mine[k]) back[k] = "";
+    await raw("PUT", `/users/${found.id}`, { ...fresh, ...back, requiredActions: enrolled ? [] : ["CONFIGURE_TOTP"] });
     done++;
   }
+  try { fs.rmSync(BACKUP); } catch { /* none */ }
   console.log(`demo sign-in removed: ${done} people back on the seeded password; flow and client binding deleted`);
 }
 

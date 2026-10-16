@@ -17,7 +17,9 @@ export function DemoMessageBadge() {
     let live = true;
     void readMessages().then((r) => {
       if (!live) return;
-      setUnread(r.ok ? r.list.unread : null);
+      // A failed poll keeps what was shown; the badge is hidden only until the first successful read, or when this person has no access (not signed in).
+      if (r.ok) setUnread(r.list.unread);
+      else if (r.failure.kind === "session" || r.failure.kind === "forbidden") setUnread(null);
     });
     return () => {
       live = false;

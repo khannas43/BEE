@@ -135,6 +135,43 @@ class MessagesDatabaseTest {
     }
 
     @Test
+    void theSeedingSwitchIsHonouredForTheOwnerButNotTheRuntimeLogin() {
+        Boolean forOwner = owner.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>) con -> {
+            try (var st = con.createStatement()) {
+                st.execute("SET bee.demo_seeding = 'on'");
+                try (var rs = st.executeQuery("SELECT demo_seeding_on()")) {
+                    rs.next();
+                    return rs.getBoolean(1);
+                }
+            }
+        });
+        Boolean forRuntime = db.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>) con -> {
+            try (var st = con.createStatement()) {
+                st.execute("SET bee.demo_seeding = 'on'");
+                try (var rs = st.executeQuery("SELECT demo_seeding_on()")) {
+                    rs.next();
+                    return rs.getBoolean(1);
+                }
+            }
+        });
+        assertEquals(true, forOwner);
+        assertEquals(false, forRuntime, "a session of the runtime login cannot silence the message triggers");
+    }
+
+    @Test
+    void everySecurityDefinerFunctionPinsItsSearchPathWithTempLast() {
+        List<String> unpinned = owner.queryForList("SELECT p.proname FROM pg_proc p WHERE p.pronamespace = to_regnamespace(?) AND p.prosecdef "
+            + "AND NOT (p.proconfig::text LIKE '%search_path=%' AND p.proconfig::text LIKE '%pg_temp%')", String.class, MAIN);
+        assertEquals(List.of(), unpinned, "definer functions without a search_path that ends in pg_temp");
+    }
+
+    @Test
+    void theMadeUpMobileNumberDoesNotOverflowForAnyName() {
+        // abs(hashtext(...)) on the one value -2147483648 would raise an integer overflow: the cast to bigint keeps it safe
+        assertEquals(2147483648L % 10000, owner.queryForObject("SELECT abs((-2147483648)::int::bigint) % 10000", Long.class));
+    }
+
+    @Test
     void theRuntimeLoginCannotWriteChangeOrDeleteMessages() {
         assertThrows(DataAccessException.class, () -> db.update("INSERT INTO demo_message (recipient_account_id, channel, address, event_kind, subject, body) VALUES (?::uuid, 'email', 'x', 'test_kind', 's', 'b')", NOVA.accountId().toString()));
         assertThrows(DataAccessException.class, () -> db.update("UPDATE demo_message SET body = 'changed'"));

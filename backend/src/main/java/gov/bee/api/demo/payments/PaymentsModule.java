@@ -136,8 +136,8 @@ public class PaymentsModule implements DemoModule {
             return DemoResult.notFound();
         }
         var found = payments.findForUpdate(paymentId);
-        // Out of scope and unknown are one answer: only the person who started the payment may use its simulated gateway.
-        if (found.isEmpty() || !found.get().startedBy().equals(caller.accountId())) {
+        // Out of scope and unknown are one answer: only the person who started the payment, and still of the paying organisation, may use its simulated gateway.
+        if (found.isEmpty() || !found.get().startedBy().equals(caller.accountId()) || !caller.organisationIds().contains(found.get().organisationId())) {
             return DemoResult.notFound();
         }
         var p = found.get();

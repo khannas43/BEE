@@ -24,6 +24,9 @@ final class ReportText {
     record Fields(Found laboratory, Found testDate, Found efficiency) {
     }
 
+    /** A report is read for at most this many content streams and this much text (a stored PDF can be anything). */
+    private static final int MAX_STREAMS = 200;
+    private static final int MAX_TEXT = 2_000_000;
     private static final Pattern STREAM = Pattern.compile("stream\\r?\\n");
     private static final Pattern SHOW = Pattern.compile("\\(((?:\\\\.|[^\\\\)])*)\\)\\s*(?:Tj|')|\\[((?:\\((?:\\\\.|[^\\\\)])*\\)|[^\\]()])*)\\]\\s*TJ");
     private static final Pattern PART = Pattern.compile("\\(((?:\\\\.|[^\\\\)])*)\\)|(-?[0-9.]+)");
@@ -37,6 +40,7 @@ final class ReportText {
         StringBuilder out = new StringBuilder();
         Matcher m = STREAM.matcher(raw);
         int from = 0;
+        int streams = 0;
         while (m.find(from)) {
             int start = m.end();
             int end = raw.indexOf("endstream", start);
@@ -48,7 +52,14 @@ final class ReportText {
             byte[] body = java.util.Arrays.copyOfRange(pdf, start, end);
             String content = flate ? inflate(body) : new String(body, StandardCharsets.ISO_8859_1);
             if (content != null) {
-                text(content, out);
+                try {
+                    text(content, out);
+                } catch (StackOverflowError e) {
+                    // a hostile string literal made the pattern recurse too deep: this stream yields no text, the rest of the file is still read
+                }
+            }
+            if (++streams >= MAX_STREAMS || out.length() > MAX_TEXT) {
+                break;
             }
             from = end + 9;
         }

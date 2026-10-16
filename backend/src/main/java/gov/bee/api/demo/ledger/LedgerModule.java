@@ -25,6 +25,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class LedgerModule implements DemoModule {
 
+    /** An amended valid-to date may not run further than this from today (a certificate lasts three years; the demonstration allows some slack). */
+    static final int MAX_YEARS_AHEAD = 10;
     private static final Set<String> WRITERS = Set.of("programme", "secretary", "admin");
     private static final Set<String> ALL_READERS = Set.of("programme", "secretary", "admin", "auditor");
 
@@ -55,8 +57,9 @@ public class LedgerModule implements DemoModule {
         return "ledger";
     }
 
+    /** The oversight roles count only when held for all records (BL-231). */
     private static boolean has(Caller c, Set<String> roles) {
-        return c.roles().stream().anyMatch(g -> roles.contains(g.role()));
+        return gov.bee.api.demo.DemoAccess.holdsAll(c, roles);
     }
 
     /** null means all certificates; otherwise the caller's organisations; the caller must be allowed to read at all (checked before). */
@@ -65,7 +68,7 @@ public class LedgerModule implements DemoModule {
     }
 
     private static boolean mayRead(Caller c) {
-        return has(c, ALL_READERS) || has(c, Set.of("manufacturer"));
+        return has(c, ALL_READERS) || gov.bee.api.demo.DemoAccess.holdsRole(c, Set.of("manufacturer"));
     }
 
     @Override
@@ -74,7 +77,7 @@ public class LedgerModule implements DemoModule {
             return DemoResult.denied();
         }
         if (id == null) {
-            return method.equals("GET") ? list(caller) : DemoResult.error(HttpStatus.METHOD_NOT_ALLOWED, "not_found", null);
+            return method.equals("GET") ? list(caller) : DemoResult.notFound();
         }
         if (id.equals("transactions")) {
             return method.equals("GET") && action == null ? explorer(caller) : DemoResult.notFound();
@@ -127,6 +130,9 @@ public class LedgerModule implements DemoModule {
                     validTo = LocalDate.parse(String.valueOf(body.get("validTo")));
                 } catch (DateTimeParseException e) {
                     return DemoResult.invalid("The new valid-to date must be a date like 2029-06-30.");
+                }
+                if (validTo.isAfter(LocalDate.now().plusYears(MAX_YEARS_AHEAD))) {
+                    return DemoResult.invalid("The new valid-to date can be at most " + MAX_YEARS_AHEAD + " years from today.");
                 }
                 r = repository.get().change(cert, actor, "amend", validTo, reason);
             }

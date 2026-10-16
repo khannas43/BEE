@@ -259,4 +259,25 @@ class AiDemoDatabaseTest {
         assertTrue(((String) ex.get("textSource")).contains("seeded sample"));
         assertEquals("not_found", post(PROG, "document-extraction", "runs", Map.of("applicationRef", "NO-SUCH")).code());
     }
+
+    @Test
+    void anOversightRoleCountsOnlyWhenHeldForAllRecordsAndTheReviewerCheckingADocumentNeedsTheApplicationAssigned() {
+        // a programme officer with a narrower scope gets nothing by role name
+        Caller narrow = new Caller(PROGRAMME, "narrow.programme", List.of(new RoleGrant("programme", "assigned")), Set.of());
+        assertEquals("role_not_permitted", post(narrow, "compliance-risk", "runs", Map.of()).code());
+        assertEquals("role_not_permitted", get(narrow, "models", null).code());
+        // the Reviewer is assigned-scope: no all-organisation runs, the helpdesk is fine, the document check only for an assigned application
+        Caller reviewer = new Caller(REVIEWER, "bee.reviewer", List.of(new RoleGrant("reviewer", "assigned")), Set.of());
+        assertEquals("role_not_permitted", post(reviewer, "compliance-risk", "runs", Map.of()).code());
+        assertEquals("role_not_permitted", post(reviewer, "production-anomaly", "runs", Map.of()).code());
+        ok(post(reviewer, "helpdesk-assist", "runs", Map.of("question", "How do I pay the fee?")));
+        ok(get(reviewer, "rating-trends", "runs"));
+        assertEquals("not_found", post(reviewer, "document-extraction", "runs", Map.of("applicationRef", "LOCAL-MA-0001")).code(), "not assigned to this Reviewer");
+        assertEquals("not_found", post(reviewer, "document-extraction", "runs", Map.of()).code());
+        ok(post(reviewer, "document-extraction", "runs", Map.of("applicationRef", "LOCAL-MA-0004")));
+        // an oversight role over all records may check any application
+        ok(post(PROG, "document-extraction", "runs", Map.of("applicationRef", "LOCAL-MA-0001")));
+        // sizes are bounded
+        assertEquals("validation_failed", post(PROG, "helpdesk-assist", "runs", Map.of("inputRef", "x".repeat(301))).code());
+    }
 }

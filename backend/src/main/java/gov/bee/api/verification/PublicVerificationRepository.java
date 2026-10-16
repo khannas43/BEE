@@ -45,6 +45,9 @@ public class PublicVerificationRepository {
      * so the public answer never fails because of the ledger.
      */
     public String ledgerOverride(String registrationId) {
+        if (!gov.bee.api.demo.DemoSwitch.enabled()) {
+            return null; // outside the demonstration deployment the answer follows the certificate's dates only (BL-232)
+        }
         try {
             // The status is NULL for an active certificate, so read the list directly: Stream.findFirst() throws on a null element.
             java.util.List<String> rows = jdbc.query(

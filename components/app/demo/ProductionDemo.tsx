@@ -182,9 +182,9 @@ export function ProductionDemo() {
     });
   }
 
-  async function validate(commit: boolean) {
+  async function validate(commit: boolean, replace = false) {
     if (!selected) return;
-    await run<DemoBody & Validation>(demoPath("production", selected, "rows"), { csv, commit }, (v) => {
+    await run<DemoBody & Validation>(demoPath("production", selected, "rows"), { csv, commit, ...(replace ? { replace: true } : {}) }, (v) => {
       setValidation(v);
       setStatus(v.message);
     });
@@ -274,7 +274,13 @@ export function ProductionDemo() {
                 <button type="button" className={btnCls} disabled={busy} onClick={() => validate(true)}>
                   Store rows (all or nothing)
                 </button>
+                {detail?.state === "query" && (
+                  <button type="button" className={btnCls} disabled={busy} onClick={() => validate(true, true)} data-testid="prod-replace-rows">
+                    Replace all rows with these
+                  </button>
+                )}
               </div>
+              {detail?.state === "query" && <p className="font-body-sm text-on-surface-variant">After a query you can correct the figures: this replaces every stored row of the submission with the rows above, all or nothing.</p>}
               {validation && (
                 <table className="w-full text-left font-body-md" data-testid="prod-results">
                   <caption className="text-left font-label-md">

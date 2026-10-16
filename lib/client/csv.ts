@@ -29,5 +29,6 @@ export function saveCsv(filename: string, csv: string): void {
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // Some browsers cancel the save if the address is revoked at once, so it is released a little later.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

@@ -37,6 +37,8 @@ import org.springframework.stereotype.Component;
 public class ProductionModule implements DemoModule {
 
     static final int MAX_EVIDENCE = 1024 * 1024;
+    static final int MAX_EVIDENCE_FILES = 5;
+    private static final java.util.regex.Pattern UNSAFE_FILE_NAME = java.util.regex.Pattern.compile("[/\\\\\\p{Cntrl}]");
     static final String EVIDENCE_LABEL = "CA evidence: recorded, not verified (local demonstration)";
     static final String NOTE = "Local demonstration: simulated, not a BEE system. Provisional rules.";
     private static final List<String> READ_ALL = List.of("programme", "admin", "auditor", "director");
@@ -215,11 +217,11 @@ public class ProductionModule implements DemoModule {
         List<Map<String, Object>> list = jdbc().queryForList(
             "SELECT e.id::text AS id, e.file_name AS \"fileName\", e.media_type AS \"mediaType\", e.size_bytes AS \"sizeBytes\", e.sha256, "
                 + "e.ca_name AS \"caName\", e.ca_membership_no AS \"caMembershipNo\", e.statement, u.username AS \"uploadedBy\", "
-                + "e.uploaded_at::text AS \"uploadedAt\", e.content FROM production_evidence e JOIN user_account u ON u.id = e.uploaded_by "
+                + "e.uploaded_at::text AS \"uploadedAt\"" + (withContent ? ", e.content" : "") + " FROM production_evidence e JOIN user_account u ON u.id = e.uploaded_by "
                 + "WHERE e.submission_id = ? ORDER BY e.uploaded_at, e.id", id);
         for (Map<String, Object> m : list) {
-            byte[] content = (byte[]) m.remove("content");
             if (withContent) {
+                byte[] content = (byte[]) m.remove("content");
                 m.put("contentBase64", Base64.getEncoder().encodeToString(content));
             }
             m.put("label", EVIDENCE_LABEL);
@@ -344,7 +346,9 @@ public class ProductionModule implements DemoModule {
         if (!canEdit(caller, sub)) {
             return DemoResult.denied();
         }
-        String s = (String) sub.get("state");
+        // The row is locked from here to the end of the transaction, so a second request on the same submission waits and then sees the state this one left.
+        String s = jdbc().queryForObject("SELECT state FROM production_submission WHERE id = ? FOR UPDATE", String.class, sub.get("id"));
+        sub.put("state", s);
         if (!s.equals("draft") && !s.equals("query")) {
             return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "This submission is " + s + " and can no longer be edited.");
         }
@@ -385,10 +389,15 @@ public class ProductionModule implements DemoModule {
             return DemoResult.invalid("Send csv, rows, or a single row (registration_id, units, period_start, period_end).");
         }
         boolean commit = body.get("commit") instanceof Boolean b ? b : single;
+        // Replacing every row is for the manufacturer's correction after a query (BL-230); the old rows then count for nothing in the checks below.
+        boolean replace = Boolean.TRUE.equals(body.get("replace"));
+        if (replace && !"query".equals(sub.get("state"))) {
+            return DemoResult.invalid("All rows can be replaced only while the submission has a query.");
+        }
         UUID sid = (UUID) sub.get("id");
         UUID org = (UUID) sub.get("organisation_id");
         Set<String> existing = new HashSet<>();
-        jdbc().query("SELECT model_application_id, period_start, period_end FROM production_row WHERE submission_id = ?", rs -> {
+        if (!replace) jdbc().query("SELECT model_application_id, period_start, period_end FROM production_row WHERE submission_id = ?", rs -> {
             Date a = rs.getDate(2);
             Date b = rs.getDate(3);
             existing.add(ProductionValidator.key(rs.getObject(1, UUID.class), a == null ? LocalDate.EPOCH : a.toLocalDate(),
@@ -398,11 +407,13 @@ public class ProductionModule implements DemoModule {
         long bad = results.stream().filter(r -> !r.ok()).count();
         boolean stored = commit && bad == 0;
         if (stored) {
+            int removed = replace ? jdbc().queryForObject("SELECT production_replace_rows(?, ?)", Integer.class, sid, caller.accountId()) : 0;
             for (RowResult r : results) {
                 jdbc().update("INSERT INTO production_row (submission_id, model_application_id, units, period_start, period_end, registration_id) VALUES (?,?,?,?,?,?)",
                     sid, r.modelId(), r.units(), r.periodStart(), r.periodEnd(), r.registrationId());
             }
-            event(sid, "rows_added", null, null, caller, submitterRole(caller), results.size() + " row(s)");
+            event(sid, replace ? "rows_replaced" : "rows_added", null, null, caller, submitterRole(caller),
+                replace ? results.size() + " row(s) replaced " + removed + " earlier row(s)" : results.size() + " row(s)");
         }
         List<Map<String, Object>> table = new ArrayList<>();
         for (RowResult r : results) {
@@ -420,7 +431,7 @@ public class ProductionModule implements DemoModule {
         out.put("rowCount", results.size());
         out.put("errorCount", bad);
         out.put("message", !commit ? (bad == 0 ? "Dry run: every row is valid; nothing was written." : "Dry run: " + bad + " row(s) have errors; nothing was written.")
-            : stored ? results.size() + " row(s) stored." : "Nothing stored: " + bad + " row(s) have errors (all or nothing).");
+            : stored ? results.size() + (replace ? " row(s) stored in place of the earlier rows." : " row(s) stored.") : "Nothing stored: " + bad + " row(s) have errors (all or nothing).");
         out.put("results", table);
         return DemoResult.ok(out);
     }
@@ -450,7 +461,7 @@ public class ProductionModule implements DemoModule {
         String caName = text(body.get("caName"));
         String caNo = text(body.get("caMembershipNo"));
         String statement = text(body.get("statement"));
-        if (fileName == null || fileName.isEmpty() || fileName.length() > 200 || fileName.matches(".*[/\\\\\\p{Cntrl}].*")) {
+        if (fileName == null || fileName.isEmpty() || fileName.length() > 200 || UNSAFE_FILE_NAME.matcher(fileName).find()) {
             return DemoResult.invalid("fileName is required (up to 200 characters, no slashes).");
         }
         if (mediaType == null || !mediaType.toLowerCase().matches("^[a-z]+/[a-z0-9.+-]+$") || mediaType.length() > 100) {
@@ -465,7 +476,7 @@ public class ProductionModule implements DemoModule {
         }
         byte[] content;
         try {
-            content = Base64.getMimeDecoder().decode(b64.trim());
+            content = Base64.getDecoder().decode(b64.trim());
         } catch (IllegalArgumentException e) {
             return DemoResult.invalid("contentBase64 is not valid base64.");
         }
@@ -474,6 +485,9 @@ public class ProductionModule implements DemoModule {
         }
         String sha = sha256(content);
         UUID sid = (UUID) sub.get("id");
+        if (jdbc().queryForObject("SELECT count(*) FROM production_evidence WHERE submission_id = ?", Integer.class, sid) >= MAX_EVIDENCE_FILES) {
+            return DemoResult.invalid("At most " + MAX_EVIDENCE_FILES + " evidence files can be attached to one submission.");
+        }
         UUID eid = jdbc().queryForObject("INSERT INTO production_evidence (submission_id, file_name, media_type, size_bytes, sha256, content, ca_name, "
             + "ca_membership_no, statement, uploaded_by) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id", UUID.class,
             sid, fileName, mediaType.toLowerCase(), content.length, sha, content, caName, caNo, statement, caller.accountId());

@@ -146,6 +146,7 @@ SQL
 fi
 if psql_super -d bee_app -c "SELECT to_regclass('app.production_event') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.production_replace_rows(uuid, uuid) TO ${BEE_RUNTIME_DB_USER};
 REVOKE UPDATE, DELETE, TRUNCATE ON app.production_event, app.production_evidence FROM ${BEE_RUNTIME_DB_USER};
 REVOKE UPDATE, DELETE, TRUNCATE ON app.production_row FROM ${BEE_RUNTIME_DB_USER};
 REVOKE DELETE, TRUNCATE ON app.production_submission FROM ${BEE_RUNTIME_DB_USER};

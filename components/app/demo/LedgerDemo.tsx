@@ -128,6 +128,7 @@ export function LedgerDemo() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [readOnly, setReadOnly] = useState(true);
   const [blocks, setBlocks] = useState<Tx[]>([]);
+  const [blocksError, setBlocksError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +146,7 @@ export function LedgerDemo() {
     if (!list.ok) { setError(list.message); return; }
     setRows(list.value.certificates);
     setReadOnly(list.value.readOnly);
-    if (ex.ok) setBlocks(ex.value.transactions);
+    if (ex.ok) { setBlocks(ex.value.transactions); setBlocksError(null); } else setBlocksError(ex.message);
   }, []);
 
   const loadDetail = useCallback(async (id: string) => {
@@ -163,7 +164,7 @@ export function LedgerDemo() {
       if (!list.ok) { setError(list.message); return; }
       setRows(list.value.certificates);
       setReadOnly(list.value.readOnly);
-      if (ex.ok) setBlocks(ex.value.transactions);
+      if (ex.ok) { setBlocks(ex.value.transactions); setBlocksError(null); } else setBlocksError(ex.message);
     });
     return () => { live = false; };
   }, []);
@@ -287,6 +288,7 @@ export function LedgerDemo() {
 
       <section className="mt-space-lg" aria-labelledby="ledger-explorer">
         <h2 id="ledger-explorer" className="font-title-md text-title-md text-on-surface">Block explorer (simulated)</h2>
+        {blocksError ? <p role="alert" className="text-error font-body-md mt-space-xs">The block explorer could not be loaded: {blocksError}</p> : null}
         <ExplorerTable blocks={blocks} />
       </section>
     </div>

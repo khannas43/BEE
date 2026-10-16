@@ -106,7 +106,7 @@ class RegistrationDatabaseTest {
             new gov.bee.api.settings.BusinessSettingRepository(db), idem, JSON), JSON);
         documentService = new RegistrationDocumentService(registrationRepo, documentRepo, new RegistrationDocumentRecorder(documentRepo, idem),
             new gov.bee.api.document.LocalSha256FileStore(props), idem, JSON);
-        assertEquals(65, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V65");
+        assertEquals(66, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V66");
     }
 
     @AfterAll
@@ -335,7 +335,7 @@ class RegistrationDatabaseTest {
         @SuppressWarnings("unchecked") Map<String, Object> latest = (Map<String, Object>) first.get("latestVersion");
         assertEquals(1, latest.get("versionNumber"));
         assertEquals("Trade licence", latest.get("label"));
-        assertEquals(65, ((String) latest.get("contentSha256")).length());
+        assertEquals(64, ((String) latest.get("contentSha256")).length());
 
         var replay = documentService.upload(NOVA, id, k, pdf("licence.pdf", "one"), null);
         assertEquals("true", replay.getHeaders().getFirst("Idempotency-Replayed"));

@@ -6,6 +6,7 @@ import { ROLES, RoleKey } from "@/lib/roles";
 import { countForRole } from "@/lib/screens";
 import { ROLE_PREVIEW_ENABLED, useRole } from "./RoleContext";
 import { NotificationBell } from "./notifications/NotificationBell";
+import { DemoMessageBadge } from "./notifications/DemoMessageBadge";
 import { TopbarSearch } from "./TopbarSearch";
 import { SessionBadge, useSpringIdentity } from "./SessionBadge";
 import { switchDemoRole } from "@/lib/client/demoAccounts";
@@ -62,6 +63,7 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
         )}
 
         <NotificationBell />
+        <DemoMessageBadge />
 
         {/* Language toggle */}
         <button

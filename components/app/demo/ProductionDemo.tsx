@@ -351,7 +351,7 @@ export function ProductionDemo() {
             <Section title="Reviewer">
               <label className="block">
                 <span className="font-label-md">Note (required for a query)</span>
-                <textarea className={inputCls} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+                <textarea className={inputCls} rows={2} maxLength={800} value={note} onChange={(e) => setNote(e.target.value)} />
               </label>
               <div className="flex gap-space-sm">
                 <button type="button" className={btnCls} disabled={busy} onClick={() => run(demoPath("production", detail.id, "review"), { decision: "accepted", note }, () => setStatus("Accepted."))}>

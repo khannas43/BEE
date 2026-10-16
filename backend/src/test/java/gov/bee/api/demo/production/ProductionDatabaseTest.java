@@ -213,7 +213,9 @@ class ProductionDatabaseTest {
         // the submitter holding a review role is refused too
         Caller self = new Caller(NOVA.accountId(), "nova.applicant", List.of(new RoleGrant("programme", "all")), Set.of(BEE_ORG));
         refused(post(self, submissionId, "review", Map.of("decision", "accepted")), 403, "segregation_refused");
-        var q = post(PROGRAMME, submissionId, "review", Map.of("decision", "query", "note", "Please explain November."));
+        // a note over 800 characters is refused; one of exactly 800 goes through (the message it sends the manufacturer must still fit its 1000-character cap)
+        refused(post(PROGRAMME, submissionId, "review", Map.of("decision", "query", "note", "x".repeat(801))), 400, "validation_failed");
+        var q = post(PROGRAMME, submissionId, "review", Map.of("decision", "query", "note", "Please explain November.".concat("x".repeat(800 - "Please explain November.".length()))));
         assertEquals("query", q.body().get("state"));
         refused(post(PROGRAMME, submissionId, "review", Map.of("decision", "accepted")), 409, "version_conflict");
         // after a query the manufacturer may edit and resubmit
@@ -252,5 +254,7 @@ class ProductionDatabaseTest {
         var wide = module.handle(NOVA, "GET", seeded, "reconciliation", Map.of("margin", "500"), Map.of()).body();
         assertEquals("ok", list(wide.get("models")).stream().filter(m -> m.get("modelNumber").equals("NC-RAC-12D")).findFirst().get().get("flag"));
         refused(module.handle(NOVA, "GET", seeded, "reconciliation", Map.of("margin", "x"), Map.of()), 400, "validation_failed");
+        refused(module.handle(NOVA, "GET", seeded, "reconciliation", Map.of("margin", "NaN"), Map.of()), 400, "validation_failed");
+        refused(module.handle(NOVA, "GET", seeded, "reconciliation", Map.of("margin", "Infinity"), Map.of()), 400, "validation_failed");
     }
 }

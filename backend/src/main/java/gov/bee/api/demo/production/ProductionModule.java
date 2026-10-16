@@ -239,7 +239,7 @@ public class ProductionModule implements DemoModule {
         if (m != null) {
             try {
                 double v = Double.parseDouble(m);
-                if (v < 0 || v > 1000) {
+                if (!Double.isFinite(v) || v < 0 || v > 1000) {
                     return DemoResult.invalid("margin must be between 0 and 1000 percent.");
                 }
                 margin = v;
@@ -540,8 +540,9 @@ public class ProductionModule implements DemoModule {
         if ("query".equals(decision) && (note == null || note.isEmpty())) {
             return DemoResult.invalid("A query needs a note.");
         }
-        if (note != null && note.length() > 1000) {
-            return DemoResult.invalid("The note is at most 1000 characters.");
+        // 800, not 1000: the message the reviewer's query sends the manufacturer wraps the note in about 130 characters of fixed text and the message body is capped at 1000.
+        if (note != null && note.length() > 800) {
+            return DemoResult.invalid("The note is at most 800 characters.");
         }
         if (!"submitted".equals(sub.get("state"))) {
             return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "Only a submitted submission can be reviewed.");

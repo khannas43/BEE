@@ -5,7 +5,8 @@
 ## Conventions
 - **Path:** `/api/demo/{module}[/{id}[/{action}]]` on Spring; the browser reaches it as `/api/runtime/demo/...` through one pass-through route (`app/api/runtime/demo/[...path]/route.ts`, GET and POST only; PUT, PATCH, DELETE answer 405).
 - **Who:** only a signed-in person with an effective role gets through (`DemoController`); the module then decides what that person may see or do. Scope comes from the database, never from the request.
-- **Writes** (`POST`) take a JSON body and an `Idempotency-Key` header, run in one transaction with their audit rows, and answer with the new state. Every body of a success carries `"demonstration": true`.
+- **Writes** (`POST`) take a JSON body, run in one transaction with their audit rows, and answer with the new state. Unlike the contract routes they do **not** use an `Idempotency-Key`: the browser client sends one, but the portal pass-through does not forward it and Spring does not read it. A repeated start of a payment or a repeated row commit is refused by the database (409 or a duplicate-row error), and a payment callback is replay-safe through its nonce. Every body of a success carries `"demonstration": true`.
+- **Path segments** are checked in the portal pass-through the same way as in the contract routes (`springIdSegment`): a segment that is empty, `.` or `..`, or holds anything outside letters, digits, `.`, `_`, `~` and `-`, becomes `-` and Spring answers 404.
 - **Errors** use the closed list in `ApiErrors`: `role_not_permitted` (403), `not_found` (404, the same for unknown and out-of-scope ids), `validation_failed` (400, with a short `detail`), `version_conflict` (409), `segregation_refused` (403). `detail`, when present, is text meant for the screen.
 - **Seeds** that write audit rows switch the message triggers off with `SET bee.demo_seeding = 'on'` (V66).
 
@@ -15,7 +16,7 @@
 | Route | Who | What |
 |---|---|---|
 | `GET payments` | manufacturer, agency (own organisation); finance, admin (all) | payments and, for payers, the applications whose fee is due |
-| `GET payments/reconciliation` | finance, admin | paid versus confirmed totals, differences, receipts |
+| `GET payments/reconciliation` | finance, admin, auditor | paid versus confirmed totals, differences, receipts |
 | `POST payments` | manufacturer, agency, own organisation only | start a payment of exactly the fee snapshot total (`applicationId`; any amount in the body is ignored) |
 | `POST payments/{id}/callback` | the person who started it | the simulated gateway callback (`gatewayRef`, `outcome` paid or failed, `nonce`); a replay with the same nonce is recognised and has no effect |
 
@@ -52,12 +53,12 @@ Own-organisation writers: manufacturer, agency. All-submission readers: programm
 | `GET production` | submissions in scope |
 | `POST production` | create a submission for a quarter (`quarter`, for example 2026-Q4) |
 | `GET production/{id}` | detail with rows, evidence and history |
-| `GET production/{id}/reconciliation` | declared units against bound QR serials; `margin` sets the percentage |
+| `GET production/{id}/reconciliation` | declared units against bound QR serials; `margin` sets the percentage (a finite number from 0 to 1000) |
 | `GET production/{id}/evidence` | the evidence record (`content=1` adds the file) |
 | `POST production/{id}/rows` | validate or store CSV rows (`csv`, `commit`); all or nothing |
 | `POST production/{id}/evidence` | attach CA evidence (name, membership number, statement, file), stored with its SHA-256, not verified |
 | `POST production/{id}/submit` | send for review; editing closes |
-| `POST production/{id}/review` | `decision` accepted or query (a query needs a `note`) |
+| `POST production/{id}/review` | `decision` accepted or query (a query needs a `note`, at most 800 characters) |
 
 ### `mis` (dashboard; V61)
 Read only. Full view: programme, director, secretary, admin, auditor. Finance sees the finance panel only.

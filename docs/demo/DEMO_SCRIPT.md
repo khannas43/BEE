@@ -32,8 +32,10 @@ Rehearsed end to end on 16 October 2026. Every account uses the password `demo12
 | 25-31 | UC4. A manufacturer reports quarterly production, BEE checks it against QR | Neha, Priya |
 | 31-36 | UC5. The Director sees the programme at a glance | Dr. Rao, Farid |
 | 36-40 | UC6. Five AI helpers that advise, never decide | Priya, Ravi, Meera |
+| 40-43 | UC7. Everyone is told | Neha, Farid, Sunita, Arjun, Priya |
+| 43-45 | Exports | Neha |
 
-Keep three minutes spare. If you run late, drop the "if time" lines.
+Keep three minutes spare. If you run late, drop the "if time" lines. UC1 to UC6 are unchanged; UC7 and the exports sit after them.
 
 ---
 
@@ -146,6 +148,33 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 
 ---
 
+## UC7. Everyone is told (40-43 min)
+**Persona: Neha** (`nova.applicant`), **Farid** (`bee.finance`), **Sunita** (`bee.secretary`), **Arjun** (`bee.admin`) and **Priya** (`bee.programme`).
+**Problem today:** people learn that a fee, a certificate or a return has moved only when someone telephones them.
+**Take-away:** each step writes an email, and where it matters an SMS, to the person who must act next. Nothing leaves this machine.
+
+Say clearly, once: "Simulated. No email and no text message is sent. Every address ends @bee-demo.invalid, and the mobile numbers are made up." The mail icon beside the bell is the unread count for this inbox. It is not the application bell next to it. Menu: **Notifications (email and SMS)**.
+
+1. After Neha pays DEMO-PAY-0001 in UC1, switch to Farid. Open the menu. Show the email **Payment to confirm: DEMO-PAY-0001**. Say: "Finance is told that money arrived, and Farid still confirms it himself."
+2. Switch back to Neha. Her inbox has an email **Payment received: DEMO-PAY-0001** and an SMS "payment received" to a made-up mobile. Say: "Neha is told the gateway took it. She is not told to confirm her own fee."
+3. In UC3, when Sunita submits 10101, Arjun's inbox has **Second signature needed**. Sunita does not get that mail: the sender is not told. When Arjun later sends the revoke, Sunita is the one who gets **Second signature needed**, and Arjun does not.
+4. When the second person commits the issue, switch to Neha: an email **Certificate on the ledger** and an SMS of the same news. When the revoke is committed, the subject is **Certificate revoked**.
+5. In UC4, when Neha submits the quarter, Priya gets **Production figures to review** (email only). If Priya raises a query, Neha gets **Query on your production figures** as an email and an SMS. When Priya accepts, Neha gets **Production figures accepted**, again as an email and an SMS.
+
+---
+
+## Exports (43-45 min)
+**Persona: Neha** (`nova.applicant`), with one look at Priya's production list and Dr. Rao's MIS.
+**Problem today:** a list on screen is not a file the office can keep.
+**Take-away:** each list saves the rows the filters currently show, as a spreadsheet, and a label can be saved as a PDF.
+
+1. On **Payments**, **QR batches and serials**, **Certificate ledger** (both the certificate list and the block explorer) and **Quarterly production**, point at **Download CSV**. Type in the search box first. Say: "This file is what the filter shows, not only this page. It opens in Excel. It is saved to Downloads." Do not open the file on the projector unless someone asks.
+2. Open one QR batch and click **Download all serials (CSV)**. Say: "This is the print shop's file. Every serial is in it, with the public check link for that serial."
+3. On the **MIS dashboard**, **Download CSV** is one file for the panel that is open, not for every chart at once.
+4. Menu: **Model label**, then **Label preview** (`/app/model-label/label-preview`). Pick an approved application. Use the browser's Print and choose **Save as PDF**. Say: "That PDF is the certificate with its QR code, for a file or a printer. It is not sent anywhere."
+
+---
+
 ## Closing (1 min)
 "Neha pays and labels, Farid reconciles, Sunita and Arjun issue with two signatures, Priya checks production against QR, Dr. Rao sees it live, and Imran can verify at the shop. One audited database, role scoping and separation of duties. What is simulated here (Fabric, gateway, AI models) is replaced by the real integrations in the next phase."
 
@@ -155,6 +184,8 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 - **AI:** "Rules, statistics and retrieval over synthetic data. Advisory only; a person decides and every decision is recorded."
 - **CA evidence:** "Stored and fingerprinted, not verified."
 - **Data:** synthetic. Not a BEE record.
+- **Email and SMS:** "Simulated. Nothing is sent. Addresses end @bee-demo.invalid and the mobile numbers are made up. The inbox is Notifications (email and SMS); the mail icon beside the bell counts what is unread there."
+- **Exports:** "Download CSV saves the filtered rows to Downloads and opens in Excel. Do not open it on the projector unless asked. Label preview, then the browser's Print, Save as PDF, is the certificate with its QR code."
 
 ## If something goes wrong
 | Symptom | Do |
@@ -170,12 +201,12 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 ## Cheat sheet (password for all: `demo123`)
 | Username | Persona | Use case |
 |---|---|---|
-| `bee.director` | Dr. Rao, Director | Opening, UC5 (lands on MIS) |
-| `nova.applicant` | Neha, manufacturer (Nova Cool) | UC1, UC2, UC4 |
-| `bee.finance` | Farid, Finance | UC1 (reconcile), UC5 (Finance tab) |
-| `bee.secretary` | Sunita, Secretary | UC3 (submit, retry, amend, commit revoke) |
-| `bee.admin` | Arjun, Administrator | UC3 (commit, revoke) |
-| `bee.programme` | Priya, Programme officer | UC4 (review), UC6 (AI) |
+| `bee.director` | Dr. Rao, Director | Opening, UC5 (lands on MIS), exports (MIS CSV) |
+| `nova.applicant` | Neha, manufacturer (Nova Cool) | UC1, UC2, UC4, UC7 (payment received, certificate on the ledger), exports |
+| `bee.finance` | Farid, Finance | UC1 (reconcile), UC5 (Finance tab), UC7 (Payment to confirm) |
+| `bee.secretary` | Sunita, Secretary | UC3 (submit, retry, amend, commit revoke), UC7 (second signature when she did not send it) |
+| `bee.admin` | Arjun, Administrator | UC3 (commit, revoke), UC7 (second signature when he did not send it) |
+| `bee.programme` | Priya, Programme officer | UC4 (review), UC6 (AI), UC7 (production figures to review) |
 | `bee.helpdesk` | Ravi, Helpdesk | UC6 (helpdesk assist) |
 | `bee.reviewer` | Meera, Reviewer | UC6 (document extraction) |
 | `bee.auditor` | Auditor | read only |
@@ -183,3 +214,5 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 | public | Imran, shopper | `/verify` in UC2, UC3 |
 
 The persona names are only for storytelling; the demo accounts carry no personal names.
+
+Order of screens: sign in as Dr. Rao (MIS) → Neha, Payments → QR batches and serials → Sunita then Arjun, Certificate ledger → Neha then Priya, Quarterly production → Dr. Rao, MIS dashboard → Priya, Ravi and Meera, AI use cases → Notifications (email and SMS) for the people named in UC7 → Download CSV on the lists, then Model label, Label preview, Save as PDF.

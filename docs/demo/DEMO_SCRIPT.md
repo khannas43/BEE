@@ -44,7 +44,7 @@ Keep three minutes spare. If you are running late, drop the second half of any p
 **Sign in as `nova.applicant`.** Menu: **QR batches and serials**.
 1. Show the two existing batches with allocated, bound and void counts.
 2. Create a batch: pick "Nova Cool NC-RAC-12D (BEE/RAC/2026/10101)", quantity 100, **Create batch**. Say: "Only an approved model with a certificate can have QR codes."
-3. Open the new batch, **Allocate** 5 serials (format `BEEQ-` plus ten characters), **Bind** one to a unit. Try to bind the same serial twice: "Duplicate code blocked" is shown. Say: "Duplicate control is enforced in the database, not only on screen."
+3. Open the new batch, **Allocate** 5 serials (format `BEEQ-` plus ten characters), **Bind** one to a unit. Paste one serial into "Serials to bind" (blank binds all allocated). Bind the same serial again: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
 4. Use **Verify this serial** on a bound serial: the public page confirms the certificate.
 5. Public check without signing in: open `/verify` in a private window with a bound serial, for example the seeded `BEEQ-S2D0000001` (type it into the search box). An unbound or void serial (`BEEQ-S2D0000040`) gives "not found", the same answer as an unknown code.
 6. *If time:* sign in as `bee.programme`: the same screen shows all batches read-only. `pixel.applicant` sees none of Nova's batches.
@@ -85,7 +85,7 @@ Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real databa
 Say: "Transparent rules and statistics, not machine learning. Every run records the model version, the data it saw and its evidence; a person decides; nothing is written to any application, certificate or fee."
 
 **Sign in as `bee.programme`.** Menu: **AI use cases**.
-1. **Compliance risk**: **Run**, open the top row to show contributions and evidence, then **Override** with a reason.
+1. **Compliance risk**: **Run**, open the top row to show contributions and evidence, then choose **Override**, enter your own value (for example `medium`) and a reason, and **Record disposition**.
 2. **Production anomaly**: flags the spike series.
 3. **Rating trends**: slope and 95 percent band.
 

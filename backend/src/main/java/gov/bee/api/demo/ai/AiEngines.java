@@ -545,7 +545,7 @@ public class AiEngines {
             : "Thank you for your question. " + lead.body() + " If this does not answer your question, a helpdesk officer will follow up. "
                 + "(Draft for an officer to review. This system never sends it.)");
         o.put("evidence", evidence);
-        o.put("note", "Keyword retrieval (TF-IDF cosine) over 20 synthetic FAQ articles. Confidence = min(0.95, 2 x best cosine); below "
+        o.put("note", "Keyword retrieval (TF-IDF cosine) over " + kb.size() + " synthetic FAQ articles. Confidence = min(0.95, 2 x best cosine); below "
             + ESCALATE_BELOW + " it asks for a person. Not a language model. Advisory.");
         String canonical = kb.stream().map(a -> a.id() + "|" + a.category() + "|" + a.title() + "|" + a.body()).reduce("", (x, y) -> x + y + "\n");
         return new Computed(o, confidence, hash(canonical), question.trim().length() > 80 ? question.trim().substring(0, 80) : question.trim());

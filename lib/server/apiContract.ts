@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.35.0";
+export const CONTRACT_VERSION = "0.36.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -313,7 +313,7 @@ export interface ApplicationCertificate {
   registrationId: string;
   validFrom: string;
   validTo: string;
-  status: "valid" | "expired" | "not_yet_valid";
+  status: "valid" | "expired" | "not_yet_valid" | "revoked";
   stars: number;
   declaredIseer: string;
   verifiedIseer: string;
@@ -328,7 +328,7 @@ export const validateApplicationCertificate: Validator<ApplicationCertificate> =
   const ok =
     isString(b.registrationId) && /^BEE\/[A-Z]{2,10}\/[0-9]{4}\/[0-9]{5,}$/.test(b.registrationId) &&
     isString(b.validFrom) && ISO_DATE.test(b.validFrom) && isString(b.validTo) && ISO_DATE.test(b.validTo) && b.validTo > b.validFrom &&
-    (b.status === "valid" || b.status === "expired" || b.status === "not_yet_valid") &&
+    (b.status === "valid" || b.status === "expired" || b.status === "not_yet_valid" || b.status === "revoked") &&
     Number.isInteger(b.stars) && (b.stars as number) >= 1 && (b.stars as number) <= 5 &&
     isString(b.declaredIseer) && isString(b.verifiedIseer) && isString(b.schemeKey) && b.localDemoCertificate === true &&
     isString(b.issuedAt) && !Number.isNaN(Date.parse(b.issuedAt));

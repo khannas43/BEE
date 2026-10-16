@@ -12,3 +12,6 @@ The demonstration messages module (`/api/demo/messages`) is promoted into the do
 
 ## What is left of BL-229
 `qr` (6 routes), `payments` (4), `production` (9), `mis` (3) and `ledger` (10) each need the same treatment: Spring routes in the real namespace, validators, OpenAPI operations in both audiences with every status and error code evidenced, request-log wiring, the portal routes and the screens moved over. `ai` stays demo-only by decision. Measured cost of this slice: about 35 files; plan on one slice per module, each with its own gate.
+
+## Contract 0.36.0 (BL-234)
+`ApplicationCertificate.status` gains `revoked`: when the demonstration deployment is on (`BEE_DEMO_LOGIN=1`) and the simulated ledger has a committed revoke for the certificate, the applicant's own certificate answer says "revoked", the same word the public verification answer uses (revoked wins over expired). A revoke that is still waiting for its second signature changes nothing. Outside the demonstration deployment the status follows the dates only. No new operation or status code: one more value in an existing 200 answer.

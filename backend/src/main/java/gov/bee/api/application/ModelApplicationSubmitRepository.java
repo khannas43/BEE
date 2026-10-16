@@ -80,14 +80,17 @@ public class ModelApplicationSubmitRepository {
 
     /** The certificate issued when the application was approved (a local demonstration, never a BEE certificate). */
     public record CertificateRow(String registrationId, java.time.LocalDate validFrom, java.time.LocalDate validTo, int stars,
-                                 java.math.BigDecimal declaredIseer, java.math.BigDecimal verifiedIseer, String schemeKey, java.time.Instant issuedAt) {
+                                 java.math.BigDecimal declaredIseer, java.math.BigDecimal verifiedIseer, String schemeKey, java.time.Instant issuedAt,
+                                 boolean ledgerRevoked) {
     }
 
     public Optional<CertificateRow> findCertificate(UUID applicationId) {
         return jdbc.query(
-            "SELECT registration_id, valid_from, valid_to, stars, declared_iseer, verified_iseer, scheme_key, issued_at FROM certificate WHERE application_id = ?",
+            "SELECT registration_id, valid_from, valid_to, stars, declared_iseer, verified_iseer, scheme_key, issued_at, "
+                + "EXISTS (SELECT 1 FROM ledger_tx l WHERE l.certificate_id = certificate.id AND l.kind = 'revoke' AND l.state = 'committed') AS ledger_revoked "
+                + "FROM certificate WHERE application_id = ?",
             (rs, i) -> new CertificateRow(rs.getString("registration_id"), rs.getDate("valid_from").toLocalDate(), rs.getDate("valid_to").toLocalDate(), rs.getInt("stars"),
-                rs.getBigDecimal("declared_iseer"), rs.getBigDecimal("verified_iseer"), rs.getString("scheme_key"), rs.getTimestamp("issued_at").toInstant()),
+                rs.getBigDecimal("declared_iseer"), rs.getBigDecimal("verified_iseer"), rs.getString("scheme_key"), rs.getTimestamp("issued_at").toInstant(), rs.getBoolean("ledger_revoked")),
             applicationId).stream().findFirst();
     }
 

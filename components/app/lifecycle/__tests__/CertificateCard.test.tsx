@@ -24,4 +24,10 @@ describe("CertificateCard", () => {
     expect(screen.getByTestId("model-app-certificate-validity").textContent).toContain("Expired");
     expect(screen.getByTestId("model-app-certificate-rating").textContent).toBe("★☆☆☆☆ 1 star · efficiency 4.62");
   });
+
+  it("says revoked when the simulated ledger has revoked it", () => {
+    render(<CertificateCard certificate={{ ...cert, status: "revoked" }} />);
+    expect(screen.getByTestId("model-app-certificate-validity").textContent).toBe("Revoked (simulated ledger) · was valid from 2026-10-06 to 2029-10-05");
+    expect(screen.getByTestId("model-app-certificate").getAttribute("data-status")).toBe("revoked");
+  });
 });

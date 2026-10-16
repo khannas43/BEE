@@ -449,7 +449,7 @@ class SpringContractTest {
         var approved = new ModelApplicationRepository.Row(NOVA_APP, "LOCAL-MA-0002", NOVA, "NOVA", "Nova Cool", "RAC", "NC-RAC-18F", "approved", 8, Set.of(), NOVA, NOVA_COOL, "NOVA");
         when(applications.find(org.mockito.ArgumentMatchers.eq(NOVA_APP), any(), any())).thenReturn(Optional.of(approved));
         when(submissions.findCertificate(NOVA_APP)).thenReturn(Optional.of(new ModelApplicationSubmitRepository.CertificateRow("BEE/RAC/2026/10001",
-            java.time.LocalDate.of(2026, 10, 6), java.time.LocalDate.of(2029, 10, 5), 4, new BigDecimal("4.50"), new BigDecimal("4.62"), "RAC-ISEER-DEMO-1", Instant.parse("2026-10-06T10:00:00Z"))));
+            java.time.LocalDate.of(2026, 10, 6), java.time.LocalDate.of(2029, 10, 5), 4, new BigDecimal("4.50"), new BigDecimal("4.62"), "RAC-ISEER-DEMO-1", Instant.parse("2026-10-06T10:00:00Z"), false)));
         var res = conforms(DETAIL, get(path(DETAIL)).with(token("manufacturer")), 200, null);
         assertTrue(res.getContentAsString().contains("\"certificate\":{\"registrationId\":\"BEE/RAC/2026/10001\""), res.getContentAsString());
         assertTrue(res.getContentAsString().contains("\"localDemoCertificate\":true"), res.getContentAsString());

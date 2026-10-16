@@ -12,7 +12,12 @@ class CertificateViewTest {
 
     static ModelApplicationSubmitRepository.CertificateRow cert() {
         return new ModelApplicationSubmitRepository.CertificateRow("BEE/RAC/2026/10001", LocalDate.of(2026, 10, 6), LocalDate.of(2029, 10, 5), 4,
-            new BigDecimal("4.50"), new BigDecimal("4.62"), "RAC-ISEER-DEMO-1", Instant.parse("2026-10-06T10:00:00Z"));
+            new BigDecimal("4.50"), new BigDecimal("4.62"), "RAC-ISEER-DEMO-1", Instant.parse("2026-10-06T10:00:00Z"), false);
+    }
+
+    static ModelApplicationSubmitRepository.CertificateRow revokedCert() {
+        var c = cert();
+        return new ModelApplicationSubmitRepository.CertificateRow(c.registrationId(), c.validFrom(), c.validTo(), c.stars(), c.declaredIseer(), c.verifiedIseer(), c.schemeKey(), c.issuedAt(), true);
     }
 
     @Test
@@ -26,6 +31,21 @@ class CertificateViewTest {
     void expiredTheDayAfterTheLastDayAndNotYetValidBeforeTheFirst() {
         assertEquals("expired", ModelApplicationViewSupport.certificateView(cert(), LocalDate.of(2029, 10, 6)).get("status"));
         assertEquals("not_yet_valid", ModelApplicationViewSupport.certificateView(cert(), LocalDate.of(2026, 10, 5)).get("status"));
+    }
+
+    @Test
+    void aCertificateRevokedOnTheSimulatedLedgerIsRevokedForItsApplicantToo() {
+        gov.bee.api.demo.DemoSwitch.forceForTest(true);
+        try {
+            assertEquals("revoked", ModelApplicationViewSupport.certificateView(revokedCert(), LocalDate.of(2027, 1, 1)).get("status"));
+            assertEquals("revoked", ModelApplicationViewSupport.certificateView(revokedCert(), LocalDate.of(2031, 1, 1)).get("status"), "revoked wins over expired, like the public answer");
+            assertEquals("valid", ModelApplicationViewSupport.certificateView(cert(), LocalDate.of(2027, 1, 1)).get("status"));
+            // outside the demonstration deployment the ledger has no say, as for the public answer
+            gov.bee.api.demo.DemoSwitch.forceForTest(false);
+            assertEquals("valid", ModelApplicationViewSupport.certificateView(revokedCert(), LocalDate.of(2027, 1, 1)).get("status"));
+        } finally {
+            gov.bee.api.demo.DemoSwitch.forceForTest(null);
+        }
     }
 
     @Test

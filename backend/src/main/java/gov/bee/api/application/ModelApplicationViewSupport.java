@@ -54,13 +54,16 @@ final class ModelApplicationViewSupport {
         return m;
     }
 
-    /** The certificate as shown to the applicant. Status is worked out from the dates (valid or expired); revoked is not built yet. */
+    /**
+     * The certificate as shown to the applicant. Status is worked out from the dates (valid, expired, not yet valid); it is "revoked" when the
+     * simulated demonstration ledger has a committed revoke for it, the same word the public verification answer uses (demonstration deployment only).
+     */
     static Map<String, Object> certificateView(ModelApplicationSubmitRepository.CertificateRow c, java.time.LocalDate today) {
         Map<String, Object> v = new java.util.LinkedHashMap<>();
         v.put("registrationId", c.registrationId());
         v.put("validFrom", c.validFrom().toString());
         v.put("validTo", c.validTo().toString());
-        v.put("status", today.isAfter(c.validTo()) ? "expired" : today.isBefore(c.validFrom()) ? "not_yet_valid" : "valid");
+        v.put("status", c.ledgerRevoked() && gov.bee.api.demo.DemoSwitch.enabled() ? "revoked" : today.isAfter(c.validTo()) ? "expired" : today.isBefore(c.validFrom()) ? "not_yet_valid" : "valid");
         v.put("stars", c.stars());
         v.put("declaredIseer", c.declaredIseer().toPlainString());
         v.put("verifiedIseer", c.verifiedIseer().toPlainString());

@@ -4,6 +4,7 @@ import { Pill } from "./DemoShell";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { useCallback, useEffect, useState } from "react";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
+import { istStamp } from "@/lib/client/istTime";
 
 /** Simulated certificate ledger (demo slice S3). A local test network, not Hyperledger Fabric and not a BEE system. */
 
@@ -94,7 +95,7 @@ function ExplorerTable({ blocks }: { blocks: Tx[] }) {
     <div className="space-y-space-sm mt-space-sm">
       {blocks.length > 0 ? <ListToolbar tools={tools} searchLabel="Search by certificate" placeholder="Certificate, kind or state" dateLabel="Created"
         exportCsv={{ filename: "ledger-transactions", header: ["Block", "Certificate", "Kind", "Attempt", "State", "Hash", "Previous hash", "Submitted by", "Created"],
-          rows: tools.visible.map((t) => [t.blockNo, t.registrationId, t.kind, t.attempt, t.state, t.hash, t.prevHash, t.submittedBy, t.createdAt.slice(0, 19).replace("T", " ")]) }} /> : null}
+          rows: tools.visible.map((t) => [t.blockNo, t.registrationId, t.kind, t.attempt, t.state, t.hash, t.prevHash, t.submittedBy, istStamp(t.createdAt)]) }} /> : null}
       {blocks.length > 0 && tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No transactions match.</p> : (
         <>
           <table className="w-full font-body-sm" data-testid="ledger-explorer">
@@ -110,7 +111,7 @@ function ExplorerTable({ blocks }: { blocks: Tx[] }) {
                 <tr key={t.id} className="border-t border-outline-variant">
                   <td className="py-1 pr-3">{t.blockNo}</td><td className="py-1 pr-3">{t.registrationId}</td><td className="py-1 pr-3">{t.kind}{t.attempt > 1 ? ` #${t.attempt}` : ""}</td>
                   <td className="py-1 pr-3"><Pill>{t.state}</Pill></td><td className="py-1 pr-3"><Hash value={t.hash} /></td><td className="py-1 pr-3"><Hash value={t.prevHash} /></td>
-                  <td className="py-1">{t.createdAt.slice(0, 19).replace("T", " ")}</td>
+                  <td className="py-1">{istStamp(t.createdAt)}</td>
                 </tr>
               ))}
               {blocks.length === 0 ? <tr><td colSpan={7} className="py-1">No transactions yet.</td></tr> : null}
@@ -278,7 +279,7 @@ export function LedgerDemo() {
 
           {detail.events.length > 0 ? (
             <details className="mt-space-sm"><summary className="font-label-md cursor-pointer">Audit trail ({detail.events.length})</summary>
-              <ul className="font-body-sm mt-1">{detail.events.map((e, i) => <li key={i}>{e.at.slice(0, 19).replace("T", " ")} · {e.action} · tx {e.seq} ({e.kind}) · {e.actor}{e.reason ? ` · ${e.reason}` : ""}</li>)}</ul>
+              <ul className="font-body-sm mt-1">{detail.events.map((e, i) => <li key={i}>{istStamp(e.at)} · {e.action} · tx {e.seq} ({e.kind}) · {e.actor}{e.reason ? ` · ${e.reason}` : ""}</li>)}</ul>
             </details>
           ) : null}
         </section>

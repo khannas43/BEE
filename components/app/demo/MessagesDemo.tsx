@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { demoGet, demoPath, demoPost } from "@/lib/client/runtimeDemo";
 import { Icon } from "@/components/ui/Icon";
+import { istStamp } from "@/lib/client/istTime";
 
 /**
  * A person's simulated email and SMS messages (demonstration). The service writes one when a payment is received or declined, a ledger step
@@ -15,7 +16,7 @@ type Body = { unread: number; items: Message[]; note: string };
 const FILTERS = [["all", "All"], ["email", "Email"], ["sms", "SMS"]] as const;
 const POLL_MS = 8000;
 
-const when = (iso: string) => iso.slice(0, 19).replace("T", " ");
+const when = (iso: string) => `${istStamp(iso)} IST`;
 
 export function MessagesDemo() {
   const [channel, setChannel] = useState<(typeof FILTERS)[number][0]>("all");

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pill } from "./DemoShell";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
+import { istStamp } from "@/lib/client/istTime";
 
 type Receipt = {
   receiptNumber: string;
@@ -82,7 +83,7 @@ function PaymentsTable({ payments, finance, receiptId, onToggleReceipt }: { paym
     <div className="space-y-space-sm mt-space-sm">
       <ListToolbar tools={tools} searchLabel="Search by application" placeholder="Application, organisation or gateway reference" dateLabel="Created"
         exportCsv={{ filename: "payments", header: ["Application", "Organisation", "Brand", "Model", "Amount INR", "Status", "Gateway reference", "Receipt", "Created"],
-          rows: tools.visible.map((p) => [p.applicationReference, p.organisationCode, p.brandName, p.modelNumber, Number(p.amountInr), p.status, p.gatewayRef, p.receiptNumber, p.createdAt?.slice(0, 19).replace("T", " ")]) }} />
+          rows: tools.visible.map((p) => [p.applicationReference, p.organisationCode, p.brandName, p.modelNumber, Number(p.amountInr), p.status, p.gatewayRef, p.receiptNumber, istStamp(p.createdAt)]) }} />
       {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No payments match.</p> : (
         <>
           <table className="w-full font-body-sm">
@@ -203,14 +204,15 @@ export function PaymentsDemo() {
               </tr></thead>
               <tbody>
                 {(listing.feeDue ?? []).map((a) => {
-                  const live = payments.some((p) => p.applicationId === a.applicationId && p.status !== "failed");
+                  const current = payments.find((p) => p.applicationId === a.applicationId && p.status !== "failed");
+                  const live = Boolean(current);
                   return (
                     <tr key={a.applicationId}>
                       <td className={th}>{a.reference}</td><td className={th}>{a.brandName} {a.modelNumber}</td>
                       <td className={th}>{inr(a.feeInr)}</td><td className={th}>{inr(a.taxInr)} ({a.taxRatePercent}%)</td><td className={th}>{inr(a.totalInr)}</td>
                       <td className={th}>
                         <button type="button" className={btn} disabled={busy || live} onClick={() => void start(a)} aria-label={`Pay at simulated gateway for ${a.reference}`}>
-                          {live ? "Payment open" : "Pay at simulated gateway"}
+                          {current?.status === "paid" ? "Paid, awaiting Finance" : live ? "Payment open" : "Pay at simulated gateway"}
                         </button>
                       </td>
                     </tr>

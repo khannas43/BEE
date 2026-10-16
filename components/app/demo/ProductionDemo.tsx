@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pill } from "./DemoShell";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
+import { istStamp } from "@/lib/client/istTime";
 
 type Submission = {
   id: string;
@@ -67,7 +68,7 @@ function SubmissionsTable({ list, onOpen }: { list: Submission[]; onOpen: (id: s
     <div className="space-y-space-sm">
       <ListToolbar tools={tools} searchLabel="Search by quarter or organisation" placeholder="Quarter, organisation or state" dateLabel="Submitted"
         exportCsv={{ filename: "production-submissions", header: ["Quarter", "Organisation", "State", "Rows", "Units", "Evidence files", "Submitted"],
-          rows: tools.visible.map((x) => [x.quarter, x.organisationName, STATE_WORD[x.state] ?? x.state, x.rowCount, x.totalUnits, x.evidenceCount, (x.submittedAt ?? x.createdAt)?.slice(0, 19).replace("T", " ")]) }} />
+          rows: tools.visible.map((x) => [x.quarter, x.organisationName, STATE_WORD[x.state] ?? x.state, x.rowCount, x.totalUnits, x.evidenceCount, istStamp(x.submittedAt ?? x.createdAt)]) }} />
       {tools.visible.length === 0 ? <p className="font-body-md text-on-surface-variant">No submissions match.</p> : (
         <>
           <table className="w-full text-left font-body-md">
@@ -399,7 +400,7 @@ export function ProductionDemo() {
             <ol className="font-body-md list-decimal pl-space-lg">
               {detail.events.map((e, i) => (
                 <li key={i}>
-                  {e.occurredAt.slice(0, 16).replace("T", " ")}: {e.action.replace(/_/g, " ")} by {e.actor} ({e.actorRole}){e.note ? `, ${e.note}` : ""}
+                  {istStamp(e.occurredAt, false)}: {e.action.replace(/_/g, " ")} by {e.actor} ({e.actorRole}){e.note ? `, ${e.note}` : ""}
                 </li>
               ))}
             </ol>

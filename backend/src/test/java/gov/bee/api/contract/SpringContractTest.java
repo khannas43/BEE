@@ -175,6 +175,9 @@ class SpringContractTest {
     @MockitoBean
     gov.bee.api.notifications.NotificationRepository notificationRepo;
 
+    @MockitoBean
+    gov.bee.api.messages.MessageRepository messageRepo;
+
     @org.springframework.beans.factory.annotation.Autowired
     gov.bee.api.verification.PublicRateLimiter publicRateLimiter;
 
@@ -2082,6 +2085,63 @@ class SpringContractTest {
         // the other methods are not routes
         assertEquals(401, mvc.perform(delete(list)).andReturn().getResponse().getStatus());
     }
+
+    @Test
+    void messageOperationsDocumentedPairs() throws Exception {
+        String list = "/api/messages";
+        String one = "/api/messages/{id}/read";
+        String all = "/api/messages/read-all";
+        UUID mine = UUID.fromString("00000000-0000-4000-a000-0000000000b1");
+        var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
+        // no token, a planted token, and the wrong method are all refused
+        conforms(list, get(list), 401, "unauthenticated");
+        conforms(one, post("/api/messages/" + mine + "/read"), 401, "unauthenticated");
+        conforms(all, post(all), 401, "unauthenticated");
+        // identity denials
+        conforms(list, get(list).with(pwdOnly), 403, "mfa_required");
+        conforms(all, post(all).with(pwdOnly), 403, "mfa_required");
+        conforms(one, post("/api/messages/" + mine + "/read").with(pwdOnly), 403, "mfa_required");
+        when(identity.activeAccount(any())).thenReturn(Optional.empty());
+        conforms(list, get(list).with(token("manufacturer")), 403, "no_active_account");
+        conforms(one, post("/api/messages/" + mine + "/read").with(token("manufacturer")), 403, "no_active_account");
+        conforms(all, post(all).with(token("manufacturer")), 403, "no_active_account");
+        account("auditor", "all");
+        conforms(list, get(list).with(token("finance")), 403, "no_effective_role");
+        conforms(one, post("/api/messages/" + mine + "/read").with(token("finance")), 403, "no_effective_role");
+        conforms(all, post(all).with(token("finance")), 403, "no_effective_role");
+        // the caller's own messages
+        account("manufacturer", "own");
+        when(messageRepo.newest(USER)).thenReturn(List.of(new gov.bee.api.messages.MessageRepository.Item(mine, "email", "nova.applicant@bee-demo.invalid", "payment_paid",
+            "DEMO-PAY-0001", "Payment received: DEMO-PAY-0001", "INR 11800.00 was received at the simulated gateway. Simulated message: nothing was sent.",
+            java.time.Instant.parse("2026-10-16T10:00:00Z"), false)));
+        when(messageRepo.unread(USER)).thenReturn(1);
+        var body = conforms(list, get(list).with(token("manufacturer")), 200, null).getContentAsString();
+        assertTrue(body.contains("\"unread\":1") && body.contains("\"kind\":\"payment_paid\""), body);
+        when(messageRepo.newest(USER)).thenReturn(List.of());
+        when(messageRepo.unread(USER)).thenReturn(0);
+        conforms(list, get(list).with(token("manufacturer")), 200, null);
+        // marking one read: its own, someone else's or unknown (the same 404), and a malformed id
+        when(messageRepo.owns(USER, mine)).thenReturn(true);
+        when(messageRepo.markRead(USER, mine)).thenReturn(1);
+        conforms(one, post("/api/messages/" + mine + "/read").with(token("manufacturer")), 200, null);
+        when(messageRepo.markRead(USER, mine)).thenReturn(0);
+        conforms(one, post("/api/messages/" + mine + "/read").with(token("manufacturer")), 200, null);
+        conforms(one, post("/api/messages/" + UUID.randomUUID() + "/read").with(token("manufacturer")), 404, "not_found");
+        conforms(one, post("/api/messages/not-a-uuid/read").with(token("manufacturer")), 404, "not_found");
+        when(messageRepo.markAllRead(USER)).thenReturn(3);
+        var bodyAll = conforms(all, post(all).with(token("manufacturer")), 200, null).getContentAsString();
+        assertTrue(bodyAll.contains("\"marked\":3"), bodyAll);
+        // the database is down
+        when(messageRepo.newest(USER)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(list, get(list).with(token("manufacturer")), 503, "service_unavailable");
+        when(messageRepo.owns(USER, mine)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(one, post("/api/messages/" + mine + "/read").with(token("manufacturer")), 503, "service_unavailable");
+        when(messageRepo.markAllRead(USER)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+        conforms(all, post(all).with(token("manufacturer")), 503, "service_unavailable");
+        // the other methods are not routes
+        assertEquals(401, mvc.perform(delete(list)).andReturn().getResponse().getStatus());
+    }
+
 
     @Test
     void publicVerificationRateLimitDocumentedPairs() throws Exception {

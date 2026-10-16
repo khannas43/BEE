@@ -72,6 +72,9 @@ before(async () => {
     registrationDocumentContent: await import("../../app/api/runtime/registrations/[id]/documents/[documentId]/versions/[versionId]/content/route.ts"),
     notificationRead: await import("../../app/api/runtime/notifications/[id]/read/route.ts"),
     notificationReadAll: await import("../../app/api/runtime/notifications/read-all/route.ts"),
+    messages: await import("../../app/api/runtime/messages/route.ts"),
+    messageRead: await import("../../app/api/runtime/messages/[id]/read/route.ts"),
+    messageReadAll: await import("../../app/api/runtime/messages/read-all/route.ts"),
   };
 });
 
@@ -262,6 +265,28 @@ test("unit-evidence: POST /api/runtime/notifications/{id}/read 401 session_expir
 test("unit-evidence: POST /api/runtime/notifications/read-all 401 session_expired | Keycloak refusing refresh", async () => {
   refreshRefusedStub();
   const res = await routes.notificationReadAll.POST(req("/api/runtime/notifications/read-all", "unit-notification-read-all-refresh-refused", nearExpiry(), { method: "POST" }));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: GET /api/runtime/messages 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const res = await routes.messages.GET(req("/api/runtime/messages", "unit-messages-refresh-refused", nearExpiry()));
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/messages/{id}/read 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const id = "00000000-0000-4000-a000-0000000000b1";
+  const res = await routes.messageRead.POST(req(`/api/runtime/messages/${id}/read`, "unit-message-read-refresh-refused", nearExpiry(), { method: "POST" }), { params: Promise.resolve({ id }) });
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).error, "session_expired");
+});
+
+test("unit-evidence: POST /api/runtime/messages/read-all 401 session_expired | Keycloak refusing refresh", async () => {
+  refreshRefusedStub();
+  const res = await routes.messageReadAll.POST(req("/api/runtime/messages/read-all", "unit-message-read-all-refresh-refused", nearExpiry(), { method: "POST" }));
   assert.equal(res.status, 401);
   assert.equal((await res.json()).error, "session_expired");
 });

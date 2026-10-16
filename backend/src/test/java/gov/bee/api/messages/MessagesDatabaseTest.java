@@ -1,10 +1,10 @@
-package gov.bee.api.demo.messages;
+package gov.bee.api.messages;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import gov.bee.api.demo.DemoResult;
 import gov.bee.api.demo.payments.PaymentRepository;
 import gov.bee.api.demo.payments.PaymentsModule;
 import gov.bee.api.identity.Caller;
@@ -46,7 +46,7 @@ class MessagesDatabaseTest {
     static JdbcTemplate db;
     static TransactionTemplate tx;
     static PaymentsModule payments;
-    static MessagesModule messages;
+    static MessageRepository messages;
     static int appModelCountBefore;
 
     static String env(String k, String d) {
@@ -78,7 +78,7 @@ class MessagesDatabaseTest {
         db = new JdbcTemplate(runtime);
         tx = new TransactionTemplate(new DataSourceTransactionManager(runtime));
         payments = new PaymentsModule(new PaymentRepository(db));
-        messages = new MessagesModule(db);
+        messages = new MessageRepository(db);
     }
 
     @AfterAll
@@ -89,10 +89,8 @@ class MessagesDatabaseTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    static List<Map<String, Object>> inbox(Caller c, String channel) {
-        DemoResult r = tx.execute(s -> messages.handle(c, "GET", null, null, channel == null ? Map.of() : Map.of("channel", channel), Map.of()));
-        return (List<Map<String, Object>>) r.body().get("items");
+    static List<MessageRepository.Item> inbox(Caller c, String channel) {
+        return tx.execute(st -> messages.newest(c.accountId()).stream().filter(m -> channel == null || m.channel().equals(channel)).toList());
     }
 
     @Test
@@ -109,28 +107,31 @@ class MessagesDatabaseTest {
         var novaSms = inbox(NOVA, "sms");
         assertEquals(1, novaMail.size());
         assertEquals(1, novaSms.size());
-        assertEquals("nova.applicant@bee-demo.invalid", novaMail.get(0).get("address"));
-        assertTrue(((String) novaMail.get(0).get("subject")).contains("DEMO-PAY-0001"));
-        assertTrue(((String) novaSms.get(0).get("body")).length() <= 160);
-        assertTrue(((String) novaSms.get(0).get("address")).contains("synthetic"));
+        assertEquals("nova.applicant@bee-demo.invalid", novaMail.get(0).address());
+        assertTrue(novaMail.get(0).subject().contains("DEMO-PAY-0001"));
+        assertNull(novaSms.get(0).subject(), "an SMS has no subject");
+        assertTrue(novaSms.get(0).body().length() <= 160);
+        assertTrue(novaSms.get(0).address().contains("synthetic"));
         var finance = inbox(FINANCE, null);
         assertEquals(1, finance.size(), "Finance gets the 'to confirm' email, no SMS");
-        assertEquals("payment_to_confirm", finance.get(0).get("kind"));
+        assertEquals("payment_to_confirm", finance.get(0).kind());
         assertEquals(0, inbox(PIXEL, null).size(), "another organisation sees nothing");
 
         // A replayed callback has no second effect, so no second message.
         tx.execute(s -> payments.handle(NOVA, "POST", id, "callback", Map.of(), Map.of("gatewayRef", ref, "outcome", "paid", "nonce", "nonce-msg-0001")));
         assertEquals(1, inbox(NOVA, "email").size());
+        assertEquals(2, messages.unread(NOVA.accountId()));
 
-        // Marking read: own only, once; someone else's id is the same as unknown.
-        String messageId = (String) novaMail.get(0).get("id");
-        assertEquals("not_found", tx.execute(s -> messages.handle(PIXEL, "POST", messageId, "read", Map.of(), Map.of())).code());
-        assertEquals("not_found", tx.execute(s -> messages.handle(FINANCE, "POST", messageId, "read", Map.of(), Map.of())).code());
-        assertEquals(1, tx.execute(s -> messages.handle(NOVA, "POST", messageId, "read", Map.of(), Map.of())).body().get("marked"));
-        assertEquals(0, tx.execute(s -> messages.handle(NOVA, "POST", messageId, "read", Map.of(), Map.of())).body().get("marked"), "a read mark never repeats");
-        assertEquals(1, tx.execute(s -> messages.handle(NOVA, "POST", "read-all", null, Map.of(), Map.of())).body().get("marked"), "the SMS was still unread");
-        assertEquals("validation_failed", tx.execute(s -> messages.handle(NOVA, "GET", null, null, Map.of("channel", "fax"), Map.of())).code());
-        assertEquals("not_found", tx.execute(s -> messages.handle(NOVA, "POST", "not-a-uuid", "read", Map.of(), Map.of())).code());
+        // Marking read: own only, once; someone else's id is not theirs.
+        UUID messageId = novaMail.get(0).id();
+        assertTrue(messages.owns(NOVA.accountId(), messageId));
+        assertEquals(false, messages.owns(PIXEL.accountId(), messageId));
+        assertEquals(false, messages.owns(FINANCE.accountId(), messageId));
+        assertEquals(1, (int) tx.execute(s -> messages.markRead(NOVA.accountId(), messageId)));
+        assertEquals(0, (int) tx.execute(s -> messages.markRead(NOVA.accountId(), messageId)), "a read mark never repeats");
+        assertEquals(0, (int) tx.execute(s -> messages.markRead(PIXEL.accountId(), messageId)), "another person's mark changes nothing");
+        assertEquals(1, (int) tx.execute(s -> messages.markAllRead(NOVA.accountId())), "the SMS was still unread");
+        assertEquals(0, messages.unread(NOVA.accountId()));
     }
 
     @Test

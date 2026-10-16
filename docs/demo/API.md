@@ -1,13 +1,13 @@
 # Demonstration API reference (`/api/demo/**`)
 
-**Status:** demonstration only, deliberately outside the OpenAPI contract (`docs/wp03/bee-local-api.openapi.json`), the contract coverage matrix and the request-log wiring check (BL-220). These routes are owner assumptions for the client demonstration, not BEE rules, and are not meant to survive into the real build unchanged. If any of them is kept, it must first be added to the OpenAPI artifact with tests (BL-229). `scripts/local/demo-api-doc.test.mjs` fails when a module, route action or role set in the Spring code is missing from this file.
+**Status:** demonstration only, deliberately outside the OpenAPI contract (`docs/wp03/bee-local-api.openapi.json`), the contract coverage matrix and the request-log wiring check (BL-220). These routes are owner assumptions for the client demonstration, not BEE rules, and are not meant to survive into the real build unchanged. If any of them is kept, it must first be added to the OpenAPI artifact with tests (BL-229, which promotes the modules one at a time: messages is done). `scripts/local/demo-api-doc.test.mjs` fails when a module, route action or role set in the Spring code is missing from this file.
 
 ## Conventions
 - **Path:** `/api/demo/{module}[/{id}[/{action}]]` on Spring; the browser reaches it as `/api/runtime/demo/...` through one pass-through route (`app/api/runtime/demo/[...path]/route.ts`, GET and POST only; PUT, PATCH, DELETE answer 405).
 - **Who:** only a signed-in person with an effective role gets through (`DemoController`); the module then decides what that person may see or do. Scope comes from the database, never from the request.
 - **Writes** (`POST`) take a JSON body and an `Idempotency-Key` header, run in one transaction with their audit rows, and answer with the new state. Every body of a success carries `"demonstration": true`.
 - **Errors** use the closed list in `ApiErrors`: `role_not_permitted` (403), `not_found` (404, the same for unknown and out-of-scope ids), `validation_failed` (400, with a short `detail`), `version_conflict` (409), `segregation_refused` (403). `detail`, when present, is text meant for the screen.
-- **Seeds** that write audit rows switch the notification triggers off with `SET bee.demo_seeding = 'on'` (V66).
+- **Seeds** that write audit rows switch the message triggers off with `SET bee.demo_seeding = 'on'` (V66).
 
 ## Modules
 
@@ -77,11 +77,5 @@ Run rights per use case are in `AiDemoModule` (`RUN` and `READ_EXTRA`); every ou
 | `GET ai/{run}` | one run with its evidence |
 | `POST ai/{run}/disposition` | record accept, override (own value and reason required) or reject; the model output is never changed |
 
-### `messages` (simulated email and SMS; V66)
-| Route | Who | What |
-|---|---|---|
-| `GET messages` | anyone with an effective role, own messages only | newest first, `channel` email or sms |
-| `POST messages/{id}/read` | the recipient | mark one read, once; another person's id is `not_found` |
-| `POST messages/read-all` | the recipient | mark all of one's own read |
-
-The rows are written by database triggers on `payment_event`, `ledger_event` and `production_event`; nothing is ever sent.
+### `messages` (promoted, no longer part of this family)
+The simulated email and SMS routes were promoted by BL-229 into the documented contract: Spring `GET /api/messages`, `POST /api/messages/{id}/read` and `POST /api/messages/read-all`, and the portal's `/api/runtime/messages` routes, in `docs/wp03/bee-local-api.openapi.json` (0.35.0) with the same evidence as every other operation. They are not under `/api/demo/**` any more.

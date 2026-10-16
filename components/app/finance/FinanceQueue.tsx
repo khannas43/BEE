@@ -82,7 +82,7 @@ export function FinanceQueue({ module, screen }: { module: Module; screen: Scree
             >
               {(r) => (
                 <FakeTable
-                  columns={["Reference", "Organisation", "Brand / Model", "Fee", ""]}
+                  columns={["Reference", "Organisation", "Brand / Model", "Submitted on", "Fee", ""]}
                   rows={r.list.items.map((a) => [
                     <span key="ref" className="font-mono" data-testid={`finance-ref-${a.reference}`}>{a.reference}</span>,
                     a.organisation,
@@ -90,6 +90,7 @@ export function FinanceQueue({ module, screen }: { module: Module; screen: Scree
                       <div className="font-semibold text-on-surface">{a.brandName}</div>
                       <div className="font-label-sm text-label-sm text-on-surface-variant">{a.modelNumber}</div>
                     </div>,
+                    a.submittedAt ? a.submittedAt.slice(0, 10) : "—",
                     a.submissionFee ? `₹${Number(a.submissionFee.totalInr).toLocaleString("en-IN")}` : "—",
                     <Link
                       key="open"

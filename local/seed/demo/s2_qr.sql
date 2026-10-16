@@ -55,3 +55,55 @@ INSERT INTO qr_event (id, batch_id, action, actor_account_id, detail, occurred_a
   ('00000000-0000-4000-c000-0000000009f2', '00000000-0000-4000-c000-0000000009e2', 'created', '00000000-0000-4000-a000-000000000001', 'quantity 50 (seed)', '2026-10-06 10:00+05:30')
 ON CONFLICT (id) DO NOTHING;
 COMMIT;
+
+-- Eight further batches for the production models (created in s4, which runs first). Quantities are partly used, two batches are closed and fully bound,
+-- and a few serials are void. Bound counts sit just above a normal quarter's units, so only the three seeded spikes fail reconciliation.
+BEGIN;
+INSERT INTO qr_batch (id, model_application_id, certificate_id, organisation_id, quantity, status, created_by, created_at) VALUES
+  ('00000000-0000-4000-c000-000000001501', '00000000-0000-4000-c000-000000001101', '00000000-0000-4000-c200-000000001101', '00000000-0000-4000-b000-000000000504', 2000, 'open', '00000000-0000-4000-a000-000000000001', now() - interval '70 days'),
+  ('00000000-0000-4000-c000-000000001502', '00000000-0000-4000-c000-000000001102', '00000000-0000-4000-c200-000000001102', '00000000-0000-4000-b000-000000000504', 2000, 'open', '00000000-0000-4000-a000-000000000001', now() - interval '68 days'),
+  ('00000000-0000-4000-c000-000000001503', '00000000-0000-4000-c000-000000001111', '00000000-0000-4000-c200-000000001111', '00000000-0000-4000-b000-000000000505', 1800, 'open', '00000000-0000-4000-a000-000000000001', now() - interval '66 days'),
+  ('00000000-0000-4000-c000-000000001504', '00000000-0000-4000-c000-000000001112', '00000000-0000-4000-c200-000000001112', '00000000-0000-4000-b000-000000000505', 2400, 'open', '00000000-0000-4000-a000-000000000001', now() - interval '64 days'),
+  ('00000000-0000-4000-c000-000000001505', '00000000-0000-4000-c000-000000001121', '00000000-0000-4000-c200-000000001121', '00000000-0000-4000-b000-000000000506', 1600, 'closed', '00000000-0000-4000-a000-000000000001', now() - interval '62 days'),
+  ('00000000-0000-4000-c000-000000001506', '00000000-0000-4000-c000-000000001122', '00000000-0000-4000-c200-000000001122', '00000000-0000-4000-b000-000000000506', 1600, 'closed', '00000000-0000-4000-a000-000000000001', now() - interval '60 days'),
+  ('00000000-0000-4000-c000-000000001507', '00000000-0000-4000-c000-000000001131', '00000000-0000-4000-c200-000000001131', '00000000-0000-4000-b000-000000000002', 1200, 'open', '00000000-0000-4000-a000-000000000002', now() - interval '58 days'),
+  ('00000000-0000-4000-c000-000000001508', '00000000-0000-4000-c000-000000001132', '00000000-0000-4000-c200-000000001132', '00000000-0000-4000-b000-000000000002', 3200, 'open', '00000000-0000-4000-a000-000000000002', now() - interval '56 days')
+ON CONFLICT (id) DO NOTHING;
+
+-- prefix is 4 Crockford characters; the 6-digit tail makes the 10 characters the serial check requires. 1..1100 bound, 1101..1220 allocated, 1221..1224 void.
+INSERT INTO qr_serial (serial, batch_id, certificate_id, state, allocated_at, bound_at, voided_at, void_reason)
+SELECT 'BEEQ-' || b.prefix || lpad(n::text, 6, '0'), b.batch_id, b.certificate_id,
+       CASE WHEN n <= b.bound_n THEN 'bound' WHEN n <= b.alloc_n THEN 'allocated' ELSE 'void' END,
+       b.at, CASE WHEN n <= b.bound_n THEN b.at + interval '1 hour' END,
+       CASE WHEN n > b.alloc_n THEN b.at + interval '2 hours' END,
+       CASE WHEN n > b.alloc_n THEN 'Label damaged in print (synthetic)' END
+FROM (VALUES
+  ('S2E0'::text, '00000000-0000-4000-c000-000000001501'::uuid, '00000000-0000-4000-c200-000000001101'::uuid, 1100, 1220, 1224, now() - interval '70 days'),
+  ('S2F0', '00000000-0000-4000-c000-000000001502', '00000000-0000-4000-c200-000000001102', 1100, 1220, 1224, now() - interval '68 days'),
+  ('S2G0', '00000000-0000-4000-c000-000000001503', '00000000-0000-4000-c200-000000001111', 1100, 1220, 1220, now() - interval '66 days'),
+  ('S2H0', '00000000-0000-4000-c000-000000001504', '00000000-0000-4000-c200-000000001112', 1100, 1220, 1220, now() - interval '64 days'),
+  ('S2J0', '00000000-0000-4000-c000-000000001505', '00000000-0000-4000-c200-000000001121', 1600, 1600, 1600, now() - interval '62 days'),
+  ('S2K0', '00000000-0000-4000-c000-000000001506', '00000000-0000-4000-c200-000000001122', 1600, 1600, 1600, now() - interval '60 days'),
+  ('S2M0', '00000000-0000-4000-c000-000000001507', '00000000-0000-4000-c200-000000001131', 1100, 1180, 1184, now() - interval '58 days'),
+  ('S2N0', '00000000-0000-4000-c000-000000001508', '00000000-0000-4000-c200-000000001132', 1100, 1220, 1220, now() - interval '56 days')
+) AS b (prefix, batch_id, certificate_id, bound_n, alloc_n, last_n, at)
+JOIN generate_series(1, 1600) AS n ON n <= b.last_n
+ON CONFLICT (serial) DO NOTHING;
+
+INSERT INTO qr_event (id, batch_id, action, actor_account_id, detail, occurred_at)
+SELECT md5('s2b-' || b.id::text || '-' || a.action)::uuid, b.id, a.action,
+       CASE WHEN b.organisation_id = '00000000-0000-4000-b000-000000000002'::uuid THEN '00000000-0000-4000-a000-000000000002'::uuid
+            ELSE '00000000-0000-4000-a000-000000000001'::uuid END,
+       a.detail, b.created_at
+FROM qr_batch b
+JOIN (VALUES ('created', 'seeded batch'), ('allocated', 'seeded allocation'), ('bound', 'seeded binding')) AS a (action, detail) ON true
+WHERE b.id IN (
+  '00000000-0000-4000-c000-000000001501','00000000-0000-4000-c000-000000001502','00000000-0000-4000-c000-000000001503','00000000-0000-4000-c000-000000001504',
+  '00000000-0000-4000-c000-000000001505','00000000-0000-4000-c000-000000001506','00000000-0000-4000-c000-000000001507','00000000-0000-4000-c000-000000001508')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO qr_event (id, batch_id, action, actor_account_id, detail, occurred_at) VALUES
+  (md5('s2b-void-1501')::uuid, '00000000-0000-4000-c000-000000001501', 'voided', '00000000-0000-4000-a000-000000000001', 'four damaged labels (synthetic)', now() - interval '69 days'),
+  (md5('s2b-void-1502')::uuid, '00000000-0000-4000-c000-000000001502', 'voided', '00000000-0000-4000-a000-000000000001', 'four damaged labels (synthetic)', now() - interval '67 days'),
+  (md5('s2b-void-1507')::uuid, '00000000-0000-4000-c000-000000001507', 'voided', '00000000-0000-4000-a000-000000000002', 'four damaged labels (synthetic)', now() - interval '57 days')
+ON CONFLICT (id) DO NOTHING;
+COMMIT;

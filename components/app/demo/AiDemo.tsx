@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Icon } from "@/components/ui/Icon";
 import { demoGet, demoPath, demoPost } from "@/lib/client/runtimeDemo";
 
 /**
@@ -46,17 +47,126 @@ interface Disposition { id: string; actor: string; role: string; decision: strin
 interface AuditRow { action: string; actor: string; role: string; detail: string; at: string }
 interface RunDetail extends RunSummary { output: Record<string, unknown> & { evidence: Evidence[]; summary?: string; note?: string }; dispositions: Disposition[]; audit: AuditRow[] }
 
-const BANNER = "Local demonstration on synthetic/seeded data: advisory only, a person decides";
+/** Business wording for an evidence source. The technical table or column name stays available as the cell's tooltip. */
+const SOURCE_LABELS: [RegExp, string | ((m: RegExpMatchArray) => string)][] = [
+  [/^model_application_return$/, "Application history: returned applications"],
+  [/^model_application_rejection$/, "Application history: rejected applications"],
+  [/^model_application_rating \(declared_iseer, verified_iseer\)$/, "Rating records: declared against verified efficiency"],
+  [/^model_application_fee_confirmation/, "Fee records: payment received to fee confirmed"],
+  [/^model_application_resubmission$/, "Application history: resubmissions"],
+  [/^production_row/, "Quarterly production submissions"],
+  [/^ai_demo_production/, "Sample production data (synthetic)"],
+  [/^ai_demo_entity/, "Sample manufacturer profile (synthetic)"],
+  [/^model_application_rating\.verified_iseer/, "Rating records: verified efficiency (live and sample)"],
+  [/^model_application_rating\.stars/, "Rating records: awarded stars (live and sample)"],
+  [/^ai_kb\.id (\d+)/, (m) => `Helpdesk knowledge base, article ${m[1]}`],
+  [/^report text: laboratory$/, "Test report: laboratory name"],
+  [/^report text: testDate$/, "Test report: test date"],
+  [/^report text: efficiency$/, "Test report: efficiency"],
+  [/^model_application_document_version\.laboratory_name/, "Application: declared laboratory"],
+  [/^model_application\.tested_on$/, "Application: declared test date"],
+  [/^model_application\.declared_iseer$/, "Application: declared efficiency (ISEER)"],
+];
+export function businessSource(source: string): string {
+  for (const [re, label] of SOURCE_LABELS) {
+    const m = source.match(re);
+    if (m) return typeof label === "function" ? label(m) : label;
+  }
+  const plain = source.replace(/\(.*?\)/g, "").replace(/[._]+/g, " ").trim();
+  return plain.charAt(0).toUpperCase() + plain.slice(1);
+}
+/** Notes written by the service mention sample tables by name; show them in business words. */
+const plainNote = (t: string) =>
+  t.replaceAll("ai_demo_entity", "the sample manufacturer profiles").replaceAll("ai_demo_production", "the sample production data").replaceAll("ai_demo_rating", "the sample rating data").replaceAll("ai_kb", "the helpdesk knowledge base");
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 const pct = (c: number) => `${Math.round(c * 100)}%`;
 const cell = "px-space-sm py-1 text-left align-top";
 
-function Box({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
+function Box({ title, children, testId, icon, aside }: { title: string; children: React.ReactNode; testId?: string; icon?: string; aside?: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-outline-variant bg-surface p-space-md" data-testid={testId}>
-      <h3 className="font-title-sm text-title-sm text-on-surface mb-space-sm">{title}</h3>
+      <div className="flex items-center justify-between gap-space-sm mb-space-sm">
+        <h3 className="font-title-sm text-title-sm text-on-surface flex items-center gap-2">
+          {icon ? <Icon name={icon} size={18} className="text-[#254e9e]" /> : null}
+          {title}
+        </h3>
+        {aside}
+      </div>
       {children}
     </section>
+  );
+}
+
+const CASE_META: Record<UseCaseId, { icon: string; blurb: string }> = {
+  "compliance-risk": { icon: "shield_person", blurb: "Which manufacturers to look at first" },
+  "production-anomaly": { icon: "monitoring", blurb: "Unusual production against the QR record" },
+  "rating-trends": { icon: "star_half", blurb: "Star-rating drift and a forecast band" },
+  "helpdesk-assist": { icon: "support_agent", blurb: "Draft answers from the knowledge base" },
+  "document-extraction": { icon: "document_scanner", blurb: "Read test reports, compare to declared" },
+};
+
+const BAND: Record<string, { bar: string; pill: string }> = {
+  high: { bar: "bg-[#ba1a1a]", pill: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]" },
+  medium: { bar: "bg-[#f59e0b]", pill: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]" },
+  low: { bar: "bg-[#1c7c4a]", pill: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]" },
+};
+
+function Chip({ children, tone = "bg-[#e7effb] text-[#14315E] border-[#c9d9f7]" }: { children: React.ReactNode; tone?: string }) {
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[12px] font-semibold leading-4 ${tone}`}>{children}</span>;
+}
+
+/** Confidence as a labelled meter: the number is what the model reports, the colour only helps reading it. */
+function Meter({ value, label }: { value: number; label?: string }) {
+  const v = Math.max(0, Math.min(1, value));
+  const tone = v >= 0.75 ? "bg-[#1c7c4a]" : v >= 0.45 ? "bg-[#f59e0b]" : "bg-[#ba1a1a]";
+  return (
+    <div className="min-w-[120px]">
+      <div className="h-2 rounded-full bg-[#e7edf6] overflow-hidden"><div className={`h-full rounded-full ${tone}`} style={{ width: `${Math.round(v * 100)}%` }} /></div>
+      {label ? <div className="mt-1 text-[11px] text-[#64748b]">{label}</div> : null}
+    </div>
+  );
+}
+
+/** A tiny bar chart: one bar per value; flagged positions are red. Accessible text is given by the caller's label. */
+function MiniBars({ values, labels, flagged = [], height = 56 }: { values: number[]; labels: string[]; flagged?: number[]; height?: number }) {
+  const max = Math.max(1, ...values);
+  return (
+    <div className="flex items-end gap-2" style={{ height: height + 22 }}>
+      {values.map((v, i) => (
+        <div key={i} className="flex flex-col items-center justify-end gap-1" style={{ height: height + 22 }}>
+          <span className="text-[10px] text-[#64748b]">{v}</span>
+          <div className={`w-7 rounded-t ${flagged.includes(i) ? "bg-[#ba1a1a]" : "bg-[#254e9e]"}`} style={{ height: Math.max(3, (v / max) * height) }} title={`${labels[i]}: ${v}`} />
+          <span className="text-[10px] text-[#64748b]">{labels[i]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Line of monthly means with an optional forecast point and 95 percent band. */
+function TrendLine({ points, forecast }: { points: { label: string; v: number }[]; forecast: { v: number; low: number; high: number } | null }) {
+  const W = 420, H = 110, pad = 18;
+  const vals = points.map((p) => p.v).concat(forecast ? [forecast.low, forecast.high] : []);
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const n = points.length + (forecast ? 1 : 0);
+  const x = (i: number) => pad + (i * (W - 2 * pad)) / Math.max(1, n - 1);
+  const y = (v: number) => H - pad - ((v - lo) / span) * (H - 2 * pad);
+  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+  const fi = points.length;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[460px]" role="img" aria-label="Monthly mean rating with forecast">
+      {forecast ? <rect x={x(fi) - 8} y={y(forecast.high)} width={16} height={Math.max(2, y(forecast.low) - y(forecast.high))} rx={4} fill="#c9d9f7" /> : null}
+      <path d={path} fill="none" stroke="#254e9e" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+      {points.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.v)} r={3} fill="#254e9e"><title>{`${p.label}: ${p.v}`}</title></circle>)}
+      {forecast ? (
+        <>
+          <line x1={x(fi - 1)} y1={y(points[points.length - 1].v)} x2={x(fi)} y2={y(forecast.v)} stroke="#4ec4ef" strokeWidth={2} strokeDasharray="4 3" />
+          <circle cx={x(fi)} cy={y(forecast.v)} r={4} fill="#4ec4ef"><title>{`Forecast: ${forecast.v}`}</title></circle>
+        </>
+      ) : null}
+      <text x={pad} y={H - 3} fontSize={9} fill="#64748b">{points[0]?.label}</text>
+      <text x={W - pad} y={H - 3} fontSize={9} fill="#64748b" textAnchor="end">{forecast ? "forecast" : points[points.length - 1]?.label}</text>
+    </svg>
   );
 }
 
@@ -81,15 +191,13 @@ export function AiDemo() {
 
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-ai">
-      <div role="note" className="rounded-xl border border-solar-gold/40 bg-solar-gold-light/60 p-space-sm font-body-sm text-on-surface" data-testid="ai-banner">
-        <strong>{BANNER}.</strong> Advisory: a person decides. Nothing here changes an application, certificate, fee or any decision record.
-      </div>
-      <h1 className="font-headline-md text-headline-md text-on-surface">AI use cases</h1>
+      <h1>AI use cases</h1>
+      <p className="ai-lead">Five transparent models read the live portal data. Each run keeps its evidence, model version and data version, and a person records the decision.</p>
       {denied ? <p role="alert" className="text-error" data-testid="ai-error">{denied}</p> : null}
       {models === null && !denied ? <p role="status">Loading models…</p> : null}
       {models ? (
         <>
-          <div role="tablist" aria-label="AI use cases" className="flex flex-wrap gap-space-xs border-b border-outline-variant">
+          <div role="tablist" aria-label="AI use cases" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {USE_CASES.map((u) => (
               <button
                 key={u.id}
@@ -98,10 +206,12 @@ export function AiDemo() {
                 aria-selected={tab === u.id}
                 aria-controls="ai-panel"
                 onClick={() => setTab(u.id)}
-                className={`px-space-md py-space-xs font-label-md ${tab === u.id ? "border-b-2 border-primary text-primary" : "text-on-surface-variant"}`}
+                className="ai-tile"
                 data-testid={`ai-tab-${u.id}`}
               >
-                {u.label}
+                <Icon name={CASE_META[u.id].icon} size={22} />
+                <span className="ai-tile-title">{u.label}</span>
+                <span className="ai-tile-blurb">{CASE_META[u.id].blurb}</span>
               </button>
             ))}
           </div>
@@ -117,14 +227,12 @@ export function AiDemo() {
 function ModelCardBox({ model }: { model: ModelCard }) {
   const rules = model.kind === "rules" || model.kind === "statistical" || model.kind === "retrieval" || model.kind === "extraction";
   return (
-    <Box title="Model card" testId="ai-model-card">
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-space-lg gap-y-space-xs font-body-sm">
-        <div><dt className="text-on-surface-variant">Model</dt><dd>{model.name} ({model.id}@{model.version})</dd></div>
-        <div><dt className="text-on-surface-variant">Kind</dt><dd>{model.kind}{rules ? " (rules or statistics, not machine learning)" : ""}</dd></div>
-        <div className="sm:col-span-2"><dt className="text-on-surface-variant">What it does</dt><dd>{model.description}</dd></div>
-        <div className="sm:col-span-2"><dt className="text-on-surface-variant">Limitations</dt><dd>{model.limitations}</dd></div>
-        <div className="sm:col-span-2"><dt className="text-on-surface-variant">Trained on</dt><dd>{model.trainedOn}</dd></div>
-      </dl>
+    <Box title="Model card" icon="neurology" testId="ai-model-card" aside={<div className="flex flex-wrap gap-2"><Chip>{model.kind}{rules ? " · not machine learning" : ""}</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{model.id}@{model.version}</Chip></div>}>
+      <p className="text-[14px] leading-6 text-[#181c20]"><span className="sr-only">Model {model.name} ({model.id}@{model.version}). Kind {model.kind}{rules ? " (rules or statistics, not machine learning)" : ""}. </span><strong className="text-[#14315E]">{model.name}.</strong> {model.description}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-[#f3dc9c] bg-[#fffaf0] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#8a4b00] mb-1">Limitations</div><div className="text-[13px] leading-5">{model.limitations}</div></div>
+        <div className="rounded-lg border border-[#c9d9f7] bg-[#f4f8ff] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#14315E] mb-1">Trained on</div><div className="text-[13px] leading-5">{model.trainedOn}</div></div>
+      </div>
     </Box>
   );
 }
@@ -172,7 +280,7 @@ function UseCasePanel({ model }: { model: ModelCard }) {
   return (
     <div className="space-y-space-md mt-space-md" data-testid={`ai-panel-${uc}`}>
       <ModelCardBox model={model} />
-      <Box title="Run">
+      <Box title="Run" icon="play_circle" aside={!model.canRun ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">Read only for your role</Chip> : undefined}>
         <div className="flex flex-wrap items-end gap-space-sm">
           {uc === "helpdesk-assist" ? (
             <label className="flex-1 min-w-64 font-label-md">Question
@@ -189,21 +297,24 @@ function UseCasePanel({ model }: { model: ModelCard }) {
               <input className="mt-1 block rounded-lg border border-outline-variant p-space-xs" value={category} onChange={(e) => setCategory(e.target.value)} data-testid="ai-input" />
             </label>
           ) : null}
-          <button className="rounded-lg bg-primary px-space-md py-space-xs text-on-primary disabled:opacity-50" disabled={!model.canRun || busy} onClick={run} data-testid="ai-run">
-            {busy ? "Running…" : "Run"}
+          <button className="ai-run bg-primary text-on-primary" disabled={!model.canRun || busy} onClick={run} data-testid="ai-run">
+            <Icon name={busy ? "hourglass_top" : "play_arrow"} size={18} /> {busy ? "Running…" : "Run"}
           </button>
           {!model.canRun ? <span className="font-body-sm text-on-surface-variant">Your role can read this area but not run it.</span> : null}
         </div>
         {error ? <p role="alert" className="mt-space-sm text-error" data-testid="ai-error">{error}</p> : null}
       </Box>
-      <Box title="History (stored, survives reload)" testId="ai-history">
+      <Box title="History (stored, survives reload)" icon="history" testId="ai-history">
         {runs === null ? <p role="status">Loading…</p> : runs.length === 0 ? <p className="font-body-sm">No runs yet.</p> : (
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {runs.map((r) => (
               <li key={r.id}>
-                <button className={`w-full text-left rounded-lg px-space-sm py-1 hover:bg-surface-container ${selected?.id === r.id ? "bg-surface-container" : ""}`} onClick={() => open(r.id)} data-testid="ai-history-item">
-                  {when(r.createdAt)} · {r.createdBy} · confidence {pct(r.confidence)} · data {r.dataVersion}
-                  {r.inputRef ? ` · ${r.inputRef}` : ""} · {r.dispositionCount === 0 ? "no disposition yet" : `latest: ${r.latestDecision}`}
+                <button className={`ai-history-row ${selected?.id === r.id ? "is-selected" : ""}`} onClick={() => open(r.id)} data-testid="ai-history-item">
+                  <span className="font-semibold text-[#14315E]">{when(r.createdAt)}</span>
+                  <span className="text-[#475569]">{r.createdBy}</span>
+                  <span className="text-[#475569]">confidence {pct(r.confidence)}</span>
+                  <span className="text-[#64748b]">data {r.dataVersion}{r.inputRef ? ` · ${r.inputRef}` : ""}</span>
+                  <span className="ml-auto">{r.dispositionCount === 0 ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">no disposition yet</Chip> : <Chip tone={r.latestDecision === "reject" ? "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]" : r.latestDecision === "override" ? "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]" : "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]"}>latest: {r.latestDecision}</Chip>}</span>
                 </button>
               </li>
             ))}
@@ -219,21 +330,26 @@ function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; 
   const out = run.output;
   return (
     <div className="space-y-space-md" data-testid="ai-run-view">
-      <Box title="Result" testId="ai-result">
-        <p role="status" className="font-body-md" data-testid="ai-summary">{String(out.summary ?? "")}</p>
-        <p className="mt-space-xs font-body-sm text-on-surface-variant">
-          Confidence <strong data-testid="ai-confidence">{pct(run.confidence)}</strong> · model {run.modelVersion} · data version <code data-testid="ai-data-version">{run.dataVersion}</code> · run {when(run.createdAt)} by {run.createdBy}
-        </p>
+      <Box title="Result" icon="insights" testId="ai-result" aside={<Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">run {when(run.createdAt)} by {run.createdBy}</Chip>}>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl bg-[#f4f8ff] border border-[#dbe6f7] p-4">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748b]">Confidence</div>
+            <div className="text-[34px] leading-9 font-extrabold text-[#14315E]" data-testid="ai-confidence">{pct(run.confidence)}</div>
+          </div>
+          <div className="w-40"><Meter value={run.confidence} /></div>
+          <div className="text-[12px] text-[#475569] leading-5">model {run.modelVersion}<br />data version <code data-testid="ai-data-version">{run.dataVersion}</code></div>
+        </div>
+        <p role="status" className="ai-summary mt-3" data-testid="ai-summary">{String(out.summary ?? "")}</p>
         <Output run={run} />
-        {out.note ? <p className="mt-space-sm font-body-sm text-on-surface-variant">{String(out.note)}</p> : null}
+        {out.note ? <p className="mt-space-sm font-body-sm text-on-surface-variant">{plainNote(String(out.note))}</p> : null}
       </Box>
-      <Box title="Evidence" testId="ai-evidence">
+      <Box title="Evidence" icon="fact_check" testId="ai-evidence">
         <table className="w-full font-body-sm">
           <thead><tr><th className={cell}>Source</th><th className={cell}>Field</th><th className={cell}>Value</th></tr></thead>
           <tbody>
             {out.evidence.map((e, i) => (
               <tr key={i} className="border-t border-outline-variant">
-                <td className={cell}>{e.source}</td><td className={cell}>{e.field}</td>
+                <td className={cell} title={`Technical source: ${e.source}`}>{businessSource(e.source)}</td><td className={cell}>{e.field}</td>
                 <td className={cell}>{typeof e.value === "object" ? JSON.stringify(e.value) : String(e.value)}{e.rows ? ` (${e.rows})` : ""}</td>
               </tr>
             ))}
@@ -241,10 +357,10 @@ function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; 
         </table>
       </Box>
       <DispositionPanel run={run} canRun={canRun} onChanged={onChanged} />
-      <Box title="Audit" testId="ai-audit">
-        <ul className="font-body-sm space-y-1">
-          {run.audit.map((a, i) => <li key={i}>{when(a.at)} · {a.actor} ({a.role}) · {a.detail}</li>)}
-        </ul>
+      <Box title="Audit" icon="receipt_long" testId="ai-audit">
+        <ol className="ai-timeline font-body-sm">
+          {run.audit.map((a, i) => <li key={i}><span className="font-semibold text-[#14315E]">{when(a.at)}</span> · {a.actor} ({a.role}) · {a.detail}</li>)}
+        </ol>
       </Box>
     </div>
   );
@@ -275,12 +391,12 @@ function DispositionPanel({ run, canRun, onChanged }: { run: RunDetail; canRun: 
   }
 
   return (
-    <Box title="Human disposition (advisory: a person decides)" testId="ai-disposition">
+    <Box title="Human disposition (advisory: a person decides)" icon="how_to_reg" testId="ai-disposition">
       {run.dispositions.length > 0 ? (
         <ul className="mb-space-sm space-y-1 font-body-sm" data-testid="ai-dispositions">
           {run.dispositions.map((d) => (
-            <li key={d.id}>
-              {when(d.at)} · <strong>{d.actor}</strong> ({d.role}): {d.decision}
+            <li key={d.id} className="rounded-lg border border-[#e2e8f0] bg-[#f8faff] px-3 py-2">
+              {when(d.at)} · <strong>{d.actor}</strong> ({d.role}): <Chip tone={d.decision === "reject" ? "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]" : d.decision === "override" ? "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]" : "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]"}>{d.decision}</Chip>
               {d.reason ? ` · reason: ${d.reason}` : ""}
               {d.overrideValue ? ` · human value: "${d.overrideValue}"` : ""}
               {d.fieldDecisions ? ` · fields: ${Object.entries(d.fieldDecisions).map(([k, v]) => `${k} ${v}`).join(", ")}` : ""}
@@ -305,13 +421,16 @@ function DispositionPanel({ run, canRun, onChanged }: { run: RunDetail; canRun: 
               ))}
             </fieldset>
           ) : null}
-          <fieldset className="flex gap-space-md font-body-sm">
-            <legend className="font-label-md">Decision</legend>
-            {(["accept", "override", "reject"] as const).map((d) => (
-              <label key={d} className="flex items-center gap-1">
-                <input type="radio" name={`decision-${run.id}`} checked={decision === d} onChange={() => setDecision(d)} data-testid={`ai-decision-${d}`} /> {d}
-              </label>
-            ))}
+          <fieldset className="font-body-sm">
+            <legend className="font-label-md mb-1">Decision</legend>
+            <div className="ai-segment">
+              {(["accept", "override", "reject"] as const).map((d) => (
+                <label key={d} className={decision === d ? "is-on" : ""} data-decision={d}>
+                  <input type="radio" className="sr-only" name={`decision-${run.id}`} checked={decision === d} onChange={() => setDecision(d)} data-testid={`ai-decision-${d}`} />
+                  <Icon name={d === "accept" ? "check_circle" : d === "override" ? "edit" : "cancel"} size={18} /> {d}
+                </label>
+              ))}
+            </div>
           </fieldset>
           {decision === "override" ? (
             <label className="block font-label-md">{run.useCase === "helpdesk-assist" ? "Your reply" : "Your value"}
@@ -321,7 +440,7 @@ function DispositionPanel({ run, canRun, onChanged }: { run: RunDetail; canRun: 
           <label className="block font-label-md">Reason {decision === "accept" ? "(optional)" : "(required)"}
             <textarea className="mt-1 w-full rounded-lg border border-outline-variant p-space-xs" rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} data-testid="ai-reason" />
           </label>
-          <button className="rounded-lg bg-primary px-space-md py-space-xs text-on-primary" onClick={submit} data-testid="ai-submit-disposition">Record disposition</button>
+          <button className="ai-run bg-primary text-on-primary" onClick={submit} data-testid="ai-submit-disposition"><Icon name="task_alt" size={18} /> Record disposition</button>
           {error ? <p role="alert" className="text-error" data-testid="ai-disposition-error">{error}</p> : null}
           {done ? <p role="status" data-testid="ai-disposition-done">{done}</p> : null}
         </div>
@@ -345,85 +464,125 @@ function Output({ run }: { run: RunDetail }) {
   if (run.useCase === "compliance-risk") {
     const ents = (o.entities as RiskEntity[]) ?? [];
     return (
-      <div className="mt-space-sm overflow-x-auto" data-testid="ai-output-risk">
-        <table className="w-full font-body-sm">
-          <thead><tr><th className={cell}>Organisation / model</th><th className={cell}>Score</th><th className={cell}>Band</th><th className={cell}>Contributions (weight)</th></tr></thead>
-          <tbody>
-            {ents.map((e) => (
-              <tr key={e.key} className="border-t border-outline-variant">
-                <td className={cell}>{e.name}{e.synthetic ? " [synthetic]" : ""}</td>
-                <td className={cell}>{e.score}</td><td className={cell}>{e.band}</td>
-                <td className={cell}>{e.features.filter((f) => f.contribution > 0).map((f) => `${f.feature}: ${f.value} → ${f.contribution}/${f.weight}`).join("; ") || "none"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mt-4 space-y-2.5" data-testid="ai-output-risk">
+        {ents.map((e, i) => {
+          const band = BAND[e.band] ?? BAND.low;
+          const top = e.features.filter((f) => f.contribution > 0).sort((x, y) => y.contribution - x.contribution);
+          return (
+            <details key={e.key} className="ai-entity" open={i < 3}>
+              <summary>
+                <span className="ai-rank">{i + 1}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block font-semibold text-[#14315E] truncate">{e.name}{e.synthetic ? " [synthetic]" : ""}</span>
+                  <span className="mt-1 block h-2 rounded-full bg-[#e7edf6] overflow-hidden"><span className={`block h-full rounded-full ${band.bar}`} style={{ width: `${Math.min(100, e.score)}%` }} /></span>
+                </span>
+                <span className="w-14 text-right text-[20px] font-extrabold text-[#14315E]">{e.score}</span>
+                <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${band.pill}`}>{e.band}</span>
+              </summary>
+              <div className="pt-2 pl-10 flex flex-wrap gap-1.5">
+                {top.length ? top.map((f) => <Chip key={f.feature}>{f.feature}: {f.value} → {f.contribution}/{f.weight}</Chip>) : <span className="text-[13px] text-[#64748b]">No contributing factors.</span>}
+              </div>
+            </details>
+          );
+        })}
       </div>
     );
   }
   if (run.useCase === "production-anomaly") {
     const series = (o.series as SeriesRow[]) ?? [];
     return (
-      <div className="mt-space-sm space-y-space-sm" data-testid="ai-output-anomaly">
-        {o.synthetic ? <p className="font-body-sm font-semibold">Synthetic production rows are shown (ai_demo_production): the live production table is absent or empty.</p> : null}
-        {series.map((s) => (
-          <div key={s.series} className="rounded-lg border border-outline-variant p-space-sm font-body-sm">
-            <p><strong>{s.series}</strong> · {s.status}{s.boundSerials !== null ? ` · ${s.boundSerials} serials bound` : ""}</p>
-            <p>{s.quarters.map((q) => `${q.quarter}: ${q.units} (z ${q.zVsOthers})`).join(" · ")}</p>
-            {s.flags.map((f, i) => <p key={i} className="text-error">Flag {f.type} ({f.quarter}): {f.detail}</p>)}
-          </div>
-        ))}
+      <div className="mt-4 space-y-3" data-testid="ai-output-anomaly">
+        {o.synthetic ? <p className="font-body-sm font-semibold">Sample production data is shown because there are no live production submissions yet.</p> : null}
+        <div className="grid gap-3 lg:grid-cols-2">
+          {series.map((s) => {
+            const flaggedIdx = s.quarters.map((q, i) => (s.flags.some((f) => f.quarter === q.quarter) ? i : -1)).filter((i) => i >= 0);
+            return (
+              <div key={s.series} className={`rounded-xl border p-3 ${s.flags.length ? "border-[#f5c2c0] bg-[#fffafa]" : "border-[#e2e8f0] bg-white"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-[#14315E]">{s.series}</span>
+                  <span className="flex gap-1.5">{s.boundSerials !== null ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{s.boundSerials} serials bound</Chip> : null}<Chip tone={s.flags.length ? BAND.high.pill : BAND.low.pill}>{s.status}</Chip></span>
+                </div>
+                <div className="mt-2"><MiniBars values={s.quarters.map((q) => q.units)} labels={s.quarters.map((q) => q.quarter)} flagged={flaggedIdx} /></div>
+                <div className="mt-1 text-[11px] text-[#64748b]">{s.quarters.map((q) => `${q.quarter}: z ${q.zVsOthers}`).join(" · ")}</div>
+                {s.flags.map((f, i) => <p key={i} className="mt-2 flex gap-1.5 text-[13px] text-[#93000a]"><Icon name="flag" size={16} /> Flag {f.type} ({f.quarter}): {f.detail}</p>)}
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }
   if (run.useCase === "rating-trends") {
     const cats = (o.categories as TrendCat[]) ?? [];
     return (
-      <div className="mt-space-sm space-y-space-sm" data-testid="ai-output-trends">
-        <p className="font-body-sm">{String(o.realRatings)} real and {String(o.syntheticRatings)} synthetic ratings.</p>
-        {cats.map((c) => {
-          const max = Math.max(1, ...c.starDistribution);
-          return (
-            <div key={c.category} className="rounded-lg border border-outline-variant p-space-sm font-body-sm">
-              <p><strong>{c.category}</strong> · {c.ratings} ratings · slope {c.slopePerMonth} per month · R² {c.rSquared}</p>
-              <div className="flex items-end gap-1 h-12 my-1" aria-label={`Star distribution for ${c.category}`}>
-                {c.starDistribution.map((n, i) => (
-                  <div key={i} className="flex flex-col items-center"><div className="w-6 bg-primary" style={{ height: `${Math.max(2, (n / max) * 40)}px` }} /><span>{i + 1}★ {n}</span></div>
-                ))}
-              </div>
-              <p>{c.months.map((m) => `${m.month}: ${m.meanIseer}`).join(" · ")}</p>
-              {c.forecast ? <p>Next month: {c.forecast.nextMonthMeanIseer} (95% band {c.forecast.low95} to {c.forecast.high95})</p> : <p>Too few months for a forecast band.</p>}
+      <div className="mt-4 space-y-3" data-testid="ai-output-trends">
+        <div className="flex gap-2"><Chip>{String(o.realRatings)} real ratings</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{String(o.syntheticRatings)} synthetic</Chip></div>
+        {cats.map((c) => (
+          <div key={c.category} className="rounded-xl border border-[#e2e8f0] bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold text-[#14315E]">{c.category}</span>
+              <span className="flex flex-wrap gap-1.5"><Chip>{c.ratings} ratings</Chip><Chip tone={c.slopePerMonth >= 0 ? BAND.low.pill : BAND.high.pill}>slope {c.slopePerMonth} per month</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">R² {c.rSquared}</Chip></span>
             </div>
-          );
-        })}
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1">Star distribution</div>
+                <div aria-label={`Star distribution for ${c.category}`}><MiniBars values={c.starDistribution} labels={c.starDistribution.map((_, i) => `${i + 1}★`)} /></div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1">Monthly mean rating</div>
+                <TrendLine points={c.months.map((m) => ({ label: m.month, v: m.meanIseer }))} forecast={c.forecast ? { v: c.forecast.nextMonthMeanIseer, low: c.forecast.low95, high: c.forecast.high95 } : null} />
+              </div>
+            </div>
+            <p className="mt-2 text-[13px] text-[#475569]">{c.forecast ? <>Next month: <strong className="text-[#14315E]">{c.forecast.nextMonthMeanIseer}</strong> (95% band {c.forecast.low95} to {c.forecast.high95})</> : "Too few months for a forecast band."} <span className="sr-only">{c.months.map((m) => `${m.month}: ${m.meanIseer}`).join(" · ")}</span></p>
+          </div>
+        ))}
       </div>
     );
   }
   if (run.useCase === "helpdesk-assist") {
     const top = (o.topAnswers as Answer[]) ?? [];
+    const best = Math.max(0.0001, ...top.map((a) => a.score));
     return (
-      <div className="mt-space-sm space-y-space-sm font-body-sm" data-testid="ai-output-helpdesk">
-        <p>Suggested category: <strong>{String(o.suggestedCategory)}</strong>{o.escalateToHuman ? " · ESCALATE TO A PERSON (confidence under the threshold)" : ""}</p>
-        <ol className="list-decimal pl-space-md">
-          {top.map((a) => <li key={a.articleId}>{a.title} <span className="text-on-surface-variant">({a.category}, score {a.score})</span></li>)}
+      <div className="mt-4 space-y-3 font-body-sm" data-testid="ai-output-helpdesk">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] text-[#64748b]">Suggested category</span>
+          <Chip>{String(o.suggestedCategory)}</Chip>
+          {o.escalateToHuman ? <Chip tone={BAND.high.pill}><Icon name="support_agent" size={14} /> ESCALATE TO A PERSON (confidence under the threshold)</Chip> : null}
+        </div>
+        <ol className="space-y-2">
+          {top.map((a, i) => (
+            <li key={a.articleId} className="flex items-center gap-3 rounded-lg border border-[#e2e8f0] bg-white px-3 py-2">
+              <span className="ai-rank">{i + 1}</span>
+              <span className="flex-1 min-w-0"><span className="block font-semibold text-[#14315E]">{a.title}</span><span className="text-[12px] text-[#64748b]">{a.category}, score {a.score}</span></span>
+              <div className="w-28"><Meter value={a.score / best} /></div>
+            </li>
+          ))}
         </ol>
-        <p className="rounded-lg bg-surface-container p-space-sm whitespace-pre-wrap" data-testid="ai-draft">Draft reply (not sent): {String(o.draftReply)}</p>
+        <div className="rounded-2xl rounded-tl-sm border border-[#c9d9f7] bg-[#f4f8ff] p-4 whitespace-pre-wrap leading-6" data-testid="ai-draft">
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#254e9e]"><Icon name="mark_email_unread" size={14} /> Draft reply (not sent)</div>
+          {String(o.draftReply)}
+        </div>
       </div>
     );
   }
   const fields = (o.fields as ExField[]) ?? [];
   return (
-    <div className="mt-space-sm font-body-sm" data-testid="ai-output-extraction">
-      <p>Application {String(o.applicationReference)} · text from: {String(o.textSource)}</p>
+    <div className="mt-4 font-body-sm" data-testid="ai-output-extraction">
+      <div className="mb-2 flex flex-wrap gap-2"><Chip>Application {String(o.applicationReference)}</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">text from: {String(o.textSource)}</Chip></div>
       <table className="w-full">
         <thead><tr><th className={cell}>Field</th><th className={cell}>Extracted</th><th className={cell}>Declared</th><th className={cell}>Status</th><th className={cell}>Confidence</th></tr></thead>
         <tbody>
-          {fields.map((f) => (
-            <tr key={f.field} className="border-t border-outline-variant">
-              <td className={cell}>{f.field}</td><td className={cell}>{f.extracted ?? "not found"}</td><td className={cell}>{f.declared ?? "not declared"}</td>
-              <td className={cell}>{f.status.replaceAll("_", " ")}</td><td className={cell}>{pct(f.confidence)}</td>
-            </tr>
-          ))}
+          {fields.map((f) => {
+            const st = f.status.replaceAll("_", " ");
+            const tone = /match|agree|same/i.test(st) && !/not|differ|mismatch/i.test(st) ? BAND.low.pill : /differ|mismatch|conflict/i.test(st) ? BAND.high.pill : "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]";
+            return (
+              <tr key={f.field} className="border-t border-outline-variant">
+                <td className={cell}><strong>{f.field}</strong></td><td className={cell}>{f.extracted ?? "not found"}</td><td className={cell}>{f.declared ?? "not declared"}</td>
+                <td className={cell}><span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${tone}`}>{st}</span></td>
+                <td className={cell}><Meter value={f.confidence} label={pct(f.confidence)} /></td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

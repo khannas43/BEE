@@ -27,7 +27,6 @@ describe("MisDemo", () => {
     expect(screen.getByTestId("mis-asof").textContent).toContain("abc123def456");
     expect(screen.getByTestId("mis-table-by_state").textContent).toContain("approved");
     expect(screen.getByTestId("mis-unavailable").textContent).toContain("not available yet");
-    expect(screen.getByTestId("mis-note").textContent).toContain("not a BEE report");
   });
 
   it("shows a refusal as an alert", async () => {

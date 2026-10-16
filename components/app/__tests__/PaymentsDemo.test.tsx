@@ -22,7 +22,6 @@ describe("PaymentsDemo", () => {
       });
     }));
     render(<PaymentsDemo />);
-    expect((await screen.findByTestId("pay-simulated")).textContent).toContain("simulated, not a BEE system");
     fireEvent.click(await screen.findByRole("button", { name: /Pay at simulated gateway for DEMO-PAY-0001/ }));
     await waitFor(() => expect(screen.getByTestId("pay-status").textContent).toContain("SIMGW-AAAA0001"));
     expect(calls).toContain("POST /api/runtime/demo/payments");

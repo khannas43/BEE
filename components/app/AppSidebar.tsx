@@ -1,10 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { Emblem } from "@/components/chrome/Emblem";
 import { categoriesForRole, categoryForPath } from "@/lib/categories";
 import { useRole } from "./RoleContext";
 import { useSpringIdentity } from "./SessionBadge";
@@ -23,25 +23,34 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const activeCat = categoryForPath(pathname)?.id ?? categories[0]?.id ?? null;
   // The category the current route belongs to opens by itself; a manual toggle is kept until the route moves to another category.
   const [toggle, setToggle] = useState<{ cat: string | null; open: string | null } | null>(null);
+  const [recordsOpen, setRecordsOpen] = useState(true);
   const open = toggle?.cat === activeCat ? toggle.open : activeCat;
   const setOpen = (next: string | null) => setToggle({ cat: activeCat, open: next });
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light">
-      <Link href="/app" className="flex items-center gap-space-sm px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate}>
-        <Emblem size={34} invert />
-        <div className="leading-tight">
-          <div className="font-title-lg text-title-lg text-on-primary">BEE S&L</div>
-          <div className="font-label-sm text-label-sm text-forest-light/70">{t("app.officerConsole")}</div>
-        </div>
+      <Link href="/app" className="flex flex-col items-center justify-center gap-0.5 px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={`BEE S&L ${t("app.officerConsole")}`}>
+        <span className="flex items-center justify-center bg-white rounded-md px-3 h-[36px]">
+          <Image src="/images/bee-logo.png" alt="Bureau of Energy Efficiency" width={1260} height={308} priority className="h-[28px] w-auto object-contain" />
+        </span>
+        <span className="font-label-sm text-label-sm uppercase tracking-[0.18em] text-forest-light/80 leading-[12px]">{t("app.officerConsole")}</span>
       </Link>
 
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">
         {runtimeNav.length > 0 && (
           <div className="pb-space-sm mb-space-sm border-b border-white/10" data-testid="runtime-nav">
-            <div className="px-space-md py-1 font-label-sm text-label-sm uppercase tracking-wide text-forest-light/60">Your BEE records</div>
-            {runtimeNav.map((r) => (
-              <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} />
+            <button
+              type="button"
+              onClick={() => setRecordsOpen((v) => !v)}
+              aria-expanded={recordsOpen}
+              className="w-full flex items-center gap-space-sm px-space-md py-2 text-left text-forest-light hover:text-on-primary transition-colors"
+            >
+              <Icon name="folder_open" size={20} />
+              <span className="flex-1 font-label-lg text-label-lg">Your BEE records</span>
+              <Icon name={recordsOpen ? "expand_less" : "expand_more"} size={18} />
+            </button>
+            {recordsOpen && runtimeNav.map((r) => (
+              <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} compact />
             ))}
           </div>
         )}
@@ -104,10 +113,25 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarLink({
-  href, icon, label, active, onNavigate, testId,
+  href, icon, label, active, onNavigate, testId, compact,
 }: {
-  href: string; icon: string; label: string; active: boolean; onNavigate?: () => void; testId?: string;
+  href: string; icon: string; label: string; active: boolean; onNavigate?: () => void; testId?: string; compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <Link
+        href={href}
+        onClick={onNavigate}
+        data-testid={testId}
+        className={`flex items-center gap-space-sm pl-[30px] pr-space-md py-1.5 font-body-sm text-body-sm transition-colors ${
+          active ? "bg-primary-container text-on-primary font-semibold" : "text-forest-light/80 hover:text-on-primary hover:bg-white/5"
+        }`}
+      >
+        <Icon name={icon} size={16} className={active ? "text-solar-gold" : "text-forest-light/40"} fill={active} />
+        <span className="flex-1">{label}</span>
+      </Link>
+    );
+  }
   return (
     <Link
       href={href}

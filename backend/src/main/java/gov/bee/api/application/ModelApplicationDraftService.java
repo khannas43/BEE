@@ -353,6 +353,9 @@ public class ModelApplicationDraftService {
         if (r.declaredIseer() != null) {
             m.put("declaredIseer", r.declaredIseer());
         }
+        if (r.submittedAt() != null) {
+            m.put("submittedAt", r.submittedAt().toString());
+        }
         return m;
     }
 

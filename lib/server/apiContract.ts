@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.33.0";
+export const CONTRACT_VERSION = "0.34.0";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -207,6 +207,8 @@ export interface ModelApplication {
   principalOrganisation?: string;
   laboratoryCode?: string;
   testedOn?: string;
+  /** When the application was first submitted (UTC); absent for a draft. */
+  submittedAt?: string;
   declaredIseer?: number;
   submissionFee?: SubmissionFee;
   rating?: ApplicationRating;
@@ -334,7 +336,7 @@ export const validateApplicationCertificate: Validator<ApplicationCertificate> =
 };
 
 export const MODEL_APPLICATION_KEYS = ["id", "reference", "organisation", "brandName", "category", "modelNumber", "state", "version", "readBasis"] as const;
-export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submissionFee", "rating", "returnNote", "rejection", "certificate"] as const;
+export const MODEL_APPLICATION_OPTIONAL = ["brandId", "principalOrganisation", "laboratoryCode", "testedOn", "declaredIseer", "submittedAt", "submissionFee", "rating", "returnNote", "rejection", "certificate"] as const;
 export const MODEL_APPLICATION_LIST_KEYS = ["items", "count", "authority"] as const;
 const READ_BASIS = /^(own-org|assigned|stage:[a-z_]+)$/;
 const LABORATORY_CODE = /^[A-Z0-9_-]{1,32}$/;
@@ -352,6 +354,7 @@ export const validateModelApplication: Validator<ModelApplication> = (body) => {
     (b.principalOrganisation === undefined || isString(b.principalOrganisation)) &&
     (b.laboratoryCode === undefined || (isString(b.laboratoryCode) && LABORATORY_CODE.test(b.laboratoryCode))) &&
     (b.testedOn === undefined || (isString(b.testedOn) && ISO_DATE.test(b.testedOn))) &&
+    (b.submittedAt === undefined || (isString(b.submittedAt) && !Number.isNaN(Date.parse(b.submittedAt)))) &&
     (b.declaredIseer === undefined || (typeof b.declaredIseer === "number" && b.declaredIseer > 0 && b.declaredIseer <= 99.99)) &&
     (b.submissionFee === undefined || validateSubmissionFee(b.submissionFee) !== null) &&
     (b.rating === undefined || validateApplicationRating(b.rating) !== null) &&

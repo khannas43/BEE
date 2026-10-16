@@ -1,14 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { RegistrationsTable } from "@/components/app/registrations/RegistrationsTable";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
-import { DECIDED_STATES, REGISTRATION_KIND_LABEL, REGISTRATION_STATE_LABEL, waitingStatesFor } from "@/components/app/registrations/labels";
-import { type RegistrationState, readRegistrationList, registrationRequestHref, registrationReviewsHref } from "@/lib/client/runtimeRegistrations";
+import { DECIDED_STATES, waitingStatesFor } from "@/components/app/registrations/labels";
+import { type RegistrationState, readRegistrationList, registrationReviewsHref } from "@/lib/client/runtimeRegistrations";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
@@ -55,32 +55,7 @@ export function RegistrationReviews({ module, screen }: { module: Module; screen
                   <TabButton id="rev-tab-all" selected={tab === "all"} onSelect={() => setTab("all")}>All</TabButton>
                 </div>
                 {rows.length === 0 ? <p className="font-body-sm text-on-surface-variant" data-testid="rev-tab-empty">Nothing in this tab.</p> : (
-                  <table className="w-full font-body-sm text-body-sm" data-testid="rev-table">
-                    <thead>
-                      <tr className="text-left text-on-surface-variant font-label-sm">
-                        <th className="py-1 pr-3">Reference</th>
-                        <th className="py-1 pr-3">Kind</th>
-                        <th className="py-1 pr-3">Brand</th>
-                        <th className="py-1 pr-3">Applicant</th>
-                        <th className="py-1 pr-3">State</th>
-                        <th className="py-1" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((item) => (
-                        <tr key={item.id} data-testid={`rev-row-${item.reference}`} data-state={item.state}>
-                          <td className="py-1 pr-3">{item.reference}</td>
-                          <td className="py-1 pr-3">{REGISTRATION_KIND_LABEL[item.kind]}</td>
-                          <td className="py-1 pr-3">{item.brandName}</td>
-                          <td className="py-1 pr-3">{item.organisation}</td>
-                          <td className="py-1 pr-3">{REGISTRATION_STATE_LABEL[item.state]}</td>
-                          <td className="py-1">
-                            <Link href={registrationRequestHref(item.id)} className="text-primary" data-testid={`rev-open-${item.reference}`}>Open</Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <RegistrationsTable items={rows} variant="review" />
                 )}
               </div>
             );

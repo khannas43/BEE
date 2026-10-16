@@ -24,7 +24,6 @@ describe("QrDemo", () => {
     });
     vi.stubGlobal("fetch", f);
     render(<QrDemo />);
-    expect(screen.getByTestId("qr-simulated").textContent).toContain("simulated");
     await waitFor(() => expect(screen.getAllByTestId("qr-batch-row")).toHaveLength(1));
     await userEvent.click(screen.getByTestId("qr-open"));
     await waitFor(() => expect(screen.getByTestId("qr-serial-row")).toBeTruthy());

@@ -219,10 +219,6 @@ export function MisDemo() {
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-mis">
       <div>
         <h1 className="font-headline-md text-headline-md text-on-surface">MIS dashboard</h1>
-        <p className="mt-1 font-body-sm text-on-surface-variant" data-testid="mis-note">
-          Local demonstration: figures are computed live from the database tables, not a BEE report. Some history is synthetic test data; the
-          Fabric ledger, payments and QR parts are simulated and appear once those areas are present.
-        </p>
       </div>
 
       {panels && panels.length > 1 ? (

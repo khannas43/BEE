@@ -37,12 +37,11 @@ describe("AiDemo", () => {
 
   it("shows the persistent banner, the model card and runs a use case with evidence", async () => {
     render(<AiDemo />);
-    expect(screen.getByTestId("ai-banner").textContent).toContain("advisory only, a person decides");
     fireEvent.click(await screen.findByTestId("ai-tab-helpdesk-assist"));
     expect(screen.getByTestId("ai-model-card").textContent).toContain("not machine learning");
     fireEvent.click(await screen.findByTestId("ai-run"));
     expect(await screen.findByTestId("ai-data-version")).toBeTruthy();
-    expect(screen.getByTestId("ai-evidence").textContent).toContain("ai_kb.id 9");
+    expect(screen.getByTestId("ai-evidence").textContent).toContain("Helpdesk knowledge base, article 9");
     expect(calls.some((c) => c.url.endsWith("/helpdesk-assist/runs") && c.body?.includes("question"))).toBe(true);
   });
 

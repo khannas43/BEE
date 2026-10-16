@@ -1,5 +1,7 @@
 "use client";
 
+import { Pill } from "./DemoShell";
+import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { useCallback, useEffect, useState } from "react";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
 
@@ -34,6 +36,87 @@ const short = (h: string) => `${h.slice(0, 10)}…${h.slice(-6)}`;
 
 function Hash({ value }: { value: string }) {
   return <code title={value} className="font-mono text-xs break-all">{short(value)}</code>;
+}
+
+const certStatusText = (c: Row) => `${STATUS_LABEL[c.ledgerStatus] ?? c.ledgerStatus}${c.pendingKind && c.ledgerStatus !== "pending" ? ` (${c.pendingKind} pending)` : ""}`;
+
+function CertsTable({ rows, onOpen }: { rows: Row[]; onOpen: (c: Row) => void }) {
+  const tools = useListTools({
+    rows,
+    text: (c) => `${c.registrationId} ${c.brandName} ${c.modelNumber} ${c.manufacturer} ${certStatusText(c)}`,
+    date: (c) => c.validTo?.slice(0, 10),
+    sortValue: (c, k) => (k === "reg" ? c.registrationId : k === "model" ? `${c.brandName} ${c.modelNumber}` : k === "mfr" ? c.manufacturer : k === "status" ? certStatusText(c) : k === "valid" ? c.validTo ?? "" : c.lastTx ? `${c.lastTx.kind} ${c.lastTx.state}` : ""),
+  });
+  return (
+    <div className="space-y-space-sm mt-space-sm">
+      <ListToolbar tools={tools} searchLabel="Search by registration or model" placeholder="Registration, model or manufacturer" dateLabel="Valid to" />
+      {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No certificates match.</p> : (
+        <>
+          <table className="w-full font-body-sm" data-testid="ledger-certs">
+            <caption className="sr-only">Certificates and their simulated ledger status</caption>
+            <thead><tr className="text-left text-on-surface-variant font-label-sm">
+              <SortableTh tools={tools} k="reg" className="py-1 pr-3">Registration ID</SortableTh><SortableTh tools={tools} k="model" className="py-1 pr-3">Model</SortableTh>
+              <SortableTh tools={tools} k="mfr" className="py-1 pr-3">Manufacturer</SortableTh><SortableTh tools={tools} k="status" className="py-1 pr-3">Ledger status</SortableTh>
+              <SortableTh tools={tools} k="valid" className="py-1 pr-3">Valid to</SortableTh><SortableTh tools={tools} k="last" className="py-1 pr-3">Last transaction</SortableTh>
+              <th className="py-1"><span className="sr-only">Open</span></th>
+            </tr></thead>
+            <tbody>
+              {tools.paged.pageRows.map((c) => (
+                <tr key={c.certificateId} className="border-t border-outline-variant">
+                  <td className="py-1 pr-3">{c.registrationId}</td>
+                  <td className="py-1 pr-3">{c.brandName} {c.modelNumber}</td>
+                  <td className="py-1 pr-3">{c.manufacturer}</td>
+                  <td className="py-1 pr-3" data-testid={`ledger-status-${c.registrationId}`}><Pill>{certStatusText(c)}</Pill></td>
+                  <td className="py-1 pr-3">{c.validTo?.slice(0, 10)}</td>
+                  <td className="py-1 pr-3">{c.lastTx ? `${c.lastTx.kind} · ${c.lastTx.state}` : "none"}</td>
+                  <td className="py-1"><button type="button" onClick={() => onOpen(c)} className="text-primary underline" aria-label={`Open ledger panel for ${c.registrationId}`}>Open</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ListPager tools={tools} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ExplorerTable({ blocks }: { blocks: Tx[] }) {
+  const tools = useListTools({
+    rows: blocks,
+    text: (t) => `${t.blockNo} ${t.registrationId} ${t.kind} ${t.state} ${t.submittedBy}`,
+    date: (t) => t.createdAt?.slice(0, 10),
+    sortValue: (t, k) => (k === "block" ? t.blockNo : k === "cert" ? t.registrationId : k === "kind" ? t.kind : k === "state" ? t.state : k === "hash" ? t.hash : k === "prev" ? t.prevHash : t.createdAt),
+  });
+  return (
+    <div className="space-y-space-sm mt-space-sm">
+      {blocks.length > 0 ? <ListToolbar tools={tools} searchLabel="Search by certificate" placeholder="Certificate, kind or state" dateLabel="Created" /> : null}
+      {blocks.length > 0 && tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No transactions match.</p> : (
+        <>
+          <table className="w-full font-body-sm" data-testid="ledger-explorer">
+            <caption className="sr-only">All transactions by block number, newest first</caption>
+            <thead><tr className="text-left text-on-surface-variant font-label-sm">
+              <SortableTh tools={tools} k="block" className="py-1 pr-3">Block</SortableTh><SortableTh tools={tools} k="cert" className="py-1 pr-3">Certificate</SortableTh>
+              <SortableTh tools={tools} k="kind" className="py-1 pr-3">Kind</SortableTh><SortableTh tools={tools} k="state" className="py-1 pr-3">State</SortableTh>
+              <SortableTh tools={tools} k="hash" className="py-1 pr-3">Hash</SortableTh><SortableTh tools={tools} k="prev" className="py-1 pr-3">Previous hash</SortableTh>
+              <SortableTh tools={tools} k="created" className="py-1">Created</SortableTh>
+            </tr></thead>
+            <tbody>
+              {tools.paged.pageRows.map((t) => (
+                <tr key={t.id} className="border-t border-outline-variant">
+                  <td className="py-1 pr-3">{t.blockNo}</td><td className="py-1 pr-3">{t.registrationId}</td><td className="py-1 pr-3">{t.kind}{t.attempt > 1 ? ` #${t.attempt}` : ""}</td>
+                  <td className="py-1 pr-3"><Pill>{t.state}</Pill></td><td className="py-1 pr-3"><Hash value={t.hash} /></td><td className="py-1 pr-3"><Hash value={t.prevHash} /></td>
+                  <td className="py-1">{t.createdAt.slice(0, 19).replace("T", " ")}</td>
+                </tr>
+              ))}
+              {blocks.length === 0 ? <tr><td colSpan={7} className="py-1">No transactions yet.</td></tr> : null}
+            </tbody>
+          </table>
+          {blocks.length > 0 ? <ListPager tools={tools} /> : null}
+        </>
+      )}
+    </div>
+  );
 }
 
 export function LedgerDemo() {
@@ -105,10 +188,7 @@ export function LedgerDemo() {
 
   return (
     <div className="p-space-md lg:p-space-lg" data-testid="demo-ledger">
-      <div role="note" data-testid="ledger-notice" className="sticky top-0 z-10 rounded-lg bg-tertiary-container text-on-tertiary-container px-space-md py-2 font-label-md">
-        {SIMULATED_NOTICE}
-      </div>
-      <h1 className="mt-space-md font-headline-md text-headline-md text-on-surface">Certificate ledger (simulated Fabric)</h1>
+      <h1 className="font-headline-md text-headline-md text-on-surface">Certificate ledger (simulated Fabric)</h1>
       <p className="mt-1 font-body-sm text-on-surface-variant">
         Each certificate has a chain of transactions; every hash is sha256 of the previous hash and the certificate fields. A second person must commit what the first submitted.
         {readOnly ? " You can read this ledger but not change it." : ""}
@@ -121,25 +201,10 @@ export function LedgerDemo() {
         {rows === null && !error ? <p className="font-body-sm">Loading…</p> : null}
         {rows && rows.length === 0 ? <p className="font-body-sm text-on-surface-variant">No certificates are visible to you.</p> : null}
         {rows && rows.length > 0 ? (
-          <table className="w-full font-body-sm mt-space-sm" data-testid="ledger-certs">
-            <caption className="sr-only">Certificates and their simulated ledger status</caption>
-            <thead><tr className="text-left text-on-surface-variant font-label-sm">
-              <th className="py-1 pr-3">Registration ID</th><th className="py-1 pr-3">Model</th><th className="py-1 pr-3">Manufacturer</th>
-              <th className="py-1 pr-3">Ledger status</th><th className="py-1 pr-3">Last transaction</th><th className="py-1"><span className="sr-only">Open</span></th>
-            </tr></thead>
-            <tbody>
-              {rows.map((c) => (
-                <tr key={c.certificateId} className="border-t border-outline-variant">
-                  <td className="py-1 pr-3">{c.registrationId}</td>
-                  <td className="py-1 pr-3">{c.brandName} {c.modelNumber}</td>
-                  <td className="py-1 pr-3">{c.manufacturer}</td>
-                  <td className="py-1 pr-3" data-testid={`ledger-status-${c.registrationId}`}>{STATUS_LABEL[c.ledgerStatus] ?? c.ledgerStatus}{c.pendingKind && c.ledgerStatus !== "pending" ? ` (${c.pendingKind} pending)` : ""}</td>
-                  <td className="py-1 pr-3">{c.lastTx ? `${c.lastTx.kind} · ${c.lastTx.state}` : "none"}</td>
-                  <td className="py-1"><button type="button" onClick={() => { setSelected(c.certificateId); setStatus(null); setError(null); setForm(null); void loadDetail(c.certificateId); }} className="text-primary underline" aria-label={`Open ledger panel for ${c.registrationId}`}>Open</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <CertsTable
+            rows={rows}
+            onOpen={(c) => { setSelected(c.certificateId); setStatus(null); setError(null); setForm(null); void loadDetail(c.certificateId); }}
+          />
         ) : null}
       </section>
 
@@ -169,7 +234,7 @@ export function LedgerDemo() {
                 <tr key={t.id} className="border-t border-outline-variant align-top">
                   <td className="py-1 pr-3">{t.blockNo}</td><td className="py-1 pr-3">{t.seq}</td>
                   <td className="py-1 pr-3">{t.kind}{t.attempt > 1 ? ` (attempt ${t.attempt})` : ""}</td>
-                  <td className="py-1 pr-3">{t.state}</td>
+                  <td className="py-1 pr-3"><Pill>{t.state}</Pill></td>
                   <td className="py-1 pr-3"><Hash value={t.hash} /></td><td className="py-1 pr-3"><Hash value={t.prevHash} /></td>
                   <td className="py-1">{t.failureReason ?? t.reason ?? ""}{t.seededNote ? <span className="block font-semibold">Seeded mismatch</span> : null}<span className="block text-on-surface-variant">by {t.submittedBy}{t.decidedBy ? `, decided by ${t.decidedBy}` : ""}</span></td>
                 </tr>
@@ -217,23 +282,7 @@ export function LedgerDemo() {
 
       <section className="mt-space-lg" aria-labelledby="ledger-explorer">
         <h2 id="ledger-explorer" className="font-title-md text-title-md text-on-surface">Block explorer (simulated)</h2>
-        <table className="w-full font-body-sm mt-space-sm" data-testid="ledger-explorer">
-          <caption className="sr-only">All transactions by block number, newest first</caption>
-          <thead><tr className="text-left text-on-surface-variant font-label-sm">
-            <th className="py-1 pr-3">Block</th><th className="py-1 pr-3">Certificate</th><th className="py-1 pr-3">Kind</th><th className="py-1 pr-3">State</th>
-            <th className="py-1 pr-3">Hash</th><th className="py-1 pr-3">Previous hash</th><th className="py-1">Created</th>
-          </tr></thead>
-          <tbody>
-            {blocks.map((t) => (
-              <tr key={t.id} className="border-t border-outline-variant">
-                <td className="py-1 pr-3">{t.blockNo}</td><td className="py-1 pr-3">{t.registrationId}</td><td className="py-1 pr-3">{t.kind}{t.attempt > 1 ? ` #${t.attempt}` : ""}</td>
-                <td className="py-1 pr-3">{t.state}</td><td className="py-1 pr-3"><Hash value={t.hash} /></td><td className="py-1 pr-3"><Hash value={t.prevHash} /></td>
-                <td className="py-1">{t.createdAt.slice(0, 19).replace("T", " ")}</td>
-              </tr>
-            ))}
-            {blocks.length === 0 ? <tr><td colSpan={7} className="py-1">No transactions yet.</td></tr> : null}
-          </tbody>
-        </table>
+        <ExplorerTable blocks={blocks} />
       </section>
     </div>
   );

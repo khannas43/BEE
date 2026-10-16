@@ -78,6 +78,7 @@ class QrDatabaseTest {
         Flyway.configure().dataSource(migrateSource(MAIN)).schemas(MAIN).defaultSchema(MAIN).createSchemas(false).locations("classpath:db/migration").load().migrate();
         owner = new JdbcTemplate(migrateSource(MAIN));
         owner.execute(Files.readString(Path.of("..", "local", "seed", "seed.sql")));
+        owner.execute(Files.readString(Path.of("..", "local", "seed", "demo", "s4_production.sql"))); // the QR seed batches the production models
         owner.execute(Files.readString(Path.of("..", "local", "seed", "demo", "s2_qr.sql")));
         owner.execute(Files.readString(Path.of("..", "local", "seed", "demo", "s2_qr.sql"))); // idempotent
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
@@ -195,9 +196,12 @@ class QrDatabaseTest {
     void readScopeAndPaging() {
         var own = get(NOVA, null, Map.of());
         assertTrue(((List<?>) own.body().get("items")).size() >= 2);
-        assertEquals(2, ((List<?>) own.body().get("eligible")).size(), "Nova's approved models with a certificate");
-        assertTrue(((List<?>) get(PIXEL, null, Map.of()).body().get("eligible")).isEmpty());
-        assertTrue(((List<?>) get(PIXEL, null, Map.of()).body().get("items")).isEmpty(), "another organisation sees none of Nova's batches");
+        assertTrue(((List<?>) own.body().get("eligible")).size() >= 2, "Nova's approved models with a certificate");
+        // The richer seed gives Pixel models and batches of its own; what must hold is that none of Nova's show for Pixel.
+        List<String> novaRegs = owner.queryForList("SELECT registration_id FROM certificate c JOIN model_application a ON a.id = c.application_id WHERE a.organisation_id = '00000000-0000-4000-b000-000000000001'", String.class);
+        var pixel = get(PIXEL, null, Map.of()).body();
+        assertTrue(((List<?>) pixel.get("eligible")).stream().noneMatch(e -> novaRegs.contains(((Map<?, ?>) e).get("registrationId"))), "Pixel is offered none of Nova's models");
+        assertTrue(((List<?>) pixel.get("items")).stream().noneMatch(b -> novaRegs.contains(((Map<?, ?>) b).get("registrationId"))), "another organisation sees none of Nova's batches");
         assertTrue(((List<?>) get(PROGRAMME, null, Map.of()).body().get("items")).size() >= 2, "programme sees all");
         assertEquals(403, get(FINANCE, null, Map.of()).status().value());
         assertEquals(404, get(PIXEL, SEED_BATCH_1.toString(), Map.of()).status().value(), "cross-organisation is not found");

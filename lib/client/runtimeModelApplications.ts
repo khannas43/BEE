@@ -35,6 +35,8 @@ export interface ModelApplication {
   laboratoryCode?: string;
   testedOn?: string;
   declaredIseer?: number;
+  /** When the application was first submitted (UTC ISO time); absent for a draft. */
+  submittedAt?: string;
   /** The provisional fee captured at submit; present once the application has been submitted. */
   submissionFee?: {
     /** The fee before tax. */

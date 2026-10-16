@@ -20,8 +20,8 @@ export interface RuntimeRoute {
 export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   {
     href: "/app/demo/payments",
-    en: "Payments (simulated)",
-    hi: "भुगतान (सिमुलेटेड)",
+    en: "Payments",
+    hi: "भुगतान",
     icon: "payments",
     navRoles: ["manufacturer", "agency", "finance", "admin"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
@@ -36,8 +36,8 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   },
   {
     href: "/app/demo/ledger",
-    en: "Certificate ledger (simulated Fabric)",
-    hi: "प्रमाणपत्र लेजर (सिमुलेटेड)",
+    en: "Certificate ledger",
+    hi: "प्रमाणपत्र लेजर",
     icon: "link",
     navRoles: ["manufacturer", "agency", "programme", "secretary", "admin", "auditor"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Icon } from "@/components/ui/Icon";
+import { filterRows, paginate, sortRows, type SortDirection } from "@/components/app/kit/dataTableLogic";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { ProposalList } from "@/components/app/admin/ProposalPanels";
 import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
@@ -185,17 +187,73 @@ export function FeeCorrections({ module, screen }: { module: Module; screen: Scr
   );
 }
 
-function ConfirmationsTable({ rows, selectedId, onSelect, reversingId, onReverse }: { rows: FeeConfirmationRow[]; selectedId: string | null; onSelect: (c: FeeConfirmationRow) => void; reversingId: string | null; onReverse: (c: FeeConfirmationRow) => void }) {
+const PAGE_SIZE = 10;
+type SortKey = "application" | "stage" | "receipt" | "on" | "amount" | "by";
+
+function ConfirmationsTable({ rows: allRows, selectedId, onSelect, reversingId, onReverse }: { rows: FeeConfirmationRow[]; selectedId: string | null; onSelect: (c: FeeConfirmationRow) => void; reversingId: string | null; onReverse: (c: FeeConfirmationRow) => void }) {
+  // Search by application, a date-received range, sort on every column, and ten rows to a page.
+  const [query, setQuery] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDirection } | null>(null);
+  const [page, setPage] = useState(1);
+  const sortValue = (c: FeeConfirmationRow, key: SortKey): string | number => {
+    const e = effective(c);
+    return key === "application" ? `${c.reference} ${c.brandName} ${c.modelNumber}` : key === "stage" ? stateLabel(c.state) : key === "receipt" ? e.receipt : key === "on" ? e.on : key === "amount" ? Number(c.amountInr) : c.confirmedBy;
+  };
+  const visible = useMemo(() => {
+    const byText = filterRows(allRows, query, (c) => `${c.reference} ${c.brandName} ${c.modelNumber}`);
+    const byDate = byText.filter((c) => {
+      const on = effective(c).on;
+      return (!from || on >= from) && (!to || on <= to);
+    });
+    return sort && sort.dir !== "none" ? sortRows(byDate, sort.dir, (c) => sortValue(c, sort.key)) : byDate;
+  }, [allRows, query, from, to, sort]);
+  const paged = paginate(visible, page, PAGE_SIZE);
+  const rows = paged.pageRows;
+  const sortBy = (key: SortKey) => {
+    setSort((prev) => (!prev || prev.key !== key ? { key, dir: "asc" } : prev.dir === "asc" ? { key, dir: "desc" } : null));
+    setPage(1);
+  };
+  const head = (k: SortKey, label: string) => {
+    const on = sort?.key === k ? sort.dir : "none";
+    return (
+      <th key={k} className="py-1 pr-3" aria-sort={on === "asc" ? "ascending" : on === "desc" ? "descending" : "none"}>
+        <button type="button" onClick={() => sortBy(k)} className="list-sort inline-flex items-center gap-1 uppercase tracking-wide" data-testid={`corrections-sort-${k}`}>
+          {label}
+          <Icon name={on === "asc" ? "arrow_upward" : on === "desc" ? "arrow_downward" : "unfold_more"} size={14} />
+        </button>
+      </th>
+    );
+  };
+  const field = "rounded-lg border border-outline-variant px-3 py-1.5 font-body-sm text-body-sm bg-surface-card";
   return (
+    <div className="space-y-space-sm">
+      <div className="flex flex-wrap items-end gap-space-md" data-testid="corrections-filters">
+        <label className="flex flex-col font-label-sm text-label-sm text-on-surface-variant">Search by application
+          <input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Reference, brand or model" className={`${field} mt-1 w-64`} data-testid="corrections-search" />
+        </label>
+        <label className="flex flex-col font-label-sm text-label-sm text-on-surface-variant">Received from
+          <input type="date" value={from} max={to || undefined} onChange={(e) => { setFrom(e.target.value); setPage(1); }} className={`${field} mt-1`} data-testid="corrections-from" />
+        </label>
+        <label className="flex flex-col font-label-sm text-label-sm text-on-surface-variant">Received to
+          <input type="date" value={to} min={from || undefined} onChange={(e) => { setTo(e.target.value); setPage(1); }} className={`${field} mt-1`} data-testid="corrections-to" />
+        </label>
+        {query || from || to ? (
+          <button type="button" className="font-label-md text-primary underline pb-2" onClick={() => { setQuery(""); setFrom(""); setTo(""); setPage(1); }} data-testid="corrections-clear">Clear filters</button>
+        ) : null}
+      </div>
+      {visible.length === 0 ? <p className="font-body-sm text-body-sm text-on-surface-variant" data-testid="corrections-none">No fee confirmations match.</p> : (
+    <>
     <table className="w-full font-body-sm text-body-sm" data-testid="corrections-table">
       <thead>
         <tr className="text-left text-on-surface-variant font-label-sm">
-          <th className="py-1 pr-3">Application</th>
-          <th className="py-1 pr-3">Stage</th>
-          <th className="py-1 pr-3">Receipt reference</th>
-          <th className="py-1 pr-3">Received on</th>
-          <th className="py-1 pr-3">Amount</th>
-          <th className="py-1 pr-3">Confirmed by</th>
+          {head("application", "Application")}
+          {head("stage", "Stage")}
+          {head("receipt", "Receipt reference")}
+          {head("on", "Received on")}
+          {head("amount", "Amount")}
+          {head("by", "Confirmed by")}
           <th className="py-1" />
         </tr>
       </thead>
@@ -262,6 +320,17 @@ function ConfirmationsTable({ rows, selectedId, onSelect, reversingId, onReverse
         })}
       </tbody>
     </table>
+    <nav className="flex flex-wrap items-center justify-between gap-space-sm pt-space-sm" aria-label="Pagination" data-testid="corrections-pagination">
+      <span className="font-label-sm text-label-sm text-on-surface-variant" aria-live="polite">{paged.total === 0 ? "Showing 0 of 0" : `Showing ${paged.start}–${paged.end} of ${paged.total}`}</span>
+      <span className="flex items-center gap-space-sm">
+        <button type="button" disabled={paged.page <= 1} onClick={() => setPage(paged.page - 1)} className="font-label-md text-primary disabled:opacity-40" data-testid="corrections-prev">Previous page</button>
+        <span className="font-label-sm text-label-sm text-on-surface-variant">Page {paged.page} of {paged.totalPages}</span>
+        <button type="button" disabled={paged.page >= paged.totalPages} onClick={() => setPage(paged.page + 1)} className="font-label-md text-primary disabled:opacity-40" data-testid="corrections-next">Next page</button>
+      </span>
+    </nav>
+    </>
+      )}
+    </div>
   );
 }
 

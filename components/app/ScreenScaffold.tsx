@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
+import { ListPager, ListToolbar, SortableTh, nodeText, sortableText, useListTools } from "@/components/app/kit/listTools";
 import { Icon } from "@/components/ui/Icon";
 import { Module, Screen } from "@/lib/screens";
 import { ACCESS_CODES, RoleKey, isExternalRole, splitCodes } from "@/lib/roles";
@@ -77,27 +79,56 @@ function Card({ title, action, children }: { title?: string; action?: React.Reac
   );
 }
 
+const DATE_TEXT = /^\d{4}-\d{2}-\d{2}/;
+const TOOLS_FROM_ROWS = 6; // a short table stays plain; a longer list gets search, date filter, sort and paging
+
 function FakeTable({ columns, rows }: { columns: string[]; rows: (string | React.ReactNode)[][] }) {
+  const cells = useMemo(() => rows.map((r) => r.map((c) => nodeText(c).trim())), [rows]);
+  const dateCol = useMemo(() => {
+    const idx = columns.findIndex((_, j) => cells.length > 0 && cells.filter((r) => DATE_TEXT.test(r[j] ?? "")).length >= cells.length / 2);
+    return idx;
+  }, [columns, cells]);
+  const indexed = useMemo(() => rows.map((r, i) => ({ r, i })), [rows]);
+  const tools = useListTools({
+    rows: indexed,
+    text: (x) => cells[x.i].join(" "),
+    date: dateCol >= 0 ? (x) => (DATE_TEXT.test(cells[x.i][dateCol] ?? "") ? cells[x.i][dateCol].slice(0, 10) : undefined) : undefined,
+    sortValue: (x, key) => sortableText(cells[x.i][Number(key)] ?? ""),
+  });
+  const rich = rows.length >= TOOLS_FROM_ROWS;
+  const shown = rich ? tools.paged.pageRows : indexed;
   return (
-    <div className="overflow-x-auto app-scroll">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-border-subtle">
-            {columns.map((c) => (
-              <th key={c} className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide py-2 pr-space-md whitespace-nowrap">{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-b border-border-subtle/60 hover:bg-surface-container-low">
-              {r.map((cell, j) => (
-                <td key={j} className="py-2.5 pr-space-md font-body-sm text-body-sm text-on-surface whitespace-nowrap">{cell}</td>
+    <div className="space-y-space-sm">
+      {rich ? <ListToolbar tools={tools} placeholder="Search this list" dateLabel={dateCol >= 0 ? columns[dateCol] : "Date"} /> : null}
+      {rich && tools.visible.length === 0 ? (
+        <p className="font-body-sm text-body-sm text-on-surface-variant" data-testid="list-none">No rows match.</p>
+      ) : (
+        <div className="overflow-x-auto app-scroll">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border-subtle">
+                {columns.map((c, j) =>
+                  rich && c ? (
+                    <SortableTh key={c + j} tools={tools} k={String(j)} className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide py-2 pr-space-md whitespace-nowrap">{c}</SortableTh>
+                  ) : (
+                    <th key={c + j} className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide py-2 pr-space-md whitespace-nowrap">{c}</th>
+                  ),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map(({ r, i }) => (
+                <tr key={i} className="border-b border-border-subtle/60 hover:bg-surface-container-low">
+                  {r.map((cell, j) => (
+                    <td key={j} className="py-2.5 pr-space-md font-body-sm text-body-sm text-on-surface whitespace-nowrap">{cell}</td>
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </tbody>
+          </table>
+        </div>
+      )}
+      {rich && tools.visible.length > 0 ? <ListPager tools={tools} /> : null}
     </div>
   );
 }
@@ -674,7 +705,9 @@ export function ScreenChrome({
   const { t } = useLang();
   const codes = accessCodesFor(role, module, screen);
 
-  return (
+  // Screens backed by the service (implemented is given) carry the shared look and no developer notes under the title.
+  const runtime = Boolean(implemented);
+  const body = (
     <div className="p-space-md lg:p-space-lg space-y-space-md">
       <div className="flex flex-col gap-space-md">
         <div className="flex items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
@@ -691,7 +724,7 @@ export function ScreenChrome({
             </span>
             <div>
               <h1 className="font-headline-md text-headline-md text-on-surface">{screen.name}</h1>
-              <div className="flex items-center gap-space-sm mt-1 flex-wrap">
+              <div className={`flex items-center gap-space-sm mt-1 flex-wrap${runtime ? " sr-only" : ""}`} data-testid="screen-meta">
                 <span className="font-label-sm text-label-sm text-on-surface-variant">{subtitle ?? `${screen.archetype} ${t("app.screenSuffix")}`}</span>
                 <span className="text-on-surface-variant/40">•</span>
                 {implemented ? (
@@ -722,6 +755,7 @@ export function ScreenChrome({
       )}
     </div>
   );
+  return runtime ? <div className="insights-screen">{body}</div> : body;
 }
 
 /* ------------------------------------------------------------------ *

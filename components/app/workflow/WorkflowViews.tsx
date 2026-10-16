@@ -59,6 +59,7 @@ export function ApplicationReviewView({ module, screen }: { module: Module; scre
       { key: "brand", header: "Brand / Model", sortValue: (a) => `${a.brandName} ${a.modelNumber}`, render: brandCell },
       { key: "organisation", header: "Organisation", sortValue: (a) => a.organisation, render: (a) => a.organisation },
       { key: "state", header: "Stage", sortValue: (a) => a.state, render: (a) => stateLabel(a.state) },
+      { key: "submitted", header: "Submitted on", sortValue: (a) => a.submittedAt ?? "", render: (a) => (a.submittedAt ? a.submittedAt.slice(0, 10) : "—") },
       {
         key: "next",
         header: "Your next action",
@@ -102,7 +103,7 @@ export function ApplicationReviewView({ module, screen }: { module: Module; scre
         >
           {(r) => {
             const rows = inFlight(r.list.items);
-            return <DataTable columns={columns(rows)} rows={rows} rowKey={(a) => a.id} pageSize={100} tableTestId="review-table" filterTestId="review-filter" />;
+            return <DataTable dateOf={(a) => a.submittedAt} dateLabel="Submitted on" columns={columns(rows)} rows={rows} rowKey={(a) => a.id} pageSize={100} tableTestId="review-table" filterTestId="review-filter" />;
           }}
         </ReadPanel>
       </div>
@@ -118,6 +119,7 @@ export function WorkflowHistoryView({ module, screen }: { module: Module; screen
     { key: "reference", header: "Reference", sortValue: (a) => a.reference, render: (a) => refCell("wfh", a) },
     { key: "brand", header: "Brand / Model", sortValue: (a) => `${a.brandName} ${a.modelNumber}`, render: brandCell },
     { key: "state", header: "Stage", sortValue: (a) => a.state, render: (a) => stateLabel(a.state) },
+    { key: "submitted", header: "Submitted on", sortValue: (a) => a.submittedAt ?? "", render: (a) => (a.submittedAt ? a.submittedAt.slice(0, 10) : "—") },
     {
       key: "open",
       header: "",
@@ -149,7 +151,7 @@ export function WorkflowHistoryView({ module, screen }: { module: Module; screen
               emptyText="You can see no application."
               emptyTestId="wfh-empty"
             >
-              {(r) => <DataTable columns={columns} rows={r.list.items} rowKey={(a) => a.id} pageSize={100} tableTestId="wfh-table" filterTestId="wfh-filter" />}
+              {(r) => <DataTable dateOf={(a) => a.submittedAt} dateLabel="Submitted on" columns={columns} rows={r.list.items} rowKey={(a) => a.id} pageSize={100} tableTestId="wfh-table" filterTestId="wfh-filter" />}
             </ReadPanel>
           </div>
           {selectedId ? (

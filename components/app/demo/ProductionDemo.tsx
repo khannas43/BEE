@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Pill } from "./DemoShell";
+import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
 
 type Submission = {
@@ -12,6 +14,8 @@ type Submission = {
   totalUnits?: number;
   evidenceCount?: number;
   reviewNote?: string | null;
+  createdAt?: string;
+  submittedAt?: string | null;
 };
 type RowResult = { line: number; ok: boolean; message: string; registrationId?: string };
 type Validation = { mode: string; committed: boolean; stored: number; rowCount: number; errorCount: number; message: string; results: RowResult[] };
@@ -49,6 +53,54 @@ function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin);
+}
+
+function SubmissionsTable({ list, onOpen }: { list: Submission[]; onOpen: (id: string) => void }) {
+  const tools = useListTools({
+    rows: list,
+    text: (x) => `${x.quarter} ${x.organisationName ?? ""} ${STATE_WORD[x.state] ?? x.state}`,
+    date: (x) => (x.submittedAt ?? x.createdAt)?.slice(0, 10),
+    sortValue: (x, k) => (k === "quarter" ? x.quarter : k === "org" ? x.organisationName ?? "" : k === "state" ? STATE_WORD[x.state] ?? x.state : k === "rows" ? x.rowCount ?? 0 : k === "units" ? x.totalUnits ?? 0 : k === "evidence" ? x.evidenceCount ?? 0 : (x.submittedAt ?? x.createdAt ?? "")),
+  });
+  if (list.length === 0) return <p className="font-body-md">No submissions yet.</p>;
+  return (
+    <div className="space-y-space-sm">
+      <ListToolbar tools={tools} searchLabel="Search by quarter or organisation" placeholder="Quarter, organisation or state" dateLabel="Submitted" />
+      {tools.visible.length === 0 ? <p className="font-body-md text-on-surface-variant">No submissions match.</p> : (
+        <>
+          <table className="w-full text-left font-body-md">
+            <caption className="sr-only">Production submissions by quarter</caption>
+            <thead>
+              <tr>
+                <SortableTh tools={tools} k="quarter">Quarter</SortableTh><SortableTh tools={tools} k="org">Organisation</SortableTh><SortableTh tools={tools} k="state">State</SortableTh>
+                <SortableTh tools={tools} k="rows">Rows</SortableTh><SortableTh tools={tools} k="units">Units</SortableTh><SortableTh tools={tools} k="evidence">Evidence</SortableTh>
+                <SortableTh tools={tools} k="date">Submitted</SortableTh><th scope="col">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tools.paged.pageRows.map((x) => (
+                <tr key={x.id}>
+                  <td>{x.quarter}</td>
+                  <td>{x.organisationName}</td>
+                  <td><Pill>{STATE_WORD[x.state] ?? x.state}</Pill></td>
+                  <td>{x.rowCount}</td>
+                  <td>{x.totalUnits}</td>
+                  <td>{x.evidenceCount}</td>
+                  <td>{(x.submittedAt ?? x.createdAt)?.slice(0, 10) ?? ""}</td>
+                  <td>
+                    <button type="button" className="underline" onClick={() => onOpen(x.id)} aria-label={`Open ${x.quarter}`}>
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ListPager tools={tools} />
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Quarterly production submission: bulk validation, CA evidence, review and reconciliation. Local demonstration, provisional rules. */
@@ -146,9 +198,6 @@ export function ProductionDemo() {
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-production">
       <h1 className="font-headline-md text-headline-md text-on-surface">Quarterly production</h1>
-      <p className="font-body-md text-on-surface-variant" data-testid="prod-note">
-        Local demonstration: simulated, not a BEE system. Provisional rules on synthetic data. A person decides every outcome.
-      </p>
       {error && (
         <p role="alert" className="rounded bg-error-container p-space-sm text-on-error-container">
           {error}
@@ -161,42 +210,7 @@ export function ProductionDemo() {
       )}
 
       <Section title="Submissions">
-        <table className="w-full text-left font-body-md">
-          <caption className="sr-only">Production submissions by quarter</caption>
-          <thead>
-            <tr>
-              <th scope="col">Quarter</th>
-              <th scope="col">Organisation</th>
-              <th scope="col">State</th>
-              <th scope="col">Rows</th>
-              <th scope="col">Units</th>
-              <th scope="col">Evidence</th>
-              <th scope="col">Open</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((s) => (
-              <tr key={s.id}>
-                <td>{s.quarter}</td>
-                <td>{s.organisationName}</td>
-                <td>{STATE_WORD[s.state] ?? s.state}</td>
-                <td>{s.rowCount}</td>
-                <td>{s.totalUnits}</td>
-                <td>{s.evidenceCount}</td>
-                <td>
-                  <button type="button" className="underline" onClick={() => open(s.id)} aria-label={`Open ${s.quarter}`}>
-                    Open
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {list.length === 0 && (
-              <tr>
-                <td colSpan={7}>No submissions yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <SubmissionsTable list={list} onOpen={open} />
         {canCreate && (
           <div className="flex flex-wrap items-end gap-space-sm">
             <label className="block">

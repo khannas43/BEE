@@ -19,7 +19,6 @@ describe("ProductionDemo", () => {
       ),
     );
     render(<ProductionDemo />);
-    expect(screen.getByTestId("prod-note").textContent).toContain("not a BEE system");
     await waitFor(() => expect(screen.getByText("2026-Q3")).toBeTruthy());
     expect(screen.getByRole("button", { name: "Create submission" })).toBeTruthy();
   });

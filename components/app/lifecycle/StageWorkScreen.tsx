@@ -221,6 +221,7 @@ function StageQueueTable({
       ),
     },
     { key: "category", header: "Category", sortValue: (a) => a.category, render: (a) => a.category },
+    { key: "submitted", header: "Submitted on", sortValue: (a) => a.submittedAt ?? "", render: (a) => (a.submittedAt ? a.submittedAt.slice(0, 10) : "—") },
     {
       key: "open",
       header: "",
@@ -237,6 +238,8 @@ function StageQueueTable({
   ];
   return (
     <DataTable
+      dateOf={(a) => a.submittedAt}
+      dateLabel="Submitted on"
       columns={columns}
       rows={items}
       rowKey={(a) => a.id}

@@ -342,7 +342,7 @@ function inventory() {
   const codeRoutes = {};
   for (const f of routes) {
     const route = "/" + path.relative(path.join(ROOT, "app"), path.dirname(f)).split(path.sep).join("/").replace(/\[(\w+)\]/g, "{$1}");
-    if (route.startsWith("/api/runtime/demo/")) continue; // the demonstration family is outside the documented contract on purpose (BL-220)
+    if (route.startsWith("/api/runtime/demo/")) continue; // the demonstration family is outside the documented contract on purpose (BL-220); described in docs/demo/API.md and kept honest by scripts/local/demo-api-doc.test.mjs
     const src = fs.readFileSync(f, "utf8");
     if (METHODS.some((m) => new RegExp(`export (async )?function ${m}\\b`).test(src))) problems.push(`${route} exports an unlogged handler function`);
     /* every method export is logged("<template>", handler), logged("<template>", methodNotAllowed(...)) or an alias of one */

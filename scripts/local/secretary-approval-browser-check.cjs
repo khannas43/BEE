@@ -304,6 +304,34 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     check(`${runLabel}.notify.read-all`, readAll.status === 200 && readAll.e.length === 0 && readAll.body?.unread === 0 && listAfter.body?.unread === 0 && (listAfter.body?.items ?? []).every((i) => i.read), `marked ${readAll.body?.marked}, unread now ${listAfter.body?.unread}`);
     check(`${runLabel}.notify.db-one-per-member-and-event`, Number(sql(`SELECT count(*) FROM app.notification WHERE application_id = '${A.id}' AND kind = 'approved'`)) === Number(sql(`SELECT count(DISTINCT m.user_id) FROM app.organisation_membership m JOIN app.organisation o ON o.id = m.organisation_id JOIN app.user_account u ON u.id = m.user_id JOIN app.model_application a ON a.organisation_id = m.organisation_id WHERE a.id = '${A.id}' AND m.active AND o.status = 'active' AND u.status = 'active' AND now() >= m.valid_from AND now() < m.valid_to`)), "one approval notification for each person of the organisation");
 
+    // BL-229: the simulated email and SMS routes. A message is placed for the applicant (in real use the audit-record triggers write it), read and marked
+    // through the portal, and removed again.
+    const M = "/api/runtime/messages";
+    const novaAccount = sql(`SELECT id FROM app.user_account WHERE username = 'nova.applicant'`).split("\n")[0].trim();
+    const mailId = sql(`INSERT INTO app.demo_message (recipient_account_id, channel, address, event_kind, reference, subject, body) VALUES ('${novaAccount}', 'email', 'nova.applicant@bee-demo.invalid', 'check_probe', 'CHECK-PROBE', 'Contract check probe', 'Placed by the contract check. Simulated message: nothing was sent.') RETURNING id`).split("\n")[0].trim();
+    try {
+      const mList = await portal(nova, "GET", M, M);
+      const probe = (mList.body?.items ?? []).find((i) => i.id === mailId);
+      check(`${runLabel}.messages.applicant-sees-the-message`, mList.status === 200 && mList.e.length === 0 && probe?.channel === "email" && probe?.subject === "Contract check probe" && probe?.read === false && mList.body?.unread >= 1,
+        `${mList.status} unread ${mList.body?.unread}${mList.e.length ? " " + mList.e.join("; ") : ""}`);
+      const mOther = await portal(finance, "GET", M, M);
+      check(`${runLabel}.messages.officer-sees-none-of-it`, mOther.status === 200 && mOther.e.length === 0 && (mOther.body?.items ?? []).every((i) => i.id !== mailId), `${mOther.status}; the officer's own list has ${mOther.body?.items?.length ?? "?"}`);
+      const mSteal = await portal(finance, "POST", `${M}/${mailId}/read`, `${M}/{id}/read`);
+      check(`${runLabel}.messages.officer-cannot-mark-someone-elses-read`, mSteal.status === 404 && mSteal.body?.error === "not_found" && mSteal.e.length === 0, `${mSteal.status} ${mSteal.body?.error}`);
+      const mBefore = mList.body?.unread ?? 0;
+      const mMarked = await portal(nova, "POST", `${M}/${mailId}/read`, `${M}/{id}/read`);
+      const mRepeat = await portal(nova, "POST", `${M}/${mailId}/read`, `${M}/{id}/read`);
+      check(`${runLabel}.messages.applicant-marks-one-read-once`, mMarked.status === 200 && mMarked.e.length === 0 && mMarked.body?.unread === mBefore - 1 && mRepeat.status === 200 && mRepeat.body?.unread === mBefore - 1,
+        `unread ${mBefore} -> ${mMarked.body?.unread}, repeat ${mRepeat.body?.unread}`);
+      const mUnknown = await portal(nova, "POST", `${M}/00000000-0000-4000-a000-00000000dead/read`, `${M}/{id}/read`);
+      check(`${runLabel}.messages.unknown-id-is-404`, mUnknown.status === 404 && mUnknown.body?.error === "not_found" && mUnknown.e.length === 0, `${mUnknown.status} ${mUnknown.body?.error}`);
+      const mAll = await portal(nova, "POST", `${M}/read-all`, `${M}/read-all`);
+      check(`${runLabel}.messages.read-all`, mAll.status === 200 && mAll.e.length === 0 && mAll.body?.unread === 0, `marked ${mAll.body?.marked}, unread ${mAll.body?.unread}`);
+    } finally {
+      sqlMaint(`DELETE FROM app.demo_message WHERE id = '${mailId}'`);
+    }
+    check(`${runLabel}.messages.probe-removed`, Number(sql(`SELECT count(*) FROM app.demo_message WHERE id = '${mailId}'`)) === 0, "the probe message is gone");
+
     // WP09.1c: a person with no account follows the QR address and sees the public facts only (the owner's assumption D8).
     const API = `http://127.0.0.1:${process.env.BEE_API_PORT || "8090"}`;
     const plain = async (url) => {

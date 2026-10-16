@@ -245,13 +245,13 @@ export function LedgerDemo() {
 
           <div className="mt-space-sm flex flex-wrap gap-2" data-testid="ledger-actions">
             {detail.actions.map((a) => (
-              <button key={a.action} type="button" disabled={!a.allowed || busy} onClick={() => press(a)} aria-describedby={a.why ? `why-${a.action}` : undefined}
+              <button key={a.action} type="button" disabled={!a.allowed || busy} onClick={() => press(a)} aria-describedby={a.why ? `why-${detail.actions.find((x) => x.why === a.why)?.action}` : undefined}
                 className="border border-primary text-primary py-2 px-4 rounded-lg font-label-md disabled:opacity-50" data-testid={`ledger-action-${a.action}`}>
                 {ACTION_LABEL[a.action] ?? a.action}
               </button>
             ))}
           </div>
-          {detail.actions.filter((a) => a.why).map((a) => <p key={a.action} id={`why-${a.action}`} className="font-body-sm text-on-surface-variant mt-1">{a.why}</p>)}
+          {detail.actions.filter((a, i, all) => a.why && all.findIndex((x) => x.why === a.why) === i).map((a) => <p key={a.action} id={`why-${a.action}`} className="font-body-sm text-on-surface-variant mt-1">{a.why}</p>)}
           {detail.actions.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-space-sm">No action is available to you on this certificate now.</p> : null}
 
           {form ? (

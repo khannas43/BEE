@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { demoGet, demoPath, type DemoResult } from "@/lib/client/runtimeDemo";
+import { saveCsv } from "@/lib/client/csv";
 
 /**
  * MIS dashboard on live data (demo slice S5). Read-only: every figure is a SQL aggregate computed by Spring on the live tables, with the time
@@ -141,15 +142,6 @@ function ChartBlock({ table }: { table: Table }) {
   );
 }
 
-function download(filename: string, csv: string) {
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export function MisDemo() {
   const [panels, setPanels] = useState<string[] | null>(null);
   const [panel, setPanel] = useState<string>("");
@@ -208,7 +200,7 @@ export function MisDemo() {
     setExportError(null);
     const r = await demoGet<ExportBody>(demoPath("mis", "export") + `?panel=${encodeURIComponent(panel)}${query ? "&" + query.slice(1) : ""}`);
     if (r.ok) {
-      download(r.value.filename, r.value.csv);
+      saveCsv(r.value.filename, r.value.csv);
       setNote(`Downloaded ${r.value.filename}.`);
     } else {
       setExportError(r.message);

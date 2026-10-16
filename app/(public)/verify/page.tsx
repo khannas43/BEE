@@ -88,7 +88,7 @@ function Result({ result }: { result: VerificationResult | "loading" }) {
           <dd data-testid="verify-category">{c.category}</dd>
           <dt className="text-on-surface-variant">Star rating</dt>
           <dd data-testid="verify-rating">{"★".repeat(c.stars)}{"☆".repeat(5 - c.stars)} ({c.stars}) · efficiency {c.verifiedIseer}</dd>
-          <dt className="text-on-surface-variant">Valid</dt>
+          <dt className="text-on-surface-variant">Validity period</dt>
           <dd data-testid="verify-validity">{c.validFrom} to {c.validTo}</dd>
         </dl>
         <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-md" data-testid="verify-demo">{VERIFICATION_COPY.demo}</p>

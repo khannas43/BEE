@@ -65,7 +65,9 @@ function SubmissionsTable({ list, onOpen }: { list: Submission[]; onOpen: (id: s
   if (list.length === 0) return <p className="font-body-md">No submissions yet.</p>;
   return (
     <div className="space-y-space-sm">
-      <ListToolbar tools={tools} searchLabel="Search by quarter or organisation" placeholder="Quarter, organisation or state" dateLabel="Submitted" />
+      <ListToolbar tools={tools} searchLabel="Search by quarter or organisation" placeholder="Quarter, organisation or state" dateLabel="Submitted"
+        exportCsv={{ filename: "production-submissions", header: ["Quarter", "Organisation", "State", "Rows", "Units", "Evidence files", "Submitted"],
+          rows: tools.visible.map((x) => [x.quarter, x.organisationName, STATE_WORD[x.state] ?? x.state, x.rowCount, x.totalUnits, x.evidenceCount, (x.submittedAt ?? x.createdAt)?.slice(0, 19).replace("T", " ")]) }} />
       {tools.visible.length === 0 ? <p className="font-body-md text-on-surface-variant">No submissions match.</p> : (
         <>
           <table className="w-full text-left font-body-md">

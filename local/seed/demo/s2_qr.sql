@@ -107,3 +107,30 @@ INSERT INTO qr_event (id, batch_id, action, actor_account_id, detail, occurred_a
   (md5('s2b-void-1507')::uuid, '00000000-0000-4000-c000-000000001507', 'voided', '00000000-0000-4000-a000-000000000002', 'four damaged labels (synthetic)', now() - interval '57 days')
 ON CONFLICT (id) DO NOTHING;
 COMMIT;
+
+-- Nova's three production models (10101 to 10103) get bound serials sized against their 2026-Q3 declarations, so quarterly reconciliation flags
+-- only the seeded 10101 spike (about 30,000 declared against 4,800 bound); the other two sit above their declared units. A batch holds at most 5,000.
+BEGIN;
+INSERT INTO qr_batch (id, model_application_id, certificate_id, organisation_id, quantity, status, created_by, created_at) VALUES
+  ('00000000-0000-4000-c000-000000001601', '00000000-0000-4000-c000-000000000101', '00000000-0000-4000-c200-000000000101', '00000000-0000-4000-b000-000000000001', 5000, 'open', '00000000-0000-4000-a000-000000000001', now() - interval '90 days'),
+  ('00000000-0000-4000-c000-000000001602', '00000000-0000-4000-c000-000000000102', '00000000-0000-4000-c200-000000000102', '00000000-0000-4000-b000-000000000001', 5000, 'open', '00000000-0000-4000-a000-000000000001', now() - interval '88 days'),
+  ('00000000-0000-4000-c000-000000001603', '00000000-0000-4000-c000-000000000103', '00000000-0000-4000-c200-000000000103', '00000000-0000-4000-b000-000000000001', 5000, 'open', '00000000-0000-4000-a000-000000000001', now() - interval '86 days'),
+  ('00000000-0000-4000-c000-000000001604', '00000000-0000-4000-c000-000000000102', '00000000-0000-4000-c200-000000000102', '00000000-0000-4000-b000-000000000001', 5000, 'open', '00000000-0000-4000-a000-000000000001', now() - interval '87 days')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO qr_serial (serial, batch_id, certificate_id, state, allocated_at, bound_at)
+SELECT 'BEEQ-' || b.prefix || lpad(n::text, 6, '0'), b.batch_id, b.certificate_id, 'bound', b.at, b.at + interval '1 hour'
+FROM (VALUES
+  ('S2P0'::text, '00000000-0000-4000-c000-000000001601'::uuid, '00000000-0000-4000-c200-000000000101'::uuid, 4800, now() - interval '90 days'),
+  ('S2Q0', '00000000-0000-4000-c000-000000001602', '00000000-0000-4000-c200-000000000102', 5000, now() - interval '88 days'),
+  ('S2R0', '00000000-0000-4000-c000-000000001603', '00000000-0000-4000-c200-000000000103', 5000, now() - interval '86 days'),
+  ('S2S0', '00000000-0000-4000-c000-000000001604', '00000000-0000-4000-c200-000000000102', 4500, now() - interval '87 days')
+) AS b (prefix, batch_id, certificate_id, bound_n, at)
+JOIN generate_series(1, 5000) AS n ON n <= b.bound_n
+ON CONFLICT (serial) DO NOTHING;
+INSERT INTO qr_event (id, batch_id, action, actor_account_id, detail, occurred_at)
+SELECT md5('s2n-' || b.id::text || '-' || a.action)::uuid, b.id, a.action, '00000000-0000-4000-a000-000000000001'::uuid, a.detail, b.created_at
+FROM qr_batch b
+JOIN (VALUES ('created', 'seeded batch'), ('allocated', 'seeded allocation'), ('bound', 'seeded binding')) AS a (action, detail) ON true
+WHERE b.id IN ('00000000-0000-4000-c000-000000001601','00000000-0000-4000-c000-000000001602','00000000-0000-4000-c000-000000001603','00000000-0000-4000-c000-000000001604')
+ON CONFLICT (id) DO NOTHING;
+COMMIT;

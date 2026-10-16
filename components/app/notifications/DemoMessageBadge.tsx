@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { demoGet, demoPath } from "@/lib/client/runtimeDemo";
+import { readMessages } from "@/lib/client/runtimeMessages";
 
 /** Unread simulated email and SMS, beside the in-portal bell. Hidden unless the messages call succeeds. */
 const POLL_MS = 10000;
@@ -15,9 +15,9 @@ export function DemoMessageBadge() {
 
   useEffect(() => {
     let live = true;
-    void demoGet<{ unread: number }>(demoPath("messages")).then((r) => {
+    void readMessages().then((r) => {
       if (!live) return;
-      setUnread(r.ok && typeof r.value.unread === "number" ? r.value.unread : null);
+      setUnread(r.ok ? r.list.unread : null);
     });
     return () => {
       live = false;

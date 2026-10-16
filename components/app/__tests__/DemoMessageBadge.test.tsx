@@ -19,7 +19,7 @@ describe("DemoMessageBadge", () => {
   });
 
   it("shows the unread count and links to the simulated inbox", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => json({ unread: 3, items: [], note: "n" })));
+    vi.stubGlobal("fetch", vi.fn(async () => json({ unread: 3, items: [] })));
     render(<DemoMessageBadge />);
     expect((await screen.findByTestId("demo-message-badge-count")).textContent).toBe("3");
     expect(screen.getByTestId("demo-message-badge").getAttribute("href")).toBe("/app/demo/notifications");
@@ -27,7 +27,7 @@ describe("DemoMessageBadge", () => {
   });
 
   it('shows "9+" when more than nine are unread', async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => json({ unread: 12, items: [], note: "n" })));
+    vi.stubGlobal("fetch", vi.fn(async () => json({ unread: 12, items: [] })));
     render(<DemoMessageBadge />);
     expect((await screen.findByTestId("demo-message-badge-count")).textContent).toBe("9+");
     expect(screen.getByTestId("demo-message-badge").getAttribute("aria-label")).toBe("Simulated email and SMS messages, 12 unread");

@@ -110,7 +110,7 @@ Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real databa
 
 **Neha files.** Menu: **Quarterly production**.
 1. "Neha's earlier quarters are accepted; 2026-Q3 is with BEE." New submission: quarter `2026-Q4`, **Create submission**, open it.
-2. Paste CSV rows (the screen shows the format) with one deliberately bad line, **Validate (dry run)**: per-row errors and "nothing was written". Fix the line, **Store rows**.
+2. The box is pre-filled with a full quarter (six rows, three months for each of two models). Change one number to text such as `abc` for one deliberately bad line, **Validate (dry run)**: per-row errors and "nothing was written". Fix the line, **Store rows**.
 3. Attach evidence: CA name, membership number, statement and a small file. Say: "Stored and fingerprinted (SHA-256): recorded, not verified." **Submit for review**: editing is now closed.
 
 **Priya reviews.** Switch role to Programme officer. Same menu.

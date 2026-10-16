@@ -35,7 +35,8 @@ type Reconciliation = {
   models: { modelApplicationId: string; modelNumber: string; registrationId: string; declaredUnits: number; boundSerials: number | null; flag: string }[];
 };
 
-const CSV_SAMPLE = "registration_id,units,period_start,period_end\nBEE/RAC/2026/10101,4200,2026-10-01,2026-10-31\nBEE/RAC/2026/10102,2600,2026-10-01,2026-10-31\n";
+/** A full quarter (three months for each of two models), sized like the earlier quarters so the demo's AI anomaly run does not flag it. */
+const CSV_SAMPLE = "registration_id,units,period_start,period_end\nBEE/RAC/2026/10101,4100,2026-10-01,2026-10-31\nBEE/RAC/2026/10101,4200,2026-11-01,2026-11-30\nBEE/RAC/2026/10101,4300,2026-12-01,2026-12-31\nBEE/RAC/2026/10102,2600,2026-10-01,2026-10-31\nBEE/RAC/2026/10102,2650,2026-11-01,2026-11-30\nBEE/RAC/2026/10102,2700,2026-12-01,2026-12-31\n";
 const STATE_WORD: Record<string, string> = { draft: "Draft", submitted: "Submitted", accepted: "Accepted", query: "Query raised" };
 const inputCls = "w-full rounded border border-outline-variant bg-surface px-space-sm py-space-xs font-body-md text-on-surface";
 const btnCls = "rounded bg-primary px-space-md py-space-xs font-label-md text-on-primary disabled:opacity-50";

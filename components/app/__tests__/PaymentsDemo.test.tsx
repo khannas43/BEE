@@ -40,6 +40,20 @@ describe("PaymentsDemo", () => {
     expect((screen.getByTestId("pay-list")).textContent).toContain("SIMGW-5EED0002");
   });
 
+  it("tells a paid application apart from one with an open payment in the fee-due list", async () => {
+    const due = (id: string, reference: string) => ({ applicationId: id, reference, brandName: "Nova Cool", modelNumber: "X", feeInr: "10000.00", taxRatePercent: "18.00", taxInr: "1800.00", totalInr: "11800.00" });
+    const pay = (id: string, applicationId: string, applicationReference: string, status: string) => ({ id, applicationId, applicationReference, amountInr: "11800.00", status, gatewayRef: `SIMGW-${id}`, receiptNumber: status === "paid" ? `R-${id}` : null });
+    vi.stubGlobal("fetch", vi.fn(async () => json({
+      view: "applicant",
+      payments: [pay("P1", "a1", "DEMO-PAY-0010", "paid"), pay("P2", "a2", "DEMO-PAY-0002", "initiated")],
+      feeDue: [due("a1", "DEMO-PAY-0010"), due("a2", "DEMO-PAY-0002"), due("a3", "DEMO-PAY-0003")],
+    })));
+    render(<PaymentsDemo />);
+    expect((await screen.findByRole("button", { name: /Pay at simulated gateway for DEMO-PAY-0010/ })).textContent).toBe("Paid, awaiting Finance");
+    expect(screen.getByRole("button", { name: /Pay at simulated gateway for DEMO-PAY-0002/ }).textContent).toBe("Payment open");
+    expect(screen.getByRole("button", { name: /Pay at simulated gateway for DEMO-PAY-0003/ }).textContent).toBe("Pay at simulated gateway");
+  });
+
   it("shows an alert when the server refuses", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ error: "role_not_permitted", message: "No." }, 403)));
     render(<PaymentsDemo />);

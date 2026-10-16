@@ -137,7 +137,7 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 
 **Priya decides where to look first** (`bee.programme`, menu **AI use cases**).
 1. **Compliance risk**: **Run**; open the top row to show the weighted contributions and evidence; then choose **Override**, enter your own value (for example `medium`) and a reason, **Record disposition**.
-2. **Production anomaly**: flags series for a person to look at (about half of them in this data; open the one with the spike). 3. **Rating trends**: slope and 95 percent band.
+2. **Production anomaly**: flags four of the eleven series; open the Nova NC-RAC-12D one for the spike. 3. **Rating trends**: slope and 95 percent band.
 
 **Ravi answers a manufacturer faster** (`bee.helpdesk`).
 4. **Helpdesk assist**: ask "How do I pay the fee?": a draft reply with ranked source articles and a confidence. Then ask a nonsense question: it escalates to a person instead of guessing.

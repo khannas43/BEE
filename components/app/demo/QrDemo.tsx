@@ -6,6 +6,7 @@ import { Pill } from "./DemoShell";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
 import { csvFileName, saveCsv, toCsv } from "@/lib/client/csv";
+import { istStamp } from "@/lib/client/istTime";
 
 type Counts = { allocated: number; bound: number; void: number; remaining: number };
 export type QrBatch = Counts & {
@@ -127,7 +128,7 @@ function BatchTable({ items, selected, onSelect }: { items: QrBatch[]; selected:
       <h2 className="font-title-md text-title-md mb-space-sm">Batches</h2>
       <ListToolbar tools={tools} searchLabel="Search by model or registration" placeholder="Model, brand or registration" dateLabel="Created"
         exportCsv={{ filename: "qr-batches", header: ["Reference", "Brand", "Model", "Registration ID", "Organisation", "Quantity", "Allocated", "Bound", "Void", "Status", "Created"],
-          rows: tools.visible.map((b) => [b.reference, b.brandName, b.modelNumber, b.registrationId, b.organisation, b.quantity, b.allocated, b.bound, b.void, b.status, b.createdAt?.slice(0, 19).replace("T", " ")]) }} />
+          rows: tools.visible.map((b) => [b.reference, b.brandName, b.modelNumber, b.registrationId, b.organisation, b.quantity, b.allocated, b.bound, b.void, b.status, istStamp(b.createdAt)]) }} />
       {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No batches match.</p> : (
       <>
       <table className="w-full text-left font-body-sm" data-testid="qr-batches">
@@ -205,7 +206,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
     }
     const origin = window.location.origin;
     saveCsv(csvFileName(`qr-serials-${detail?.registrationId.replace(/\//g, "-") ?? id}`), toCsv(["Serial", "State", "Allocated", "Bound", "Voided", "Void reason", "Public check link"],
-      rows.map((x) => [x.serial, x.state, x.allocatedAt?.slice(0, 19).replace("T", " "), x.boundAt?.slice(0, 19).replace("T", " "), x.voidedAt?.slice(0, 19).replace("T", " "), x.voidReason, `${origin}${verifyHref(x.serial)}`])));
+      rows.map((x) => [x.serial, x.state, istStamp(x.allocatedAt), istStamp(x.boundAt), istStamp(x.voidedAt), x.voidReason, `${origin}${verifyHref(x.serial)}`])));
   }
 
   async function copy(serial: string) {

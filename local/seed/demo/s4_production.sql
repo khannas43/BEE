@@ -46,7 +46,7 @@ BEGIN
   LOOP
     CONTINUE WHEN EXISTS (SELECT 1 FROM production_submission WHERE organisation_id = nova AND quarter = q.quarter);
     INSERT INTO production_submission (organisation_id, quarter, created_by) VALUES (nova, q.quarter, applicant) RETURNING id INTO sid;
-    INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role) VALUES (sid, 'created', NULL, 'draft', applicant, 'manufacturer');
+    INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, occurred_at) VALUES (sid, 'created', NULL, 'draft', applicant, 'manufacturer', q.first_day + interval '95 days');
     FOR m IN SELECT a.id, c.registration_id, c.sequence_no FROM model_application a JOIN certificate c ON c.application_id = a.id
               WHERE a.organisation_id = nova AND a.state = 'approved' AND c.registration_id IN ('BEE/RAC/2026/10101', 'BEE/RAC/2026/10102', 'BEE/RAC/2026/10103') LOOP
       base_u := CASE m.sequence_no WHEN 10101 THEN 4000 WHEN 10102 THEN 2500 ELSE 1200 END;
@@ -63,12 +63,12 @@ BEGIN
     INSERT INTO production_evidence (submission_id, file_name, media_type, size_bytes, sha256, content, ca_name, ca_membership_no, statement, uploaded_by)
       VALUES (sid, 'ca-certificate-' || q.quarter || '.txt', 'text/plain', length(content), encode(sha256(content), 'hex'), content,
               'Synthetic CA and Co (synthetic)', 'SYN-000123', 'Production figures agree with the books for the quarter (synthetic statement).', applicant);
-    UPDATE production_submission SET state = 'submitted', version = 1, submitted_by = applicant, submitted_at = now() WHERE id = sid;
-    INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role) VALUES (sid, 'submitted', 'draft', 'submitted', applicant, 'manufacturer');
+    UPDATE production_submission SET state = 'submitted', version = 1, submitted_by = applicant, submitted_at = LEAST(q.first_day + interval '100 days', now() - interval '2 days') WHERE id = sid;
+    INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, occurred_at) VALUES (sid, 'submitted', 'draft', 'submitted', applicant, 'manufacturer', LEAST(q.first_day + interval '100 days', now() - interval '2 days'));
     IF q.final_state = 'accepted' THEN
-      UPDATE production_submission SET state = 'accepted', version = 2, reviewed_by = programme, reviewed_at = now(), review_note = 'Figures in line with earlier quarters (synthetic).' WHERE id = sid;
-      INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note)
-        VALUES (sid, 'review_accepted', 'submitted', 'accepted', programme, 'programme', 'Figures in line with earlier quarters (synthetic).');
+      UPDATE production_submission SET state = 'accepted', version = 2, reviewed_by = programme, reviewed_at = LEAST(q.first_day + interval '110 days', now() - interval '1 day'), review_note = 'Figures in line with earlier quarters (synthetic).' WHERE id = sid;
+      INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note, occurred_at)
+        VALUES (sid, 'review_accepted', 'submitted', 'accepted', programme, 'programme', 'Figures in line with earlier quarters (synthetic).', LEAST(q.first_day + interval '110 days', now() - interval '1 day'));
     END IF;
   END LOOP;
 END $$;
@@ -177,8 +177,8 @@ BEGIN
                   ELSE '00000000-0000-4000-a000-000000000001'::uuid END;
     actor_role := CASE WHEN q.org = '00000000-0000-4000-b000-000000000002'::uuid THEN 'agency' ELSE 'manufacturer' END;
     INSERT INTO production_submission (organisation_id, quarter, created_by) VALUES (q.org, q.quarter, actor) RETURNING id INTO sid;
-    INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role)
-      VALUES (sid, 'created', NULL, 'draft', actor, actor_role);
+    INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, occurred_at)
+      VALUES (sid, 'created', NULL, 'draft', actor, actor_role, q.first_day + interval '95 days');
     FOR m IN
       SELECT a.id, c.registration_id, a.model_number
         FROM model_application a JOIN certificate c ON c.application_id = a.id
@@ -198,20 +198,20 @@ BEGIN
     INSERT INTO production_evidence (submission_id, file_name, media_type, size_bytes, sha256, content, ca_name, ca_membership_no, statement, uploaded_by)
       VALUES (sid, 'ca-certificate-' || q.quarter || '.txt', 'text/plain', length(content), encode(sha256(content), 'hex'), content,
               'Synthetic CA and Co (synthetic)', 'SYN-000456', 'Production figures agree with the books for the quarter (synthetic statement).', actor);
-    UPDATE production_submission SET state = 'submitted', version = 1, submitted_by = actor, submitted_at = q.first_day + interval '100 days' WHERE id = sid;
-    INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role)
-      VALUES (sid, 'submitted', 'draft', 'submitted', actor, actor_role);
+    UPDATE production_submission SET state = 'submitted', version = 1, submitted_by = actor, submitted_at = LEAST(q.first_day + interval '100 days', now() - interval '2 days') WHERE id = sid;
+    INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, occurred_at)
+      VALUES (sid, 'submitted', 'draft', 'submitted', actor, actor_role, LEAST(q.first_day + interval '100 days', now() - interval '2 days'));
     final_state := q.final_state;
     IF final_state = 'accepted' THEN
-      UPDATE production_submission SET state = 'accepted', version = 2, reviewed_by = programme, reviewed_at = q.first_day + interval '110 days',
+      UPDATE production_submission SET state = 'accepted', version = 2, reviewed_by = programme, reviewed_at = LEAST(q.first_day + interval '110 days', now() - interval '1 day'),
              review_note = 'Figures in line with the bound serials (synthetic).' WHERE id = sid;
-      INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note)
-        VALUES (sid, 'review_accepted', 'submitted', 'accepted', programme, 'programme', 'Figures in line with the bound serials (synthetic).');
+      INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note, occurred_at)
+        VALUES (sid, 'review_accepted', 'submitted', 'accepted', programme, 'programme', 'Figures in line with the bound serials (synthetic).', LEAST(q.first_day + interval '110 days', now() - interval '1 day'));
     ELSIF final_state = 'query' THEN
-      UPDATE production_submission SET state = 'query', version = 2, reviewed_by = programme, reviewed_at = q.first_day + interval '110 days',
+      UPDATE production_submission SET state = 'query', version = 2, reviewed_by = programme, reviewed_at = LEAST(q.first_day + interval '110 days', now() - interval '1 day'),
              review_note = 'Please confirm the September model split (synthetic query).' WHERE id = sid;
-      INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note)
-        VALUES (sid, 'review_query', 'submitted', 'query', programme, 'programme', 'Please confirm the September model split (synthetic query).');
+      INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note, occurred_at)
+        VALUES (sid, 'review_query', 'submitted', 'query', programme, 'programme', 'Please confirm the September model split (synthetic query).', LEAST(q.first_day + interval '110 days', now() - interval '1 day'));
     END IF;
   END LOOP;
 END $$;

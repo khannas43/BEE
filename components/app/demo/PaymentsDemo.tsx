@@ -80,7 +80,9 @@ function PaymentsTable({ payments, finance, receiptId, onToggleReceipt }: { paym
   });
   return (
     <div className="space-y-space-sm mt-space-sm">
-      <ListToolbar tools={tools} searchLabel="Search by application" placeholder="Application, organisation or gateway reference" dateLabel="Created" />
+      <ListToolbar tools={tools} searchLabel="Search by application" placeholder="Application, organisation or gateway reference" dateLabel="Created"
+        exportCsv={{ filename: "payments", header: ["Application", "Organisation", "Brand", "Model", "Amount INR", "Status", "Gateway reference", "Receipt", "Created"],
+          rows: tools.visible.map((p) => [p.applicationReference, p.organisationCode, p.brandName, p.modelNumber, Number(p.amountInr), p.status, p.gatewayRef, p.receiptNumber, p.createdAt?.slice(0, 19).replace("T", " ")]) }} />
       {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No payments match.</p> : (
         <>
           <table className="w-full font-body-sm">

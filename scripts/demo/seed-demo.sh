@@ -6,6 +6,6 @@ container_running bee-local-postgres || die "postgres is not running (npm run lo
 bash "$ROOT/scripts/local/seed.sh"
 for f in s4_production s2_qr s5_mis s3_ledger s1_payments s6_ai; do
   [[ -f "$ROOT/local/seed/demo/$f.sql" ]] || { log "skip $f (no file)"; continue; }
-  psql_app < "$ROOT/local/seed/demo/$f.sql" >/dev/null || die "demo seed $f failed"
+  { echo "SET bee.demo_seeding = 'on';"; cat "$ROOT/local/seed/demo/$f.sql"; } | psql_app >/dev/null || die "demo seed $f failed"
   log "demo seed applied: $f"
 done

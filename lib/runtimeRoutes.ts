@@ -67,6 +67,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
+    href: "/app/demo/notifications",
+    en: "Notifications (email and SMS)",
+    hi: "सूचनाएँ (ईमेल और एसएमएस)",
+    icon: "notifications_active",
+    navRoles: ["manufacturer", "agency", "finance", "programme", "reviewer", "director", "secretary", "admin", "auditor", "helpdesk", "iame"],
+    implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
+  },
+  {
     href: "/app/administration/fee-rules",
     en: "Fee rules",
     hi: "शुल्क नियम",

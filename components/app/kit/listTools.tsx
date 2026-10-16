@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { filterRows, paginate, sortRows, type SortDirection } from "@/components/app/kit/dataTableLogic";
+import { csvFileName, saveCsv, toCsv, type CsvCell } from "@/lib/client/csv";
 
 /**
  * Search, an optional date range, sort on every column and paging for a list that is already loaded in the browser.
@@ -54,7 +55,10 @@ export type ListTools = {
 
 const field = "rounded-lg border border-outline-variant px-3 py-1.5 font-body-sm text-body-sm bg-surface-card";
 
-export function ListToolbar({ tools, placeholder = "Type to search", searchLabel = "Search", dateLabel = "Date" }: { tools: ListTools; placeholder?: string; searchLabel?: string; dateLabel?: string }) {
+/** What "Download CSV" saves: every row the filters leave (not only the page), under the given file name. */
+export type CsvExport = { filename: string; header: string[]; rows: CsvCell[][] };
+
+export function ListToolbar({ tools, placeholder = "Type to search", searchLabel = "Search", dateLabel = "Date", exportCsv }: { tools: ListTools; placeholder?: string; searchLabel?: string; dateLabel?: string; exportCsv?: CsvExport }) {
   return (
     <div className="flex flex-wrap items-end gap-space-md" data-testid="list-filters">
       <label className="flex flex-col font-label-sm text-label-sm text-on-surface-variant">{searchLabel}
@@ -71,6 +75,12 @@ export function ListToolbar({ tools, placeholder = "Type to search", searchLabel
         </>
       ) : null}
       {tools.filtered ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={tools.clear} data-testid="list-clear">Clear filters</button> : null}
+      {exportCsv ? (
+        <button type="button" disabled={exportCsv.rows.length === 0} onClick={() => saveCsv(csvFileName(exportCsv.filename), toCsv(exportCsv.header, exportCsv.rows))}
+          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 font-label-md text-primary disabled:opacity-40" data-testid="list-export">
+          <Icon name="download" size={16} /> Download CSV
+        </button>
+      ) : null}
     </div>
   );
 }

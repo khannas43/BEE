@@ -49,7 +49,9 @@ function CertsTable({ rows, onOpen }: { rows: Row[]; onOpen: (c: Row) => void })
   });
   return (
     <div className="space-y-space-sm mt-space-sm">
-      <ListToolbar tools={tools} searchLabel="Search by registration or model" placeholder="Registration, model or manufacturer" dateLabel="Valid to" />
+      <ListToolbar tools={tools} searchLabel="Search by registration or model" placeholder="Registration, model or manufacturer" dateLabel="Valid to"
+        exportCsv={{ filename: "ledger-certificates", header: ["Registration ID", "Brand", "Model", "Manufacturer", "Ledger status", "Valid to", "Last transaction"],
+          rows: tools.visible.map((c) => [c.registrationId, c.brandName, c.modelNumber, c.manufacturer, certStatusText(c), c.validTo?.slice(0, 10), c.lastTx ? `${c.lastTx.kind} ${c.lastTx.state}` : "none"]) }} />
       {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No certificates match.</p> : (
         <>
           <table className="w-full font-body-sm" data-testid="ledger-certs">
@@ -90,7 +92,9 @@ function ExplorerTable({ blocks }: { blocks: Tx[] }) {
   });
   return (
     <div className="space-y-space-sm mt-space-sm">
-      {blocks.length > 0 ? <ListToolbar tools={tools} searchLabel="Search by certificate" placeholder="Certificate, kind or state" dateLabel="Created" /> : null}
+      {blocks.length > 0 ? <ListToolbar tools={tools} searchLabel="Search by certificate" placeholder="Certificate, kind or state" dateLabel="Created"
+        exportCsv={{ filename: "ledger-transactions", header: ["Block", "Certificate", "Kind", "Attempt", "State", "Hash", "Previous hash", "Submitted by", "Created"],
+          rows: tools.visible.map((t) => [t.blockNo, t.registrationId, t.kind, t.attempt, t.state, t.hash, t.prevHash, t.submittedBy, t.createdAt.slice(0, 19).replace("T", " ")]) }} /> : null}
       {blocks.length > 0 && tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No transactions match.</p> : (
         <>
           <table className="w-full font-body-sm" data-testid="ledger-explorer">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Pill } from "./DemoShell";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
+import { csvFileName, saveCsv, toCsv } from "@/lib/client/csv";
 
 type Counts = { allocated: number; bound: number; void: number; remaining: number };
 export type QrBatch = Counts & {
@@ -124,7 +125,9 @@ function BatchTable({ items, selected, onSelect }: { items: QrBatch[]; selected:
   return (
     <div className="rounded-xl bg-surface-card shadow-md p-space-md overflow-x-auto space-y-space-sm">
       <h2 className="font-title-md text-title-md mb-space-sm">Batches</h2>
-      <ListToolbar tools={tools} searchLabel="Search by model or registration" placeholder="Model, brand or registration" dateLabel="Created" />
+      <ListToolbar tools={tools} searchLabel="Search by model or registration" placeholder="Model, brand or registration" dateLabel="Created"
+        exportCsv={{ filename: "qr-batches", header: ["Reference", "Brand", "Model", "Registration ID", "Organisation", "Quantity", "Allocated", "Bound", "Void", "Status", "Created"],
+          rows: tools.visible.map((b) => [b.reference, b.brandName, b.modelNumber, b.registrationId, b.organisation, b.quantity, b.allocated, b.bound, b.void, b.status, b.createdAt?.slice(0, 19).replace("T", " ")]) }} />
       {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No batches match.</p> : (
       <>
       <table className="w-full text-left font-body-sm" data-testid="qr-batches">
@@ -186,6 +189,23 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
     if (report(r, r.ok ? ok(r.value) : "")) {
       refresh();
     }
+  }
+
+  /** Every serial of the batch (the service gives 200 at a time) as one CSV: what a print shop needs for the labels. */
+  async function exportSerials() {
+    const rows: Serial[] = [];
+    for (let at = 0; at < 20000; at += 200) {
+      const r = await demoGet<BatchDetail>(`${demoPath("qr", id)}?offset=${at}&limit=200`);
+      if (!r.ok) {
+        report(r, "");
+        return;
+      }
+      rows.push(...r.value.serials);
+      if (r.value.serials.length < 200) break;
+    }
+    const origin = window.location.origin;
+    saveCsv(csvFileName(`qr-serials-${detail?.registrationId.replace(/\//g, "-") ?? id}`), toCsv(["Serial", "State", "Allocated", "Bound", "Voided", "Void reason", "Public check link"],
+      rows.map((x) => [x.serial, x.state, x.allocatedAt?.slice(0, 19).replace("T", " "), x.boundAt?.slice(0, 19).replace("T", " "), x.voidedAt?.slice(0, 19).replace("T", " "), x.voidReason, `${origin}${verifyHref(x.serial)}`])));
   }
 
   async function copy(serial: string) {
@@ -252,6 +272,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
         <button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="underline disabled:opacity-40">Previous</button>
         <span data-testid="qr-page">{detail.total === 0 ? "No serials yet" : `${offset + 1} to ${Math.min(offset + PAGE, detail.total)} of ${detail.total}`}</span>
         <button type="button" disabled={offset + PAGE >= detail.total} onClick={() => setOffset(offset + PAGE)} className="underline disabled:opacity-40">Next</button>
+        <button type="button" disabled={detail.total === 0} onClick={() => void exportSerials()} className="ml-auto text-primary underline disabled:opacity-40" data-testid="qr-export-serials">Download all serials (CSV)</button>
       </div>
       <p className="font-label-sm text-on-surface-variant">A serial answers on the public check only once it is bound; a void or unbound serial is shown as not found.</p>
     </section>

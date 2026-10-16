@@ -23,17 +23,18 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const activeCat = categoryForPath(pathname)?.id ?? categories[0]?.id ?? null;
   // The category the current route belongs to opens by itself; a manual toggle is kept until the route moves to another category.
   const [toggle, setToggle] = useState<{ cat: string | null; open: string | null } | null>(null);
-  const [recordsOpen, setRecordsOpen] = useState(true);
+  // "Your BEE records" starts closed after sign-in; the person opens it when they want it.
+  const [recordsOpen, setRecordsOpen] = useState(false);
   const open = toggle?.cat === activeCat ? toggle.open : activeCat;
   const setOpen = (next: string | null) => setToggle({ cat: activeCat, open: next });
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light">
-      <Link href="/app" className="flex flex-col items-center justify-center gap-0.5 px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={`BEE S&L ${t("app.officerConsole")}`}>
-        <span className="flex items-center justify-center bg-white rounded-md px-3 h-[36px]">
+      <Link href="/app" className="flex flex-row items-center justify-start gap-space-sm px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={`BEE S&L ${t("app.officerConsole")}`}>
+        <span className="flex items-center justify-center bg-white rounded-md px-3 h-[36px] shrink-0">
           <Image src="/images/bee-logo.png" alt="Bureau of Energy Efficiency" width={1260} height={308} priority className="h-[28px] w-auto object-contain" />
         </span>
-        <span className="font-label-sm text-label-sm uppercase tracking-[0.18em] text-forest-light/80 leading-[12px]">{t("app.officerConsole")}</span>
+        <span className="font-label-sm text-label-sm uppercase tracking-[0.14em] text-forest-light/90 leading-[14px] text-left">{t("app.officerConsole")}</span>
       </Link>
 
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">
@@ -49,9 +50,11 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
               <span className="flex-1 font-label-lg text-label-lg">Your BEE records</span>
               <Icon name={recordsOpen ? "expand_less" : "expand_more"} size={18} />
             </button>
-            {recordsOpen && runtimeNav.map((r) => (
+            <div hidden={!recordsOpen}>
+            {runtimeNav.map((r) => (
               <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} compact />
             ))}
+            </div>
           </div>
         )}
         <div>

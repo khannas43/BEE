@@ -1,6 +1,6 @@
 # Client demonstration: presenter script by use case (40 minutes)
 
-Rehearsed end to end on 16 October 2026. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username). The role dropdown at the top right of every console page switches to that role's demo account in one step, so you can change persona without signing out. Sign out with the arrow icon at the top right.
+Rehearsed end to end on 16 October 2026. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username). The role dropdown at the top right of every console page switches to that role's demo account in one step, so you can change persona without signing out. Sign out with the arrow icon at the top right. The left menu group **Your BEE records** (Payments, QR batches, Certificate ledger and the other demo screens) starts closed after sign-in: click it once to open it, and it stays open while you present.
 
 **How to run this demo:** tell it as stories about people, not screens. Each use case below names the person, the problem they have today, what they do, and the outcome the audience should take away. Say the persona's name out loud and keep to their view of the work.
 

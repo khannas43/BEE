@@ -10,7 +10,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -81,53 +81,45 @@ public class WorkflowFoundationRepository {
     }
 
     public TaskRow createTask(TaskCommand command, UUID commandId, UUID actorAccount, String actorRole) {
-        if (commandId != null) {
-            return createTaskIdempotent(command, commandId, actorAccount, actorRole);
-        }
-        return tx.execute(status -> insertTaskWithEvent(command, null, null, actorAccount, actorRole));
+        return createTaskIdempotent(command, commandId, actorAccount, actorRole);
     }
 
     public TaskRow createTaskIdempotent(TaskCommand command, UUID commandId, UUID actorAccount, String actorRole) {
-        String hash = payloadHash(command);
+        String hash = commandId == null ? null : payloadHash(command);
         return tx.execute(status -> {
-            Optional<TaskRow> existing = findTaskByCommandId(commandId);
-            if (existing.isPresent()) {
-                assertSamePayload(existing.get(), command, hash);
-                return existing.get();
-            }
-            try {
-                return insertTaskWithEvent(command, commandId, hash, actorAccount, actorRole);
-            } catch (DataIntegrityViolationException ex) {
-                Optional<TaskRow> raced = findTaskByCommandId(commandId);
-                if (raced.isPresent()) {
-                    assertSamePayload(raced.get(), command, hash);
-                    return raced.get();
-                }
-                throw ex;
-            }
+            UUID taskId = invokeCreateTask(command, commandId, hash, actorAccount, actorRole);
+            return findTask(taskId).orElseThrow();
         });
     }
 
-    TaskRow insertTaskWithEvent(TaskCommand command, UUID commandId, String hash, UUID actorAccount, String actorRole) {
-        UUID taskId = jdbc.queryForObject(
-            "INSERT INTO workflow_task (subject_kind, subject_id, stage, action, owner_role, owner_account_id, command_id, command_payload_hash) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-            UUID.class, command.subjectKind(), command.subjectId(), command.stage(), command.action(), command.ownerRole(), command.ownerAccount(), commandId,
-            hash);
-        jdbc.update(
-            "INSERT INTO workflow_task_event (task_id, kind, to_owner_role, to_owner_account, actor_account_id, actor_role) VALUES (?, 'created', ?, ?, ?, ?)",
-            taskId, command.ownerRole(), command.ownerAccount(), actorAccount, actorRole);
-        return findTask(taskId).orElseThrow();
+    UUID invokeCreateTask(TaskCommand command, UUID commandId, String hash, UUID actorAccount, String actorRole) {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            try {
+                return jdbc.queryForObject(
+                    "SELECT workflow_foundation_create_task(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    UUID.class,
+                    command.subjectKind(), command.subjectId(), command.stage(), command.action(), command.ownerRole(), command.ownerAccount(), commandId, hash,
+                    actorAccount, actorRole);
+            } catch (DataAccessException ex) {
+                if (isSqlMessage(ex, "workflow_idempotency_conflict")) {
+                    throw new WorkflowIdempotencyConflictException();
+                }
+                if (isSqlMessage(ex, "workflow_command_create_race_retry") && attempt + 1 < 5) {
+                    continue;
+                }
+                throw ex;
+            }
+        }
+        throw new IllegalStateException("workflow_command_create_exhausted");
     }
 
-    void assertSamePayload(TaskRow row, TaskCommand command, String hash) {
-        if (!hash.equals(row.commandPayloadHash())
-            || !command.subjectKind().equals(row.subjectKind())
-            || !command.subjectId().equals(row.subjectId())
-            || !command.stage().equals(row.stage())
-            || !command.action().equals(row.action())) {
-            throw new WorkflowIdempotencyConflictException();
+    static boolean isSqlMessage(DataAccessException ex, String fragment) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t.getMessage() != null && t.getMessage().contains(fragment)) {
+                return true;
+            }
         }
+        return false;
     }
 
     public Optional<TaskRow> findTaskByCommandId(UUID commandId) {
@@ -153,14 +145,10 @@ public class WorkflowFoundationRepository {
     }
 
     public void reassignTask(UUID taskId, int expectedVersion, String toRole, UUID toAccount, UUID actorAccount, String actorRole, String reason) {
-        tx.executeWithoutResult(status -> {
-            var before = findTask(taskId).orElseThrow();
-            applyTaskFields(taskId, expectedVersion, toRole, toAccount, null, null);
-            jdbc.update(
-                "INSERT INTO workflow_task_event (task_id, kind, from_owner_role, from_owner_account, to_owner_role, to_owner_account, actor_account_id, actor_role, reason) "
-                    + "VALUES (?, 'reassigned', ?, ?, ?, ?, ?, ?, ?)",
-                taskId, before.ownerRole(), before.ownerAccountId(), toRole, toAccount, actorAccount, actorRole, reason);
-        });
+        tx.executeWithoutResult(status -> jdbc.query(
+            "SELECT workflow_foundation_reassign_task(?, ?, ?, ?, ?, ?, ?)",
+            rs -> null,
+            taskId, expectedVersion, toRole, toAccount, actorAccount, actorRole, reason));
     }
 
     public void completeTask(UUID taskId, int expectedVersion, UUID actorAccount, String actorRole, String reason) {
@@ -172,19 +160,10 @@ public class WorkflowFoundationRepository {
     }
 
     void terminalTask(UUID taskId, int expectedVersion, String status, UUID actorAccount, String actorRole, String reason) {
-        tx.executeWithoutResult(s -> {
-            applyTaskFields(taskId, expectedVersion, null, null, status, null);
-            jdbc.update(
-                "INSERT INTO workflow_task_event (task_id, kind, actor_account_id, actor_role, reason) VALUES (?, ?, ?, ?, ?)",
-                taskId, status.equals("completed") ? "completed" : "cancelled", actorAccount, actorRole, reason);
-        });
-    }
-
-    void applyTaskFields(UUID taskId, int expectedVersion, String ownerRole, UUID ownerAccount, String status, Instant dueAt) {
-        jdbc.query(
-            "SELECT workflow_foundation_set_task_fields(?, ?, ?, ?, ?, ?)",
-            (rs, rowNum) -> rs.getString(1),
-            taskId, expectedVersion, ownerRole, ownerAccount, status, dueAt == null ? null : java.sql.Timestamp.from(dueAt));
+        tx.executeWithoutResult(s -> jdbc.query(
+            "SELECT workflow_foundation_terminal_task(?, ?, ?, ?, ?, ?)",
+            rs -> null,
+            taskId, expectedVersion, status, actorAccount, actorRole, reason));
     }
 
     public UUID openDiscrepancy(String subjectKind, UUID subjectId, String lineCode, String summary, UUID openedBy) {
@@ -194,54 +173,22 @@ public class WorkflowFoundationRepository {
     }
 
     public void addDiscrepancyResponse(UUID discrepancyId, int responseSeq, String body, UUID respondedBy) {
-        tx.executeWithoutResult(s -> {
-            String status = jdbc.queryForObject("SELECT status FROM workflow_discrepancy WHERE id = ? FOR UPDATE", String.class, discrepancyId);
-            if (!"open".equals(status) && !"needs_more".equals(status)) {
-                throw new DataIntegrityViolationException("workflow_discrepancy_not_accepting_response");
-            }
-            jdbc.update(
-                "INSERT INTO workflow_discrepancy_response (discrepancy_id, response_seq, body, responded_by) VALUES (?, ?, ?, ?)",
-                discrepancyId, responseSeq, body, respondedBy);
-            setDiscrepancyStatus(discrepancyId, "awaiting_review");
-        });
+        tx.executeWithoutResult(s -> jdbc.query(
+            "SELECT workflow_foundation_discrepancy_respond(?, ?, ?, ?)",
+            rs -> null,
+            discrepancyId, responseSeq, body, respondedBy));
     }
 
     public void disposeDiscrepancy(UUID discrepancyId, int responseSeq, String outcome, String note, UUID disposedBy) {
-        tx.executeWithoutResult(s -> {
-            String status = jdbc.queryForObject("SELECT status FROM workflow_discrepancy WHERE id = ? FOR UPDATE", String.class, discrepancyId);
-            if (!"awaiting_review".equals(status)) {
-                throw new DataIntegrityViolationException("workflow_discrepancy_not_awaiting_review");
-            }
-            if ("needs_more".equals(outcome)) {
-                Integer priorNeedsMore = jdbc.queryForObject(
-                    "SELECT count(*)::int FROM workflow_discrepancy_disposition WHERE discrepancy_id = ? AND outcome = 'needs_more'",
-                    Integer.class, discrepancyId);
-                if (priorNeedsMore != null && priorNeedsMore > 0) {
-                    throw new DataIntegrityViolationException("workflow_discrepancy_needs_more_once");
-                }
-            }
-            jdbc.update(
-                "INSERT INTO workflow_discrepancy_disposition (discrepancy_id, response_seq, outcome, note, disposed_by) VALUES (?, ?, ?, ?, ?)",
-                discrepancyId, responseSeq, outcome, note, disposedBy);
-            if ("needs_more".equals(outcome)) {
-                setDiscrepancyStatus(discrepancyId, "needs_more");
-            } else {
-                setDiscrepancyStatus(discrepancyId, "closed");
-            }
-        });
-    }
-
-    void setDiscrepancyStatus(UUID discrepancyId, String status) {
-        jdbc.queryForObject("SELECT set_config('bee.workflow_discrepancy_status', 'allow', true)", String.class);
-        jdbc.update("UPDATE workflow_discrepancy SET status = ? WHERE id = ?", status, discrepancyId);
+        tx.executeWithoutResult(s -> jdbc.query(
+            "SELECT workflow_foundation_discrepancy_dispose(?, ?, ?, ?, ?)",
+            rs -> null,
+            discrepancyId, responseSeq, outcome, note, disposedBy));
     }
 
     public UUID appendClockEvent(String subjectKind, UUID subjectId, UUID policyVersionId, String eventKind, String responsibleParty, Instant at, String note) {
-        var prior = loadClockEvents(subjectKind, subjectId);
-        WorkingDaySla.validateClockSequence(prior, new WorkingDaySla.ClockEvent(eventKind, responsibleParty, at));
         return jdbc.queryForObject(
-            "INSERT INTO workflow_sla_clock_event (subject_kind, subject_id, policy_version_id, event_kind, responsible_party, occurred_at, note) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            "SELECT workflow_foundation_append_clock_event(?, ?, ?, ?, ?, ?, ?)",
             UUID.class, subjectKind, subjectId, policyVersionId, eventKind, responsibleParty, java.sql.Timestamp.from(at), note);
     }
 

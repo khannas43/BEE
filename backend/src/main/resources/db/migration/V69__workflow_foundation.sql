@@ -196,7 +196,7 @@ BEGIN
          IS DISTINCT FROM (OLD.subject_kind, OLD.subject_id, OLD.line_code, OLD.summary, OLD.opened_by, OLD.opened_at) THEN
       RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_discrepancy_identity_immutable';
     END IF;
-    IF NEW.status IS DISTINCT FROM OLD.status AND current_setting('bee.workflow_discrepancy_status', true) <> 'allow' THEN
+    IF NEW.status IS DISTINCT FROM OLD.status AND current_user = 'bee_runtime' THEN
       RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_discrepancy_status_command_only';
     END IF;
   END IF;
@@ -207,39 +207,260 @@ CREATE TRIGGER workflow_discrepancy_mutation BEFORE UPDATE ON workflow_discrepan
 
 CREATE FUNCTION workflow_sla_policy_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF session_user = 'bee_local_maint' THEN
-    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
-    IF TG_OP = 'UPDATE' THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'workflow_sla_policy_version_immutable';
   END IF;
-  RAISE EXCEPTION USING ERRCODE = '55000',
-    MESSAGE = format('%s records are append-only (%s refused for %s)', TG_TABLE_NAME, TG_OP, session_user);
+  IF TG_OP = 'DELETE' THEN
+    IF EXISTS (SELECT 1 FROM workflow_sla_clock_event c WHERE c.policy_version_id = OLD.id) THEN
+      RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_sla_policy_version_referenced';
+    END IF;
+    IF session_user <> 'bee_local_maint' AND current_user <> 'bee_local_maint' THEN
+      RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'workflow_sla_policy_delete_refused';
+    END IF;
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
 END $$;
 
 CREATE TRIGGER workflow_sla_policy_immutable_row BEFORE UPDATE OR DELETE ON workflow_sla_policy_version
   FOR EACH ROW EXECUTE FUNCTION workflow_sla_policy_immutable();
 
-CREATE FUNCTION workflow_foundation_set_task_fields(
-  p_task uuid, p_expected_version integer, p_owner_role text, p_owner_account uuid,
-  p_status text, p_due_at timestamptz
-) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+CREATE FUNCTION workflow_idempotency_payload_matches(
+  p_row workflow_task, p_hash char(64), p_kind text, p_subject uuid, p_stage text, p_action text
+) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  SELECT p_row.command_payload_hash IS NOT DISTINCT FROM p_hash
+     AND p_row.subject_kind = p_kind AND p_row.subject_id = p_subject
+     AND p_row.stage = p_stage AND p_row.action = p_action;
+$$;
+
+CREATE FUNCTION workflow_foundation_create_task(
+  p_subject_kind text, p_subject_id uuid, p_stage text, p_action text,
+  p_owner_role text, p_owner_account uuid,
+  p_command_id uuid, p_command_payload_hash char(64),
+  p_actor_account uuid, p_actor_role text
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE
+  v_id uuid;
+  v_row workflow_task;
+BEGIN
+  PERFORM workflow_validate_subject(p_subject_kind, p_subject_id);
+  IF p_command_id IS NOT NULL THEN
+    IF p_command_payload_hash IS NULL THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_command_hash_required';
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended(p_command_id::text, 0));
+    INSERT INTO workflow_task (subject_kind, subject_id, stage, action, owner_role, owner_account_id, command_id, command_payload_hash)
+    VALUES (p_subject_kind, p_subject_id, p_stage, p_action, p_owner_role, p_owner_account, p_command_id, p_command_payload_hash)
+    ON CONFLICT (command_id) WHERE command_id IS NOT NULL DO NOTHING
+    RETURNING id INTO v_id;
+    IF v_id IS NULL THEN
+      SELECT * INTO v_row FROM workflow_task WHERE command_id = p_command_id;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'workflow_command_create_race_retry';
+      END IF;
+      IF NOT workflow_idempotency_payload_matches(v_row, p_command_payload_hash, p_subject_kind, p_subject_id, p_stage, p_action) THEN
+        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'workflow_idempotency_conflict';
+      END IF;
+      RETURN v_row.id;
+    END IF;
+  ELSE
+    INSERT INTO workflow_task (subject_kind, subject_id, stage, action, owner_role, owner_account_id)
+    VALUES (p_subject_kind, p_subject_id, p_stage, p_action, p_owner_role, p_owner_account)
+    RETURNING id INTO v_id;
+  END IF;
+  INSERT INTO workflow_task_event (task_id, kind, to_owner_role, to_owner_account, actor_account_id, actor_role)
+  VALUES (v_id, 'created', p_owner_role, p_owner_account, p_actor_account, p_actor_role);
+  RETURN v_id;
+END $$;
+
+CREATE FUNCTION workflow_foundation_reassign_task(
+  p_task uuid, p_expected_version integer, p_to_role text, p_to_account uuid,
+  p_actor_account uuid, p_actor_role text, p_reason text
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_from_role text;
+  v_from_account uuid;
   n integer;
 BEGIN
+  SELECT owner_role, owner_account_id INTO v_from_role, v_from_account FROM workflow_task WHERE id = p_task FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_task_missing';
+  END IF;
   UPDATE workflow_task
-     SET owner_role = coalesce(p_owner_role, owner_role),
-         owner_account_id = CASE WHEN p_owner_role IS NOT NULL THEN p_owner_account ELSE owner_account_id END,
-         status = coalesce(p_status, status),
-         due_at = coalesce(p_due_at, due_at),
-         version = version + 1
+     SET owner_role = p_to_role, owner_account_id = p_to_account, version = version + 1
    WHERE id = p_task AND version = p_expected_version AND status = 'open';
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN
     RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_task_version_conflict';
   END IF;
-  RETURN 'ok';
+  INSERT INTO workflow_task_event (task_id, kind, from_owner_role, from_owner_account, to_owner_role, to_owner_account, actor_account_id, actor_role, reason)
+  VALUES (p_task, 'reassigned', v_from_role, v_from_account, p_to_role, p_to_account, p_actor_account, p_actor_role, p_reason);
 END $$;
 
-REVOKE ALL ON FUNCTION workflow_foundation_set_task_fields(uuid, integer, text, uuid, text, timestamptz) FROM PUBLIC;
+CREATE FUNCTION workflow_foundation_terminal_task(
+  p_task uuid, p_expected_version integer, p_status text,
+  p_actor_account uuid, p_actor_role text, p_reason text
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  n integer;
+  v_kind text;
+BEGIN
+  IF p_status NOT IN ('completed', 'cancelled') THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'workflow_task_terminal_status_invalid';
+  END IF;
+  v_kind := CASE WHEN p_status = 'completed' THEN 'completed' ELSE 'cancelled' END;
+  PERFORM 1 FROM workflow_task WHERE id = p_task FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_task_missing';
+  END IF;
+  UPDATE workflow_task SET status = p_status, version = version + 1
+   WHERE id = p_task AND version = p_expected_version AND status = 'open';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_task_version_conflict';
+  END IF;
+  INSERT INTO workflow_task_event (task_id, kind, actor_account_id, actor_role, reason)
+  VALUES (p_task, v_kind, p_actor_account, p_actor_role, p_reason);
+END $$;
+
+CREATE FUNCTION workflow_foundation_discrepancy_respond(
+  p_discrepancy uuid, p_response_seq integer, p_body text, p_responded_by uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_status text;
+  v_next integer;
+BEGIN
+  SELECT status INTO v_status FROM workflow_discrepancy WHERE id = p_discrepancy FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_discrepancy_missing';
+  END IF;
+  IF v_status NOT IN ('open', 'needs_more') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_discrepancy_not_accepting_response';
+  END IF;
+  SELECT coalesce(max(response_seq), 0) + 1 INTO v_next FROM workflow_discrepancy_response WHERE discrepancy_id = p_discrepancy;
+  IF p_response_seq <> v_next THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_discrepancy_response_seq_gap';
+  END IF;
+  INSERT INTO workflow_discrepancy_response (discrepancy_id, response_seq, body, responded_by)
+  VALUES (p_discrepancy, p_response_seq, p_body, p_responded_by);
+  UPDATE workflow_discrepancy SET status = 'awaiting_review' WHERE id = p_discrepancy;
+END $$;
+
+CREATE FUNCTION workflow_foundation_discrepancy_dispose(
+  p_discrepancy uuid, p_response_seq integer, p_outcome text, p_note text, p_disposed_by uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_status text;
+  v_target integer;
+BEGIN
+  SELECT status INTO v_status FROM workflow_discrepancy WHERE id = p_discrepancy FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_discrepancy_missing';
+  END IF;
+  IF v_status <> 'awaiting_review' THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_discrepancy_not_awaiting_review';
+  END IF;
+  SELECT r.response_seq INTO v_target
+    FROM workflow_discrepancy_response r
+    LEFT JOIN workflow_discrepancy_disposition d ON d.discrepancy_id = r.discrepancy_id AND d.response_seq = r.response_seq
+   WHERE r.discrepancy_id = p_discrepancy AND d.id IS NULL
+   ORDER BY r.response_seq DESC LIMIT 1;
+  IF v_target IS NULL OR p_response_seq <> v_target THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_discrepancy_disposition_target';
+  END IF;
+  INSERT INTO workflow_discrepancy_disposition (discrepancy_id, response_seq, outcome, note, disposed_by)
+  VALUES (p_discrepancy, p_response_seq, p_outcome, p_note, p_disposed_by);
+  IF p_outcome = 'needs_more' THEN
+    UPDATE workflow_discrepancy SET status = 'needs_more' WHERE id = p_discrepancy;
+  ELSE
+    UPDATE workflow_discrepancy SET status = 'closed' WHERE id = p_discrepancy;
+  END IF;
+END $$;
+
+CREATE FUNCTION workflow_foundation_append_clock_event(
+  p_subject_kind text, p_subject_id uuid, p_policy_version_id uuid,
+  p_event_kind text, p_responsible_party text, p_occurred_at timestamptz, p_note text
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  r record;
+  v_started boolean := false;
+  v_paused boolean := false;
+  v_stopped boolean := false;
+  v_last_at timestamptz;
+  v_id uuid;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_subject_kind || ':' || p_subject_id::text, 0));
+  PERFORM workflow_validate_subject(p_subject_kind, p_subject_id);
+  IF NOT EXISTS (SELECT 1 FROM workflow_sla_policy_version WHERE id = p_policy_version_id) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_policy_version_missing';
+  END IF;
+  FOR r IN
+    SELECT event_kind, responsible_party, occurred_at FROM workflow_sla_clock_event
+     WHERE subject_kind = p_subject_kind AND subject_id = p_subject_id
+     ORDER BY occurred_at, id
+  LOOP
+    IF v_last_at IS NOT NULL AND r.occurred_at <= v_last_at THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_not_monotonic';
+    END IF;
+    v_last_at := r.occurred_at;
+    IF v_stopped THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_after_stop';
+    END IF;
+    CASE r.event_kind
+      WHEN 'start' THEN
+        IF v_started THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_duplicate_start'; END IF;
+        IF r.responsible_party <> 'bureau' THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_start_party'; END IF;
+        v_started := true;
+      WHEN 'pause' THEN
+        IF NOT v_started OR v_paused THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_pause_invalid'; END IF;
+        IF r.responsible_party <> 'applicant' THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_pause_party'; END IF;
+        v_paused := true;
+      WHEN 'resume' THEN
+        IF NOT v_paused THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_resume_invalid'; END IF;
+        IF r.responsible_party <> 'applicant' THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_resume_party'; END IF;
+        v_paused := false;
+      WHEN 'stop' THEN
+        IF NOT v_started OR v_paused THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_stop_invalid'; END IF;
+        IF r.responsible_party <> 'bureau' THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_stop_party'; END IF;
+        v_stopped := true;
+      ELSE
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'workflow_clock_unknown_kind';
+    END CASE;
+  END LOOP;
+  IF v_last_at IS NOT NULL AND p_occurred_at <= v_last_at THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_not_monotonic';
+  END IF;
+  IF v_stopped THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_after_stop';
+  END IF;
+  CASE p_event_kind
+    WHEN 'start' THEN
+      IF v_started THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_duplicate_start'; END IF;
+      IF p_responsible_party <> 'bureau' THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_start_party'; END IF;
+    WHEN 'pause' THEN
+      IF NOT v_started OR v_paused THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_pause_invalid'; END IF;
+      IF p_responsible_party <> 'applicant' THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_pause_party'; END IF;
+    WHEN 'resume' THEN
+      IF NOT v_paused THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_resume_invalid'; END IF;
+      IF p_responsible_party <> 'applicant' THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_resume_party'; END IF;
+    WHEN 'stop' THEN
+      IF NOT v_started OR v_paused THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_stop_invalid'; END IF;
+      IF p_responsible_party <> 'bureau' THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_clock_stop_party'; END IF;
+    ELSE
+      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'workflow_clock_unknown_kind';
+  END CASE;
+  INSERT INTO workflow_sla_clock_event (subject_kind, subject_id, policy_version_id, event_kind, responsible_party, occurred_at, note)
+  VALUES (p_subject_kind, p_subject_id, p_policy_version_id, p_event_kind, p_responsible_party, p_occurred_at, p_note)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+REVOKE ALL ON FUNCTION workflow_foundation_create_task(text, uuid, text, text, text, uuid, uuid, char(64), uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION workflow_foundation_reassign_task(uuid, integer, text, uuid, uuid, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION workflow_foundation_terminal_task(uuid, integer, text, uuid, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION workflow_foundation_discrepancy_respond(uuid, integer, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION workflow_foundation_discrepancy_dispose(uuid, integer, text, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION workflow_foundation_append_clock_event(text, uuid, uuid, text, text, timestamptz, text) FROM PUBLIC;
 
 DO $$
 DECLARE
@@ -272,14 +493,21 @@ BEGIN
   END IF;
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_runtime') THEN
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO bee_runtime', home_schema);
-    EXECUTE format('GRANT SELECT, INSERT ON %I.workflow_task TO bee_runtime', home_schema);
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE ON %I.workflow_discrepancy TO bee_runtime', home_schema);
-    EXECUTE format('GRANT SELECT, INSERT ON %I.workflow_task_event, %I.workflow_discrepancy_response, %I.workflow_discrepancy_disposition, '
+    EXECUTE format('GRANT SELECT ON %I.workflow_task, %I.workflow_discrepancy TO bee_runtime', home_schema, home_schema);
+    EXECUTE format('GRANT SELECT, INSERT ON %I.workflow_discrepancy TO bee_runtime', home_schema);
+    EXECUTE format('GRANT SELECT ON %I.workflow_task_event, %I.workflow_discrepancy_response, %I.workflow_discrepancy_disposition, '
       || '%I.workflow_sla_clock_event TO bee_runtime', home_schema, home_schema, home_schema, home_schema);
     EXECUTE format('GRANT SELECT ON %I.workflow_calendar, %I.workflow_calendar_closure, %I.workflow_sla_policy_version TO bee_runtime', home_schema, home_schema, home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_set_task_fields(uuid, integer, text, uuid, text, timestamptz) TO bee_runtime', home_schema);
-    EXECUTE format('REVOKE UPDATE ON %I.workflow_task, %I.workflow_sla_policy_version, %I.workflow_calendar, '
-      || '%I.workflow_calendar_closure FROM bee_runtime', home_schema, home_schema, home_schema, home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_create_task(text, uuid, text, text, text, uuid, uuid, char(64), uuid, text) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_reassign_task(uuid, integer, text, uuid, uuid, text, text) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_terminal_task(uuid, integer, text, uuid, text, text) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_discrepancy_respond(uuid, integer, text, uuid) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_discrepancy_dispose(uuid, integer, text, text, uuid) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_append_clock_event(text, uuid, uuid, text, text, timestamptz, text) TO bee_runtime', home_schema);
+    EXECUTE format('REVOKE INSERT, UPDATE ON %I.workflow_task, %I.workflow_task_event, %I.workflow_discrepancy_response, %I.workflow_discrepancy_disposition, '
+      || '%I.workflow_sla_clock_event, %I.workflow_sla_policy_version, %I.workflow_calendar, %I.workflow_calendar_closure FROM bee_runtime',
+      home_schema, home_schema, home_schema, home_schema, home_schema, home_schema, home_schema, home_schema);
+    EXECUTE format('REVOKE UPDATE ON %I.workflow_discrepancy FROM bee_runtime', home_schema);
     EXECUTE format('REVOKE DELETE, TRUNCATE ON %I.workflow_task_event, %I.workflow_discrepancy_response, %I.workflow_discrepancy_disposition, '
       || '%I.workflow_sla_clock_event FROM bee_runtime', home_schema, home_schema, home_schema, home_schema);
   END IF;

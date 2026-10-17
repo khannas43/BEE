@@ -11,8 +11,16 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HexFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -59,6 +67,12 @@ class WorkflowFoundationDatabaseTest {
         return new DriverManagerDataSource(
             "jdbc:postgresql://127.0.0.1:" + env("BEE_PG_PORT", "5434") + "/" + env("BEE_APP_DB", "bee_app") + "?currentSchema=" + schema,
             env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime"));
+    }
+
+    static DriverManagerDataSource maintSource(String schema) {
+        return new DriverManagerDataSource(
+            "jdbc:postgresql://127.0.0.1:" + env("BEE_PG_PORT", "5434") + "/" + env("BEE_APP_DB", "bee_app") + "?currentSchema=" + schema,
+            env("BEE_MAINT_DB_USER", "bee_local_maint"), env("BEE_MAINT_DB_PASSWORD", "bee-local-maint"));
     }
 
     static WorkflowFoundationRepository.TaskCommand cmd(String kind, UUID subject, String stage, String action) {
@@ -108,6 +122,7 @@ class WorkflowFoundationDatabaseTest {
         insertPolicy("adj_b", 1, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 7, 1), 5);
         assertThrows(DataIntegrityViolationException.class, () -> insertPolicy("adj_b", 2, LocalDate.of(2026, 6, 1), null, 6));
         assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_sla_policy_version SET note = 'x' WHERE policy_key = 'adj_a'"));
+        assertThrows(DataAccessException.class, () -> owner.update("UPDATE workflow_sla_policy_version SET note = 'x' WHERE policy_key = 'adj_a'"));
     }
 
     @Test
@@ -160,20 +175,127 @@ class WorkflowFoundationDatabaseTest {
         UUID eventId = runtime.queryForObject("SELECT id FROM workflow_task_event WHERE task_id = ? LIMIT 1", UUID.class, task.id());
         assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_task_event SET reason = 'tamper' WHERE id = ?", eventId));
         assertThrows(DataAccessException.class, () -> runtime.update("INSERT INTO workflow_calendar_closure (calendar_key, closure_date) VALUES ('india_bee_default', DATE '2099-01-01')"));
+        runtime.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) con -> {
+            try (var st = con.createStatement()) {
+                st.execute("SELECT set_config('bee.workflow_discrepancy_status', 'allow', true)");
+            }
+            return null;
+        });
+        assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_discrepancy SET status = 'closed' WHERE id = ?", disc));
     }
 
     @Test
-    void discrepancyTwoCycleNeedsMoreThenClose() {
+    void runtimeCommandFunctionsAppendInseparableAuditEvidence() {
+        UUID command = UUID.randomUUID();
+        var task = repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_cmd", "review"), command, PROGRAMME, "programme");
+        int eventsBefore = repo.countTaskEvents(task.id());
+        runtime.query(
+            "SELECT workflow_foundation_reassign_task(?, ?, ?, ?, ?, ?, ?)",
+            rs -> null,
+            task.id(), task.version(), "director", NOVA_USER, PROGRAMME, "programme", "via function");
+        assertEquals(eventsBefore + 1, repo.countTaskEvents(task.id()));
+    }
+
+    @Test
+    void discrepancyThreeCycleNeedsMoreThenClose() {
         UUID disc = repo.openDiscrepancy(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "line1", "Need docs", PROGRAMME);
         repo.addDiscrepancyResponse(disc, 1, "First upload", NOVA_USER);
-        assertThrows(DataIntegrityViolationException.class, () -> repo.addDiscrepancyResponse(disc, 2, "too soon", NOVA_USER));
+        assertThrows(DataAccessException.class, () -> repo.addDiscrepancyResponse(disc, 2, "too soon", NOVA_USER));
         repo.disposeDiscrepancy(disc, 1, "needs_more", "more detail", PROGRAMME);
-        assertThrows(DataIntegrityViolationException.class, () -> repo.disposeDiscrepancy(disc, 1, "accepted", "dup", PROGRAMME));
+        assertThrows(DataAccessException.class, () -> repo.disposeDiscrepancy(disc, 1, "accepted", "dup", PROGRAMME));
         repo.addDiscrepancyResponse(disc, 2, "Second upload", NOVA_USER);
-        assertThrows(DataIntegrityViolationException.class, () -> repo.disposeDiscrepancy(disc, 2, "needs_more", "again", PROGRAMME));
-        repo.disposeDiscrepancy(disc, 2, "accepted", "ok", PROGRAMME);
+        repo.disposeDiscrepancy(disc, 2, "needs_more", "again", PROGRAMME);
+        repo.addDiscrepancyResponse(disc, 3, "Third upload", NOVA_USER);
+        repo.disposeDiscrepancy(disc, 3, "accepted", "ok", PROGRAMME);
         assertEquals("closed", owner.queryForObject("SELECT status FROM workflow_discrepancy WHERE id = ?", String.class, disc));
-        assertThrows(DataIntegrityViolationException.class, () -> repo.addDiscrepancyResponse(disc, 3, "late", NOVA_USER));
+        assertThrows(DataAccessException.class, () -> repo.addDiscrepancyResponse(disc, 4, "late", NOVA_USER));
+    }
+
+    @Test
+    void concurrentIdempotentCreateSharesOneTaskAndOneEvent() throws Exception {
+        UUID command = UUID.randomUUID();
+        var body = cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_race", "review");
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch go = new CountDownLatch(1);
+        List<UUID> ids = new ArrayList<>();
+        try {
+            List<Future<UUID>> futures = List.of(
+                pool.submit(() -> {
+                    go.await();
+                    return new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN)))
+                        .createTaskIdempotent(body, command, PROGRAMME, "programme").id();
+                }),
+                pool.submit(() -> {
+                    go.await();
+                    return new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN)))
+                        .createTaskIdempotent(body, command, PROGRAMME, "programme").id();
+                }));
+            go.countDown();
+            for (Future<UUID> f : futures) {
+                ids.add(f.get(15, TimeUnit.SECONDS));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(1, ids.stream().distinct().count());
+        assertEquals(1, repo.countTaskEvents(ids.get(0)));
+    }
+
+    @Test
+    void concurrentDiscrepancyResponseAllowsOneWinner() throws Exception {
+        UUID disc = repo.openDiscrepancy(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "line_race", "Race", PROGRAMME);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch go = new CountDownLatch(1);
+        AtomicInteger ok = new AtomicInteger();
+        AtomicInteger fail = new AtomicInteger();
+        try {
+            List<Future<?>> futures = List.of(
+                pool.submit(() -> {
+                    go.await();
+                    try {
+                        new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN))).addDiscrepancyResponse(disc, 1, "A", NOVA_USER);
+                        ok.incrementAndGet();
+                    } catch (DataAccessException ex) {
+                        fail.incrementAndGet();
+                    }
+                    return null;
+                }),
+                pool.submit(() -> {
+                    go.await();
+                    try {
+                        new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN))).addDiscrepancyResponse(disc, 1, "B", NOVA_USER);
+                        ok.incrementAndGet();
+                    } catch (DataAccessException ex) {
+                        fail.incrementAndGet();
+                    }
+                    return null;
+                }));
+            go.countDown();
+            for (Future<?> f : futures) {
+                f.get(15, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(1, ok.get());
+        assertEquals(1, fail.get());
+        assertEquals(1, owner.queryForObject("SELECT count(*)::int FROM workflow_discrepancy_response WHERE discrepancy_id = ?", Integer.class, disc));
+    }
+
+    @Test
+    void referencedPolicyVersionCannotChangeOrDelete() {
+        Instant start = LocalDate.of(2026, 5, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        UUID regClock = UUID.randomUUID();
+        owner.update(
+            "INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version) VALUES (?, ?, 'brand', ?, ?, 'draft', 0)",
+            regClock, "WF2A-POL-" + TAG, NOVA_ORG, "WF Pol " + TAG);
+        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, policyVersionId, "start", "bureau", start, null);
+        assertThrows(DataAccessException.class, () -> owner.update("UPDATE workflow_sla_policy_version SET note = 'tamper' WHERE id = ?", policyVersionId));
+        assertThrows(DataAccessException.class, () -> owner.update("DELETE FROM workflow_sla_policy_version WHERE id = ?", policyVersionId));
+        var maint = new JdbcTemplate(maintSource(MAIN));
+        assertThrows(DataAccessException.class, () -> maint.update("DELETE FROM workflow_sla_policy_version WHERE id = ?", policyVersionId));
+        UUID unused = insertPolicy("unused_del", 1, LocalDate.of(2027, 1, 1), LocalDate.of(2027, 12, 31), 3);
+        maint.update("DELETE FROM workflow_sla_policy_version WHERE id = ?", unused);
     }
 
     @Test
@@ -205,9 +327,13 @@ class WorkflowFoundationDatabaseTest {
         Instant start = LocalDate.of(2026, 4, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
         UUID clockSubject = registrationId;
         repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "start", "bureau", start, null);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(DataAccessException.class,
             () -> repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "resume", "applicant",
                 start.plusSeconds(5), null));
+        assertThrows(DataAccessException.class, () -> runtime.update(
+            "INSERT INTO workflow_sla_clock_event (subject_kind, subject_id, policy_version_id, event_kind, responsible_party, occurred_at) "
+                + "VALUES (?, ?, ?, 'pause', 'applicant', ?)",
+            WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, java.sql.Timestamp.from(start.plusSeconds(8))));
         repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "pause", "applicant", start.plusSeconds(10),
             null);
         repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "resume", "applicant", start.plusSeconds(20),
@@ -216,5 +342,54 @@ class WorkflowFoundationDatabaseTest {
         UUID storedPolicy = runtime.queryForObject(
             "SELECT policy_version_id FROM workflow_sla_clock_event WHERE subject_id = ? LIMIT 1", UUID.class, clockSubject);
         assertEquals(policyVersionId, storedPolicy);
+    }
+
+    @Test
+    void concurrentClockAppendAllowsOneValidSuccessor() throws Exception {
+        UUID regClock = UUID.randomUUID();
+        owner.update(
+            "INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version) VALUES (?, ?, 'brand', ?, ?, 'draft', 0)",
+            regClock, "WF2A-CLK-" + TAG, NOVA_ORG, "WF Clk " + TAG);
+        Instant start = LocalDate.of(2026, 7, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        Instant next = start.plusSeconds(10);
+        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, policyVersionId, "start", "bureau", start, null);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch go = new CountDownLatch(1);
+        AtomicInteger ok = new AtomicInteger();
+        AtomicInteger fail = new AtomicInteger();
+        try {
+            List<Future<?>> futures = List.of(
+                pool.submit(() -> {
+                    go.await();
+                    try {
+                        new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN)))
+                            .appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, policyVersionId, "pause", "applicant", next, null);
+                        ok.incrementAndGet();
+                    } catch (DataAccessException ex) {
+                        fail.incrementAndGet();
+                    }
+                    return null;
+                }),
+                pool.submit(() -> {
+                    go.await();
+                    try {
+                        new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN)))
+                            .appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, policyVersionId, "pause", "applicant", next, null);
+                        ok.incrementAndGet();
+                    } catch (DataAccessException ex) {
+                        fail.incrementAndGet();
+                    }
+                    return null;
+                }));
+            go.countDown();
+            for (Future<?> f : futures) {
+                f.get(15, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(1, ok.get());
+        assertEquals(1, fail.get());
+        assertEquals(2, owner.queryForObject("SELECT count(*)::int FROM workflow_sla_clock_event WHERE subject_id = ?", Integer.class, regClock));
     }
 }

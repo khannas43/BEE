@@ -43,7 +43,7 @@ public final class WorkingDaySla {
     public static void validateClockSequence(List<ClockEvent> prior, ClockEvent next) {
         if (prior != null) {
             for (ClockEvent e : prior) {
-                if (!next.occurredAt().isAfter(e.occurredAt()) && !next.occurredAt().equals(e.occurredAt())) {
+                if (!next.occurredAt().isAfter(e.occurredAt())) {
                     throw new IllegalArgumentException("workflow_clock_not_monotonic");
                 }
             }
@@ -188,6 +188,11 @@ public final class WorkingDaySla {
     }
 
     public static List<PauseInterval> applicantPausesFromClockEvents(List<ClockEvent> events, Instant asOf) {
+        var prior = new ArrayList<ClockEvent>();
+        for (ClockEvent e : events) {
+            validateClockSequence(prior, e);
+            prior.add(e);
+        }
         var pauses = new ArrayList<PauseInterval>();
         Instant pauseStart = null;
         for (ClockEvent e : events) {

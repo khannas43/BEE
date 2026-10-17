@@ -62,6 +62,22 @@ class WorkingDaySlaTest {
     }
 
     @Test
+    void clockSequenceRejectsEqualTimestamps() {
+        Instant t = Instant.parse("2026-05-01T10:00:00Z");
+        var prior = List.of(new WorkingDaySla.ClockEvent("start", "bureau", t));
+        assertThrows(IllegalArgumentException.class, () -> WorkingDaySla.validateClockSequence(prior, new WorkingDaySla.ClockEvent("pause", "applicant", t)));
+    }
+
+    @Test
+    void applicantPausesRejectResumeBeforePauseInFullSequence() {
+        Instant t = Instant.parse("2026-06-15T10:00:00Z");
+        var bad = List.of(
+            new WorkingDaySla.ClockEvent("start", "bureau", t),
+            new WorkingDaySla.ClockEvent("resume", "applicant", t.plusSeconds(5)));
+        assertThrows(IllegalArgumentException.class, () -> WorkingDaySla.applicantPausesFromClockEvents(bad, t.plusSeconds(10)));
+    }
+
+    @Test
     void clockSequenceRejectsInvalidTransitions() {
         Instant t = Instant.parse("2026-05-01T10:00:00Z");
         assertThrows(IllegalArgumentException.class, () -> WorkingDaySla.validateClockSequence(List.of(), new WorkingDaySla.ClockEvent("pause", "applicant", t)));

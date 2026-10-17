@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "../ui/Icon";
-import { useLang } from "@/components/i18n/LangProvider";
+import { LANGUAGE_SWITCH_ENABLED, useLang } from "@/components/i18n/LangProvider";
 import { useA11y } from "@/components/public/A11yProvider";
 import { NAV } from "@/lib/nav";
 import type { Lang } from "@/lib/i18n";
@@ -42,14 +42,16 @@ export function PublicHeader() {
               <button onClick={a11y.reset} aria-label={t("a11y.reset")} className="text-on-secondary hover:text-secondary-fixed px-1 font-bold" type="button">A</button>
               <button onClick={a11y.bigger} aria-label={t("a11y.bigger")} className="text-on-secondary hover:text-secondary-fixed px-1 font-bold" type="button">A+</button>
             </div>
-            <button
-              onClick={toggle}
-              className="bg-primary-container text-on-primary font-bold px-2 py-0.5 rounded text-label-sm hover:bg-forest-dark"
-              type="button"
-              aria-label="Toggle language"
-            >
-              {lang === "en" ? "हिन्दी" : "English"}
-            </button>
+            {LANGUAGE_SWITCH_ENABLED ? (
+              <button
+                onClick={toggle}
+                className="bg-primary-container text-on-primary font-bold px-2 py-0.5 rounded text-label-sm hover:bg-forest-dark"
+                type="button"
+                aria-label="Toggle language"
+              >
+                {lang === "en" ? "हिन्दी" : "English"}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

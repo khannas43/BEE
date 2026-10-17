@@ -251,7 +251,8 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_policy_version_missing';
   END IF;
-  IF p_anchor::date < v_from OR (v_to IS NOT NULL AND p_anchor::date >= v_to) THEN
+  IF (p_anchor AT TIME ZONE 'Asia/Kolkata')::date < v_from
+     OR (v_to IS NOT NULL AND (p_anchor AT TIME ZONE 'Asia/Kolkata')::date >= v_to) THEN
     RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_policy_version_not_applicable';
   END IF;
 END $$;

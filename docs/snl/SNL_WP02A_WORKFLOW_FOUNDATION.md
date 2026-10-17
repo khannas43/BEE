@@ -1,6 +1,6 @@
 # SNL WP02A — workflow foundation (implementation note)
 
-**Status:** Foundation slice corrected (Brief 18C); ChatGPT acceptance pending. Journey wiring deferred to WP2B.
+**Status:** Foundation slice accepted by ChatGPT on 18 October 2026. Journey wiring deferred to WP2B.
 **Date:** 18 October 2026
 **Migration:** `V69__workflow_foundation.sql` (editable in place until merge)
 **Code:** `gov.bee.api.workflow.WorkingDaySla`, `WorkflowFoundationRepository`
@@ -14,7 +14,7 @@ Registration and model applications keep their current state columns and transit
 
 Each SLA-governed **`workflow_task`** has at most one **`workflow_sla_clock`** row (1:1, immutable `policy_version_id` and `policy_anchor_at`). Clock **events** append to **`workflow_sla_clock_event.clock_id`**, not to the application id. A subject may therefore run **`stop`** on one stage clock and later **`start`** a new clock on another task. Advisory locking is per **clock id**.
 
-Policy applicability is checked at task/clock creation: `policy_anchor_at` must fall in the version’s half-open `[effective_from, effective_to)` range. Events do not carry a policy argument; the aggregate pins the version for the life of the clock.
+Policy applicability is checked at task/clock creation: the `policy_anchor_at` date in **Asia/Kolkata** must fall in the version’s half-open `[effective_from, effective_to)` range. Events do not carry a policy argument; the aggregate pins the version for the life of the clock.
 
 ## Database command boundaries
 
@@ -42,4 +42,5 @@ Common transition APIs, UI, journey wiring, notification outbox, supervisor queu
 ## Evidence
 
 - Flyway **V69** on throwaway schemas.
-- **`WorkingDaySlaTest`** and **`WorkflowFoundationDatabaseTest`** (@Tag `db`), including per-clock concurrency and multi-clock subject cases.
+- **`WorkingDaySlaTest`** and **`WorkflowFoundationDatabaseTest`** (@Tag `db`), including per-clock concurrency, multi-clock subject cases and the India-date policy boundary.
+- Final acceptance checks: backend **160/160**, database **287/287**, web **251/251**, and TypeScript clean.

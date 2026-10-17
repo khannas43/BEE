@@ -134,6 +134,19 @@ class WorkflowFoundationDatabaseTest {
     }
 
     @Test
+    void policyApplicabilityUsesIndiaDateAtUtcBoundary() {
+        UUID policy = insertPolicy("india_date", 1, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 2), 1);
+        Instant indiaNewYear = Instant.parse("2025-12-31T18:45:00Z");
+        Instant due = indiaNewYear.plusSeconds(86400);
+
+        var task = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "india_date", "review", due, policy, indiaNewYear),
+            UUID.randomUUID(), PROGRAMME, "programme");
+
+        assertEquals(indiaNewYear, repo.findClockByTaskId(task.id()).orElseThrow().policyAnchorAt());
+    }
+
+    @Test
     void idempotentReplayAndConflictAndTerminalRetention() {
         UUID command = UUID.randomUUID();
         var first = repo.createTaskIdempotent(cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_a", "review"), command, PROGRAMME,

@@ -292,8 +292,8 @@ At the end of each development session, update the package status, progress, com
 | UI tests | Pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | Brief 18C clock identity and due-date closure; ChatGPT acceptance pending |
-| Completion commit or PR | Task branch commits (18 + 18A + 18B + 18C) |
+| Review | WP2A accepted by ChatGPT on 18 Oct 2026 after Briefs 18A–18C and India-date boundary correction |
+| Completion commit or PR | Task branch commits (18 + 18A + 18B + 18C), merged to `main` after final acceptance |
 
 #### WP2 acceptance
 
@@ -778,6 +778,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP1 | In progress | Gate pending (90%) | WP01 baseline + Brief 17A review corrections; BL-252/256; live form not fetched (504) | ChatGPT WP1 acceptance; BL-252; then WP2 |
 | 18 Oct 2026 | WP1 | Gate pending (90%) | Complete (100%) | ChatGPT accepted the PDF-backed provisional baseline; A01–A20 remain provisional | Begin WP2; retry secondary live-form comparison in WP3 (BL-252) |
 | 18 Oct 2026 | WP2 | In progress (5%) | In progress (35%) | Brief 18 WP2A: V69 schema, WorkingDaySla, db/unit tests | WP2B wiring, APIs, UI; BL-257 |
+| 18 Oct 2026 | WP2 | In progress (35%) | In progress (35%), WP2A accepted | Per-task policy-pinned clocks, atomic due-dated tasks, multi-cycle discrepancies and India-date policy boundary accepted; 160 backend, 287 database and 251 web tests passed | Begin WP2B journey wiring (BL-257) |
 
 ### 6.2 Standard completion record
 

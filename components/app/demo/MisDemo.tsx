@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { demoGet, demoPath, type DemoResult } from "@/lib/client/runtimeDemo";
 import { datedFileName, parseCsvText, saveBytes, saveCsv } from "@/lib/client/csv";
 import { buildXlsx, XLSX_TYPE } from "@/lib/client/xlsx";
+import { Icon } from "@/components/ui/Icon";
+import { BarList, DonutChart, TrendChart } from "./charts";
 
 /**
  * MIS dashboard on live data (demo slice S5). Read-only: every figure is a SQL aggregate computed by Spring on the live tables, with the time
@@ -46,24 +48,6 @@ function cardValue(c: Card): string {
 
 function seriesOf(t: Table): { name: string; values: number[] }[] {
   return t.columns.slice(1).map((name, i) => ({ name, values: t.rows.map((r) => Number(r[i + 1] ?? 0)) }));
-}
-
-function BarChart({ table }: { table: Table }) {
-  const values = table.rows.map((r) => Number(r[1] ?? 0));
-  const max = Math.max(1, ...values);
-  return (
-    <ul className="space-y-1" role="img" aria-label={`${table.title}: bar chart of ${table.columns[1]}. The same figures are in the table below.`}>
-      {table.rows.map((r, i) => (
-        <li key={i} className="flex items-center gap-space-sm font-label-sm text-label-sm" aria-hidden="true">
-          <span className="w-40 shrink-0 truncate text-on-surface-variant" title={String(r[0])}>{String(r[0])}</span>
-          <span className="flex-1 bg-surface-container rounded h-3">
-            <span className="block h-3 rounded bg-primary" style={{ width: `${(values[i] / max) * 100}%` }} />
-          </span>
-          <span className="w-16 text-right text-on-surface">{fmt(r[1])}</span>
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 function LineChart({ table }: { table: Table }) {
@@ -133,15 +117,29 @@ function DataTable({ table }: { table: Table }) {
   );
 }
 
+/** A distribution of a few groups reads best as a ring; a long list as ranked bars; a single monthly series as a trend; several series as lines. */
 function ChartBlock({ table }: { table: Table }) {
+  const points = table.rows.map((r) => ({ label: String(r[0]), value: Number(r[1] ?? 0) }));
+  const multi = table.columns.length > 2;
   return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid={`mis-chart-${table.key}`} aria-labelledby={`mis-h-${table.key}`}>
-      <h3 id={`mis-h-${table.key}`} className="font-title-md text-title-md text-on-surface mb-space-sm">{table.title}</h3>
-      {table.rows.length === 0 ? null : table.chart === "bar" ? <BarChart table={table} /> : table.chart === "line" ? <LineChart table={table} /> : null}
-      <DataTable table={table} />
-    </section>
+    <div className="rounded-2xl bg-white shadow-md border border-outline-variant/60 p-space-md" data-testid={`mis-chart-${table.key}`} role="group" aria-labelledby={`mis-h-${table.key}`}>
+      <div role="heading" aria-level={3} id={`mis-h-${table.key}`} className="text-[15px] leading-6 font-bold text-on-surface mb-space-sm">{table.title}</div>
+      {table.rows.length === 0 ? <p className="font-body-sm text-on-surface-variant">Nothing in this period.</p> : table.chart === "bar" ? (
+        points.length <= 6 ? <DonutChart data={points} title={table.title} /> : <BarList data={points} title={table.title} />
+      ) : table.chart === "line" ? (
+        multi ? <LineChart table={table} /> : <TrendChart data={points} title={table.title} />
+      ) : null}
+      <details className="mt-space-sm">
+        <summary className="font-label-md text-primary">Show the figures</summary>
+        <DataTable table={table} />
+      </details>
+    </div>
   );
 }
+
+const CARD_ICON: [RegExp, string][] = [[/submitted/, "description"], [/approved/, "task_alt"], [/average|days/, "schedule"], [/returned/, "undo"], [/rejected/, "block"], [/certificate/, "verified"], [/fee|receipt|inr/, "payments"], [/delegation/, "group"]];
+const CARD_TONE = ["bg-[#e3ebfb] text-[#14315e]", "bg-[#e2f3e8] text-[#14532d]", "bg-[#fff1d2] text-[#8a4b00]", "bg-[#efe3f6] text-[#59307a]"];
+const iconFor = (key: string, label: string) => CARD_ICON.find(([re]) => re.test(`${key} ${label}`.toLowerCase()))?.[1] ?? "insights";
 
 export function MisDemo() {
   const [panels, setPanels] = useState<string[] | null>(null);
@@ -223,45 +221,44 @@ export function MisDemo() {
     }
   }, [panel, query]);
 
+  const chip = (active: boolean) => `!px-3 !py-1.5 !rounded-full font-label-md transition-colors !border-0 ${active ? "!bg-white !text-[#0f3d2a] !shadow" : "!bg-white/15 !text-white hover:!bg-white/25"}`;
+  const field = "block mt-1 rounded-lg bg-white/15 text-white px-2.5 py-1.5 font-label-md border border-white/25 [color-scheme:dark]";
+  const thisYear = () => { const d = new Date(); setFrom(`${d.getFullYear()}-01-01`); setTo(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`); };
   return (
-    <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-mis">
-      <div>
-        <h1 className="font-headline-md text-headline-md text-on-surface">MIS dashboard</h1>
-      </div>
-
-      {panels && panels.length > 1 ? (
-        <div role="tablist" aria-label="MIS panels" className="flex flex-wrap gap-space-sm">
-          {panels.map((p) => (
-            <button
-              key={p}
-              role="tab"
-              type="button"
-              aria-selected={p === panel}
-              onClick={() => setPanel(p)}
-              className={`px-space-md py-1 rounded-full font-label-md text-label-md ${p === panel ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface"}`}
-              data-testid={`mis-tab-${p}`}
-            >
-              {PANEL_TITLES[p] ?? p}
-            </button>
-          ))}
+    <div className="space-y-space-md" data-testid="demo-mis">
+      <header className="rounded-2xl bg-gradient-to-r from-[#0f3d2a] via-[#1b5a3d] to-[#2c7a52] text-white p-space-lg shadow-lg">
+        <div className="flex flex-wrap items-start justify-between gap-space-md">
+          <div>
+            <p className="font-label-md uppercase tracking-[0.18em] !text-white/70">Bureau of Energy Efficiency · demonstration</p>
+            <div role="heading" aria-level={1} className="mt-1 text-[30px] leading-9 font-bold tracking-tight text-white">MIS dashboard</div>
+            <p className="font-body-md !text-white/85 mt-0.5">The programme in figures, calculated live from the database</p>
+            {data && !loading ? <p className="font-label-md !text-white/70 mt-space-sm" data-testid="mis-asof">Calculated live at {new Date(data.asOf).toLocaleString("en-IN")} · data version <code className="!bg-white/15 !text-white">{data.dataVersion}</code> · range {data.from} to {data.to}</p> : null}
+          </div>
+          <div className="flex flex-wrap gap-space-sm">
+            <button type="button" onClick={() => setReload((n) => n + 1)} className="inline-flex items-center gap-1 rounded-full bg-white/15 hover:bg-white/25 px-4 py-2 font-label-md text-white" data-testid="mis-refresh"><Icon name="refresh" size={18} /> Refresh</button>
+            <button type="button" onClick={exportCsv} disabled={!panel || !data} className="inline-flex items-center gap-1 rounded-full bg-white text-[#0f3d2a] px-4 py-2 font-label-md disabled:opacity-50" data-testid="mis-export"><Icon name="download" size={18} /> Download CSV</button>
+            <button type="button" onClick={exportExcel} disabled={!panel || !data} className="inline-flex items-center gap-1 rounded-full bg-white text-[#0f3d2a] px-4 py-2 font-label-md disabled:opacity-50" data-testid="mis-export-xlsx"><Icon name="table_view" size={18} /> Download Excel</button>
+          </div>
         </div>
-      ) : null}
-
-      <form className="flex flex-wrap items-end gap-space-md" onSubmit={(e) => e.preventDefault()} aria-label="Date range for monthly charts">
-        <label className="font-label-sm text-label-sm text-on-surface-variant">
-          From
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="block mt-1 rounded border border-outline-variant px-2 py-1 text-on-surface" data-testid="mis-from" />
-        </label>
-        <label className="font-label-sm text-label-sm text-on-surface-variant">
-          To
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="block mt-1 rounded border border-outline-variant px-2 py-1 text-on-surface" data-testid="mis-to" />
-        </label>
-        <button type="button" onClick={() => { setFrom(""); setTo(""); }} className="px-space-md py-1 rounded bg-surface-container text-on-surface font-label-md" data-testid="mis-reset">Last 12 months</button>
-        <button type="button" onClick={() => setReload((n) => n + 1)} className="px-space-md py-1 rounded bg-surface-container text-on-surface font-label-md" data-testid="mis-refresh">Refresh</button>
-        <button type="button" onClick={exportCsv} disabled={!panel || !data} className="px-space-md py-1 rounded bg-primary text-on-primary font-label-md disabled:opacity-50" data-testid="mis-export">Download CSV</button>
-        <button type="button" onClick={exportExcel} disabled={!panel || !data} className="px-space-md py-1 rounded border border-primary text-primary font-label-md disabled:opacity-50" data-testid="mis-export-xlsx">Download Excel</button>
-        <span className="font-label-sm text-label-sm text-on-surface-variant">The range applies to the monthly charts; headline figures are all time.</span>
-      </form>
+        <div className="mt-space-md border-t border-white/20 pt-space-md flex flex-wrap items-end justify-between gap-space-md">
+          {panels && panels.length > 1 ? (
+            <div role="tablist" aria-label="MIS panels" className="flex flex-wrap gap-space-sm">
+              {panels.map((p) => (
+                <button key={p} role="tab" type="button" aria-selected={p === panel} onClick={() => setPanel(p)} className={chip(p === panel)} data-testid={`mis-tab-${p}`}>
+                  {PANEL_TITLES[p] ?? p}
+                </button>
+              ))}
+            </div>
+          ) : <span />}
+          <form className="flex flex-wrap items-end gap-space-sm" onSubmit={(e) => e.preventDefault()} aria-label="Date range for monthly charts">
+            <label className="font-label-sm !text-white/80">From<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={field} data-testid="mis-from" /></label>
+            <label className="font-label-sm !text-white/80">To<input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={field} data-testid="mis-to" /></label>
+            <button type="button" onClick={() => { setFrom(""); setTo(""); }} aria-pressed={!from && !to} className={chip(!from && !to)} data-testid="mis-reset">Last 12 months</button>
+            <button type="button" onClick={thisYear} className={chip(false)} data-testid="mis-this-year">This year</button>
+          </form>
+        </div>
+        <p className="font-label-sm !text-white/65 mt-2">The range applies to the monthly charts; headline figures are all time.</p>
+      </header>
 
       {error ? (
         <div role="alert" className="rounded border border-error p-space-md text-error font-body-md" data-testid="mis-error">{error}</div>
@@ -271,16 +268,16 @@ export function MisDemo() {
 
       {data && !loading ? (
         <>
-          <p className="font-label-sm text-label-sm text-on-surface-variant" data-testid="mis-asof">
-            As of {new Date(data.asOf).toLocaleString("en-IN")} · data version <code>{data.dataVersion}</code> · range {data.from} to {data.to} · sources: {data.sources.join(", ")}
-          </p>
           {data.cards.length > 0 ? (
-            <ul className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-4" data-testid="mis-cards">
-              {data.cards.map((c) => (
-                <li key={c.key} className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid={`mis-card-${c.key}`}>
-                  <p className="font-label-sm text-label-sm text-on-surface-variant">{c.label}</p>
-                  <p className="font-headline-sm text-headline-sm text-on-surface mt-1">{cardValue(c)}</p>
-                  {c.note ? <p className="font-label-sm text-label-sm text-on-surface-variant mt-1">{c.note}</p> : null}
+            <ul className="grid gap-space-md sm:grid-cols-2 xl:grid-cols-4" data-testid="mis-cards">
+              {data.cards.map((c, i) => (
+                <li key={c.key} title={c.note ?? undefined} className="relative overflow-hidden rounded-2xl bg-white shadow-md border border-outline-variant/60 p-space-md" data-testid={`mis-card-${c.key}`}>
+                  <span className="flex items-center gap-space-sm">
+                    <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${CARD_TONE[i % CARD_TONE.length]}`}><Icon name={iconFor(c.key, c.label)} size={22} /></span>
+                    <span className="font-label-md text-on-surface-variant uppercase tracking-wide leading-tight">{c.label}</span>
+                  </span>
+                  <p className="mt-space-sm text-[34px] leading-none font-bold text-on-surface tabular-nums">{cardValue(c)}</p>
+                  {c.note ? <p className="font-label-sm text-on-surface-variant mt-1 truncate">{c.note}</p> : null}
                 </li>
               ))}
             </ul>
@@ -295,6 +292,10 @@ export function MisDemo() {
               <ChartBlock key={t.key} table={t} />
             ))}
           </div>
+          <details className="text-on-surface-variant font-label-md">
+            <summary>Where these figures come from</summary>
+            <p className="mt-1">Sources: {data.sources.join(", ")}.</p>
+          </details>
         </>
       ) : null}
     </div>

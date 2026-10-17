@@ -175,4 +175,77 @@ class DashboardDatabaseTest {
         get(DIRECTOR, "director", "ai_risk");
         assertEquals(before, owner.queryForObject("SELECT (SELECT count(*) FROM ledger_tx) + (SELECT count(*) FROM payment_event) + (SELECT count(*) FROM ai_run)", Integer.class));
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void everyTileFollowsTheDateRangeAndChartsAddUp() {
+        for (String view : List.of("director", "auditor")) {
+            Caller who = "director".equals(view) ? DIRECTOR : AUDITOR;
+            var all = get(who, view, null);
+            assertEquals(null, ((Map<String, Object>) all.body().get("range")).get("from"));
+            // a range far in the past leaves nothing; a range around now keeps today's records
+            var none = module.handle(who, "GET", view, null, Map.of("from", "2001-01-01", "to", "2001-12-31"), Map.of());
+            for (var t : tiles(none)) {
+                if (!"ai_risk".equals(t.get("key")) && !"ledger_integrity".equals(t.get("key"))) {
+                    assertEquals(0, ((Number) t.get("value")).intValue(), view + "/" + t.get("key") + " in 2001");
+                }
+                assertTrue(((List<?>) t.get("rows")).isEmpty() || "ai_risk".equals(t.get("key")) || "ledger_integrity".equals(t.get("key")));
+            }
+            for (var t : tiles(all)) {
+                var charts = (List<Map<String, Object>>) t.get("charts");
+                assertTrue(charts.size() >= 2, view + "/" + t.get("key") + " has charts");
+                for (var c : charts) {
+                    assertTrue(List.of("donut", "bars", "trend").contains(c.get("kind")));
+                    assertTrue(!((List<?>) c.get("data")).isEmpty() || "bars".equals(c.get("kind")), t.get("key") + " chart " + c.get("title") + " has data");
+                }
+                var trend = charts.stream().filter(c -> "trend".equals(c.get("kind"))).findFirst();
+                trend.ifPresent(c -> assertEquals(12, ((List<?>) c.get("data")).size(), "twelve months by default"));
+                // the figure never exceeds the true total of the unfiltered list
+                var drill = get(who, view, (String) t.get("key")).body();
+                assertEquals(((Number) drill.get("total")).intValue(), ((Number) t.get("value")).intValue());
+            }
+            var wide = module.handle(who, "GET", view, null, Map.of("from", "2000-01-01", "to", "2100-01-01"), Map.of());
+            for (var t : tiles(wide)) {
+                var base = tile(all, (String) t.get("key"));
+                assertEquals(((Number) base.get("value")).intValue(), ((Number) t.get("value")).intValue(), "a wide range keeps everything: " + t.get("key"));
+            }
+        }
+        assertEquals("validation_failed", module.handle(DIRECTOR, "GET", "director", null, Map.of("from", "yesterday"), Map.of()).code());
+        assertEquals("validation_failed", module.handle(DIRECTOR, "GET", "director", null, Map.of("from", "2026-02-01", "to", "2026-01-01"), Map.of()).code());
+        // a range drives the drill-down and its charts too
+        var drillNone = module.handle(DIRECTOR, "GET", "director", "certificates", Map.of("from", "2001-01-01", "to", "2001-01-31"), Map.of()).body();
+        assertEquals(0, ((Number) drillNone.get("total")).intValue());
+        var trend = ((List<Map<String, Object>>) drillNone.get("charts")).stream().filter(c -> "trend".equals(c.get("kind"))).findFirst().orElseThrow();
+        assertEquals(1, ((List<?>) trend.get("data")).size(), "a one-month range is a one-month trend");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void theRiskTileSaysWhyEachRiskIsHigh() {
+        var drill = get(DIRECTOR, "director", "ai_risk").body();
+        assertEquals(List.of("Manufacturer", "Score", "Risk band", "Why it is high", "Applications"), drill.get("columns"));
+        var rows = (List<List<Object>>) drill.get("rows");
+        var details = (List<List<Map<String, Object>>>) drill.get("details");
+        assertTrue(rows.size() >= 1);
+        assertEquals(rows.size(), details.size(), "one explanation per row");
+        for (int i = 0; i < rows.size(); i++) {
+            assertEquals("High", rows.get(i).get(2));
+            String why = String.valueOf(rows.get(i).get(3));
+            assertTrue(why.length() > 10 && !why.equals("null"), why);
+            var d = details.get(i);
+            assertTrue(!d.isEmpty());
+            double sum = 0;
+            for (var f : d) {
+                assertTrue(String.valueOf(f.get("reason")).contains("full weight"), String.valueOf(f.get("reason")));
+                sum += ((Number) f.get("points")).doubleValue();
+            }
+            assertEquals(((Number) rows.get(i).get(1)).doubleValue(), sum, 0.6, "the points add up to the score");
+            for (int k = 1; k < d.size(); k++) {
+                assertTrue(((Number) d.get(k - 1).get("points")).doubleValue() >= ((Number) d.get(k).get("points")).doubleValue(), "biggest reason first");
+            }
+        }
+        // a date range lists the organisations active then; none in 2001
+        var none = module.handle(DIRECTOR, "GET", "director", "ai_risk", Map.of("from", "2001-01-01", "to", "2001-12-31"), Map.of()).body();
+        assertEquals(0, ((Number) none.get("total")).intValue());
+    }
 }

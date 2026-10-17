@@ -43,7 +43,7 @@ Keep three minutes spare. If you run late, drop the "if time" lines, then shorte
 
 ## Opening (0-3 min). Persona: Dr. Rao, Director
 1. Open `/login`; point at the demo panel on the left and "Password for every demo account: demo123".
-2. Sign in as `bee.director`. You land on the **Director's dashboard**: six figures (awaiting approval, certificates issued, ledger needs a look, production with BEE, paid but fee not confirmed, highest compliance risk). Click **Highest compliance risk** (or any figure): the full list opens below with search, sort, **Download CSV** and **Download Excel**, and a link to the working screen. Say: "Every number is calculated at this moment, and each one opens the records behind it." The MIS dashboard (UC5) is one click away in the menu.
+2. Sign in as `bee.director`. You land on the **Director's dashboard**: six figures (awaiting approval, certificates issued, ledger needs a look, production with BEE, paid but fee not confirmed, highest compliance risk). Each card has its own chart (a ring for the mix, a small trend for the months). Use the date range in the green banner (**Last 30 days**, **Last 90 days**, **This year**, or From and To): every card, chart and list changes with it. Click **Highest compliance risk**: the list shows each organisation's score and **Why it is high**; click the arrow on a row to see every factor with its points (for example "33% of its applications were rejected, +24.5 of 25"). Search, sort, **Download CSV** and **Download Excel** work on any list. Say: "Every number is calculated at this moment, and each one opens the records behind it and says why." The MIS dashboard (UC5) is one click away in the menu.
 3. Say: "Dr. Rao will see the whole programme at the end. First, the people whose work feeds it." Point at the role dropdown: "Choosing a role signs in as that person, so we change hats in one click."
 
 ---
@@ -126,7 +126,7 @@ Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real databa
 **Problem today:** programme numbers come from different offices and are weeks old.
 **Take-away:** every number is calculated live from the database, and each role sees only its own tab.
 
-Menu: **MIS dashboard** (the Director's dashboard from the opening is the one-page version; this is the full set of panels).
+Menu: **MIS dashboard** (the Director's dashboard from the opening is the one-page version; this is the full set of panels, in the same look: cards with icons, rings and trends, and **Show the figures** under each chart for the table behind it).
 1. Read the cards: applications, approvals, average days to approval, certificates, fees collected, open delegations, and the "as of ... data version" line. Say: "Every number is calculated at this moment."
 2. Tabs: Summary, Applications, Finance, Production, Certificates. Open a table under a chart. Click **Last 12 months**, **Refresh**. **Download CSV** or **Download Excel**.
 3. Say: "Some history is synthetic, which is why twelve months of data exist."
@@ -186,7 +186,7 @@ Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
 1. Click **Ledger chains**: the list puts the broken chain first, `BEE/RAC/2025/90037`, **MISMATCH** at transaction 1, and then every other certificate as **MATCH**. Say: "Every hash is recomputed now. This is the record that was altered in the seed."
 2. Click **Two-person commits**: "Committed by the same person who sent it: 0". Each row names the sender and the committer.
 3. Click **AI overrides and rejections**: each row has the person, their own value and the reason they gave.
-4. Click **All recorded activity**: payments, ledger, production and AI steps together, newest first. Type a name or a certificate in the search box, then **Download Excel**.
+4. Click **All recorded activity**: payments, ledger, production and AI steps together, newest first. Set **Last 30 days** in the banner, type a name or a certificate in the search box, then **Download Excel**.
 5. Say: "The auditor can read everything and change nothing."
 
 ---

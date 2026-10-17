@@ -81,12 +81,14 @@ Run rights per use case are in `AiDemoModule` (`RUN` and `READ_EXTRA`); every ou
 | `POST ai/{run}/disposition` | record accept, override (own value and reason required) or reject; the model output is never changed |
 
 ### `dashboard` (Director's and Auditor's dashboards)
-Read only; everything is computed from the live tables on each call. Director's dashboard: director, secretary, programme or admin. Auditor's dashboard: auditor or admin. Each role held for all records.
+Read only; everything is computed from the live tables on each call. Director's dashboard: director, secretary, programme or admin. Auditor's dashboard: auditor or admin. Each role held for all records. Every route takes an optional date range, `from` and `to` (yyyy-mm-dd, India time); a bad date or a start after the end is `validation_failed`.
 | Route | What |
 |---|---|
 | `GET dashboard` | the dashboards the caller may open (`views`) |
-| `GET dashboard/{director\|auditor}` | the tiles: figure, unit, hint, colour tone, columns and the first five rows |
-| `GET dashboard/{view}/{tile}` | the full list behind a tile (up to 200 rows, with the true total). Director tiles: `awaiting_approval`, `certificates`, `ledger_attention`, `production_review`, `fees_unconfirmed`, `ai_risk`. Auditor tiles: `ledger_integrity` (every chain re-verified, broken ones first), `two_person_proof`, `overrides`, `payment_trail`, `production_reviews`, `activity` (all recorded steps, newest first) |
+| `GET dashboard/{director\|auditor}` | the six tiles: figure, unit, icon, colour tone, the columns, the first five rows and the charts (a donut, ranked bars and a monthly trend, each following the date range; the trend is the last twelve months when no range is set) |
+| `GET dashboard/{view}/{tile}` | the full list behind a tile (up to 200 rows, with the true total) and the same charts. Director tiles: `awaiting_approval`, `certificates`, `ledger_attention`, `production_review`, `fees_unconfirmed`, `ai_risk`. Auditor tiles: `ledger_integrity` (every chain re-verified, broken ones first), `two_person_proof`, `overrides`, `payment_trail`, `production_reviews`, `activity` (all recorded steps, newest first) |
+
+`ai_risk` lists only the high-risk band, highest score first, with the column "Why it is high" (the two biggest reasons in words) and a `details` list, one entry per row, of every factor with its points, its weight and its reason ("33% of its applications were rejected (full weight at 34%)"); the points add up to the score. The scores use each organisation's whole history, so a date range lists the organisations that had application activity in that period (demonstration organisations without dates count as current).
 
 ### `messages` (promoted, no longer part of this family)
 The simulated email and SMS routes were promoted by BL-229 into the documented contract: Spring `GET /api/messages`, `POST /api/messages/{id}/read` and `POST /api/messages/read-all`, and the portal's `/api/runtime/messages` routes, in `docs/wp03/bee-local-api.openapi.json` (0.35.0) with the same evidence as every other operation. They are not under `/api/demo/**` any more. "Mark all as read" marks every unread message of the person, including those beyond the 50 the list shows.

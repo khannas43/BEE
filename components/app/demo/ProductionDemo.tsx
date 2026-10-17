@@ -280,6 +280,7 @@ export function ProductionDemo() {
                   </button>
                 )}
               </div>
+              {csv.trim() && detail.rows.length === 0 ? <p role="status" className="font-label-md text-error" data-testid="prod-rows-pending">Not stored yet: Validate only checks the rows. Click Store rows to save them.</p> : null}
               {detail?.state === "query" && <p className="font-body-sm text-on-surface-variant">After a query you can correct the figures: this replaces every stored row of the submission with the rows above, all or nothing.</p>}
               {validation && (
                 <table className="w-full text-left font-body-md" data-testid="prod-results">
@@ -335,10 +336,14 @@ export function ProductionDemo() {
                   <span className="font-label-md">Evidence file (up to 1 MiB)</span>
                   <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
                 </label>
-                <div>
+                <div className="md:col-span-2">
                   <button type="button" className={btnCls} disabled={busy} onClick={addEvidence}>
                     Attach evidence
                   </button>
+                  <p className="font-label-sm text-on-surface-variant mt-1">Filling in the details is not enough: click Attach evidence. The file then appears in the list above, and the Programme Officer sees it only after that.</p>
+                  {(file || ev.caName.trim() || ev.statement.trim()) && detail.evidence.length === 0 ? (
+                    <p role="status" className="font-label-md text-error mt-1" data-testid="prod-evidence-pending">Not attached yet: nothing is stored until you click Attach evidence.</p>
+                  ) : null}
                 </div>
               </div>
             )}

@@ -1,8 +1,10 @@
 # Current Cursor task
 
-**Holder:** claude (ChatGPT-compatible baton), from 18 October 2026.
+**Holder:** cursor, from 18 October 2026.
 
-- Active Cursor task: none.
-- Last completed task: `BRIEF_17A_SNL_WP01_REVIEW_CORRECTIONS.md` on `cursor/snl-wp01-traceability`.
-- Result: WP1 accepted; BL-252 remains a non-blocking WP3 follow-up.
-- Next task: WP2 common workflow tasks and SLA brief to be prepared by ChatGPT.
+- Brief: `BRIEF_18_SNL_WP02A_WORKFLOW_FOUNDATION.md`
+- Branch: `cursor/snl-wp02a-workflow-foundation`
+- Work package: `SNL-WP02A — common workflow persistence and working-day SLA foundation`
+- Scope: backend schema, internal working-day calculation, tests and evidence only; no existing journey wiring, API, OpenAPI, Next.js UI, demo data, Word or PDF changes.
+- Governing source: `SnL_Disha_Advisory_Manual.pdf`, WP1 accepted baseline and provisional assumptions A08/A09/A17.
+- Completion: commit the work, run `/bee-handback`, do not push, and return the complete report for ChatGPT review.

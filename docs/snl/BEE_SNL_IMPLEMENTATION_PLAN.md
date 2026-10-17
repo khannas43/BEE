@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | Not started | 0% | WP1 | R1 | Pending |
+| WP2 | Common workflow tasks and SLA | In progress | 5% | WP1 | R1 | Brief 18 / WP2A foundation in progress |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -251,13 +251,13 @@ At the end of each development session, update the package status, progress, com
 
 | Tracking field | Current value |
 |---|---|
-| Status | Not started |
-| Progress | 0% |
+| Status | In progress |
+| Progress | 5% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
 | Existing foundation | Current registration and model flows already have assignments, returns, resubmission, decisions, history and notifications in separate implementations |
-| Next action | Design the shared workflow, discrepancy, task and SLA schema after WP1 acceptance |
+| Next action | Implement Brief 18: shared workflow persistence and working-day SLA foundation without changing existing journeys |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -777,6 +777,7 @@ Add one row whenever a package status or material result changes.
 |---|---|---|---|---|---|
 | 18 Oct 2026 | WP1 | In progress | Gate pending (90%) | WP01 baseline + Brief 17A review corrections; BL-252/256; live form not fetched (504) | ChatGPT WP1 acceptance; BL-252; then WP2 |
 | 18 Oct 2026 | WP1 | Gate pending (90%) | Complete (100%) | ChatGPT accepted the PDF-backed provisional baseline; A01–A20 remain provisional | Begin WP2; retry secondary live-form comparison in WP3 (BL-252) |
+| 18 Oct 2026 | WP2 | Not started | In progress (5%) | Brief 18 prepared for common workflow persistence and working-day SLA foundation | Cursor implements WP2A; ChatGPT reviews evidence before journey wiring |
 
 ### 6.2 Standard completion record
 

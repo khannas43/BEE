@@ -255,8 +255,8 @@ function LabelPanel({ app }: { app: ModelApplication }) {
 
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex justify-between">
-      <dt className="text-on-surface-variant">{k}</dt>
+    <div className="flex flex-wrap items-baseline gap-x-2">
+      <dt className="text-on-surface-variant">{k}:</dt>
       <dd className="font-semibold text-on-surface">{v}</dd>
     </div>
   );

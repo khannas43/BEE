@@ -81,6 +81,30 @@ describe("register revocations", () => {
     installDeferredFetch();
   });
 
+  it("pages, searches, filters and sorts the register, and shows a summary", async () => {
+    mount();
+    const brands = Array.from({ length: 12 }, (_, i) => ({
+      id: `b${i}`, name: `Brand ${String(i).padStart(2, "0")}`, owner: i % 2 ? "NOVA" : "PIXEL", status: (i % 4 === 3 ? "suspended" : "active") as "active" | "suspended", source: "REG",
+    }));
+    await resolveAt(0, register({ brands }));
+    expect(screen.getByTestId("rvk-card-brands").textContent).toContain("12");
+    expect(screen.getByTestId("rvk-card-brands").textContent).toContain("9 active, 3 suspended");
+    expect(screen.getAllByTestId(/^rvk-brand-b/).length).toBe(8);
+    expect(screen.getAllByTestId("list-pagination")[0].textContent).toContain("Showing 1–8 of 12");
+    fireEvent.change(screen.getByTestId("rvk-brand-status"), { target: { value: "suspended" } });
+    expect(screen.getAllByTestId(/^rvk-brand-b/).length).toBe(3);
+    fireEvent.change(screen.getByTestId("rvk-brand-owner"), { target: { value: "PIXEL" } });
+    expect(screen.queryAllByTestId(/^rvk-brand-b/).length).toBe(0);
+    expect(screen.getByTestId("rvk-brands").textContent).toContain("No brand matches these filters.");
+    fireEvent.click(screen.getByTestId("rvk-brand-clear"));
+    fireEvent.change(screen.getAllByTestId("list-search")[0], { target: { value: "Brand 07" } });
+    expect(screen.getAllByTestId(/^rvk-brand-b/).length).toBe(1);
+    fireEvent.click(screen.getAllByTestId("list-clear")[0]);
+    fireEvent.click(screen.getAllByTestId("list-sort-name")[0]);
+    fireEvent.click(screen.getAllByTestId("list-sort-name")[0]);
+    expect(screen.getAllByTestId(/^rvk-brand-b/)[0].textContent).toContain("Brand 11");
+  });
+
   it("shows the register in words, and a Propose button only on an active row when the API allows a proposal", async () => {
     mount();
     await resolveAt(0, register());
@@ -250,7 +274,7 @@ describe("register revocations", () => {
     }));
     expect(screen.getByTestId("rvk-history-hist-1").textContent).toContain("Approved");
     expect(screen.getByTestId("rvk-history-hist-1").textContent).toContain("Director");
-    expect(screen.getByTestId("rvk-history-hist-1").textContent).toContain("2026-10-14T11:00:00Z");
+    expect(screen.getByTestId("rvk-history-hist-1").textContent).toContain("2026-10-14 16:30:00");
     expect(screen.getByTestId("rvk-history-hist-2").textContent).toContain("Rejected");
     expect(screen.getByTestId("rvk-history-hist-2").textContent).toContain("Not this season.");
     expect(screen.getByTestId("rvk-history-hist-3").textContent).toContain("Withdrawn");

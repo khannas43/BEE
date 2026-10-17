@@ -440,6 +440,15 @@ function UseCasePanel({ model, ctl }: { model: ModelCard; ctl: UseCaseController
 
 function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; onChanged: () => void }) {
   const out = run.output;
+  const isRisk = run.useCase === "compliance-risk";
+  const entities = isRisk ? ((out.entities as RiskEntity[]) ?? []) : [];
+  const [selKey, setSelKey] = useState<string | null>(entities[0]?.key ?? null);
+  const [showAll, setShowAll] = useState(false);
+  const selEntity = entities.find((e) => e.key === selKey) ?? null;
+  const prefix = selEntity ? `${selEntity.name}: ` : "";
+  const evidence = isRisk && selEntity && !showAll
+    ? out.evidence.filter((e) => e.field.startsWith(prefix)).map((e) => ({ ...e, field: e.field.slice(prefix.length) }))
+    : out.evidence;
   return (
     <div className="space-y-space-md" data-testid="ai-run-view">
       <Box title="Result" icon="insights" testId="ai-result" aside={<Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">run {when(run.createdAt)} by {run.createdBy}</Chip>}>
@@ -452,11 +461,12 @@ function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; 
           <div className="text-[12px] text-[#475569] leading-5">model {run.modelVersion}<br />data version <code data-testid="ai-data-version">{run.dataVersion}</code></div>
         </div>
         <p role="status" className="ai-summary mt-3" data-testid="ai-summary">{String(out.summary ?? "")}</p>
-        <Output run={run} />
+        <Output run={run} selKey={selKey} onSelect={(k) => { setSelKey(k); setShowAll(false); }} />
         {out.note ? <p className="mt-space-sm font-body-sm text-on-surface-variant">{plainNote(String(out.note))}</p> : null}
       </Box>
-      <Box title="Evidence for this run" icon="fact_check" testId="ai-evidence">
-        <EvidenceTable evidence={out.evidence} />
+      <Box title={isRisk && selEntity && !showAll ? `Evidence for ${selEntity.name}` : "Evidence for this run"} icon="fact_check" testId="ai-evidence"
+        aside={isRisk && selEntity ? <button type="button" className="font-label-md text-primary underline" onClick={() => setShowAll(!showAll)} data-testid="ai-evidence-all">{showAll ? `Show only ${selEntity.name}` : "Show evidence for all manufacturers"}</button> : undefined}>
+        <EvidenceTable key={`${selKey}-${showAll}`} evidence={evidence} />
       </Box>
       <DispositionPanel run={run} canRun={canRun} onChanged={onChanged} />
       <Collapsible title="Audit" icon="receipt_long" testId="ai-audit" hint="Show audit trail">
@@ -554,41 +564,82 @@ function DispositionPanel({ run, canRun, onChanged }: { run: RunDetail; canRun: 
 // ---- per use case output ----------------------------------------------------------------------------------------------------
 
 interface Feature { feature: string; value: number; weight: number; contribution: number }
-interface RiskEntity { key: string; name: string; synthetic: boolean; score: number; band: string; confidence: number; features: Feature[] }
+interface RiskEntity { key: string; name: string; synthetic: boolean; applications: number; score: number; band: string; confidence: number; features: Feature[] }
 interface Quarter { quarter: string; units: number; zVsOthers: number }
 interface SeriesRow { series: string; quarters: Quarter[]; boundSerials: number | null; flags: { type: string; quarter: string; detail: string }[]; status: string }
 interface TrendCat { category: string; ratings: number; starDistribution: number[]; months: { month: string; meanIseer: number; count: number }[]; slopePerMonth: number; rSquared: number; forecast: { nextMonthMeanIseer: number; low95: number; high95: number } | null }
 interface Answer { articleId: number; title: string; category: string; score: number }
 interface ExField { field: string; extracted: string | null; declared: string | null; status: string; confidence: number }
 
-function Output({ run }: { run: RunDetail }) {
+const RISK_SORT = (e: RiskEntity & { rank: number }, k: string): string | number =>
+  k === "rank" ? e.rank : k === "name" ? e.name : k === "apps" ? e.applications : k === "score" ? e.score : k === "band" ? e.band : e.confidence;
+
+/** The scored manufacturers: sortable, paged, and one row is selected; the evidence below is for that row only. */
+function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; selKey: string | null; onSelect: (key: string) => void }) {
+  const ranked = entities.map((e, i) => ({ ...e, rank: i + 1 }));
+  const tools = useListTools({
+    rows: ranked,
+    text: (e) => `${e.name} ${e.band}`,
+    sortValue: RISK_SORT,
+    pageSize: 8,
+  });
+  const sel = ranked.find((e) => e.key === selKey) ?? null;
+  const top = sel ? sel.features.filter((f) => f.contribution > 0).sort((x, y) => y.contribution - x.contribution) : [];
+  return (
+    <div className="mt-4 space-y-3" data-testid="ai-output-risk">
+      <p className="font-body-sm text-on-surface-variant">{entities.length} manufacturers scored. Click a row to select it: the evidence below is shown for the selected manufacturer only.</p>
+      <div className="overflow-x-auto">
+        <table className="w-full font-body-sm" data-testid="ai-risk-table">
+          <caption className="sr-only">Scored manufacturers, highest review priority first</caption>
+          <thead>
+            <tr>
+              <SortableTh tools={tools} k="rank" className={cell}>Rank</SortableTh>
+              <SortableTh tools={tools} k="name" className={cell}>Manufacturer</SortableTh>
+              <SortableTh tools={tools} k="apps" className={cell}>Applications</SortableTh>
+              <SortableTh tools={tools} k="score" className={cell}>Score</SortableTh>
+              <SortableTh tools={tools} k="band" className={cell}>Risk band</SortableTh>
+              <SortableTh tools={tools} k="confidence" className={cell}>Confidence</SortableTh>
+              <th scope="col" className={cell}><span className="sr-only">Select</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {tools.paged.pageRows.map((e) => {
+              const band = BAND[e.band] ?? BAND.low;
+              const on = e.key === selKey;
+              return (
+                <tr key={e.key} className={`border-t border-outline-variant cursor-pointer ${on ? "bg-[#e7effb]" : "hover:bg-[#f4f8ff]"}`} onClick={() => onSelect(e.key)} aria-selected={on} data-testid="ai-risk-row">
+                  <td className={cell}>{e.rank}</td>
+                  <td className={`${cell} font-semibold text-[#14315E]`}>{e.name}{e.synthetic ? " [synthetic]" : ""}</td>
+                  <td className={cell}>{e.applications}</td>
+                  <td className={cell}>
+                    <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-16 rounded-full bg-[#e7edf6] overflow-hidden"><span className={`block h-full ${band.bar}`} style={{ width: `${Math.min(100, e.score)}%` }} /></span><strong>{e.score}</strong></span>
+                  </td>
+                  <td className={cell}><span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${band.pill}`}>{e.band}</span></td>
+                  <td className={cell}>{pct(e.confidence)}</td>
+                  <td className={cell}><button type="button" className="text-primary underline" onClick={(ev) => { ev.stopPropagation(); onSelect(e.key); }} aria-label={`Select ${e.name}`}>{on ? "Selected" : "Select"}</button></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <ListPager tools={tools} />
+      {sel ? (
+        <div className="rounded-xl border border-[#dbe6f7] bg-[#f4f8ff] p-3" data-testid="ai-risk-selected">
+          <div className="font-semibold text-[#14315E]">{sel.name}: score {sel.score} ({sel.band})</div>
+          <div className="pt-2 flex flex-wrap gap-1.5">
+            {top.length ? top.map((f) => <Chip key={f.feature}>{f.feature}: {f.value} → {f.contribution}/{f.weight}</Chip>) : <span className="text-[13px] text-[#64748b]">No contributing factors.</span>}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Output({ run, selKey, onSelect }: { run: RunDetail; selKey: string | null; onSelect: (key: string) => void }) {
   const o = run.output as Record<string, unknown>;
   if (run.useCase === "compliance-risk") {
-    const ents = (o.entities as RiskEntity[]) ?? [];
-    return (
-      <div className="mt-4 space-y-2.5" data-testid="ai-output-risk">
-        {ents.map((e, i) => {
-          const band = BAND[e.band] ?? BAND.low;
-          const top = e.features.filter((f) => f.contribution > 0).sort((x, y) => y.contribution - x.contribution);
-          return (
-            <details key={e.key} className="ai-entity" open={i < 3}>
-              <summary>
-                <span className="ai-rank">{i + 1}</span>
-                <span className="flex-1 min-w-0">
-                  <span className="block font-semibold text-[#14315E] truncate">{e.name}{e.synthetic ? " [synthetic]" : ""}</span>
-                  <span className="mt-1 block h-2 rounded-full bg-[#e7edf6] overflow-hidden"><span className={`block h-full rounded-full ${band.bar}`} style={{ width: `${Math.min(100, e.score)}%` }} /></span>
-                </span>
-                <span className="w-14 text-right text-[20px] font-extrabold text-[#14315E]">{e.score}</span>
-                <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${band.pill}`}>{e.band}</span>
-              </summary>
-              <div className="pt-2 pl-10 flex flex-wrap gap-1.5">
-                {top.length ? top.map((f) => <Chip key={f.feature}>{f.feature}: {f.value} → {f.contribution}/{f.weight}</Chip>) : <span className="text-[13px] text-[#64748b]">No contributing factors.</span>}
-              </div>
-            </details>
-          );
-        })}
-      </div>
-    );
+    return <RiskTable entities={(o.entities as RiskEntity[]) ?? []} selKey={selKey} onSelect={onSelect} />;
   }
   if (run.useCase === "production-anomaly") {
     const series = (o.series as SeriesRow[]) ?? [];

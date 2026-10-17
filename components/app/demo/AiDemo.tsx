@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ListPager, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { Icon } from "@/components/ui/Icon";
 import { demoGet, demoPath, demoPost } from "@/lib/client/runtimeDemo";
 
@@ -188,11 +189,15 @@ export function AiDemo() {
   }, []);
 
   const model = models?.find((m) => m.useCase === tab) ?? null;
+  const ctl = useUseCase(model);
 
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-ai">
       <h1>AI use cases</h1>
-      <p className="ai-lead">Five transparent models read the live portal data. Each run keeps its evidence, model version and data version, and a person records the decision.</p>
+      <div className="flex flex-wrap items-start justify-between gap-space-md">
+        <p className="ai-lead flex-1 min-w-64">Five transparent models read the live portal data. Each run keeps its evidence, model version and data version, and a person records the decision.</p>
+        {models ? <RunButton model={model} ctl={ctl} /> : null}
+      </div>
       {denied ? <p role="alert" className="text-error" data-testid="ai-error">{denied}</p> : null}
       {models === null && !denied ? <p role="status">Loading models…</p> : null}
       {models ? (
@@ -216,7 +221,7 @@ export function AiDemo() {
             ))}
           </div>
           <div role="tabpanel" id="ai-panel" aria-labelledby={`ai-tab-${tab}`}>
-            {model ? <UseCasePanel key={tab} model={model} /> : <p role="alert">You may not use this area.</p>}
+            {model ? <UseCasePanel key={tab} model={model} ctl={ctl} /> : <p role="alert">You may not use this area.</p>}
           </div>
         </>
       ) : null}
@@ -224,36 +229,44 @@ export function AiDemo() {
   );
 }
 
-function ModelCardBox({ model }: { model: ModelCard }) {
+/** A box that starts closed; the header is the button. The body stays in the page (hidden) so nothing is lost when it is closed. */
+function Collapsible({ title, icon, testId, aside, children, hint }: { title: string; icon: string; testId: string; aside?: React.ReactNode; children: React.ReactNode; hint?: string }) {
   const [open, setOpen] = useState(false);
-  const rules = model.kind === "rules" || model.kind === "statistical" || model.kind === "retrieval" || model.kind === "extraction";
   return (
-    <section className="rounded-xl border border-outline-variant bg-surface p-space-md" data-testid="ai-model-card">
-      <button type="button" className="w-full flex items-center justify-between gap-space-sm text-left" aria-expanded={open} aria-controls="ai-model-card-body" onClick={() => setOpen(!open)} data-testid="ai-model-card-toggle">
+    <section className="rounded-xl border border-outline-variant bg-surface p-space-md" data-testid={testId}>
+      <button type="button" className="w-full flex items-center justify-between gap-space-sm text-left" aria-expanded={open} aria-controls={`${testId}-body`} onClick={() => setOpen(!open)} data-testid={`${testId}-toggle`}>
         <h3 className="font-title-sm text-title-sm text-on-surface flex items-center gap-2">
-          <Icon name="neurology" size={18} className="text-[#254e9e]" />
-          Model card
-          <span className="font-label-md text-on-surface-variant font-normal">{open ? "Hide details" : "Show details"}</span>
+          <Icon name={icon} size={18} className="text-[#254e9e]" />
+          {title}
+          <span className="font-label-md text-on-surface-variant font-normal">{open ? "Hide details" : hint ?? "Show details"}</span>
         </h3>
         <span className="flex flex-wrap items-center gap-2">
-          <Chip>{model.kind}{rules ? " · not machine learning" : ""}</Chip>
-          <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{model.id}@{model.version}</Chip>
+          {aside}
           <Icon name={open ? "expand_less" : "expand_more"} size={20} className="text-on-surface-variant" />
         </span>
       </button>
-      <div id="ai-model-card-body" hidden={!open} className="mt-space-sm">
-        <p className="text-[14px] leading-6 text-[#181c20]"><span className="sr-only">Model {model.name} ({model.id}@{model.version}). Kind {model.kind}{rules ? " (rules or statistics, not machine learning)" : ""}. </span><strong className="text-[#14315E]">{model.name}.</strong> {model.description}</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-[#f3dc9c] bg-[#fffaf0] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#8a4b00] mb-1">Limitations</div><div className="text-[13px] leading-5">{model.limitations}</div></div>
-          <div className="rounded-lg border border-[#c9d9f7] bg-[#f4f8ff] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#14315E] mb-1">Trained on</div><div className="text-[13px] leading-5">{model.trainedOn}</div></div>
-        </div>
-      </div>
+      <div id={`${testId}-body`} hidden={!open} className="mt-space-sm">{children}</div>
     </section>
   );
 }
 
-function UseCasePanel({ model }: { model: ModelCard }) {
-  const uc = model.useCase;
+function ModelCardBox({ model }: { model: ModelCard }) {
+  const rules = model.kind === "rules" || model.kind === "statistical" || model.kind === "retrieval" || model.kind === "extraction";
+  return (
+    <Collapsible title="Model card" icon="neurology" testId="ai-model-card"
+      aside={<><Chip>{model.kind}{rules ? " · not machine learning" : ""}</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{model.id}@{model.version}</Chip></>}>
+      <p className="text-[14px] leading-6 text-[#181c20]"><span className="sr-only">Model {model.name} ({model.id}@{model.version}). Kind {model.kind}{rules ? " (rules or statistics, not machine learning)" : ""}. </span><strong className="text-[#14315E]">{model.name}.</strong> {model.description}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-[#f3dc9c] bg-[#fffaf0] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#8a4b00] mb-1">Limitations</div><div className="text-[13px] leading-5">{model.limitations}</div></div>
+        <div className="rounded-lg border border-[#c9d9f7] bg-[#f4f8ff] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#14315E] mb-1">Trained on</div><div className="text-[13px] leading-5">{model.trainedOn}</div></div>
+      </div>
+    </Collapsible>
+  );
+}
+
+/** Everything one use case needs: its stored runs, the selected run, the inputs and the Run action (shown at the top of the page). */
+function useUseCase(model: ModelCard | null) {
+  const uc = model?.useCase ?? null;
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
   const [selected, setSelected] = useState<RunDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -261,8 +274,16 @@ function UseCasePanel({ model }: { model: ModelCard }) {
   const [question, setQuestion] = useState("How do I pay the application fee?");
   const [appRef, setAppRef] = useState("LOCAL-MA-0004");
   const [category, setCategory] = useState("");
+  const [seenUc, setSeenUc] = useState(uc);
+  if (seenUc !== uc) {
+    setSeenUc(uc);
+    setRuns(null);
+    setSelected(null);
+    setError(null);
+  }
 
   const loadRuns = useCallback(async () => {
+    if (!uc) return;
     const r = await demoGet<{ runs: RunSummary[] }>(demoPath("ai", uc, "runs"));
     if (r.ok) setRuns(r.value.runs);
     else setError(r.message);
@@ -281,6 +302,7 @@ function UseCasePanel({ model }: { model: ModelCard }) {
   }
 
   async function run() {
+    if (!uc) return;
     setBusy(true);
     setError(null);
     const body = uc === "helpdesk-assist" ? { question } : uc === "document-extraction" ? { applicationRef: appRef } : uc === "rating-trends" ? { category } : {};
@@ -292,51 +314,126 @@ function UseCasePanel({ model }: { model: ModelCard }) {
     } else setError(r.message);
   }
 
+  return { runs, selected, error, busy, question, setQuestion, appRef, setAppRef, category, setCategory, loadRuns, open, run };
+}
+type UseCaseController = ReturnType<typeof useUseCase>;
+
+/** The Run button, at the top of the page beside the introduction. */
+function RunButton({ model, ctl }: { model: ModelCard | null; ctl: UseCaseController }) {
+  return (
+    <div className="flex flex-col items-end gap-1 shrink-0">
+      <button className="ai-run bg-primary text-on-primary" disabled={!model?.canRun || ctl.busy} onClick={() => void ctl.run()} data-testid="ai-run">
+        <Icon name={ctl.busy ? "hourglass_top" : "play_arrow"} size={18} /> {ctl.busy ? "Running…" : "Run"}
+      </button>
+      {model && !model.canRun ? <span className="font-label-sm text-on-surface-variant">Read only for your role</span> : null}
+    </div>
+  );
+}
+
+const HISTORY_SORT = (r: RunSummary, k: string): string | number =>
+  k === "when" ? r.createdAt : k === "by" ? r.createdBy : k === "confidence" ? r.confidence : k === "data" ? `${r.dataVersion} ${r.inputRef ?? ""}` : r.dispositionCount === 0 ? "" : r.latestDecision ?? "";
+
+function HistoryTable({ runs, selectedId, onOpen }: { runs: RunSummary[]; selectedId: string | undefined; onOpen: (id: string) => void }) {
+  const tools = useListTools({
+    rows: runs,
+    text: (r) => `${r.createdBy} ${r.dataVersion} ${r.inputRef ?? ""} ${r.latestDecision ?? ""}`,
+    sortValue: HISTORY_SORT,
+    pageSize: 5,
+  });
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full font-body-sm" data-testid="ai-history-table">
+          <caption className="sr-only">Stored runs of this use case</caption>
+          <thead>
+            <tr>
+              <SortableTh tools={tools} k="when" className={cell}>When</SortableTh>
+              <SortableTh tools={tools} k="by" className={cell}>Run by</SortableTh>
+              <SortableTh tools={tools} k="confidence" className={cell}>Confidence</SortableTh>
+              <SortableTh tools={tools} k="data" className={cell}>Data version</SortableTh>
+              <SortableTh tools={tools} k="decision" className={cell}>Decision</SortableTh>
+              <th scope="col" className={cell}><span className="sr-only">Open</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {tools.paged.pageRows.map((r) => (
+              <tr key={r.id} className={`border-t border-outline-variant ${selectedId === r.id ? "bg-[#f4f8ff]" : ""}`}>
+                <td className={cell}>{when(r.createdAt)}</td>
+                <td className={cell}>{r.createdBy}</td>
+                <td className={cell}>{pct(r.confidence)}</td>
+                <td className={cell}>{r.dataVersion}{r.inputRef ? ` · ${r.inputRef}` : ""}</td>
+                <td className={cell}>{r.dispositionCount === 0 ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">no disposition yet</Chip> : <Chip tone={r.latestDecision === "reject" ? "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]" : r.latestDecision === "override" ? "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]" : "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]"}>{r.latestDecision}</Chip>}</td>
+                <td className={cell}><button type="button" className="text-primary underline" onClick={() => onOpen(r.id)} data-testid="ai-history-item" aria-label={`Open the run of ${when(r.createdAt)}`}>{selectedId === r.id ? "Selected" : "Open"}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ListPager tools={tools} />
+    </div>
+  );
+}
+
+function EvidenceTable({ evidence }: { evidence: Evidence[] }) {
+  const valueText = (e: Evidence) => `${typeof e.value === "object" ? JSON.stringify(e.value) : String(e.value)}${e.rows ? ` (${e.rows})` : ""}`;
+  const tools = useListTools({
+    rows: evidence,
+    text: (e) => `${businessSource(e.source)} ${e.field} ${valueText(e)}`,
+    sortValue: (e, k) => (k === "source" ? businessSource(e.source) : k === "field" ? e.field : valueText(e)),
+    pageSize: 5,
+  });
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full font-body-sm">
+          <thead><tr><SortableTh tools={tools} k="source" className={cell}>Source</SortableTh><SortableTh tools={tools} k="field" className={cell}>Field</SortableTh><SortableTh tools={tools} k="value" className={cell}>Value</SortableTh></tr></thead>
+          <tbody>
+            {tools.paged.pageRows.map((e, i) => (
+              <tr key={i} className="border-t border-outline-variant">
+                <td className={cell} title={`Technical source: ${e.source}`}>{businessSource(e.source)}</td><td className={cell}>{e.field}</td>
+                <td className={cell}>{valueText(e)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ListPager tools={tools} />
+    </div>
+  );
+}
+
+function UseCasePanel({ model, ctl }: { model: ModelCard; ctl: UseCaseController }) {
+  const uc = model.useCase;
+  const { runs, selected, error } = ctl;
+  const hasInput = uc === "helpdesk-assist" || uc === "document-extraction" || uc === "rating-trends";
+
   return (
     <div className="space-y-space-md mt-space-md" data-testid={`ai-panel-${uc}`}>
       <ModelCardBox model={model} />
-      <Box title="Run" icon="play_circle" aside={!model.canRun ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">Read only for your role</Chip> : undefined}>
-        <div className="flex flex-wrap items-end gap-space-sm">
+      {error ? <p role="alert" className="text-error" data-testid="ai-error">{error}</p> : null}
+      {hasInput ? (
+        <Box title="Input for the next run" icon="tune">
           {uc === "helpdesk-assist" ? (
-            <label className="flex-1 min-w-64 font-label-md">Question
-              <textarea className="mt-1 w-full rounded-lg border border-outline-variant p-space-xs" rows={2} value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} data-testid="ai-input" />
+            <label className="block font-label-md">Question
+              <textarea className="mt-1 w-full rounded-lg border border-outline-variant p-space-xs" rows={2} value={ctl.question} maxLength={500} onChange={(e) => ctl.setQuestion(e.target.value)} data-testid="ai-input" />
             </label>
           ) : null}
           {uc === "document-extraction" ? (
             <label className="font-label-md">Application reference
-              <input className="mt-1 block rounded-lg border border-outline-variant p-space-xs" value={appRef} onChange={(e) => setAppRef(e.target.value)} data-testid="ai-input" />
+              <input className="mt-1 block rounded-lg border border-outline-variant p-space-xs" value={ctl.appRef} onChange={(e) => ctl.setAppRef(e.target.value)} data-testid="ai-input" />
             </label>
           ) : null}
           {uc === "rating-trends" ? (
             <label className="font-label-md">Category (blank for all)
-              <input className="mt-1 block rounded-lg border border-outline-variant p-space-xs" value={category} onChange={(e) => setCategory(e.target.value)} data-testid="ai-input" />
+              <input className="mt-1 block rounded-lg border border-outline-variant p-space-xs" value={ctl.category} onChange={(e) => ctl.setCategory(e.target.value)} data-testid="ai-input" />
             </label>
           ) : null}
-          <button className="ai-run bg-primary text-on-primary" disabled={!model.canRun || busy} onClick={run} data-testid="ai-run">
-            <Icon name={busy ? "hourglass_top" : "play_arrow"} size={18} /> {busy ? "Running…" : "Run"}
-          </button>
-          {!model.canRun ? <span className="font-body-sm text-on-surface-variant">Your role can read this area but not run it.</span> : null}
-        </div>
-        {error ? <p role="alert" className="mt-space-sm text-error" data-testid="ai-error">{error}</p> : null}
-      </Box>
-      <Box title="History (stored, survives reload)" icon="history" testId="ai-history">
-        {runs === null ? <p role="status">Loading…</p> : runs.length === 0 ? <p className="font-body-sm">No runs yet.</p> : (
-          <ul className="space-y-1.5">
-            {runs.map((r) => (
-              <li key={r.id}>
-                <button className={`ai-history-row ${selected?.id === r.id ? "is-selected" : ""}`} onClick={() => open(r.id)} data-testid="ai-history-item">
-                  <span className="font-semibold text-[#14315E]">{when(r.createdAt)}</span>
-                  <span className="text-[#475569]">{r.createdBy}</span>
-                  <span className="text-[#475569]">confidence {pct(r.confidence)}</span>
-                  <span className="text-[#64748b]">data {r.dataVersion}{r.inputRef ? ` · ${r.inputRef}` : ""}</span>
-                  <span className="ml-auto">{r.dispositionCount === 0 ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">no disposition yet</Chip> : <Chip tone={r.latestDecision === "reject" ? "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]" : r.latestDecision === "override" ? "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]" : "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]"}>latest: {r.latestDecision}</Chip>}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Box>
-      {selected ? <RunView key={selected.id} run={selected} canRun={model.canRun} onChanged={() => { void open(selected.id); void loadRuns(); }} /> : null}
+        </Box>
+      ) : null}
+      <Collapsible title="History (stored, survives reload)" icon="history" testId="ai-history" hint="Show past runs">
+        {runs === null ? <p role="status">Loading…</p> : runs.length === 0 ? <p className="font-body-sm">No runs yet.</p> : <HistoryTable runs={runs} selectedId={selected?.id} onOpen={(id) => void ctl.open(id)} />}
+      </Collapsible>
+      {selected ? <RunView key={selected.id} run={selected} canRun={model.canRun} onChanged={() => { void ctl.open(selected.id); void ctl.loadRuns(); }} /> : null}
     </div>
   );
 }
@@ -358,25 +455,15 @@ function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; 
         <Output run={run} />
         {out.note ? <p className="mt-space-sm font-body-sm text-on-surface-variant">{plainNote(String(out.note))}</p> : null}
       </Box>
-      <Box title="Evidence" icon="fact_check" testId="ai-evidence">
-        <table className="w-full font-body-sm">
-          <thead><tr><th className={cell}>Source</th><th className={cell}>Field</th><th className={cell}>Value</th></tr></thead>
-          <tbody>
-            {out.evidence.map((e, i) => (
-              <tr key={i} className="border-t border-outline-variant">
-                <td className={cell} title={`Technical source: ${e.source}`}>{businessSource(e.source)}</td><td className={cell}>{e.field}</td>
-                <td className={cell}>{typeof e.value === "object" ? JSON.stringify(e.value) : String(e.value)}{e.rows ? ` (${e.rows})` : ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Box title="Evidence for this run" icon="fact_check" testId="ai-evidence">
+        <EvidenceTable evidence={out.evidence} />
       </Box>
       <DispositionPanel run={run} canRun={canRun} onChanged={onChanged} />
-      <Box title="Audit" icon="receipt_long" testId="ai-audit">
+      <Collapsible title="Audit" icon="receipt_long" testId="ai-audit" hint="Show audit trail">
         <ol className="ai-timeline font-body-sm">
           {run.audit.map((a, i) => <li key={i}><span className="font-semibold text-[#14315E]">{when(a.at)}</span> · {a.actor} ({a.role}) · {a.detail}</li>)}
         </ol>
-      </Box>
+      </Collapsible>
     </div>
   );
 }

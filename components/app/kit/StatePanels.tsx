@@ -110,14 +110,17 @@ export interface DescriptionRow {
   capitalize?: boolean;
 }
 
-/** Label and value pairs for a record's fields. */
+/**
+ * Label and value pairs for a record's fields, each on one line in front of its value: "Reference: DEMO-PAY-0010". This is the one pattern for
+ * every details panel (application detail, the stage screens, the finance queue); do not stack the label above the value.
+ */
 export function DescriptionList({ rows, testId }: { rows: DescriptionRow[]; testId?: string }) {
   return (
-    <dl className="space-y-space-sm" data-testid={testId}>
+    <dl className="space-y-1.5" data-testid={testId}>
       {rows.map((row) => (
-        <div key={row.label}>
-          <dt className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wide">{row.label}</dt>
-          <dd className={`font-body-sm text-body-sm text-on-surface mt-0.5 ${row.mono ? "font-mono break-all" : ""} ${row.capitalize ? "capitalize" : ""}`}>{row.value}</dd>
+        <div key={row.label} className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+          <dt className="font-label-md text-label-md text-on-surface-variant shrink-0">{row.label}:</dt>
+          <dd className={`font-body-sm text-body-sm font-semibold text-on-surface min-w-0 ${row.mono ? "font-mono break-all" : ""} ${row.capitalize ? "capitalize" : ""}`}>{row.value}</dd>
         </div>
       ))}
     </dl>

@@ -1,9 +1,9 @@
 # SNL WP01 — traceability baseline
 
-**Status:** Working baseline for R0 (WP1). Not BEE-approved policy.  
-**Date:** 18 October 2026  
-**Governing source:** *SnL Disha Advisory Manual* (`SnL_Disha_Advisory_Manual.pdf`, printed footer page numbers).  
-**Plan:** [BEE_SNL_IMPLEMENTATION_PLAN.md](BEE_SNL_IMPLEMENTATION_PLAN.md)  
+**Status:** Working baseline for R0 (WP1). Not BEE-approved policy.
+**Date:** 18 October 2026
+**Governing source:** *SnL Disha Advisory Manual* (`SnL_Disha_Advisory_Manual.pdf`, printed footer page numbers).
+**Plan:** [BEE_SNL_IMPLEMENTATION_PLAN.md](BEE_SNL_IMPLEMENTATION_PLAN.md)
 **Companion artifacts:** [SNL_WP01_ROLE_MATRIX.md](SNL_WP01_ROLE_MATRIX.md), [SNL_WP01_STATE_MODELS.md](SNL_WP01_STATE_MODELS.md), [SNL_WP01_FIELD_DICTIONARY.md](SNL_WP01_FIELD_DICTIONARY.md)
 
 ## 1. Source hierarchy and conflict handling
@@ -22,6 +22,7 @@
 - **Discrepancy communication deadline:** §3.10 narrative (printed p. 28) says discrepancies shall be communicated **within 7 working days** of receipt; Table 2 (brand registration, printed p. 28) gives **12 working days** for incompleteness/discrepancy communication; Table 3 (model registration, printed p. 29) gives **15 working days**. **Disposition:** assumption **A08** (seven working days as statutory ceiling until BEE resolves tables).
 - **Entity approval roles:** §3.3 (printed p. 24) names **Programme Director recommendation** and **Secretary** final approval for **model** registration; §3.1.1–§3.1.2 do not name entity/brand/category approvers. **Disposition:** assumptions **A02–A03** for entity/brand/category (scrutiny officer or designated agency; Programme recommend; Director approve).
 - **Hold vs return:** Manual uses “put on hold” for incomplete applications (§3.4, printed pp. 24–25) while the portal uses a **returned** state with applicant resubmission. **Disposition:** WP2 unified “discrepancy / return / response” (assumption **A05** for document sets).
+- **60-day cancel vs reject:** §3.2 (p. 24) — model application with no action within 60 days **shall stand cancelled**; §3.4(a)–(b) (p. 25) — brand/model may be **rejected** after 60 days without response to notice or without paying dues; Table 2 row 5 (p. 29) — brand on hold **automatically cancelled** after 60 days without revised documents; Table 3 row 5 (p. 30) — **60 days** for revised model documents only (no auto-cancel text). **Disposition:** WP2 normalization (**BL-256**); do not collapse in implementation design.
 
 ## 2. Current implementation inventory
 
@@ -103,7 +104,7 @@ Evidence is from the documented contract (`docs/wp03/bee-local-api.openapi.json`
 | Model registration form & annexure fields | Model application + test report document | §3.1.3, Annexure 3 (pp. 23–24, 56–57) | Partial — Annexure 3 not fully mapped | WP4 | A05 |
 | Model scrutiny (completeness) | IAME + reviewer stages | §3.2 designated agency/BEE (p. 24) | Partial — roles differ | WP2, WP4 | A02, A04 |
 | Model approval chain | Director recommend → Secretary approve | §3.3 (p. 24) | None for authority chain | WP4 | A04 |
-| Hold / reject / 60-day cancel | Return + reject; no auto-cancel job | §3.2 (p. 24), §3.4 (pp. 24–25), Table 2 row 6 (p. 28) | Partial — no 60-day cancellation automation | WP2, WP9 | A08, A17 |
+| Hold / reject / 60-day outcomes | Return + reject; no auto-cancel job | §3.2 cancel (p. 24); §3.4 reject (p. 25); Table 2 row 5 auto-cancel (p. 29); Table 3 row 5 deadline only (p. 30) | Partial — distinct manual outcomes not automated | WP2 | A17, BL-256 |
 | Company registration fee ₹5,000 | Registration fee snapshot (amount configurable) | §4.1 (p. 30) | Partial — key/rule differs from REG fee in tests | WP3, WP5 | A07 |
 | Category security deposit | Not implemented | §4.2 (pp. 30–31) | Major | WP3, WP5 | A07 |
 | Model permission fee ₹5,000 | Model fee rule (demo ₹10,000+tax in places) | §4.3 (p. 31) | Partial | WP4, WP5 | A07 |
@@ -113,7 +114,7 @@ Evidence is from the documented contract (`docs/wp03/bee-local-api.openapi.json`
 | Quarterly production return | `/api/demo/production` | §1.3.5(a) (p. 15) | Partial — demo | WP7 | A12 |
 | Retailer/dealer list by 30 Apr | None | §1.3.5(h) (p. 15) | Major | WP7 | — |
 | Renewal / agreement renewal | Not in registration API | §3.5–§3.6 (pp. 25–26) | Major | WP9 | A15 |
-| Withdrawal / cancellation | Register revocation demo; manual cancellation reasons not modeled | §3.7–§3.8 (pp. 26–27) | Major | WP9 | A15 |
+| Withdrawal / cancellation | Register revocation demo; manual cancellation reasons not modeled | §3.7 (pp. 26–27); §3.8 (pp. 27–28) | Major | WP9 | A15 |
 | Fresh application after cancel | Not implemented | §3.9 (p. 28) | Major | WP9 | — |
 | Processing timelines & SLA tables | Ad hoc dates in seeds; no SLA engine | §3.10, Tables 2–3 (pp. 28–29) | Major | WP2 | A08, A09, A17 |
 | Finance auto-confirm on gateway success | Manual fee confirmation in contract | §4 electronic payment (p. 30) | Partial | WP5 | A16 |
@@ -139,5 +140,6 @@ From [docs/demo/API.md](../demo/API.md) and [BEE_SNL_IMPLEMENTATION_PLAN.md](BEE
 ## 5. WP1 evidence note
 
 - Manual sections listed in Brief 17 were extracted from the owner’s PDF on 18 October 2026 (`pdftotext`); printed footer pages cited in companion documents match footers in that extract.
-- Public registration form was **not** retrieved; field dictionary marks portal comparison as pending (BL-252).
-- Final WP1 **acceptance** and ChatGPT review remain open per [BEE_SNL_IMPLEMENTATION_PLAN.md](BEE_SNL_IMPLEMENTATION_PLAN.md).
+- **Brief 17A (18 October 2026):** ChatGPT review corrections — 60-day citations (Table 2 row 5, p. 29; §3.2 vs §3.4 vs Table 3 row 5, p. 30), withdrawal/cancellation pages (§3.7 pp. 26–27; §3.8 pp. 27–28), expanded role and state models, trailing Markdown whitespace removed, **BL-256** added for cancel-vs-reject normalization.
+- Public registration form was **not** retrieved (504, 18 Oct 2026); field dictionary uses **Unavailable — BL-252**; plan checklist item for live form inspection remains **unchecked**.
+- Final WP1 **acceptance** (ChatGPT sign-off) remains open; package status **Gate pending** at 90% per [BEE_SNL_IMPLEMENTATION_PLAN.md](BEE_SNL_IMPLEMENTATION_PLAN.md).

@@ -1,10 +1,19 @@
 # SNL WP01 — field dictionary
 
-**Status:** Working baseline. No new mandatory fields invented beyond the manual.  
-**Governing source:** Annexure 1 (printed pp. 50–53), Annexure 1-A (pp. 52–53), §3.1.1 (pp. 22–23); Annexure 3 (pp. 56–57), §3.1.3 (pp. 23–24).  
-**Public form comparison:** https://www.beestarlabel.com/Manufacturer/AgencyRegistration — **not retrieved** (504 Gateway Timeout, 18 Oct 2026). Column **Public form** is **Pending (BL-252)**.
+**Status:** Working baseline. No new mandatory fields invented beyond the manual.
+**Governing source:** Annexure 1 (printed pp. 50–53), Annexure 1-A (pp. 52–53), §3.1.1 (pp. 22–23); Annexure 3 (pp. 56–57), §3.1.3 (pp. 23–24).
+**Secondary URL:** https://www.beestarlabel.com/Manufacturer/AgencyRegistration — **not retrieved** (504 Gateway Timeout, 18 Oct 2026). Do not infer fields from snippets.
 
 **Legend — current implementation:** `RegistrationForm` / OpenAPI `Registration`; model application types in OpenAPI and model screens.
+
+## 0. Public form comparison (live portal)
+
+Until **BL-252** closes, every field below is unverified against the live UI.
+
+| Scope | Public form status |
+|---|---|
+| Annexure 1 / §3.1.1 company–brand fields (§1 table) | **Unavailable — BL-252** |
+| Annexure 3 model fields (§2 table) | **Unavailable — BL-252** |
 
 ## 1. Company / brand registration (Annexure 1 and 1-A)
 
@@ -73,6 +82,6 @@
 
 ## 3. Cross-reference
 
-- Traceability and packages: [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md) §3.  
-- Document configuration assumption: **A05**, **A06**, **A19** in [docs/BEE_DECISIONS.md](../BEE_DECISIONS.md) (18 October 2026).  
+- Traceability and packages: [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md) §3.
+- Document configuration assumption: **A05**, **A06**, **A19** in [docs/BEE_DECISIONS.md](../BEE_DECISIONS.md) (18 October 2026).
 - Next implementation: full Annexure 1 checklist and entity master (**WP3**); Annexure 3 field schema (**WP4**).

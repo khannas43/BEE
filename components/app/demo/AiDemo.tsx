@@ -193,11 +193,11 @@ export function AiDemo() {
 
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-ai">
-      <h1>AI use cases</h1>
-      <div className="flex flex-wrap items-start justify-between gap-space-md">
-        <p className="ai-lead flex-1 min-w-64">Five transparent models read the live portal data. Each run keeps its evidence, model version and data version, and a person records the decision.</p>
+      <div className="flex items-center justify-between gap-space-md">
+        <h1 className="flex-1 min-w-0">AI use cases</h1>
         {models ? <RunButton model={model} ctl={ctl} /> : null}
       </div>
+      <p className="ai-lead">Five transparent models read the live portal data. Each run keeps its evidence, model version and data version, and a person records the decision.</p>
       {denied ? <p role="alert" className="text-error" data-testid="ai-error">{denied}</p> : null}
       {models === null && !denied ? <p role="status">Loading models…</p> : null}
       {models ? (
@@ -323,7 +323,7 @@ function RunButton({ model, ctl }: { model: ModelCard | null; ctl: UseCaseContro
   return (
     <div className="flex flex-col items-end gap-1 shrink-0">
       <button className="ai-run ai-run-round bg-primary text-on-primary" disabled={!model?.canRun || ctl.busy} onClick={() => void ctl.run()} data-testid="ai-run" aria-label={ctl.busy ? "Running" : "Run"}>
-        <Icon name={ctl.busy ? "hourglass_top" : "play_arrow"} size={30} /> {ctl.busy ? "Running" : "Run"}
+        <Icon name={ctl.busy ? "hourglass_top" : "play_arrow"} size={22} /> {ctl.busy ? "Running" : "Run"}
       </button>
       {model && !model.canRun ? <span className="font-label-sm text-on-surface-variant">Read only for your role</span> : null}
     </div>

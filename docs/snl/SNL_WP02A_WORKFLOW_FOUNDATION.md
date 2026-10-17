@@ -1,6 +1,6 @@
 # SNL WP02A — workflow foundation (implementation note)
 
-**Status:** Foundation slice corrected (Brief 18B); ChatGPT acceptance pending. Journey wiring deferred to WP2B.
+**Status:** Foundation slice corrected (Brief 18C); ChatGPT acceptance pending. Journey wiring deferred to WP2B.
 **Date:** 18 October 2026
 **Migration:** `V69__workflow_foundation.sql` (editable in place until merge)
 **Code:** `gov.bee.api.workflow.WorkingDaySla`, `WorkflowFoundationRepository`
@@ -10,51 +10,30 @@
 
 Registration and model applications keep their current state columns and transition tables. WP2A tables are **parallel** (`subject_kind` + `subject_id`). No backfill and no change to existing APIs or screens.
 
+## SLA clock identity
+
+Each SLA-governed **`workflow_task`** has at most one **`workflow_sla_clock`** row (1:1, immutable `policy_version_id` and `policy_anchor_at`). Clock **events** append to **`workflow_sla_clock_event.clock_id`**, not to the application id. A subject may therefore run **`stop`** on one stage clock and later **`start`** a new clock on another task. Advisory locking is per **clock id**.
+
+Policy applicability is checked at task/clock creation: `policy_anchor_at` must fall in the version’s half-open `[effective_from, effective_to)` range. Events do not carry a policy argument; the aggregate pins the version for the life of the clock.
+
 ## Database command boundaries
 
-Runtime **`bee_runtime`** may **not** insert or update foundation task rows, task events, discrepancy responses/dispositions, SLA clock rows, calendars or policies directly. It executes **`SECURITY DEFINER`** command functions only (pinned `search_path` ending in `pg_temp`, `PUBLIC` execute revoked):
+Runtime **`bee_runtime`** executes WP2A **`SECURITY DEFINER`** functions only (each pinned `search_path = <schema>, pg_temp`; V69 does **not** alter unrelated definer functions):
 
 | Function | Effect |
 | --- | --- |
-| `workflow_foundation_create_task` | Idempotent task insert (`ON CONFLICT` on `command_id`) plus exactly one `created` event when the row is new |
-| `workflow_foundation_reassign_task` | Versioned owner change plus `reassigned` event |
-| `workflow_foundation_terminal_task` | `completed` / `cancelled` plus matching event |
-| `workflow_foundation_discrepancy_respond` | Row lock, contiguous `response_seq`, response row plus `awaiting_review` status |
-| `workflow_foundation_discrepancy_dispose` | Disposition for the current undisposed response plus status (`needs_more` or `closed`) |
-| `workflow_foundation_append_clock_event` | Advisory lock per subject, strict monotonic time and state machine, single insert |
+| `workflow_foundation_create_task` | Task (+ optional SLA bundle) and exactly one `created` event when the row is new; idempotent via `ON CONFLICT` on `command_id` |
+| `workflow_foundation_reassign_task` / `_terminal_task` | Versioned task change plus matching event |
+| `workflow_foundation_discrepancy_respond` / `_dispose` | Locked response/disposition plus status |
+| `workflow_foundation_append_clock_event` | Per-clock lock, strict monotonic time, state machine insert |
 
-Opening a discrepancy remains a direct **`INSERT`** on `workflow_discrepancy` (identity only; no status bypass).
+## SLA task creation
 
-Task identity and discrepancy identity fields stay immutable via triggers. Policy version rows are **never updated**; delete is allowed for **`bee_local_maint`** only when no clock event references the version.
+For an SLA task, **`due_at`**, **`policy_version_id`** and **`policy_anchor_at`** must all be present; for a non-SLA task, all three must be absent. **`due_at`** is immutable after insert (no `due_changed` event in WP2A). Idempotency hash covers due time and policy fields plus clock association on replay.
 
-## Idempotency
+## Idempotency, discrepancies, policy, subject integrity
 
-- **`command_id`** + **`command_payload_hash`** (SHA-256 canonical payload) on `workflow_task`.
-- Same command + same payload → replay original task (including after terminal status); no extra event.
-- Same command + different payload → **`workflow_idempotency_conflict`** / `WorkflowIdempotencyConflictException`.
-- Concurrent creates with the same command ID rely on **`INSERT … ON CONFLICT DO NOTHING`**, not post-abort recovery in the same transaction.
-
-## Policy versions
-
-- Half-open **`[effective_from, effective_to)`** via **`btree_gist` EXCLUDE**.
-- **`workflow_sla_clock_event.policy_version_id`** references the applied version row.
-
-## SLA clock
-
-- **`responsible_party`:** `bureau` on `start`/`stop`; `applicant` on `pause`/`resume`.
-- DB command boundary enforces monotonic **strict** time (`<=` refused) and legal transitions.
-- Java **`WorkingDaySla.validateClockSequence`** mirrors rules for derivation; **`applicantPausesFromClockEvents`** validates the full supplied sequence.
-
-## Discrepancy cycles
-
-Statuses: `open` → `awaiting_review` → (`needs_more` → …)* → `closed`.
-
-- Any number of **`needs_more`** cycles; contiguous **`response_seq`** from 1; disposition must target the latest undisposed response.
-- All responses and dispositions are append-only evidence.
-
-## Subject delete integrity
-
-**`BEFORE DELETE`** triggers on `registration_application` and `model_application` refuse delete when foundation rows reference the subject.
+Unchanged from Brief 18B: payload-safe command replay, multi-cycle discrepancies, immutable policy version rows (delete only when unreferenced and maint), subject delete guards.
 
 ## Explicit deferrals (WP2B+)
 
@@ -62,5 +41,5 @@ Common transition APIs, UI, journey wiring, notification outbox, supervisor queu
 
 ## Evidence
 
-- Flyway **V69** through rank 69 on throwaway schemas.
-- **`WorkingDaySlaTest`** (unit) and **`WorkflowFoundationDatabaseTest`** (@Tag `db`), including two-connection concurrency cases.
+- Flyway **V69** on throwaway schemas.
+- **`WorkingDaySlaTest`** and **`WorkflowFoundationDatabaseTest`** (@Tag `db`), including per-clock concurrency and multi-clock subject cases.

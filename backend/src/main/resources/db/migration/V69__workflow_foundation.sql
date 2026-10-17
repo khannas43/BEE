@@ -69,7 +69,7 @@ CREATE UNIQUE INDEX workflow_task_command ON workflow_task (command_id) WHERE co
 CREATE TABLE workflow_task_event (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id            uuid NOT NULL REFERENCES workflow_task (id),
-  kind               text NOT NULL CHECK (kind IN ('created', 'reassigned', 'completed', 'cancelled', 'due_changed')),
+  kind               text NOT NULL CHECK (kind IN ('created', 'reassigned', 'completed', 'cancelled')),
   from_owner_role    text,
   from_owner_account uuid REFERENCES user_account (id),
   to_owner_role      text,
@@ -115,17 +115,23 @@ CREATE TABLE workflow_discrepancy_disposition (
   FOREIGN KEY (discrepancy_id, response_seq) REFERENCES workflow_discrepancy_response (discrepancy_id, response_seq)
 );
 
+CREATE TABLE workflow_sla_clock (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id              uuid NOT NULL UNIQUE REFERENCES workflow_task (id),
+  policy_version_id    uuid NOT NULL REFERENCES workflow_sla_policy_version (id),
+  policy_anchor_at     timestamptz NOT NULL,
+  created_at           timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE workflow_sla_clock_event (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  subject_kind         text NOT NULL CHECK (subject_kind IN ('registration_application', 'model_application')),
-  subject_id           uuid NOT NULL,
-  policy_version_id    uuid NOT NULL REFERENCES workflow_sla_policy_version (id),
+  clock_id             uuid NOT NULL REFERENCES workflow_sla_clock (id),
   event_kind           text NOT NULL CHECK (event_kind IN ('start', 'pause', 'resume', 'stop')),
   responsible_party    text NOT NULL CHECK (responsible_party IN ('applicant', 'bureau')),
   occurred_at          timestamptz NOT NULL,
   note                 text CHECK (note IS NULL OR char_length(note) <= 300)
 );
-CREATE INDEX workflow_sla_clock_subject ON workflow_sla_clock_event (subject_kind, subject_id, occurred_at);
+CREATE INDEX workflow_sla_clock_event_clock ON workflow_sla_clock_event (clock_id, occurred_at);
 
 CREATE FUNCTION workflow_validate_subject(p_kind text, p_id uuid) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
@@ -152,8 +158,19 @@ CREATE TRIGGER workflow_task_subject BEFORE INSERT ON workflow_task
   FOR EACH ROW EXECUTE FUNCTION workflow_subject_guard();
 CREATE TRIGGER workflow_discrepancy_subject BEFORE INSERT ON workflow_discrepancy
   FOR EACH ROW EXECUTE FUNCTION workflow_subject_guard();
-CREATE TRIGGER workflow_sla_clock_subject BEFORE INSERT ON workflow_sla_clock_event
-  FOR EACH ROW EXECUTE FUNCTION workflow_subject_guard();
+CREATE FUNCTION workflow_sla_clock_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF (NEW.task_id, NEW.policy_version_id, NEW.policy_anchor_at, NEW.created_at)
+         IS DISTINCT FROM (OLD.task_id, OLD.policy_version_id, OLD.policy_anchor_at, OLD.created_at) THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_sla_clock_identity_immutable';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER workflow_sla_clock_identity BEFORE UPDATE ON workflow_sla_clock
+  FOR EACH ROW EXECUTE FUNCTION workflow_sla_clock_identity_guard();
 
 CREATE FUNCTION workflow_block_subject_delete() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -161,7 +178,7 @@ DECLARE
 BEGIN
   IF EXISTS (SELECT 1 FROM workflow_task t WHERE t.subject_kind = kind AND t.subject_id = OLD.id)
      OR EXISTS (SELECT 1 FROM workflow_discrepancy d WHERE d.subject_kind = kind AND d.subject_id = OLD.id)
-     OR EXISTS (SELECT 1 FROM workflow_sla_clock_event c WHERE c.subject_kind = kind AND c.subject_id = OLD.id) THEN
+     OR EXISTS (SELECT 1 FROM workflow_sla_clock c JOIN workflow_task t ON t.id = c.task_id WHERE t.subject_kind = kind AND t.subject_id = OLD.id) THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_subject_has_foundation_rows';
   END IF;
   RETURN OLD;
@@ -175,8 +192,8 @@ CREATE TRIGGER workflow_model_delete_guard BEFORE DELETE ON model_application
 CREATE FUNCTION workflow_task_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
-    IF (NEW.subject_kind, NEW.subject_id, NEW.stage, NEW.action, NEW.command_id, NEW.command_payload_hash, NEW.created_at)
-         IS DISTINCT FROM (OLD.subject_kind, OLD.subject_id, OLD.stage, OLD.action, OLD.command_id, OLD.command_payload_hash, OLD.created_at) THEN
+    IF (NEW.subject_kind, NEW.subject_id, NEW.stage, NEW.action, NEW.command_id, NEW.command_payload_hash, NEW.due_at, NEW.created_at)
+         IS DISTINCT FROM (OLD.subject_kind, OLD.subject_id, OLD.stage, OLD.action, OLD.command_id, OLD.command_payload_hash, OLD.due_at, OLD.created_at) THEN
       RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_task_identity_immutable';
     END IF;
     IF NEW.version <> OLD.version + 1 THEN
@@ -211,7 +228,7 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'workflow_sla_policy_version_immutable';
   END IF;
   IF TG_OP = 'DELETE' THEN
-    IF EXISTS (SELECT 1 FROM workflow_sla_clock_event c WHERE c.policy_version_id = OLD.id) THEN
+    IF EXISTS (SELECT 1 FROM workflow_sla_clock c WHERE c.policy_version_id = OLD.id) THEN
       RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_sla_policy_version_referenced';
     END IF;
     IF session_user <> 'bee_local_maint' AND current_user <> 'bee_local_maint' THEN
@@ -225,32 +242,68 @@ END $$;
 CREATE TRIGGER workflow_sla_policy_immutable_row BEFORE UPDATE OR DELETE ON workflow_sla_policy_version
   FOR EACH ROW EXECUTE FUNCTION workflow_sla_policy_immutable();
 
+CREATE FUNCTION workflow_assert_policy_applicable(p_policy_version uuid, p_anchor timestamptz) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+  v_from date;
+  v_to date;
+BEGIN
+  SELECT effective_from, effective_to INTO v_from, v_to FROM workflow_sla_policy_version WHERE id = p_policy_version;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_policy_version_missing';
+  END IF;
+  IF p_anchor::date < v_from OR (v_to IS NOT NULL AND p_anchor::date >= v_to) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_policy_version_not_applicable';
+  END IF;
+END $$;
+
 CREATE FUNCTION workflow_idempotency_payload_matches(
-  p_row workflow_task, p_hash char(64), p_kind text, p_subject uuid, p_stage text, p_action text
-) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  p_row workflow_task, p_hash char(64), p_kind text, p_subject uuid, p_stage text, p_action text,
+  p_due timestamptz, p_policy uuid, p_anchor timestamptz
+) RETURNS boolean LANGUAGE sql STABLE AS $$
   SELECT p_row.command_payload_hash IS NOT DISTINCT FROM p_hash
      AND p_row.subject_kind = p_kind AND p_row.subject_id = p_subject
-     AND p_row.stage = p_stage AND p_row.action = p_action;
+     AND p_row.stage = p_stage AND p_row.action = p_action
+     AND p_row.due_at IS NOT DISTINCT FROM p_due;
+$$;
+
+CREATE FUNCTION workflow_idempotency_clock_matches(
+  p_task uuid, p_policy uuid, p_anchor timestamptz
+) RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT CASE
+    WHEN p_policy IS NULL THEN NOT EXISTS (SELECT 1 FROM workflow_sla_clock c WHERE c.task_id = p_task)
+    ELSE EXISTS (
+      SELECT 1 FROM workflow_sla_clock c
+       WHERE c.task_id = p_task AND c.policy_version_id = p_policy AND c.policy_anchor_at = p_anchor)
+  END;
 $$;
 
 CREATE FUNCTION workflow_foundation_create_task(
   p_subject_kind text, p_subject_id uuid, p_stage text, p_action text,
   p_owner_role text, p_owner_account uuid,
   p_command_id uuid, p_command_payload_hash char(64),
+  p_due_at timestamptz, p_policy_version_id uuid, p_policy_anchor_at timestamptz,
   p_actor_account uuid, p_actor_role text
 ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE
   v_id uuid;
   v_row workflow_task;
+  v_sla integer;
 BEGIN
   PERFORM workflow_validate_subject(p_subject_kind, p_subject_id);
+  v_sla := (p_due_at IS NOT NULL)::integer + (p_policy_version_id IS NOT NULL)::integer + (p_policy_anchor_at IS NOT NULL)::integer;
+  IF v_sla NOT IN (0, 3) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_sla_fields_inconsistent';
+  END IF;
+  IF p_policy_version_id IS NOT NULL THEN
+    PERFORM workflow_assert_policy_applicable(p_policy_version_id, p_policy_anchor_at);
+  END IF;
   IF p_command_id IS NOT NULL THEN
     IF p_command_payload_hash IS NULL THEN
       RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workflow_command_hash_required';
     END IF;
     PERFORM pg_advisory_xact_lock(hashtextextended(p_command_id::text, 0));
-    INSERT INTO workflow_task (subject_kind, subject_id, stage, action, owner_role, owner_account_id, command_id, command_payload_hash)
-    VALUES (p_subject_kind, p_subject_id, p_stage, p_action, p_owner_role, p_owner_account, p_command_id, p_command_payload_hash)
+    INSERT INTO workflow_task (subject_kind, subject_id, stage, action, owner_role, owner_account_id, due_at, command_id, command_payload_hash)
+    VALUES (p_subject_kind, p_subject_id, p_stage, p_action, p_owner_role, p_owner_account, p_due_at, p_command_id, p_command_payload_hash)
     ON CONFLICT (command_id) WHERE command_id IS NOT NULL DO NOTHING
     RETURNING id INTO v_id;
     IF v_id IS NULL THEN
@@ -258,15 +311,20 @@ BEGIN
       IF NOT FOUND THEN
         RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'workflow_command_create_race_retry';
       END IF;
-      IF NOT workflow_idempotency_payload_matches(v_row, p_command_payload_hash, p_subject_kind, p_subject_id, p_stage, p_action) THEN
+      IF NOT workflow_idempotency_payload_matches(v_row, p_command_payload_hash, p_subject_kind, p_subject_id, p_stage, p_action, p_due_at, p_policy_version_id, p_policy_anchor_at)
+         OR NOT workflow_idempotency_clock_matches(v_row.id, p_policy_version_id, p_policy_anchor_at) THEN
         RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'workflow_idempotency_conflict';
       END IF;
       RETURN v_row.id;
     END IF;
   ELSE
-    INSERT INTO workflow_task (subject_kind, subject_id, stage, action, owner_role, owner_account_id)
-    VALUES (p_subject_kind, p_subject_id, p_stage, p_action, p_owner_role, p_owner_account)
+    INSERT INTO workflow_task (subject_kind, subject_id, stage, action, owner_role, owner_account_id, due_at)
+    VALUES (p_subject_kind, p_subject_id, p_stage, p_action, p_owner_role, p_owner_account, p_due_at)
     RETURNING id INTO v_id;
+  END IF;
+  IF p_policy_version_id IS NOT NULL THEN
+    INSERT INTO workflow_sla_clock (task_id, policy_version_id, policy_anchor_at)
+    VALUES (v_id, p_policy_version_id, p_policy_anchor_at);
   END IF;
   INSERT INTO workflow_task_event (task_id, kind, to_owner_role, to_owner_account, actor_account_id, actor_role)
   VALUES (v_id, 'created', p_owner_role, p_owner_account, p_actor_account, p_actor_role);
@@ -378,8 +436,7 @@ BEGIN
 END $$;
 
 CREATE FUNCTION workflow_foundation_append_clock_event(
-  p_subject_kind text, p_subject_id uuid, p_policy_version_id uuid,
-  p_event_kind text, p_responsible_party text, p_occurred_at timestamptz, p_note text
+  p_clock_id uuid, p_event_kind text, p_responsible_party text, p_occurred_at timestamptz, p_note text
 ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE
   r record;
@@ -389,14 +446,13 @@ DECLARE
   v_last_at timestamptz;
   v_id uuid;
 BEGIN
-  PERFORM pg_advisory_xact_lock(hashtextextended(p_subject_kind || ':' || p_subject_id::text, 0));
-  PERFORM workflow_validate_subject(p_subject_kind, p_subject_id);
-  IF NOT EXISTS (SELECT 1 FROM workflow_sla_policy_version WHERE id = p_policy_version_id) THEN
-    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_policy_version_missing';
+  IF NOT EXISTS (SELECT 1 FROM workflow_sla_clock WHERE id = p_clock_id) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_sla_clock_missing';
   END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_clock_id::text, 0));
   FOR r IN
     SELECT event_kind, responsible_party, occurred_at FROM workflow_sla_clock_event
-     WHERE subject_kind = p_subject_kind AND subject_id = p_subject_id
+     WHERE clock_id = p_clock_id
      ORDER BY occurred_at, id
   LOOP
     IF v_last_at IS NOT NULL AND r.occurred_at <= v_last_at THEN
@@ -449,27 +505,29 @@ BEGIN
     ELSE
       RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'workflow_clock_unknown_kind';
   END CASE;
-  INSERT INTO workflow_sla_clock_event (subject_kind, subject_id, policy_version_id, event_kind, responsible_party, occurred_at, note)
-  VALUES (p_subject_kind, p_subject_id, p_policy_version_id, p_event_kind, p_responsible_party, p_occurred_at, p_note)
+  INSERT INTO workflow_sla_clock_event (clock_id, event_kind, responsible_party, occurred_at, note)
+  VALUES (p_clock_id, p_event_kind, p_responsible_party, p_occurred_at, p_note)
   RETURNING id INTO v_id;
   RETURN v_id;
 END $$;
 
-REVOKE ALL ON FUNCTION workflow_foundation_create_task(text, uuid, text, text, text, uuid, uuid, char(64), uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION workflow_foundation_create_task(text, uuid, text, text, text, uuid, uuid, char(64), timestamptz, uuid, timestamptz, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION workflow_foundation_reassign_task(uuid, integer, text, uuid, uuid, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION workflow_foundation_terminal_task(uuid, integer, text, uuid, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION workflow_foundation_discrepancy_respond(uuid, integer, text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION workflow_foundation_discrepancy_dispose(uuid, integer, text, text, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION workflow_foundation_append_clock_event(text, uuid, uuid, text, text, timestamptz, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION workflow_foundation_append_clock_event(uuid, text, text, timestamptz, text) FROM PUBLIC;
 
 DO $$
 DECLARE
   home_schema text := current_schema();
-  f regprocedure;
 BEGIN
-  FOR f IN SELECT p.oid::regprocedure FROM pg_proc p WHERE p.pronamespace = to_regnamespace(home_schema) AND p.prosecdef LOOP
-    EXECUTE format('ALTER FUNCTION %s SET search_path = %I, pg_temp', f, home_schema);
-  END LOOP;
+  EXECUTE format('ALTER FUNCTION %I.workflow_foundation_create_task(text, uuid, text, text, text, uuid, uuid, char(64), timestamptz, uuid, timestamptz, uuid, text) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.workflow_foundation_reassign_task(uuid, integer, text, uuid, uuid, text, text) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.workflow_foundation_terminal_task(uuid, integer, text, uuid, text, text) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.workflow_foundation_discrepancy_respond(uuid, integer, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.workflow_foundation_discrepancy_dispose(uuid, integer, text, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.workflow_foundation_append_clock_event(uuid, text, text, timestamptz, text) SET search_path = %I, pg_temp', home_schema, home_schema);
 END $$;
 
 DO $$
@@ -487,26 +545,26 @@ DECLARE
 BEGIN
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_local_maint') THEN
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I.workflow_calendar, %I.workflow_calendar_closure, %I.workflow_sla_policy_version, '
-      || '%I.workflow_task, %I.workflow_discrepancy TO bee_local_maint', home_schema, home_schema, home_schema, home_schema, home_schema);
+      || '%I.workflow_task, %I.workflow_discrepancy, %I.workflow_sla_clock TO bee_local_maint', home_schema, home_schema, home_schema, home_schema, home_schema, home_schema);
     EXECUTE format('GRANT SELECT, DELETE ON %I.workflow_task_event, %I.workflow_discrepancy_response, %I.workflow_discrepancy_disposition, '
       || '%I.workflow_sla_clock_event TO bee_local_maint', home_schema, home_schema, home_schema, home_schema);
   END IF;
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_runtime') THEN
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO bee_runtime', home_schema);
-    EXECUTE format('GRANT SELECT ON %I.workflow_task, %I.workflow_discrepancy TO bee_runtime', home_schema, home_schema);
+    EXECUTE format('GRANT SELECT ON %I.workflow_task, %I.workflow_discrepancy, %I.workflow_sla_clock TO bee_runtime', home_schema, home_schema, home_schema);
     EXECUTE format('GRANT SELECT, INSERT ON %I.workflow_discrepancy TO bee_runtime', home_schema);
     EXECUTE format('GRANT SELECT ON %I.workflow_task_event, %I.workflow_discrepancy_response, %I.workflow_discrepancy_disposition, '
       || '%I.workflow_sla_clock_event TO bee_runtime', home_schema, home_schema, home_schema, home_schema);
     EXECUTE format('GRANT SELECT ON %I.workflow_calendar, %I.workflow_calendar_closure, %I.workflow_sla_policy_version TO bee_runtime', home_schema, home_schema, home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_create_task(text, uuid, text, text, text, uuid, uuid, char(64), uuid, text) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_create_task(text, uuid, text, text, text, uuid, uuid, char(64), timestamptz, uuid, timestamptz, uuid, text) TO bee_runtime', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_reassign_task(uuid, integer, text, uuid, uuid, text, text) TO bee_runtime', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_terminal_task(uuid, integer, text, uuid, text, text) TO bee_runtime', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_discrepancy_respond(uuid, integer, text, uuid) TO bee_runtime', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_discrepancy_dispose(uuid, integer, text, text, uuid) TO bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_append_clock_event(text, uuid, uuid, text, text, timestamptz, text) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.workflow_foundation_append_clock_event(uuid, text, text, timestamptz, text) TO bee_runtime', home_schema);
     EXECUTE format('REVOKE INSERT, UPDATE ON %I.workflow_task, %I.workflow_task_event, %I.workflow_discrepancy_response, %I.workflow_discrepancy_disposition, '
-      || '%I.workflow_sla_clock_event, %I.workflow_sla_policy_version, %I.workflow_calendar, %I.workflow_calendar_closure FROM bee_runtime',
-      home_schema, home_schema, home_schema, home_schema, home_schema, home_schema, home_schema, home_schema);
+      || '%I.workflow_sla_clock, %I.workflow_sla_clock_event, %I.workflow_sla_policy_version, %I.workflow_calendar, %I.workflow_calendar_closure FROM bee_runtime',
+      home_schema, home_schema, home_schema, home_schema, home_schema, home_schema, home_schema, home_schema, home_schema);
     EXECUTE format('REVOKE UPDATE ON %I.workflow_discrepancy FROM bee_runtime', home_schema);
     EXECUTE format('REVOKE DELETE, TRUNCATE ON %I.workflow_task_event, %I.workflow_discrepancy_response, %I.workflow_discrepancy_disposition, '
       || '%I.workflow_sla_clock_event FROM bee_runtime', home_schema, home_schema, home_schema, home_schema);

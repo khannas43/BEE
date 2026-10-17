@@ -79,6 +79,14 @@ class WorkflowFoundationDatabaseTest {
         return new WorkflowFoundationRepository.TaskCommand(kind, subject, stage, action, "programme", PROGRAMME);
     }
 
+    static WorkflowFoundationRepository.TaskCommand slaCmd(String kind, UUID subject, String stage, String action, Instant due, UUID policy, Instant anchor) {
+        return new WorkflowFoundationRepository.TaskCommand(kind, subject, stage, action, "programme", PROGRAMME, due, policy, anchor);
+    }
+
+    static UUID clockForTask(UUID taskId) {
+        return repo.findClockByTaskId(taskId).orElseThrow().id();
+    }
+
     @BeforeAll
     static void migrateAndSeed() throws Exception {
         admin = new JdbcTemplate(migrateSource(null));
@@ -182,6 +190,16 @@ class WorkflowFoundationDatabaseTest {
             return null;
         });
         assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_discrepancy SET status = 'closed' WHERE id = ?", disc));
+        Instant due = LocalDate.of(2026, 8, 1).atTime(17, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        Instant anchor = LocalDate.of(2026, 8, 1).atStartOfDay(ZoneId.of("Asia/Kolkata")).toInstant();
+        var slaTask = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_due", "review", due, policyVersionId, anchor), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        UUID clockId = clockForTask(slaTask.id());
+        assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_task SET due_at = ? WHERE id = ?", java.sql.Timestamp.from(due.plusSeconds(60)), slaTask.id()));
+        assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_sla_clock SET policy_version_id = ? WHERE id = ?", policyVersionId, clockId));
+        assertThrows(DataAccessException.class, () -> runtime.update("INSERT INTO workflow_sla_clock_event (clock_id, event_kind, responsible_party, occurred_at) VALUES (?, 'start', 'bureau', ?)", clockId,
+            java.sql.Timestamp.from(anchor)));
     }
 
     @Test
@@ -285,11 +303,15 @@ class WorkflowFoundationDatabaseTest {
     @Test
     void referencedPolicyVersionCannotChangeOrDelete() {
         Instant start = LocalDate.of(2026, 5, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        Instant due = LocalDate.of(2026, 5, 15).atTime(17, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
         UUID regClock = UUID.randomUUID();
         owner.update(
             "INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version) VALUES (?, ?, 'brand', ?, ?, 'draft', 0)",
             regClock, "WF2A-POL-" + TAG, NOVA_ORG, "WF Pol " + TAG);
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, policyVersionId, "start", "bureau", start, null);
+        var task = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, "scr_pol", "review", due, policyVersionId, start), UUID.randomUUID(), PROGRAMME,
+            "programme");
+        repo.appendClockEvent(clockForTask(task.id()), "start", "bureau", start, null);
         assertThrows(DataAccessException.class, () -> owner.update("UPDATE workflow_sla_policy_version SET note = 'tamper' WHERE id = ?", policyVersionId));
         assertThrows(DataAccessException.class, () -> owner.update("DELETE FROM workflow_sla_policy_version WHERE id = ?", policyVersionId));
         var maint = new JdbcTemplate(maintSource(MAIN));
@@ -323,36 +345,137 @@ class WorkflowFoundationDatabaseTest {
     }
 
     @Test
-    void clockEventsRequireValidSequenceAndPolicyVersion() {
+    void clockEventsRequireValidSequenceAndPinnedPolicy() {
         Instant start = LocalDate.of(2026, 4, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
-        UUID clockSubject = registrationId;
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "start", "bureau", start, null);
-        assertThrows(DataAccessException.class,
-            () -> repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "resume", "applicant",
-                start.plusSeconds(5), null));
+        Instant due = LocalDate.of(2026, 4, 15).atTime(17, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        var task = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_clk", "review", due, policyVersionId, start), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        UUID clockId = clockForTask(task.id());
+        repo.appendClockEvent(clockId, "start", "bureau", start, null);
+        assertThrows(DataAccessException.class, () -> repo.appendClockEvent(clockId, "resume", "applicant", start.plusSeconds(5), null));
         assertThrows(DataAccessException.class, () -> runtime.update(
-            "INSERT INTO workflow_sla_clock_event (subject_kind, subject_id, policy_version_id, event_kind, responsible_party, occurred_at) "
-                + "VALUES (?, ?, ?, 'pause', 'applicant', ?)",
-            WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, java.sql.Timestamp.from(start.plusSeconds(8))));
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "pause", "applicant", start.plusSeconds(10),
-            null);
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "resume", "applicant", start.plusSeconds(20),
-            null);
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "stop", "bureau", start.plusSeconds(30), null);
-        UUID storedPolicy = runtime.queryForObject(
-            "SELECT policy_version_id FROM workflow_sla_clock_event WHERE subject_id = ? LIMIT 1", UUID.class, clockSubject);
-        assertEquals(policyVersionId, storedPolicy);
+            "INSERT INTO workflow_sla_clock_event (clock_id, event_kind, responsible_party, occurred_at) VALUES (?, 'pause', 'applicant', ?)", clockId,
+            java.sql.Timestamp.from(start.plusSeconds(8))));
+        repo.appendClockEvent(clockId, "pause", "applicant", start.plusSeconds(10), null);
+        repo.appendClockEvent(clockId, "resume", "applicant", start.plusSeconds(20), null);
+        repo.appendClockEvent(clockId, "stop", "bureau", start.plusSeconds(30), null);
+        assertEquals(policyVersionId, repo.findClockByTaskId(task.id()).orElseThrow().policyVersionId());
+    }
+
+    @Test
+    void sequentialTwoClocksOnOneSubjectStopThenStart() {
+        Instant t0 = LocalDate.of(2026, 9, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        Instant due1 = t0.plusSeconds(86400 * 10);
+        var taskA = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "stage_a", "review", due1, policyVersionId, t0), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        UUID clockA = clockForTask(taskA.id());
+        repo.appendClockEvent(clockA, "start", "bureau", t0, null);
+        repo.appendClockEvent(clockA, "stop", "bureau", t0.plusSeconds(30), null);
+        repo.completeTask(taskA.id(), taskA.version(), PROGRAMME, "programme", "done");
+        Instant t1 = t0.plusSeconds(100);
+        Instant due2 = due1.plusSeconds(86400);
+        var taskB = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "stage_b", "review", due2, policyVersionId, t1), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        UUID clockB = clockForTask(taskB.id());
+        repo.appendClockEvent(clockB, "start", "bureau", t1, null);
+        assertEquals(2, repo.loadClockEvents(clockA).size());
+        assertEquals(1, repo.loadClockEvents(clockB).size());
+    }
+
+    @Test
+    void separateStageClockHistoriesDoNotMerge() {
+        Instant t = LocalDate.of(2026, 10, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        var t1 = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "st_m1", "pay", t.plusSeconds(1), policyVersionId, t), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        var t2 = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "st_m2", "approve", t.plusSeconds(2), policyVersionId, t), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        UUID c1 = clockForTask(t1.id());
+        UUID c2 = clockForTask(t2.id());
+        repo.appendClockEvent(c1, "start", "bureau", t.plusSeconds(10), null);
+        repo.appendClockEvent(c2, "start", "bureau", t.plusSeconds(20), null);
+        assertEquals(1, repo.loadClockEvents(c1).size());
+        assertEquals(1, repo.loadClockEvents(c2).size());
+    }
+
+    @Test
+    void slaCreateRollbackLeavesNoPartialTaskClockOrEvent() {
+        Instant anchor = LocalDate.of(2026, 11, 2).atStartOfDay(ZoneId.of("Asia/Kolkata")).toInstant();
+        Instant due = LocalDate.of(2026, 11, 12).atTime(17, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        UUID c1 = UUID.randomUUID();
+        UUID c2 = UUID.randomUUID();
+        int clocksBefore = owner.queryForObject("SELECT count(*)::int FROM workflow_sla_clock", Integer.class);
+        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
+            repo.createTask(
+                slaCmd(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scr_sla_rb", "review", due, policyVersionId, anchor), c1, PROGRAMME, "programme");
+            repo.createTask(
+                slaCmd(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scr_sla_rb", "review", due, policyVersionId, anchor), c2, PROGRAMME, "programme");
+        }));
+        assertTrue(repo.findTaskByCommandId(c1).isEmpty());
+        assertTrue(repo.findTaskByCommandId(c2).isEmpty());
+        assertEquals(clocksBefore, owner.queryForObject("SELECT count(*)::int FROM workflow_sla_clock", Integer.class));
+    }
+
+    @Test
+    void slaTaskCreatedWithDueAndClockAtomically() {
+        Instant anchor = LocalDate.of(2026, 11, 1).atStartOfDay(ZoneId.of("Asia/Kolkata")).toInstant();
+        Instant due = LocalDate.of(2026, 11, 12).atTime(17, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        UUID command = UUID.randomUUID();
+        var task = repo.createTaskIdempotent(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_sla", "review", due, policyVersionId, anchor), command, PROGRAMME,
+            "programme");
+        assertEquals(due, task.dueAt());
+        var clock = repo.findClockByTaskId(task.id()).orElseThrow();
+        assertEquals(policyVersionId, clock.policyVersionId());
+        assertEquals(anchor, clock.policyAnchorAt());
+        assertEquals(1, repo.countTaskEvents(task.id()));
+    }
+
+    @Test
+    void slaIdempotentReplayAndDuePolicyConflict() {
+        Instant anchor = LocalDate.of(2026, 12, 1).atStartOfDay(ZoneId.of("Asia/Kolkata")).toInstant();
+        Instant due = LocalDate.of(2026, 12, 10).atTime(17, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        UUID command = UUID.randomUUID();
+        var first = repo.createTaskIdempotent(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_idem", "review", due, policyVersionId, anchor), command, PROGRAMME,
+            "programme");
+        var replay = repo.createTaskIdempotent(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_idem", "review", due, policyVersionId, anchor), command, PROGRAMME,
+            "programme");
+        assertEquals(first.id(), replay.id());
+        assertEquals(first.id(), repo.findClockByTaskId(replay.id()).orElseThrow().taskId());
+        var otherDue = slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_idem", "review", due.plusSeconds(60), policyVersionId, anchor);
+        assertThrows(WorkflowIdempotencyConflictException.class, () -> repo.createTaskIdempotent(otherDue, command, PROGRAMME, "programme"));
+    }
+
+    @Test
+    void preV69SecurityDefinerSearchPathNotRewrittenByV69() {
+        String cfg = owner.queryForObject(
+            "SELECT coalesce(array_to_string(p.proconfig, ','), '') FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                + "WHERE n.nspname = ? AND p.proname = 'demo_message_on_payment' AND p.prosecdef",
+            String.class, MAIN);
+        assertTrue(cfg.contains("search_path=") && cfg.contains("pg_temp"), cfg);
+        String wf = owner.queryForObject(
+            "SELECT coalesce(array_to_string(p.proconfig, ','), '') FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                + "WHERE n.nspname = ? AND p.proname = 'workflow_foundation_create_task'",
+            String.class, MAIN);
+        assertTrue(wf.contains("search_path=") && wf.contains("pg_temp"), wf);
     }
 
     @Test
     void concurrentClockAppendAllowsOneValidSuccessor() throws Exception {
-        UUID regClock = UUID.randomUUID();
-        owner.update(
-            "INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version) VALUES (?, ?, 'brand', ?, ?, 'draft', 0)",
-            regClock, "WF2A-CLK-" + TAG, NOVA_ORG, "WF Clk " + TAG);
         Instant start = LocalDate.of(2026, 7, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        Instant due = start.plusSeconds(86400 * 5);
+        var task = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_cnc", "review", due, policyVersionId, start), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        UUID clockId = clockForTask(task.id());
         Instant next = start.plusSeconds(10);
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, policyVersionId, "start", "bureau", start, null);
+        repo.appendClockEvent(clockId, "start", "bureau", start, null);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch go = new CountDownLatch(1);
         AtomicInteger ok = new AtomicInteger();
@@ -362,8 +485,7 @@ class WorkflowFoundationDatabaseTest {
                 pool.submit(() -> {
                     go.await();
                     try {
-                        new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN)))
-                            .appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, policyVersionId, "pause", "applicant", next, null);
+                        new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN))).appendClockEvent(clockId, "pause", "applicant", next, null);
                         ok.incrementAndGet();
                     } catch (DataAccessException ex) {
                         fail.incrementAndGet();
@@ -373,8 +495,7 @@ class WorkflowFoundationDatabaseTest {
                 pool.submit(() -> {
                     go.await();
                     try {
-                        new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN)))
-                            .appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, regClock, policyVersionId, "pause", "applicant", next, null);
+                        new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN))).appendClockEvent(clockId, "pause", "applicant", next, null);
                         ok.incrementAndGet();
                     } catch (DataAccessException ex) {
                         fail.incrementAndGet();
@@ -390,6 +511,44 @@ class WorkflowFoundationDatabaseTest {
         }
         assertEquals(1, ok.get());
         assertEquals(1, fail.get());
-        assertEquals(2, owner.queryForObject("SELECT count(*)::int FROM workflow_sla_clock_event WHERE subject_id = ?", Integer.class, regClock));
+        assertEquals(2, owner.queryForObject("SELECT count(*)::int FROM workflow_sla_clock_event WHERE clock_id = ?", Integer.class, clockId));
+    }
+
+    @Test
+    void independentClocksOnSameSubjectDoNotSerializeEachOther() throws Exception {
+        Instant t = LocalDate.of(2026, 7, 2).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        var task1 = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "ind_a", "review", t.plusSeconds(100), policyVersionId, t), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        var task2 = repo.createTask(
+            slaCmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "ind_b", "review", t.plusSeconds(200), policyVersionId, t), UUID.randomUUID(),
+            PROGRAMME, "programme");
+        UUID c1 = clockForTask(task1.id());
+        UUID c2 = clockForTask(task2.id());
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch go = new CountDownLatch(1);
+        AtomicInteger ok = new AtomicInteger();
+        try {
+            List<Future<?>> futures = List.of(
+                pool.submit(() -> {
+                    go.await();
+                    new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN))).appendClockEvent(c1, "start", "bureau", t.plusSeconds(10), null);
+                    ok.incrementAndGet();
+                    return null;
+                }),
+                pool.submit(() -> {
+                    go.await();
+                    new WorkflowFoundationRepository(new JdbcTemplate(runtimeSource(MAIN))).appendClockEvent(c2, "start", "bureau", t.plusSeconds(10), null);
+                    ok.incrementAndGet();
+                    return null;
+                }));
+            go.countDown();
+            for (Future<?> f : futures) {
+                f.get(15, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(2, ok.get());
     }
 }

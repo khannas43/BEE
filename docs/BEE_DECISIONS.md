@@ -252,7 +252,7 @@ Each decision below gives what the system does today, the realistic options, a r
 | A05 | Required documents configured by applicant type, registration type, category, effective date | §3.1.1, §3.1.3; Annexures 1 & 3 | Provisional — owner confirmation pending |
 | A06 | Issue/expiry dates recorded for trademark, SSI, BIS, ISO, lab accreditation, etc. | §3.1, §3.4 (pp. 22–25) | Provisional — owner confirmation pending |
 | A07 | Default fees: ₹5,000 company; ₹3,00,000 category deposit (₹50,000 SSI); ₹5,000 model | §4.1–§4.3 (pp. 30–31) | Provisional — owner confirmation pending |
-| A08 | Seven working days as discrepancy communication ceiling until tables reconciled | §3.10 narrative vs Tables 2–3 (pp. 28–29) | Provisional — owner confirmation pending |
+| A08 | Seven working days as discrepancy communication ceiling until tables reconciled | §3.10 narrative vs Tables 2–3 (pp. 28–30) | Provisional — owner confirmation pending |
 | A09 | Internal targets: 1 day first scrutiny; 2–3 days clean entity; 3–5 days clean model | Improves on manual ceilings without changing authority | Provisional — owner confirmation pending |
 | A10 | Prepaid QR label fees from 1 April 2027; accrued settlement before | §4.5 (p. 32) | Provisional — owner confirmation pending |
 | A11 | One QR serial per physical unit; opaque, server-resolved; no reuse after bind/void | §5(b) (p. 33); technical detail not in manual | Provisional — owner confirmation pending |

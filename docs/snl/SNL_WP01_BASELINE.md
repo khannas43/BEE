@@ -1,6 +1,6 @@
 # SNL WP01 — traceability baseline
 
-**Status:** Working baseline for R0 (WP1). Not BEE-approved policy.
+**Status:** Accepted implementation baseline for R0 (WP1). Assumptions remain provisional and are not BEE-approved policy.
 **Date:** 18 October 2026
 **Governing source:** *SnL Disha Advisory Manual* (`SnL_Disha_Advisory_Manual.pdf`, printed footer page numbers).
 **Plan:** [BEE_SNL_IMPLEMENTATION_PLAN.md](BEE_SNL_IMPLEMENTATION_PLAN.md)
@@ -19,7 +19,7 @@
 
 **Known manual internal conflicts (flagged, not resolved here):**
 
-- **Discrepancy communication deadline:** §3.10 narrative (printed p. 28) says discrepancies shall be communicated **within 7 working days** of receipt; Table 2 (brand registration, printed p. 28) gives **12 working days** for incompleteness/discrepancy communication; Table 3 (model registration, printed p. 29) gives **15 working days**. **Disposition:** assumption **A08** (seven working days as statutory ceiling until BEE resolves tables).
+- **Discrepancy communication deadline:** §3.10 narrative (printed p. 28) says discrepancies shall be communicated **within 7 working days** of receipt; Table 2 (brand registration, printed p. 29) gives **12 working days** for incompleteness/discrepancy communication; Table 3 (model registration, printed p. 30) gives **15 working days**. **Disposition:** assumption **A08** (seven working days as statutory ceiling until BEE resolves tables).
 - **Entity approval roles:** §3.3 (printed p. 24) names **Programme Director recommendation** and **Secretary** final approval for **model** registration; §3.1.1–§3.1.2 do not name entity/brand/category approvers. **Disposition:** assumptions **A02–A03** for entity/brand/category (scrutiny officer or designated agency; Programme recommend; Director approve).
 - **Hold vs return:** Manual uses “put on hold” for incomplete applications (§3.4, printed pp. 24–25) while the portal uses a **returned** state with applicant resubmission. **Disposition:** WP2 unified “discrepancy / return / response” (assumption **A05** for document sets).
 - **60-day cancel vs reject:** §3.2 (p. 24) — model application with no action within 60 days **shall stand cancelled**; §3.4(a)–(b) (p. 25) — brand/model may be **rejected** after 60 days without response to notice or without paying dues; Table 2 row 5 (p. 29) — brand on hold **automatically cancelled** after 60 days without revised documents; Table 3 row 5 (p. 30) — **60 days** for revised model documents only (no auto-cancel text). **Disposition:** WP2 normalization (**BL-256**); do not collapse in implementation design.
@@ -116,7 +116,7 @@ Evidence is from the documented contract (`docs/wp03/bee-local-api.openapi.json`
 | Renewal / agreement renewal | Not in registration API | §3.5–§3.6 (pp. 25–26) | Major | WP9 | A15 |
 | Withdrawal / cancellation | Register revocation demo; manual cancellation reasons not modeled | §3.7 (pp. 26–27); §3.8 (pp. 27–28) | Major | WP9 | A15 |
 | Fresh application after cancel | Not implemented | §3.9 (p. 28) | Major | WP9 | — |
-| Processing timelines & SLA tables | Ad hoc dates in seeds; no SLA engine | §3.10, Tables 2–3 (pp. 28–29) | Major | WP2 | A08, A09, A17 |
+| Processing timelines & SLA tables | Ad hoc dates in seeds; no SLA engine | §3.10, Tables 2–3 (pp. 28–30) | Major | WP2 | A08, A09, A17 |
 | Finance auto-confirm on gateway success | Manual fee confirmation in contract | §4 electronic payment (p. 30) | Partial | WP5 | A16 |
 | Manufacturer 360 | Demo MIS + dashboards | Derived from §1.3.5, §3, §4 | Major — no formal 360 API | WP8 | A14 |
 | Public verification | `/api/public/verification` | Label/registration credibility §5 | Partial — QR serial via demo | WP6, WP9 | — |
@@ -141,5 +141,5 @@ From [docs/demo/API.md](../demo/API.md) and [BEE_SNL_IMPLEMENTATION_PLAN.md](BEE
 
 - Manual sections listed in Brief 17 were extracted from the owner’s PDF on 18 October 2026 (`pdftotext`); printed footer pages cited in companion documents match footers in that extract.
 - **Brief 17A (18 October 2026):** ChatGPT review corrections — 60-day citations (Table 2 row 5, p. 29; §3.2 vs §3.4 vs Table 3 row 5, p. 30), withdrawal/cancellation pages (§3.7 pp. 26–27; §3.8 pp. 27–28), expanded role and state models, trailing Markdown whitespace removed, **BL-256** added for cancel-vs-reject normalization.
-- Public registration form was **not** retrieved (504, 18 Oct 2026); field dictionary uses **Unavailable — BL-252**; plan checklist item for live form inspection remains **unchecked**.
-- Final WP1 **acceptance** (ChatGPT sign-off) remains open; package status **Gate pending** at 90% per [BEE_SNL_IMPLEMENTATION_PLAN.md](BEE_SNL_IMPLEMENTATION_PLAN.md).
+- Public registration form was **not** retrieved (504, 18 Oct 2026); field dictionary uses **Unavailable — BL-252**. Because the PDF is the governing source, the secondary live-form comparison is a non-blocking WP3 follow-up.
+- **Accepted by ChatGPT on 18 October 2026** as the provisional implementation baseline. A01–A20 remain owner-confirmation items; acceptance does not convert them into BEE policy.

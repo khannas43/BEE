@@ -31,7 +31,7 @@ Target authority (includes today’s brand registration; legal-entity master is 
 | Pay company registration fee | Applicant | — | **Manual** §4.1 (p. 30) |
 | Confirm payment | Finance | — | **Existing implementation** (auto-post target: **Assumption A16**) |
 | Scrutinise completeness | Registration Scrutiny Officer or designated agency | — | **Assumption A02** (manual silent on entity/brand officer title) |
-| Communicate discrepancies / put on hold | Registration Scrutiny Officer or designated agency | — | **Manual** §3.4 (pp. 24–25); Table 2 row 4 (p. 28) |
+| Communicate discrepancies / put on hold | Registration Scrutiny Officer or designated agency | — | **Manual** §3.4 (pp. 24–25); Table 2 row 4 (p. 29) |
 | Submit revised documents | Applicant | — | **Manual** Table 2 row 5 (p. 29) |
 | Recommend registration | Programme (portal) | — | **Assumption A03** (manual Programme **Director** named only for model §3.3) |
 | Approve registration / issue permittee number | Director (portal) | Director | **Assumption A03** |
@@ -64,7 +64,7 @@ No portal journey today. Target responsibilities use **Assumption A01**, **A02**
 | Submit and pay model fee | Applicant | — | **Manual** §3.1.3; §4.3 (p. 31) |
 | Confirm fee | Finance | — | **Existing implementation**; **Assumption A16** |
 | Scrutinise completeness | BEE or designated agency | — | **Manual** §3.2 (p. 24) |
-| Communicate discrepancies; put on hold | BEE or designated agency | — | **Manual** §3.2 (p. 24); Table 3 row 4 (p. 29) |
+| Communicate discrepancies; put on hold | BEE or designated agency | — | **Manual** §3.2 (p. 24); Table 3 row 4 (p. 30) |
 | Applicant response / revised documents | Applicant | — | **Manual** Table 3 row 5 (p. 30) — **60-day deadline only** (no “auto-cancel” in table) |
 | Stand cancelled after 60 days no action | System / Bureau update | — | **Manual** §3.2 (p. 24) — **cancel** wording |
 | Reject after 60-day failure to respond to notice | Bureau | — | **Manual** §3.4(a) (p. 25) — **reject** wording (**BL-256**) |

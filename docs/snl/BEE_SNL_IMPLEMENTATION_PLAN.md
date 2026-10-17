@@ -3,7 +3,7 @@
 **Status:** Living work-package tracker
 **Date:** 18 October 2026
 **Last updated:** 18 October 2026
-**Active work package:** WP1 Policy baseline and traceability
+**Active work package:** WP2 Common workflow tasks and SLA
 **Primary source:** *SnL Disha Advisory Manual*
 **Secondary reference:** https://www.beestarlabel.com/Manufacturer/AgencyRegistration
 **Important:** The assumptions in this plan are implementation defaults selected because formal BEE decisions were not available. They are not BEE policy and must remain configurable.
@@ -20,7 +20,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
-| WP1 | Policy baseline and traceability | Gate pending | 90% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); Brief 17A corrections; BL-252 live form; ChatGPT acceptance open |
+| WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
 | WP2 | Common workflow tasks and SLA | Not started | 0% | WP1 | R1 | Pending |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
@@ -196,13 +196,13 @@ At the end of each development session, update the package status, progress, com
 
 | Tracking field | Current value |
 |---|---|
-| Status | Gate pending |
-| Progress | 90% |
+| Status | Complete |
+| Progress | 100% |
 | Target release | R0 |
 | Depends on | None |
 | Manual references | Sections 1.3.5, 3.1–3.10, 4.1–4.5, 5 and 5.1; Annexures 1–4 |
 | Current evidence | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md), [SNL_WP01_ROLE_MATRIX.md](SNL_WP01_ROLE_MATRIX.md), [SNL_WP01_STATE_MODELS.md](SNL_WP01_STATE_MODELS.md), [SNL_WP01_FIELD_DICTIONARY.md](SNL_WP01_FIELD_DICTIONARY.md); A01–A20 in [docs/BEE_DECISIONS.md](../BEE_DECISIONS.md) |
-| Next action | Final ChatGPT WP1 acceptance; fetch live company registration form (BL-252); then WP2 |
+| Next action | Start WP2 workflow/SLA design; retry live company registration form during WP3 (BL-252) |
 
 **Outcome:** an accepted provisional requirements baseline in which every planned function has a manual source or a clearly identified implementation assumption.
 
@@ -211,7 +211,7 @@ At the end of each development session, update the package status, progress, com
 #### WP1 checklist
 
 - [x] Review the SnL Disha Advisory Manual.
-- [ ] Inspect the current BEE Company Registration Form (attempted 18 Oct 2026 — **504**; tracked as **BL-252**).
+- [x] Attempt inspection of the current BEE Company Registration Form (504 on 18 Oct 2026); defer the secondary comparison to WP3 as **BL-252**.
 - [x] Draft assumptions A01–A20.
 - [x] Draft the manual traceability index.
 - [x] Add assumptions to `docs/BEE_DECISIONS.md` as provisional owner assumptions.
@@ -222,7 +222,7 @@ At the end of each development session, update the package status, progress, com
 - [x] Review the baseline against the existing schema, routes and backlog.
 - [x] Create the WP1 evidence note ([SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md) §5 and companion artifacts).
 - [x] Run documentation and traceability checks (see WP1 completion evidence).
-- [ ] Commit, review and accept WP1 (final ChatGPT/owner acceptance still open).
+- [x] Commit, review and accept WP1 (accepted by ChatGPT on 18 Oct 2026; assumptions remain provisional).
 
 #### WP1 completion evidence
 
@@ -234,16 +234,16 @@ At the end of each development session, update the package status, progress, com
 | State diagrams | [SNL_WP01_STATE_MODELS.md](SNL_WP01_STATE_MODELS.md) |
 | Field dictionaries | [SNL_WP01_FIELD_DICTIONARY.md](SNL_WP01_FIELD_DICTIONARY.md) |
 | Test or validation result | `npm run web:test` on task commit (Cursor WP01 handback) |
-| Review result | Brief 17A corrections applied 18 Oct 2026; final ChatGPT acceptance pending |
-| Completion commit or PR | Brief 17 + 17A commits on task branch; merge/acceptance pending |
+| Review result | Accepted by ChatGPT on 18 Oct 2026 after Brief 17A corrections; BL-252 is a non-blocking WP3 follow-up |
+| Completion commit or PR | Brief 17, Brief 17A and acceptance commits merged to `main` |
 
 #### WP1 acceptance
 
-- [ ] Every planned requirement has a manual section/page or an assumption ID.
-- [ ] Manual requirements and implementation designs are visibly distinguished.
-- [ ] Roles, transitions, fields and required documents are defined.
-- [ ] Policy values are configurable and effective-dated where appropriate.
-- [ ] No unresolved item is omitted; each is recorded as an assumption, dependency or backlog item.
+- [x] Every planned requirement has a manual section/page or an assumption ID.
+- [x] Manual requirements and implementation designs are visibly distinguished.
+- [x] Roles, transitions, fields and required documents are defined.
+- [x] Policy values are configurable and effective-dated where appropriate.
+- [x] No unresolved item is omitted; each is recorded as an assumption, dependency or backlog item.
 
 ---
 
@@ -776,6 +776,7 @@ Add one row whenever a package status or material result changes.
 | Date | WP | Previous status | New status | Result | Evidence or next action |
 |---|---|---|---|---|---|
 | 18 Oct 2026 | WP1 | In progress | Gate pending (90%) | WP01 baseline + Brief 17A review corrections; BL-252/256; live form not fetched (504) | ChatGPT WP1 acceptance; BL-252; then WP2 |
+| 18 Oct 2026 | WP1 | Gate pending (90%) | Complete (100%) | ChatGPT accepted the PDF-backed provisional baseline; A01–A20 remain provisional | Begin WP2; retry secondary live-form comparison in WP3 (BL-252) |
 
 ### 6.2 Standard completion record
 

@@ -33,7 +33,7 @@ States include payment and exception paths. Later lifecycle rows point to **WP9*
 | `payment_pending` | `payment_settled` | Gateway / Finance | Successful payment | Payment receipt | Applicant | — | **Manual** §4 (p. 30); confirm **Assumption A16** |
 | `payment_pending` | `payment_exception` | Finance | Failed / unmatched | Exception record | Finance queue | — | **Assumption A16** |
 | `payment_settled` | `scrutiny` | System | Payment posted | Fee confirmation | Officer queue | — | **Existing implementation** |
-| `scrutiny` | `returned` | Scrutiny officer / agency | Discrepancy | Structured return lines | Portal §3.4 | 12 days communicate (Table 2 row 4, p. 28) vs 7 days narrative §3.10 — **BL-255** | **Manual** + **Assumption A02** |
+| `scrutiny` | `returned` | Scrutiny officer / agency | Discrepancy | Structured return lines | Portal §3.4 | 12 days communicate (Table 2 row 4, p. 29) vs 7 days narrative §3.10 — **BL-255** | **Manual** + **Assumption A02** |
 | `returned` | `applicant_response` | Applicant | Uploads / corrections | Response version | Portal | — | **Manual** §3.4 hold (pp. 24–25) |
 | `applicant_response` | `scrutiny` | Applicant | Resubmit | Resubmit event | Officer | Table 2 row 5: **60 days** from hold notice (p. 29) | **Manual** |
 | `returned` | `cancelled_auto` | System job | No resubmit within 60 days from hold notice | Cancel + refund event | Portal | Table 2 row 5 (p. 29) | **Manual** |
@@ -76,7 +76,7 @@ States include payment and exception paths. Later lifecycle rows point to **WP9*
 | `payment_pending` | `payment_settled` | Gateway / Finance | Paid | Receipt | Applicant | — | **Assumption A16** |
 | `payment_pending` | `payment_exception` | Finance | Exception | Exception | Finance | — | **Assumption A16** |
 | `payment_settled` | `scrutiny` | Designated agency / BEE | Fee posted | Fee confirm | Agency queue | Table 3 row 2: 15 days scrutiny (p. 29) | **Manual** §3.2 |
-| `scrutiny` | `returned` | Designated agency / BEE | Discrepancy | Return lines | Portal | Table 3 row 4: 15 days (p. 29) | **Manual** |
+| `scrutiny` | `returned` | Designated agency / BEE | Discrepancy | Return lines | Portal | Table 3 row 4: 15 days (p. 30) | **Manual** |
 | `returned` | `scrutiny` | Applicant | Revised documents | Resubmit | Portal | Table 3 row 5: **60 days** from communication (p. 30) | **Manual** |
 | `returned` | `cancelled` | System / Bureau | No action 60 days | Cancel event | Portal | §3.2 (p. 24) **stand cancelled** | **Manual** |
 | `returned` | `rejected` | Bureau | 60 days from **notice** per §3.4 | Rejection | Portal | §3.4(a) (p. 25) | **Manual**; reconcile with §3.2 in **WP2 BL-256** |

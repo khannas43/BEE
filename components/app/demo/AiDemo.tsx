@@ -655,14 +655,47 @@ interface TrendCat { category: string; ratings: number; starDistribution: number
 interface Answer { articleId: number; title: string; category: string; score: number }
 interface ExField { field: string; extracted: string | null; declared: string | null; status: string; confidence: number }
 
+const FIELD_CLS = "rounded-lg border border-outline-variant px-3 !h-10 !py-0 box-border font-body-sm bg-surface-card";
+
+/** One row of filters; every control is 40px high. "Clear filters" appears when any filter is set. */
+function FilterBar({ children, active, onClear, testId }: { children: React.ReactNode; active: boolean; onClear: () => void; testId: string }) {
+  return (
+    <div className="flex flex-wrap items-end gap-space-sm" data-testid={testId}>
+      {children}
+      {active ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={onClear} data-testid={`${testId}-clear`}>Clear filters</button> : null}
+    </div>
+  );
+}
+function FSearch({ label = "Search", value, onChange, placeholder, testId }: { label?: string; value: string; onChange: (v: string) => void; placeholder: string; testId: string }) {
+  return (
+    <label className="font-label-md">{label}
+      <input className={`${FIELD_CLS} mt-1 block`} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} data-testid={testId} />
+    </label>
+  );
+}
+function FSelect({ label, value, onChange, options, testId }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][]; testId: string }) {
+  return (
+    <label className="font-label-md">{label}
+      <select className={`${FIELD_CLS} mt-1 block`} value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId}>
+        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+    </label>
+  );
+}
+
 const RISK_SORT = (e: RiskEntity & { rank: number }, k: string): string | number =>
   k === "rank" ? e.rank : k === "name" ? e.name : k === "apps" ? e.applications : k === "score" ? e.score : k === "band" ? e.band : e.confidence;
 
 /** The scored manufacturers: sortable, paged, and one row is selected; the evidence below is for that row only. */
 function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; selKey: string | null; onSelect: (key: string) => void }) {
   const ranked = entities.map((e, i) => ({ ...e, rank: i + 1 }));
+  const [band, setBand] = useState("");
+  const [factor, setFactor] = useState("");
+  const [data, setData] = useState("");
+  const factors = [...new Set(entities.flatMap((e) => e.features.filter((f) => f.contribution > 0).map((f) => f.feature)))].sort();
+  const filtered = ranked.filter((e) => (!band || e.band === band) && (!factor || e.features.some((f) => f.feature === factor && f.contribution > 0)) && (!data || (data === "synthetic") === e.synthetic));
   const tools = useListTools({
-    rows: ranked,
+    rows: filtered,
     text: (e) => `${e.name} ${e.band}`,
     sortValue: RISK_SORT,
     pageSize: 8,
@@ -672,6 +705,12 @@ function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; sel
   return (
     <div className="mt-4 space-y-3" data-testid="ai-output-risk">
       <p className="font-body-sm text-on-surface-variant">{entities.length} manufacturers scored. Click a row to select it: the evidence below is shown for the selected manufacturer only.</p>
+      <FilterBar testId="ai-risk-filters" active={Boolean(tools.query || band || factor || data)} onClear={() => { tools.clear(); setBand(""); setFactor(""); setData(""); }}>
+        <FSearch value={tools.query} onChange={tools.setQuery} placeholder="Manufacturer name" testId="ai-risk-search" />
+        <FSelect label="Risk band" value={band} onChange={(v) => { setBand(v); tools.setPage(1); }} testId="ai-risk-band" options={[["", "All"], ["high", "High"], ["medium", "Medium"], ["low", "Low"]]} />
+        <FSelect label="Contributing factor" value={factor} onChange={(v) => { setFactor(v); tools.setPage(1); }} testId="ai-risk-factor" options={[["", "Any"], ...factors.map((f): [string, string] => [f, f])]} />
+        <FSelect label="Data" value={data} onChange={(v) => { setData(v); tools.setPage(1); }} testId="ai-risk-data" options={[["", "All"], ["live", "Live portal data"], ["synthetic", "Synthetic sample"]]} />
+      </FilterBar>
       <div className="overflow-x-auto">
         <table className="w-full font-body-sm" data-testid="ai-risk-table">
           <caption className="sr-only">Scored manufacturers, highest review priority first</caption>
@@ -704,6 +743,7 @@ function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; sel
                 </tr>
               );
             })}
+            {tools.paged.total === 0 ? <tr><td className={cell} colSpan={7}>No manufacturers match these filters.</td></tr> : null}
           </tbody>
         </table>
       </div>
@@ -820,20 +860,33 @@ function AnomalyTable({ series, synthetic, selKey, onSelect }: { series: SeriesR
   );
 }
 
-function Output({ run, selKey, onSelect }: { run: RunDetail; selKey: string | null; onSelect: (key: string) => void }) {
-  const o = run.output as Record<string, unknown>;
-  if (run.useCase === "compliance-risk") {
-    return <RiskTable entities={(o.entities as RiskEntity[]) ?? []} selKey={selKey} onSelect={onSelect} />;
-  }
-  if (run.useCase === "production-anomaly") {
-    return <AnomalyTable series={(o.series as SeriesRow[]) ?? []} synthetic={Boolean(o.synthetic)} selKey={selKey} onSelect={onSelect} />;
-  }
-  if (run.useCase === "rating-trends") {
-    const cats = (o.categories as TrendCat[]) ?? [];
-    return (
-      <div className="mt-4 space-y-3" data-testid="ai-output-trends">
-        <div className="flex gap-2"><Chip>{String(o.realRatings)} real ratings</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{String(o.syntheticRatings)} synthetic</Chip></div>
-        {cats.map((c) => (
+const TREND_SORT: Record<string, (c: TrendCat) => string | number> = {
+  category: (c) => c.category, slope: (c) => c.slopePerMonth, fit: (c) => c.rSquared, ratings: (c) => c.ratings,
+};
+
+/** Rating categories: filter by name, direction of the trend, whether a forecast exists and how well the line fits; sort and page. */
+function TrendCards({ cats, realRatings, syntheticRatings }: { cats: TrendCat[]; realRatings: string; syntheticRatings: string }) {
+  const [trend, setTrend] = useState("");
+  const [forecast, setForecast] = useState("");
+  const [fit, setFit] = useState("");
+  const [sortKey, setSortKey] = useState("category");
+  const filtered = cats
+    .filter((c) => (!trend || (trend === "rising" ? c.slopePerMonth >= 0 : c.slopePerMonth < 0)) && (!forecast || (forecast === "yes") === (c.forecast !== null)) && (!fit || (fit === "strong" ? c.rSquared >= 0.7 : c.rSquared < 0.7)))
+    .sort((x, y) => { const a = TREND_SORT[sortKey](x), b = TREND_SORT[sortKey](y); return typeof a === "string" ? String(a).localeCompare(String(b)) : Number(b) - Number(a); });
+  const tools = useListTools({ rows: filtered, text: (c) => c.category, sortValue: () => 0, pageSize: 3 });
+  return (
+    <div className="mt-4 space-y-3" data-testid="ai-output-trends">
+      <div className="flex gap-2"><Chip>{realRatings} real ratings</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{syntheticRatings} synthetic</Chip></div>
+      <FilterBar testId="ai-trend-filters" active={Boolean(tools.query || trend || forecast || fit)} onClear={() => { tools.clear(); setTrend(""); setForecast(""); setFit(""); }}>
+        <FSearch label="Search" value={tools.query} onChange={tools.setQuery} placeholder="Category" testId="ai-trend-search" />
+        <FSelect label="Trend" value={trend} onChange={(v) => { setTrend(v); tools.setPage(1); }} testId="ai-trend-direction" options={[["", "Any"], ["rising", "Rising or flat"], ["falling", "Falling"]]} />
+        <FSelect label="Forecast" value={forecast} onChange={(v) => { setForecast(v); tools.setPage(1); }} testId="ai-trend-forecast" options={[["", "Any"], ["yes", "Available"], ["no", "Too few months"]]} />
+        <FSelect label="Line fit (R²)" value={fit} onChange={(v) => { setFit(v); tools.setPage(1); }} testId="ai-trend-fit" options={[["", "Any"], ["strong", "Strong (0.7 or more)"], ["weak", "Weak (under 0.7)"]]} />
+        <FSelect label="Sort by" value={sortKey} onChange={(v) => { setSortKey(v); tools.setPage(1); }} testId="ai-trend-sort" options={[["category", "Category"], ["slope", "Slope per month"], ["fit", "Line fit (R²)"], ["ratings", "Number of ratings"]]} />
+      </FilterBar>
+      <p className="font-body-sm text-on-surface-variant">{tools.paged.total} of {cats.length} categories shown.</p>
+      {tools.paged.total === 0 ? <p className="font-body-sm">No categories match these filters.</p> : null}
+        {tools.paged.pageRows.map((c) => (
           <div key={c.category} className="rounded-xl border border-[#e2e8f0] bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-semibold text-[#14315E]">{c.category}</span>
@@ -852,21 +905,52 @@ function Output({ run, selKey, onSelect }: { run: RunDetail; selKey: string | nu
             <p className="mt-2 text-[13px] text-[#475569]">{c.forecast ? <>Next month: <strong className="text-[#14315E]">{c.forecast.nextMonthMeanIseer}</strong> (95% band {c.forecast.low95} to {c.forecast.high95})</> : "Too few months for a forecast band."} <span className="sr-only">{c.months.map((m) => `${m.month}: ${m.meanIseer}`).join(" · ")}</span></p>
           </div>
         ))}
-      </div>
-    );
+      <ListPager tools={tools} />
+    </div>
+  );
+}
+
+function Output({ run, selKey, onSelect }: { run: RunDetail; selKey: string | null; onSelect: (key: string) => void }) {
+  const o = run.output as Record<string, unknown>;
+  if (run.useCase === "compliance-risk") {
+    return <RiskTable entities={(o.entities as RiskEntity[]) ?? []} selKey={selKey} onSelect={onSelect} />;
+  }
+  if (run.useCase === "production-anomaly") {
+    return <AnomalyTable series={(o.series as SeriesRow[]) ?? []} synthetic={Boolean(o.synthetic)} selKey={selKey} onSelect={onSelect} />;
+  }
+  if (run.useCase === "rating-trends") {
+    return <TrendCards cats={(o.categories as TrendCat[]) ?? []} realRatings={String(o.realRatings)} syntheticRatings={String(o.syntheticRatings)} />;
   }
   if (run.useCase === "helpdesk-assist") {
     const top = (o.topAnswers as Answer[]) ?? [];
     const best = Math.max(0.0001, ...top.map((a) => a.score));
-    return (
+    return <HelpdeskResult o={o} top={top} best={best} />;
+  }
+  return <ExtractionTable o={o} fields={(o.fields as ExField[]) ?? []} />;
+}
+
+function HelpdeskResult({ o, top, best }: { o: Record<string, unknown>; top: Answer[]; best: number }) {
+  const [category, setCategory] = useState("");
+  const [strength, setStrength] = useState("");
+  const [query, setQuery] = useState("");
+  const categories = [...new Set(top.map((a) => a.category))].sort();
+  const shown = top.filter((a) => (!category || a.category === category) && (!strength || (strength === "strong" ? a.score >= 0.7 * best : a.score < 0.7 * best)) && (!query || a.title.toLowerCase().includes(query.toLowerCase())));
+  return (
       <div className="mt-4 space-y-3 font-body-sm" data-testid="ai-output-helpdesk">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] text-[#64748b]">Suggested category</span>
           <Chip>{String(o.suggestedCategory)}</Chip>
           {o.escalateToHuman ? <Chip tone={BAND.high.pill}><Icon name="support_agent" size={14} /> ESCALATE TO A PERSON (confidence under the threshold)</Chip> : null}
         </div>
+        <FilterBar testId="ai-help-filters" active={Boolean(query || category || strength)} onClear={() => { setQuery(""); setCategory(""); setStrength(""); }}>
+          <FSearch label="Search" value={query} onChange={setQuery} placeholder="Article title" testId="ai-help-search" />
+          <FSelect label="Category" value={category} onChange={setCategory} testId="ai-help-category" options={[["", "All"], ...categories.map((c): [string, string] => [c, c])]} />
+          <FSelect label="Match strength" value={strength} onChange={setStrength} testId="ai-help-strength" options={[["", "Any"], ["strong", "Strong (70% of the best or more)"], ["weak", "Weaker"]]} />
+        </FilterBar>
+        <p className="text-on-surface-variant">{shown.length} of {top.length} matching articles shown.</p>
         <ol className="space-y-2">
-          {top.map((a, i) => (
+          {shown.length === 0 ? <li>No articles match these filters.</li> : null}
+          {shown.map((a, i) => (
             <li key={a.articleId} className="flex items-center gap-3 rounded-lg border border-[#e2e8f0] bg-white px-3 py-2">
               <span className="ai-rank">{i + 1}</span>
               <span className="flex-1 min-w-0"><span className="block font-semibold text-[#14315E]">{a.title}</span><span className="text-[12px] text-[#64748b]">{a.category}, score {a.score}</span></span>
@@ -879,28 +963,55 @@ function Output({ run, selKey, onSelect }: { run: RunDetail; selKey: string | nu
           {String(o.draftReply)}
         </div>
       </div>
-    );
-  }
-  const fields = (o.fields as ExField[]) ?? [];
+  );
+}
+
+const STATUS_WORD: Record<string, string> = { match: "Matches", differs: "Differs", not_found_in_report: "Not found in report", not_declared: "Not declared" };
+
+/** The extracted fields against the declared ones: filter by status and confidence, sort every column. */
+function ExtractionTable({ o, fields }: { o: Record<string, unknown>; fields: ExField[] }) {
+  const [status, setStatus] = useState("");
+  const [level, setLevel] = useState("");
+  const statuses = [...new Set(fields.map((f) => f.status))].sort();
+  const rows = fields.filter((f) => (!status || f.status === status) && (!level || (level === "high" ? f.confidence >= 0.75 : level === "medium" ? f.confidence >= 0.45 && f.confidence < 0.75 : f.confidence < 0.45)));
+  const tools = useListTools({
+    rows,
+    text: (f) => `${f.field} ${f.extracted ?? ""} ${f.declared ?? ""}`,
+    sortValue: (f, k) => (k === "field" ? f.field : k === "extracted" ? f.extracted ?? "" : k === "declared" ? f.declared ?? "" : k === "status" ? f.status : f.confidence),
+    pageSize: 10,
+  });
   return (
-    <div className="mt-4 font-body-sm" data-testid="ai-output-extraction">
-      <div className="mb-2 flex flex-wrap gap-2"><Chip>Application {String(o.applicationReference)}</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">text from: {String(o.textSource)}</Chip></div>
-      <table className="w-full">
-        <thead><tr><th className={cell}>Field</th><th className={cell}>Extracted</th><th className={cell}>Declared</th><th className={cell}>Status</th><th className={cell}>Confidence</th></tr></thead>
-        <tbody>
-          {fields.map((f) => {
-            const st = f.status.replaceAll("_", " ");
-            const tone = /match|agree|same/i.test(st) && !/not|differ|mismatch/i.test(st) ? BAND.low.pill : /differ|mismatch|conflict/i.test(st) ? BAND.high.pill : "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]";
-            return (
-              <tr key={f.field} className="border-t border-outline-variant">
-                <td className={cell}><strong>{f.field}</strong></td><td className={cell}>{f.extracted ?? "not found"}</td><td className={cell}>{f.declared ?? "not declared"}</td>
-                <td className={cell}><span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${tone}`}>{st}</span></td>
-                <td className={cell}><Meter value={f.confidence} label={pct(f.confidence)} /></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="mt-4 space-y-3 font-body-sm" data-testid="ai-output-extraction">
+      <div className="flex flex-wrap gap-2"><Chip>Application {String(o.applicationReference)}</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">text from: {String(o.textSource)}</Chip></div>
+      <FilterBar testId="ai-extract-filters" active={Boolean(tools.query || status || level)} onClear={() => { tools.clear(); setStatus(""); setLevel(""); }}>
+        <FSearch value={tools.query} onChange={tools.setQuery} placeholder="Field, extracted or declared value" testId="ai-extract-search" />
+        <FSelect label="Status" value={status} onChange={(v) => { setStatus(v); tools.setPage(1); }} testId="ai-extract-status" options={[["", "All"], ...statuses.map((x): [string, string] => [x, STATUS_WORD[x] ?? x])]} />
+        <FSelect label="Confidence" value={level} onChange={(v) => { setLevel(v); tools.setPage(1); }} testId="ai-extract-level" options={[["", "Any"], ["high", "High (75% or more)"], ["medium", "Medium (45% to 74%)"], ["low", "Low (under 45%)"]]} />
+      </FilterBar>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead><tr>
+            <SortableTh tools={tools} k="field" className={cell}>Field</SortableTh><SortableTh tools={tools} k="extracted" className={cell}>Extracted</SortableTh>
+            <SortableTh tools={tools} k="declared" className={cell}>Declared</SortableTh><SortableTh tools={tools} k="status" className={cell}>Status</SortableTh>
+            <SortableTh tools={tools} k="confidence" className={cell}>Confidence</SortableTh>
+          </tr></thead>
+          <tbody>
+            {tools.paged.pageRows.map((f) => {
+              const st = f.status.replaceAll("_", " ");
+              const tone = /match|agree|same/i.test(st) && !/not|differ|mismatch/i.test(st) ? BAND.low.pill : /differ|mismatch|conflict/i.test(st) ? BAND.high.pill : "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]";
+              return (
+                <tr key={f.field} className="border-t border-outline-variant">
+                  <td className={cell}><strong>{f.field}</strong></td><td className={cell}>{f.extracted ?? "not found"}</td><td className={cell}>{f.declared ?? "not declared"}</td>
+                  <td className={cell}><span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${tone}`}>{st}</span></td>
+                  <td className={cell}><Meter value={f.confidence} label={pct(f.confidence)} /></td>
+                </tr>
+              );
+            })}
+            {tools.paged.total === 0 ? <tr><td className={cell} colSpan={5}>No fields match these filters.</td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+      <ListPager tools={tools} />
     </div>
   );
 }

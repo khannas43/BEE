@@ -307,6 +307,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
     "/app/registrations/requests",
     "/app/registrations/new",
     "/app/registrations/request",
+    "/app/registrations/fees",
     "/app/registrations/reviews",
     "/app/registrations/register",
     "/app/model-label/model-dashboard",
@@ -327,7 +328,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }]).some((r) => r.href === "/app/registrations/requests"), false, "Finance does not get the registration list");
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/registrations/new"), false, "the form is reached from the list, not by its own menu entry");
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/registrations/request"), false, "a request is reached from the list, not by its own menu entry");
-  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/finance/finance-queue", "/app/delegations"], "Finance gets its queue, the inbox and delegations");
+  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/finance/finance-queue", "/app/registrations/fees", "/app/delegations"], "Finance gets its queue, the registration fees, the inbox and delegations");
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/finance/finance-queue"), false, "an applicant never gets the Finance entry");
   assert.deepEqual(runtimeNavFor([{ role: "iame", scope: "assigned" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/model-label/iame-scrutiny"], "IAME gets only its scrutiny screen");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }]).some((r) => r.href === "/app/model-label/iame-scrutiny"), false, "Finance never gets the IAME entry");
@@ -335,7 +336,7 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.equal(runtimeNavFor([{ role: "iame", scope: "assigned" }]).some((r) => r.href === "/app/model-label/bee-scrutiny"), false, "IAME never gets the Reviewer entry");
   assert.deepEqual(runtimeNavFor([{ role: "programme", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/registrations/reviews", "/app/registrations/register", "/app/model-label/rating-calculation", "/app/delegations"], "Programme gets the rating screen, registration reviews, the register and delegations");
   assert.equal(runtimeNavFor([{ role: "reviewer", scope: "assigned" }]).some((r) => r.href === "/app/model-label/rating-calculation"), false, "the Reviewer never gets the Programme entry");
-  assert.deepEqual(runtimeNavFor([{ role: "director", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/registrations/reviews", "/app/registrations/register", "/app/model-label/director-approval", "/app/delegations"], "the Director gets the approval screen, registration reviews, the register and delegations");
+  assert.deepEqual(runtimeNavFor([{ role: "director", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval", "/app/registrations/reviews", "/app/registrations/register", "/app/delegations"], "the Director gets the approval screen, registration reviews, the register and delegations");
   assert.deepEqual(runtimeNavFor([{ role: "secretary", scope: "all" }]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval"], "the Secretary gets the same approval screen, for its own stage");
   assert.equal(runtimeNavFor([{ role: "secretary", scope: "all" }]).some((r) => r.href === "/app/registrations/reviews"), false, "the Secretary does not review a registration");
   assert.equal(runtimeNavFor([{ role: "manufacturer", scope: "own-org" }]).some((r) => r.href === "/app/registrations/reviews"), false, "an applicant does not get the review queue");
@@ -348,9 +349,9 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.deepEqual(runtimeNavFor([{ role: "admin", scope: "all" }], ["fee_rule_manage", "rating_scheme_manage"]).map((r) => r.href), ["/app/administration/fee-rules", "/app/administration/rating-formula", "/app/delegations"], "the Administrator, who holds both permissions, gets both screens and delegations");
   assert.deepEqual(runtimeNavFor([{ role: "admin", scope: "all" }], ["business_setting_manage"]).map((r) => r.href), ["/app/administration/business-settings", "/app/delegations"], "the business-settings permission brings that screen, and the Administrator also gets delegations");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_rule_manage", "rating_scheme_manage"]).some((r) => r.href === "/app/administration/business-settings"), false, "the other administration permissions do not bring Business settings");
-  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_rule_manage"]).map((r) => r.href), ["/app/administration/fee-rules", "/app/workflow/personal-inbox", "/app/finance/finance-queue", "/app/delegations"], "a role given the permission later gets the entry, in menu order, beside its own entries");
+  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_rule_manage"]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/finance/finance-queue", "/app/registrations/fees", "/app/administration/fee-rules", "/app/delegations"], "a role given the permission later gets the entry, in menu order, beside its own entries");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }], ["rating_scheme_manage"]).some((r) => r.href === "/app/administration/fee-rules"), false, "one permission does not bring the other screen");
-  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_confirmation_correct"]).map((r) => r.href), ["/app/finance/receipt", "/app/workflow/personal-inbox", "/app/finance/finance-queue", "/app/delegations"], "Finance, which holds the correction permission, gets the receipts screen and delegations");
+  assert.deepEqual(runtimeNavFor([{ role: "finance", scope: "all" }], ["fee_confirmation_correct"]).map((r) => r.href), ["/app/workflow/personal-inbox", "/app/finance/finance-queue", "/app/registrations/fees", "/app/finance/receipt", "/app/delegations"], "Finance, which holds the correction permission, gets the receipts screen and delegations");
   assert.equal(runtimeNavFor([{ role: "admin", scope: "all" }], ["fee_rule_manage", "rating_scheme_manage"]).some((r) => r.href === "/app/finance/receipt"), false, "the Administrator does not hold the correction permission");
   assert.deepEqual(runtimeNavFor([{ role: "laboratory", scope: "assigned" }], ["fee_rule_manage"]).map((r) => r.href), ["/app/administration/fee-rules"], "the permission alone is enough for the entry; no other entry comes with it");
   assert.equal(runtimeNavFor([{ role: "finance", scope: "all" }]).some((r) => r.href === "/app/administration/fee-rules"), false, "Finance does not get the fee-rule entry without the permission");

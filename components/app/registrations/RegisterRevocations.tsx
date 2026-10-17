@@ -3,6 +3,8 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
+import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
+import { istStamp } from "@/lib/client/istTime";
 import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { useCommand, type CommandState } from "@/components/app/kit/CommandPanel";
 import { ReadPanel } from "@/components/app/kit/StatePanels";
@@ -50,7 +52,6 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
     <ScreenChrome module={module} screen={screen} subtitle="Register" implemented={runtimeRouteFor(registerHref())?.implemented}>
       <div className="space-y-space-md" data-testid="rvk-screen">
         <IdentityStrip identity={identity} testId="rvk-identity" />
-        <p className="font-body-sm text-on-surface-variant" data-testid="rvk-provisional">Provisional local rules, not BEE rules.</p>
         <ReadPanel
           title="Register"
           read={read}
@@ -68,6 +69,43 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
   );
 }
 
+type TabKey = "brands" | "auths" | "pending" | "history";
+
+const FIELD = "rounded-lg border border-outline-variant px-3 h-10 box-border font-body-sm bg-surface-card";
+const TH = "py-2 pr-3 text-left font-label-sm text-on-surface-variant";
+const TD = "py-2 pr-3 align-top";
+
+const STATUS_TONE: Record<string, string> = {
+  active: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]", suspended: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", revoked: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
+  pending: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", approved: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]", rejected: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
+  withdrawn: "bg-[#eef2f7] text-[#475569] border-[#d8e0ea]",
+};
+function StatusPill({ code, label }: { code: string; label: string }) {
+  return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[12px] font-semibold leading-4 ${STATUS_TONE[code] ?? "bg-[#e7effb] text-[#14315E] border-[#c9d9f7]"}`}>{label}</span>;
+}
+
+function FilterSelect({ label, value, onChange, options, testId }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][]; testId: string }) {
+  return (
+    <label className="flex flex-col font-label-sm text-label-sm text-on-surface-variant">{label}
+      <select className={`${FIELD} mt-1`} value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId}>
+        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+    </label>
+  );
+}
+
+const distinct = (xs: string[]): [string, string][] => [["", "All"], ...[...new Set(xs)].sort().map((x): [string, string] => [x, x])];
+
+function SummaryCard({ label, value, hint, tone, tab, current, onPick }: { label: string; value: number; hint: string; tone: string; tab: TabKey; current: TabKey; onPick: (t: TabKey) => void }) {
+  return (
+    <button type="button" onClick={() => onPick(tab)} aria-pressed={current === tab} className={`text-left rounded-2xl border p-space-md bg-surface-card hover:shadow transition ${current === tab ? "border-primary shadow" : "border-outline-variant"}`} data-testid={`rvk-card-${tab}`}>
+      <span className="font-label-md uppercase tracking-wide text-on-surface-variant">{label}</span>
+      <span className={`block text-[30px] leading-9 font-extrabold tabular-nums ${tone}`}>{value}</span>
+      <span className="block font-label-sm text-on-surface-variant">{hint}</span>
+    </button>
+  );
+}
+
 function RegisterBody({
   register,
   openId,
@@ -81,100 +119,261 @@ function RegisterBody({
   onChanged: () => void;
   onRefresh: () => void;
 }) {
-  const openBrand = register.brands.find((b) => b.id === openId) ?? null;
-  const openAuth = register.authorisations.find((a) => a.id === openId) ?? null;
+  const [tab, setTab] = useState<TabKey>("brands");
+  const count = (xs: { status: string }[], st: string) => xs.filter((x) => x.status === st).length;
+  const brandsActive = count(register.brands, "active");
+  const authsActive = count(register.authorisations, "active");
+  const tabBtn = (key: TabKey, label: string, n: number) => (
+    <button key={key} type="button" role="tab" aria-selected={tab === key} id={`rvk-tab-${key}`} onClick={() => setTab(key)} data-testid={`rvk-tab-${key}`}
+      className={`px-space-md py-2 rounded-t-lg font-label-lg border-b-2 ${tab === key ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
+      {label} <span className="ml-1 rounded-full bg-surface-container px-2 text-[12px]">{n}</span>
+    </button>
+  );
 
   return (
     <div className="space-y-space-md">
-      <section>
-        <h2 className="font-title-md text-title-md text-on-surface">Brands</h2>
-        {register.brands.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">No brand is on the register.</p> : (
-          <table className="w-full font-body-sm text-body-sm mt-space-sm" data-testid="rvk-brands">
+      <div className="grid gap-space-sm sm:grid-cols-2 xl:grid-cols-4" data-testid="rvk-summary">
+        <SummaryCard label="Brands" value={register.brands.length} hint={`${brandsActive} active, ${count(register.brands, "suspended")} suspended, ${count(register.brands, "revoked")} revoked`} tone="text-[#14315e]" tab="brands" current={tab} onPick={setTab} />
+        <SummaryCard label="Agency authorisations" value={register.authorisations.length} hint={`${authsActive} active, ${count(register.authorisations, "revoked")} revoked`} tone="text-[#14315e]" tab="auths" current={tab} onPick={setTab} />
+        <SummaryCard label="Waiting for a decision" value={register.pending.length} hint={register.pending.length ? "Closures or revocations to decide" : "Nothing is waiting"} tone={register.pending.length ? "text-[#8a4b00]" : "text-[#14532d]"} tab="pending" current={tab} onPick={setTab} />
+        <SummaryCard label="Decided" value={register.decided.length} hint="Approved, rejected or withdrawn" tone="text-[#14315e]" tab="history" current={tab} onPick={setTab} />
+      </div>
+
+      <div role="tablist" aria-label="Register" className="flex flex-wrap gap-space-xs border-b border-outline-variant">
+        {tabBtn("brands", "Brands", register.brands.length)}
+        {tabBtn("auths", "Agency authorisations", register.authorisations.length)}
+        {tabBtn("pending", "Waiting for a decision", register.pending.length)}
+        {tabBtn("history", "History", register.decided.length)}
+      </div>
+
+      <section role="tabpanel" aria-labelledby="rvk-tab-brands" hidden={tab !== "brands"}>
+        <BrandsPanel register={register} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />
+      </section>
+      <section role="tabpanel" aria-labelledby="rvk-tab-auths" hidden={tab !== "auths"}>
+        <AuthsPanel register={register} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />
+      </section>
+      <section role="tabpanel" aria-labelledby="rvk-tab-pending" hidden={tab !== "pending"} data-testid="rvk-pending">
+        <PendingPanel register={register} onChanged={onChanged} onRefresh={onRefresh} />
+      </section>
+      <section role="tabpanel" aria-labelledby="rvk-tab-history" hidden={tab !== "history"} data-testid="rvk-history">
+        <HistoryPanel decided={register.decided} />
+      </section>
+    </div>
+  );
+}
+
+type PanelProps = { register: RegisterRevocations; openId: string | null; onOpen: (id: string | null) => void; onChanged: () => void; onRefresh: () => void };
+
+function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelProps) {
+  const [status, setStatus] = useState("");
+  const [owner, setOwner] = useState("");
+  const rows = register.brands.filter((b) => (!status || b.status === status) && (!owner || b.owner === owner));
+  const tools = useListTools({
+    rows,
+    text: (b) => `${b.name} ${b.owner} ${b.source} ${words(BRAND_STATUS, b.status)}`,
+    sortValue: (b, k) => (k === "name" ? b.name : k === "owner" ? b.owner : k === "status" ? b.status : b.source),
+    pageSize: 8,
+  });
+  const openBrand = register.brands.find((b) => b.id === openId) ?? null;
+  const clear = () => { tools.clear(); setStatus(""); setOwner(""); };
+  return (
+    <div className="space-y-space-sm">
+      <div className="flex flex-wrap items-end gap-space-md">
+        <ListToolbar tools={tools} searchLabel="Search brands" placeholder="Brand, owner or source"
+          exportCsv={{ filename: "register-brands", header: ["Name", "Owner", "Status", "Source"], rows: tools.visible.map((b) => [b.name, b.owner, words(BRAND_STATUS, b.status), b.source]) }} />
+      </div>
+      <div className="flex flex-wrap items-end gap-space-md" data-testid="rvk-filters">
+        <FilterSelect label="Status" value={status} onChange={(v) => { setStatus(v); tools.setPage(1); }} testId="rvk-brand-status" options={[["", "All"], ["active", "Active"], ["suspended", "Suspended"], ["revoked", "Revoked"]]} />
+        <FilterSelect label="Owner" value={owner} onChange={(v) => { setOwner(v); tools.setPage(1); }} testId="rvk-brand-owner" options={distinct(register.brands.map((b) => b.owner))} />
+        {(status || owner) ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={clear} data-testid="rvk-brand-clear">Clear filters</button> : null}
+      </div>
+      {register.brands.length === 0 ? <p className="font-body-sm text-on-surface-variant">No brand is on the register.</p> : (
+        <div className="overflow-x-auto">
+          <table className="w-full font-body-sm text-body-sm" data-testid="rvk-brands">
             <caption className="sr-only">Registered brands</caption>
             <thead>
-              <tr className="text-left text-on-surface-variant font-label-sm">
-                <th className="py-1 pr-3">Name</th>
-                <th className="py-1 pr-3">Owner</th>
-                <th className="py-1 pr-3">Status</th>
-                <th className="py-1 pr-3">Source</th>
-                <th className="py-1"><span className="sr-only">Actions</span></th>
+              <tr>
+                <SortableTh tools={tools} k="name" className={TH}>Name</SortableTh><SortableTh tools={tools} k="owner" className={TH}>Owner</SortableTh>
+                <SortableTh tools={tools} k="status" className={TH}>Status</SortableTh><SortableTh tools={tools} k="source" className={TH}>Source</SortableTh>
+                <th className={TH}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              {register.brands.map((brand) => (
-                <tr key={brand.id} data-testid={`rvk-brand-${brand.id}`} data-status={brand.status}>
-                  <td className="py-1 pr-3">{brand.name}</td>
-                  <td className="py-1 pr-3">{brand.owner}</td>
-                  <td className="py-1 pr-3">{words(BRAND_STATUS, brand.status)}</td>
-                  <td className="py-1 pr-3">{brand.source}</td>
-                  <td className="py-1">{proposeButton(register.canPropose, brand.status === "active", brand.id, openId, onOpen)}</td>
+              {tools.paged.pageRows.map((brand) => (
+                <tr key={brand.id} className="border-t border-outline-variant" data-testid={`rvk-brand-${brand.id}`} data-status={brand.status}>
+                  <td className={`${TD} font-semibold`}>{brand.name}</td>
+                  <td className={TD}>{brand.owner}</td>
+                  <td className={TD}><StatusPill code={brand.status} label={words(BRAND_STATUS, brand.status)} /></td>
+                  <td className={TD}>{brand.source}</td>
+                  <td className={TD}>{proposeButton(register.canPropose, brand.status === "active", brand.id, openId, onOpen)}</td>
                 </tr>
               ))}
+              {tools.paged.total === 0 ? <tr><td className={TD} colSpan={5}>No brand matches these filters.</td></tr> : null}
             </tbody>
           </table>
-        )}
-        {openBrand && register.canPropose ? <ProposeBrand key={openBrand.id} brand={openBrand} onDone={onChanged} onStale={onRefresh} /> : null}
-      </section>
+        </div>
+      )}
+      <ListPager tools={tools} />
+      {openBrand && register.canPropose ? <ProposeBrand key={openBrand.id} brand={openBrand} onDone={onChanged} onStale={onRefresh} /> : null}
+    </div>
+  );
+}
 
-      <section>
-        <h2 className="font-title-md text-title-md text-on-surface">Agency authorisations</h2>
-        {register.authorisations.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">No agency authorisation is on the register.</p> : (
-          <table className="w-full font-body-sm text-body-sm mt-space-sm" data-testid="rvk-auths">
+function AuthsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelProps) {
+  const [status, setStatus] = useState("");
+  const [agency, setAgency] = useState("");
+  const [principal, setPrincipal] = useState("");
+  const [period, setPeriod] = useState("");
+  const rows = register.authorisations.filter((a) => (!status || a.status === status) && (!agency || a.agency === agency) && (!principal || a.principal === principal)
+    && (!period || (period === "open" ? a.validTo === null : a.validTo !== null)));
+  const tools = useListTools({
+    rows,
+    text: (a) => `${a.brandName} ${a.agency} ${a.principal} ${words(AUTH_STATUS, a.status)}`,
+    date: (a) => a.validFrom,
+    sortValue: (a, k) => (k === "brand" ? a.brandName : k === "agency" ? a.agency : k === "principal" ? a.principal : k === "from" ? a.validFrom : k === "to" ? a.validTo ?? "9999-12-31" : a.status),
+    pageSize: 8,
+  });
+  const openAuth = register.authorisations.find((a) => a.id === openId) ?? null;
+  const clear = () => { tools.clear(); setStatus(""); setAgency(""); setPrincipal(""); setPeriod(""); };
+  return (
+    <div className="space-y-space-sm">
+      <div className="flex flex-wrap items-end gap-space-md">
+        <ListToolbar tools={tools} searchLabel="Search authorisations" placeholder="Brand, agency or principal" dateLabel="Valid from"
+          exportCsv={{ filename: "register-authorisations", header: ["Brand", "Agency", "Principal", "From", "To", "Status"], rows: tools.visible.map((a) => [a.brandName, a.agency, a.principal, a.validFrom, a.validTo, words(AUTH_STATUS, a.status)]) }} />
+      </div>
+      <div className="flex flex-wrap items-end gap-space-md" data-testid="rvk-filters">
+        <FilterSelect label="Status" value={status} onChange={(v) => { setStatus(v); tools.setPage(1); }} testId="rvk-auth-status" options={[["", "All"], ["active", "Active"], ["revoked", "Revoked"]]} />
+        <FilterSelect label="Agency" value={agency} onChange={(v) => { setAgency(v); tools.setPage(1); }} testId="rvk-auth-agency" options={distinct(register.authorisations.map((a) => a.agency))} />
+        <FilterSelect label="Principal" value={principal} onChange={(v) => { setPrincipal(v); tools.setPage(1); }} testId="rvk-auth-principal" options={distinct(register.authorisations.map((a) => a.principal))} />
+        <FilterSelect label="Period" value={period} onChange={(v) => { setPeriod(v); tools.setPage(1); }} testId="rvk-auth-period" options={[["", "All"], ["open", "No end date"], ["dated", "Has an end date"]]} />
+        {(status || agency || principal || period) ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={clear} data-testid="rvk-auth-clear">Clear filters</button> : null}
+      </div>
+      {register.authorisations.length === 0 ? <p className="font-body-sm text-on-surface-variant">No agency authorisation is on the register.</p> : (
+        <div className="overflow-x-auto">
+          <table className="w-full font-body-sm text-body-sm" data-testid="rvk-auths">
             <caption className="sr-only">Agency authorisations</caption>
             <thead>
-              <tr className="text-left text-on-surface-variant font-label-sm">
-                <th className="py-1 pr-3">Brand</th>
-                <th className="py-1 pr-3">Agency</th>
-                <th className="py-1 pr-3">Principal</th>
-                <th className="py-1 pr-3">From</th>
-                <th className="py-1 pr-3">To</th>
-                <th className="py-1 pr-3">Status</th>
-                <th className="py-1"><span className="sr-only">Actions</span></th>
+              <tr>
+                <SortableTh tools={tools} k="brand" className={TH}>Brand</SortableTh><SortableTh tools={tools} k="agency" className={TH}>Agency</SortableTh>
+                <SortableTh tools={tools} k="principal" className={TH}>Principal</SortableTh><SortableTh tools={tools} k="from" className={TH}>From</SortableTh>
+                <SortableTh tools={tools} k="to" className={TH}>To</SortableTh><SortableTh tools={tools} k="status" className={TH}>Status</SortableTh>
+                <th className={TH}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              {register.authorisations.map((auth) => (
-                <tr key={auth.id} data-testid={`rvk-auth-${auth.id}`} data-status={auth.status}>
-                  <td className="py-1 pr-3">{auth.brandName}</td>
-                  <td className="py-1 pr-3">{auth.agency}</td>
-                  <td className="py-1 pr-3">{auth.principal}</td>
-                  <td className="py-1 pr-3">{auth.validFrom}</td>
-                  <td className="py-1 pr-3">{auth.validTo ?? "—"}</td>
-                  <td className="py-1 pr-3">{words(AUTH_STATUS, auth.status)}</td>
-                  <td className="py-1">{proposeButton(register.canPropose, auth.status === "active", auth.id, openId, onOpen)}</td>
+              {tools.paged.pageRows.map((auth) => (
+                <tr key={auth.id} className="border-t border-outline-variant" data-testid={`rvk-auth-${auth.id}`} data-status={auth.status}>
+                  <td className={`${TD} font-semibold`}>{auth.brandName}</td>
+                  <td className={TD}>{auth.agency}</td>
+                  <td className={TD}>{auth.principal}</td>
+                  <td className={TD}>{auth.validFrom}</td>
+                  <td className={TD}>{auth.validTo ?? "—"}</td>
+                  <td className={TD}><StatusPill code={auth.status} label={words(AUTH_STATUS, auth.status)} /></td>
+                  <td className={TD}>{proposeButton(register.canPropose, auth.status === "active", auth.id, openId, onOpen)}</td>
                 </tr>
               ))}
+              {tools.paged.total === 0 ? <tr><td className={TD} colSpan={7}>No authorisation matches these filters.</td></tr> : null}
             </tbody>
           </table>
-        )}
-        {openAuth && register.canPropose ? <ProposeAuthorisation key={openAuth.id} auth={openAuth} onDone={onChanged} onStale={onRefresh} /> : null}
-      </section>
+        </div>
+      )}
+      <ListPager tools={tools} />
+      {openAuth && register.canPropose ? <ProposeAuthorisation key={openAuth.id} auth={openAuth} onDone={onChanged} onStale={onRefresh} /> : null}
+    </div>
+  );
+}
 
-      <section data-testid="rvk-pending">
-        <h2 className="font-title-md text-title-md text-on-surface">Waiting for a decision</h2>
-        {register.pending.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">Nothing is waiting for a decision.</p> : (
-          <ul className="mt-space-sm space-y-space-sm">
-            {register.pending.map((proposal) => (
-              <PendingRow key={proposal.id} proposal={proposal} canPropose={register.canPropose} canDecide={register.canDecide} onChanged={onChanged} onStale={onRefresh} />
-            ))}
-          </ul>
-        )}
-      </section>
+function PendingPanel({ register, onChanged, onRefresh }: { register: RegisterRevocations; onChanged: () => void; onRefresh: () => void }) {
+  const [action, setAction] = useState("");
+  const [kind, setKind] = useState("");
+  const [mine, setMine] = useState("");
+  const rows = register.pending.filter((p) => (!action || p.action === action) && (!kind || p.targetKind === kind) && (!mine || (mine === "yours") === p.proposedByYou));
+  const tools = useListTools({
+    rows,
+    text: (p) => `${p.targetLabel} ${p.reason} ${p.proposedBy}`,
+    date: (p) => p.proposedAt.slice(0, 10),
+    sortValue: (p, k) => (k === "target" ? p.targetLabel : k === "action" ? p.action : k === "by" ? p.proposedBy : p.proposedAt),
+    pageSize: 5,
+  });
+  const clear = () => { tools.clear(); setAction(""); setKind(""); setMine(""); };
+  if (register.pending.length === 0) return <p className="font-body-sm text-on-surface-variant">Nothing is waiting for a decision.</p>;
+  return (
+    <div className="space-y-space-sm">
+      <div className="flex flex-wrap items-end gap-space-md">
+        <ListToolbar tools={tools} searchLabel="Search proposals" placeholder="Entry, reason or proposer" dateLabel="Proposed" />
+      </div>
+      <div className="flex flex-wrap items-end gap-space-md" data-testid="rvk-filters">
+        <FilterSelect label="Action" value={action} onChange={(v) => { setAction(v); tools.setPage(1); }} testId="rvk-pending-action" options={[["", "All"], ["revoke", "Revoke"], ["close", "Close on a date"]]} />
+        <FilterSelect label="Entry" value={kind} onChange={(v) => { setKind(v); tools.setPage(1); }} testId="rvk-pending-kind" options={[["", "All"], ["brand", "Brand"], ["authorisation", "Agency authorisation"]]} />
+        <FilterSelect label="Proposed by" value={mine} onChange={(v) => { setMine(v); tools.setPage(1); }} testId="rvk-pending-mine" options={[["", "Anyone"], ["yours", "You"], ["others", "Someone else"]]} />
+        {(action || kind || mine) ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={clear} data-testid="rvk-pending-clear">Clear filters</button> : null}
+      </div>
+      <ul className="space-y-space-sm">
+        {tools.paged.pageRows.map((proposal) => (
+          <PendingRow key={proposal.id} proposal={proposal} canPropose={register.canPropose} canDecide={register.canDecide} onChanged={onChanged} onStale={onRefresh} />
+        ))}
+        {tools.paged.total === 0 ? <li className="font-body-sm text-on-surface-variant">No proposal matches these filters.</li> : null}
+      </ul>
+      <ListPager tools={tools} />
+    </div>
+  );
+}
 
-      <section data-testid="rvk-history">
-        <h2 className="font-title-md text-title-md text-on-surface">History</h2>
-        {register.decided.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">No proposal has been decided.</p> : (
-          <ul className="mt-space-sm space-y-space-sm">
-            {register.decided.map((proposal) => (
-              <li key={proposal.id} className="font-body-sm" data-testid={`rvk-history-${proposal.id}`} data-state={proposal.state}>
-                {words(PROPOSAL_STATE, proposal.state)} · {proposal.targetLabel} · {words(ACTION_WORD, proposal.action)}
-                {proposal.closeOn ? ` · ${proposal.closeOn}` : ""} · {proposal.decidedBy ?? ""} · {proposal.decidedAt ?? ""}
-                {proposal.decisionNote ? ` · ${proposal.decisionNote}` : ""}
-              </li>
+function HistoryPanel({ decided }: { decided: RegisterRevocationProposal[] }) {
+  const [state, setState] = useState("");
+  const [action, setAction] = useState("");
+  const [kind, setKind] = useState("");
+  const rows = decided.filter((p) => (!state || p.state === state) && (!action || p.action === action) && (!kind || p.targetKind === kind));
+  const tools = useListTools({
+    rows,
+    text: (p) => `${p.targetLabel} ${p.reason} ${p.proposedBy} ${p.decidedBy ?? ""} ${p.decisionNote ?? ""}`,
+    date: (p) => (p.decidedAt ?? p.proposedAt).slice(0, 10),
+    sortValue: (p, k) => (k === "decision" ? p.state : k === "target" ? p.targetLabel : k === "action" ? p.action : k === "by" ? p.decidedBy ?? "" : k === "proposer" ? p.proposedBy : p.decidedAt ?? ""),
+    pageSize: 8,
+  });
+  const clear = () => { tools.clear(); setState(""); setAction(""); setKind(""); };
+  if (decided.length === 0) return <p className="font-body-sm text-on-surface-variant">No proposal has been decided.</p>;
+  return (
+    <div className="space-y-space-sm">
+      <div className="flex flex-wrap items-end gap-space-md">
+        <ListToolbar tools={tools} searchLabel="Search history" placeholder="Entry, reason, person or note" dateLabel="Decided"
+          exportCsv={{ filename: "register-history", header: ["Decision", "Entry", "Action", "Closing date", "Proposed by", "Decided by", "Decided at (IST)", "Note"],
+            rows: tools.visible.map((p) => [words(PROPOSAL_STATE, p.state), p.targetLabel, words(ACTION_WORD, p.action), p.closeOn, p.proposedBy, p.decidedBy, istStamp(p.decidedAt), p.decisionNote]) }} />
+      </div>
+      <div className="flex flex-wrap items-end gap-space-md" data-testid="rvk-filters">
+        <FilterSelect label="Decision" value={state} onChange={(v) => { setState(v); tools.setPage(1); }} testId="rvk-history-state" options={[["", "All"], ["approved", "Approved"], ["rejected", "Rejected"], ["withdrawn", "Withdrawn"]]} />
+        <FilterSelect label="Action" value={action} onChange={(v) => { setAction(v); tools.setPage(1); }} testId="rvk-history-action" options={[["", "All"], ["revoke", "Revoke"], ["close", "Close on a date"]]} />
+        <FilterSelect label="Entry" value={kind} onChange={(v) => { setKind(v); tools.setPage(1); }} testId="rvk-history-kind" options={[["", "All"], ["brand", "Brand"], ["authorisation", "Agency authorisation"]]} />
+        {(state || action || kind) ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={clear} data-testid="rvk-history-clear">Clear filters</button> : null}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full font-body-sm text-body-sm">
+          <caption className="sr-only">Decided proposals</caption>
+          <thead>
+            <tr>
+              <SortableTh tools={tools} k="decision" className={TH}>Decision</SortableTh><SortableTh tools={tools} k="target" className={TH}>Entry</SortableTh>
+              <SortableTh tools={tools} k="action" className={TH}>Action</SortableTh><SortableTh tools={tools} k="proposer" className={TH}>Proposed by</SortableTh>
+              <SortableTh tools={tools} k="by" className={TH}>Decided by</SortableTh><SortableTh tools={tools} k="at" className={TH}>Decided (IST)</SortableTh>
+              <th className={TH}>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tools.paged.pageRows.map((p) => (
+              <tr key={p.id} className="border-t border-outline-variant" data-testid={`rvk-history-${p.id}`} data-state={p.state}>
+                <td className={TD}><StatusPill code={p.state} label={words(PROPOSAL_STATE, p.state)} /></td>
+                <td className={`${TD} font-semibold`}>{p.targetLabel}</td>
+                <td className={TD}>{words(ACTION_WORD, p.action)}{p.closeOn ? ` on ${p.closeOn}` : ""}</td>
+                <td className={TD}>{p.proposedBy}</td>
+                <td className={TD}>{p.decidedBy ?? ""}</td>
+                <td className={TD}>{p.decidedAt ? istStamp(p.decidedAt) : ""}</td>
+                <td className={TD}>{p.decisionNote ?? p.reason}</td>
+              </tr>
             ))}
-          </ul>
-        )}
-      </section>
+            {tools.paged.total === 0 ? <tr><td className={TD} colSpan={7}>No proposal matches these filters.</td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+      <ListPager tools={tools} />
     </div>
   );
 }
@@ -322,10 +521,15 @@ function PendingRow({
 
   return (
     <li className="font-body-sm border border-outline-variant rounded-lg p-space-sm" data-testid={`rvk-pending-${proposal.id}`}>
-      <p>
-        {proposal.targetLabel} · {words(ACTION_WORD, proposal.action)}
-        {proposal.closeOn ? ` · ${proposal.closeOn}` : ""} · {proposal.reason} · {proposal.proposedBy} · {proposal.proposedAt}
-      </p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-semibold text-on-surface">{proposal.targetLabel}</span>
+        <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[12px] font-semibold bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]">
+          {words(ACTION_WORD, proposal.action)}{proposal.closeOn ? ` on ${proposal.closeOn}` : ""}
+        </span>
+        <span className="text-on-surface-variant">{proposal.targetKind === "brand" ? "Brand" : "Agency authorisation"}</span>
+      </div>
+      <p className="mt-1">{proposal.reason}</p>
+      <p className="mt-1 text-on-surface-variant">Proposed by {proposal.proposedBy} on {istStamp(proposal.proposedAt, false)} IST</p>
       {yours ? <p className="mt-1" data-testid={`rvk-yours-${proposal.id}`}>You proposed this; another person decides</p> : null}
       {showDecision ? (
         <div className="mt-space-sm">

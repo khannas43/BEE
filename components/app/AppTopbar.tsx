@@ -11,7 +11,7 @@ import { TopbarSearch } from "./TopbarSearch";
 import { SessionBadge, useSpringIdentity } from "./SessionBadge";
 import { switchDemoRole } from "@/lib/client/demoAccounts";
 import { useDemoMode } from "@/lib/client/useDemoMode";
-import { useLang } from "@/components/i18n/LangProvider";
+import { LANGUAGE_SWITCH_ENABLED, useLang } from "@/components/i18n/LangProvider";
 
 export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
   const { role, setRole } = useRole();
@@ -65,15 +65,17 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
         <NotificationBell />
         <DemoMessageBadge />
 
-        {/* Language toggle */}
-        <button
-          onClick={toggle}
-          className={`bg-primary-container text-on-primary font-bold px-2.5 py-1.5 rounded-lg text-label-sm hover:bg-forest-dark transition-colors`}
-          type="button"
-          aria-label="Toggle language"
-        >
-          {lang === "en" ? "हिन्दी" : "English"}
-        </button>
+        {/* Language toggle: hidden while the RFP asks for English only (LANGUAGE_SWITCH_ENABLED) */}
+        {LANGUAGE_SWITCH_ENABLED ? (
+          <button
+            onClick={toggle}
+            className={`bg-primary-container text-on-primary font-bold px-2.5 py-1.5 rounded-lg text-label-sm hover:bg-forest-dark transition-colors`}
+            type="button"
+            aria-label="Toggle language"
+          >
+            {lang === "en" ? "हिन्दी" : "English"}
+          </button>
+        ) : null}
 
         {/* The only identity shown here is the signed-in one, as Spring reports it. */}
         <SessionBadge

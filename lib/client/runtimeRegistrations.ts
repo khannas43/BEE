@@ -265,3 +265,35 @@ export async function fetchRegistrationContent(id: string, documentId: string, v
   }
   return { ok: false as const, failure: readFailure(res.status, await parseJson(res)) };
 }
+
+export const registrationFeeConfirmationPath = (id: string) => `${registrationPath(id)}/fee-confirmation`;
+
+export type RegistrationFeeReceipt = {
+  registrationId: string;
+  reference: string;
+  fromState: "fee_due";
+  toState: "programme_review";
+  version: number;
+  receiptReference: string;
+  amountInr: string;
+  receivedOn: string;
+  confirmedAt: string;
+};
+
+export type RegistrationFeeInput = { id: string; version: number; receiptReference: string; receivedOn: string; amountInr: string };
+
+const parseFeeReceipt = (body: unknown): RegistrationFeeReceipt | null =>
+  body && typeof body === "object" && "registrationId" in body && "receiptReference" in body ? (body as RegistrationFeeReceipt) : null;
+
+/** Finance confirms by hand that the registration fee was received (fee due to programme review). */
+export function runRegistrationFeeConfirmation(p: RegistrationFeeInput, idempotencyKey: string) {
+  return runtimeCommand(
+    registrationFeeConfirmationPath(p.id),
+    "POST",
+    { version: p.version, receiptReference: p.receiptReference, receivedOn: p.receivedOn, amountInr: p.amountInr },
+    idempotencyKey,
+    parseFeeReceipt,
+  );
+}
+
+export const registrationFeeSignature = (p: RegistrationFeeInput) => [p.id, p.version, p.receiptReference, p.receivedOn, p.amountInr];

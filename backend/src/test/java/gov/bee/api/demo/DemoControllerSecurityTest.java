@@ -37,6 +37,26 @@ class DemoControllerSecurityTest {
     @MockitoBean
     IdentityRepository identity;
 
+    @org.junit.jupiter.api.BeforeEach
+    void demoOn() {
+        DemoSwitch.forceForTest(true);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void demoBackToEnvironment() {
+        DemoSwitch.forceForTest(null);
+    }
+
+    @Test
+    void outsideTheDemonstrationDeploymentEveryDemoRouteIsNotFound() throws Exception {
+        DemoSwitch.forceForTest(false);
+        when(identity.activeAccount(SUBJECT)).thenReturn(Optional.of(new IdentityRepository.Account(SUBJECT, "nova.applicant", "Nova Applicant")));
+        when(identity.activeRoles(SUBJECT)).thenReturn(List.of(new IdentityRepository.RoleGrant("manufacturer", "own-org")));
+        mvc.perform(get("/api/demo/payments").with(jwt().jwt(j -> j.subject(SUBJECT.toString()).claim("amr", List.of("pwd", "otp"))
+                .claim("realm_access", Map.of("roles", List.of("manufacturer"))))))
+            .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("not_found"));
+    }
+
     @Test
     void anonymousCallerIsUnauthenticated() throws Exception {
         mvc.perform(get("/api/demo/payments")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.error").value("unauthenticated"));

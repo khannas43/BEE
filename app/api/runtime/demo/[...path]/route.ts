@@ -1,3 +1,4 @@
+import { springIdSegment } from "@/lib/server/apiContract";
 import { type NextRequest } from "next/server";
 import { sessionDemo } from "@/lib/server/bff";
 import { logged } from "@/lib/server/http";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
  * Demonstration areas (payments, QR, ledger, production, MIS, AI). Passes GET and POST to Spring's /api/demo/** with the signed-in
  * session; Spring decides who may do what. Outside the documented contract on purpose (BL-220).
  */
-const target = (request: NextRequest, path: string[]) => `/api/demo/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
+const target = (request: NextRequest, path: string[]) => `/api/demo/${path.map(springIdSegment).map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
 
 export const GET = logged("/api/runtime/demo", async (request: NextRequest, ctx: { params: Promise<{ path: string[] }> }) => {
   const { path } = await ctx.params;

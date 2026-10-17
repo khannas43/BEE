@@ -97,6 +97,17 @@ class PaymentsDatabaseTest {
     }
 
     @Test
+    void aPersonWhoLeftThePayingOrganisationCannotSettleItsPayment() {
+        // the seeded open payment of DEMO-PAY-0003, started by Nova's applicant
+        String id = "00000000-0000-4000-f000-000000000a03";
+        String ref = "SIMGW-5EED0003";
+        // the same account, now a member of another organisation only
+        Caller moved = new Caller(NOVA.accountId(), "nova.applicant", List.of(new RoleGrant("manufacturer", "own-org")), Set.of(PIXEL_ORG));
+        assertEquals("not_found", call(moved, "POST", id, "callback", Map.of("gatewayRef", ref, "outcome", "paid", "nonce", "nonce-moved-001")).code());
+        assertEquals("initiated", db.queryForObject("SELECT status FROM payment WHERE id = ?::uuid", String.class, id));
+    }
+
+    @Test
     void paymentLifecycleIdempotencyAndDenials() {
         // Start: applicant only, own organisation only, exactly the fee total from the snapshot.
         assertEquals("role_not_permitted", call(FINANCE, "POST", null, null, Map.of("applicationId", APP_A)).code());
@@ -173,7 +184,7 @@ class PaymentsDatabaseTest {
         assertTrue(all.stream().anyMatch(r -> "DEMO-PAY-0004".equals(r.get("applicationReference")) && ((String) r.get("gatewayRef")).startsWith("SIMGW-")));
         assertEquals("finance", call(ADMIN, "GET", null, null, Map.of()).body().get("view"));
         assertEquals("role_not_permitted", call(HELPDESK, "GET", null, null, Map.of()).code());
-        assertEquals("role_not_permitted", call(AUDITOR, "GET", null, null, Map.of()).code(), "the auditor sees the reconciliation, not the payment table");
+        assertEquals("finance", call(AUDITOR, "GET", null, null, Map.of()).body().get("view"), "the auditor reads the payment table (read only), as the dashboards link to it");
 
         assertEquals("role_not_permitted", call(NOVA, "GET", "reconciliation", null, Map.of()).code());
         assertEquals("role_not_permitted", call(HELPDESK, "GET", "reconciliation", null, Map.of()).code());

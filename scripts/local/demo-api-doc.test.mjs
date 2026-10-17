@@ -17,8 +17,10 @@ for (const f of fs.readdirSync(DEMO, { recursive: true })) {
   if (name) modules.push({ file: String(f), name, src });
 }
 
-test("every demonstration module has a section in the reference", () => {
-  assert.ok(modules.length >= 7, `expected the seven demo modules, found ${modules.map((m) => m.name)}`);
+test("every demonstration module has a section in the reference, and a promoted one points at the contract", () => {
+  assert.match(doc, /^### `messages` \(promoted/m);
+  assert.ok(!modules.some((m) => m.name === "messages"), "messages was promoted into the contract; it must not be a demo module again");
+  assert.ok(modules.length >= 6, `expected the six remaining demo modules, found ${modules.map((m) => m.name)}`);
   for (const m of modules) assert.match(doc, new RegExp("^### `" + m.name + "`", "m"), `${m.name} (${m.file}) has no section in docs/demo/API.md`);
 });
 

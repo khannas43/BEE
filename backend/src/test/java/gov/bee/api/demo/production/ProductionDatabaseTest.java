@@ -213,7 +213,9 @@ class ProductionDatabaseTest {
         // the submitter holding a review role is refused too
         Caller self = new Caller(NOVA.accountId(), "nova.applicant", List.of(new RoleGrant("programme", "all")), Set.of(BEE_ORG));
         refused(post(self, submissionId, "review", Map.of("decision", "accepted")), 403, "segregation_refused");
-        var q = post(PROGRAMME, submissionId, "review", Map.of("decision", "query", "note", "Please explain November."));
+        // a note over 800 characters is refused; one of exactly 800 goes through (the message it sends the manufacturer must still fit its 1000-character cap)
+        refused(post(PROGRAMME, submissionId, "review", Map.of("decision", "query", "note", "x".repeat(801))), 400, "validation_failed");
+        var q = post(PROGRAMME, submissionId, "review", Map.of("decision", "query", "note", "Please explain November.".concat("x".repeat(800 - "Please explain November.".length()))));
         assertEquals("query", q.body().get("state"));
         refused(post(PROGRAMME, submissionId, "review", Map.of("decision", "accepted")), 409, "version_conflict");
         // after a query the manufacturer may edit and resubmit
@@ -252,5 +254,51 @@ class ProductionDatabaseTest {
         var wide = module.handle(NOVA, "GET", seeded, "reconciliation", Map.of("margin", "500"), Map.of()).body();
         assertEquals("ok", list(wide.get("models")).stream().filter(m -> m.get("modelNumber").equals("NC-RAC-12D")).findFirst().get().get("flag"));
         refused(module.handle(NOVA, "GET", seeded, "reconciliation", Map.of("margin", "x"), Map.of()), 400, "validation_failed");
+        refused(module.handle(NOVA, "GET", seeded, "reconciliation", Map.of("margin", "NaN"), Map.of()), 400, "validation_failed");
+        refused(module.handle(NOVA, "GET", seeded, "reconciliation", Map.of("margin", "Infinity"), Map.of()), 400, "validation_failed");
+    }
+
+    @Test
+    @Order(7)
+    void overlappingPeriodsAreRefusedAndRowsCanBeReplacedOnlyAfterAQuery() {
+        String sid = (String) post(NOVA, null, null, Map.of("quarter", "2027-Q1")).body().get("id");
+        String head = "registration_id,units,period_start,period_end\n";
+        String jan = "BEE/RAC/2026/10101,4000,2027-01-01,2027-01-31\n";
+        assertEquals(true, post(NOVA, sid, "rows", Map.of("csv", head + jan, "commit", true)).body().get("committed"));
+        // a different period that overlaps the stored one is refused, in the same input and against what is stored
+        var overlap = post(NOVA, sid, "rows", Map.of("csv", head + "BEE/RAC/2026/10101,3000,2027-01-15,2027-02-15\n", "commit", true)).body();
+        assertEquals(false, overlap.get("committed"));
+        assertTrue(String.valueOf(list(overlap.get("results")).get(0).get("message")).contains("overlaps"), String.valueOf(overlap));
+        var inInput = post(NOVA, sid, "rows", Map.of("csv", head + "BEE/RAC/2026/10101,10,2027-02-01,2027-02-20\nBEE/RAC/2026/10101,10,2027-02-10,2027-02-28\n", "commit", false)).body();
+        assertEquals(1L, ((Number) inInput.get("errorCount")).longValue());
+        // an adjacent period and another model are fine
+        assertEquals(true, post(NOVA, sid, "rows", Map.of("csv", head + "BEE/RAC/2026/10101,3500,2027-02-01,2027-02-28\nBEE/RAC/2026/10102,2000,2027-01-01,2027-01-31\n", "commit", true)).body().get("committed"));
+        // replacing all rows is only for a submission that has a query
+        refused(post(NOVA, sid, "rows", Map.of("csv", head + jan, "commit", true, "replace", true)), 400, "validation_failed");
+        for (int i = 0; i < 5; i++) {
+            assertEquals(201, post(NOVA, sid, "evidence", Map.of("fileName", "ca" + i + ".txt", "mediaType", "text/plain", "caName", "CA", "caMembershipNo", "1", "statement", "ok",
+                "contentBase64", java.util.Base64.getEncoder().encodeToString(("evidence " + i).getBytes()))).status().value());
+        }
+        refused(post(NOVA, sid, "evidence", Map.of("fileName", "ca6.txt", "mediaType", "text/plain", "caName", "CA", "caMembershipNo", "1", "statement", "ok",
+            "contentBase64", java.util.Base64.getEncoder().encodeToString("six".getBytes()))), 400, "validation_failed");
+        refused(post(NOVA, sid, "evidence", Map.of("fileName", "bad\nname.txt", "mediaType", "text/plain", "caName", "CA", "caMembershipNo", "1", "statement", "ok",
+            "contentBase64", "AAAA")), 400, "validation_failed");
+        refused(post(NOVA, sid, "evidence", Map.of("fileName", "x.txt", "mediaType", "text/plain", "caName", "CA", "caMembershipNo", "1", "statement", "ok",
+            "contentBase64", "AA AA")), 400, "validation_failed");
+        assertEquals("submitted", post(NOVA, sid, "submit", Map.of()).body().get("state"));
+        assertEquals("query", post(PROGRAMME, sid, "review", Map.of("decision", "query", "note", "Units for January look wrong.")).body().get("state"));
+        // the manufacturer replaces all rows: the old ones go, the new ones stay, the history says so
+        var fixed = post(NOVA, sid, "rows", Map.of("csv", head + "BEE/RAC/2026/10101,4100,2027-01-01,2027-03-31\n", "commit", true, "replace", true)).body();
+        assertEquals(true, fixed.get("committed"));
+        var detail = get(NOVA, sid, null).body();
+        assertEquals(1, list(detail.get("rows")).size());
+        assertEquals(4100, ((Number) list(detail.get("rows")).get(0).get("units")).intValue());
+        assertTrue(list(detail.get("events")).stream().anyMatch(e -> "rows_replaced".equals(e.get("action"))));
+        // someone else cannot replace them, and a replacement with a bad row changes nothing
+        refused(post(PROGRAMME, sid, "rows", Map.of("csv", head + jan, "commit", true, "replace", true)), 403, "role_not_permitted");
+        assertEquals(false, post(NOVA, sid, "rows", Map.of("csv", head + "BEE/RAC/2026/10101,abc,2027-01-01,2027-03-31\n", "commit", true, "replace", true)).body().get("committed"));
+        assertEquals(1, list(get(NOVA, sid, null).body().get("rows")).size());
+        // the runtime login itself still cannot delete rows
+        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.dao.DataAccessException.class, () -> db.update("DELETE FROM production_row WHERE submission_id = ?::uuid", sid));
     }
 }

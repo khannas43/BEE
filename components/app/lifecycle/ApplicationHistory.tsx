@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { HISTORY_ACTION_LABELS, type ApplicationHistory as History, readModelHistory } from "@/lib/client/runtimeModelHistory";
 import { stateLabel } from "@/lib/client/runtimeModelApplications";
+import { DescriptionList } from "@/components/app/kit/StatePanels";
 
 /**
  * Every step of an application from submission on, in order: who took it (an officer sees the name; the applicant sees the
@@ -66,14 +67,7 @@ export function ApplicationHistory({ applicationId, testIdPrefix = "history" }: 
             </p>
             {e.note ? <p className="font-body-sm text-body-sm mt-1" data-testid={`${testIdPrefix}-note-${e.sequence}`}>{e.note}</p> : null}
             {e.facts.length ? (
-              <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-space-sm font-label-sm text-label-sm text-on-surface-variant">
-                {e.facts.map((f) => (
-                  <div key={f.label} className="contents">
-                    <dt>{f.label}</dt>
-                    <dd className="text-on-surface">{f.value}</dd>
-                  </div>
-                ))}
-              </dl>
+              <div className="mt-1"><DescriptionList rows={e.facts.map((f) => ({ label: f.label, value: f.value }))} /></div>
             ) : null}
             {e.withheld ? <p className="font-label-sm text-label-sm text-on-surface-variant italic mt-1" data-testid={`${testIdPrefix}-withheld-${e.sequence}`}>{HISTORY_COPY.withheld}</p> : null}
           </li>

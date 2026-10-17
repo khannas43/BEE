@@ -19,6 +19,14 @@ export interface RuntimeRoute {
 
 export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   {
+    href: "/app/demo/executive",
+    en: "Executive dashboard",
+    hi: "कार्यकारी डैशबोर्ड",
+    icon: "space_dashboard",
+    navRoles: ["director", "secretary", "programme", "admin"],
+    implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
+  },
+  {
     href: "/app/demo/payments",
     en: "Payments",
     hi: "भुगतान",
@@ -48,6 +56,22 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "त्रैमासिक उत्पादन",
     icon: "factory",
     navRoles: ["manufacturer", "agency", "programme", "admin"],
+    implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
+  },
+  {
+    href: "/app/demo/director",
+    en: "Director's dashboard",
+    hi: "निदेशक डैशबोर्ड",
+    icon: "dashboard",
+    navRoles: ["director", "secretary", "programme", "admin"],
+    implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
+  },
+  {
+    href: "/app/demo/auditor",
+    en: "Auditor's dashboard",
+    hi: "लेखापरीक्षक डैशबोर्ड",
+    icon: "fact_check",
+    navRoles: ["auditor", "admin"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
@@ -175,6 +199,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["See the request", "Upload the trade licence", "See the fee and submit", "Follow the request until Programme review", "Recommend or return", "Approve, return or reject", "See why it was returned and resubmit"],
   },
   {
+    href: "/app/registrations/fees",
+    en: "Registration fees",
+    hi: "पंजीकरण शुल्क",
+    icon: "request_quote",
+    navRoles: ["finance"],
+    implemented: ["List registrations waiting for their fee", "Confirm that the fee was received"],
+  },
+  {
     href: "/app/registrations/reviews",
     en: "Registration reviews",
     hi: "पंजीकरण समीक्षा",
@@ -276,6 +308,26 @@ export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {
   return RUNTIME_ROUTES.find((r) => r.href === pathname);
 }
 
+/**
+ * The order of the menu, whatever the role: dashboards, then the person's own work, registrations, applications and certificates, then the
+ * scrutiny and approval steps, money, the demonstration screens and finally administration. A route not listed goes last, in the order above.
+ */
+const MENU_ORDER: string[] = [
+  "/app/demo/executive", "/app/demo/director", "/app/demo/auditor", "/app/demo/mis",
+  "/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval", "/app/workflow/application-review", "/app/workflow/workflow-history", "/app/workflow/escalation-dashboard",
+  "/app/registrations/requests", "/app/registrations/new", "/app/registrations/request", "/app/registrations/reviews", "/app/registrations/register",
+  "/app/model-label/new-model-application", "/app/model-label/model-dashboard", "/app/model-label/label-preview", "/app/model-label/notifications",
+  "/app/model-label/iame-scrutiny", "/app/model-label/bee-scrutiny", "/app/model-label/rating-calculation",
+  "/app/finance/finance-queue", "/app/registrations/fees", "/app/finance/receipt", "/app/demo/payments",
+  "/app/demo/qr", "/app/demo/ledger", "/app/demo/production", "/app/demo/ai", "/app/demo/notifications",
+  "/app/administration/fee-rules", "/app/administration/rating-formula", "/app/administration/business-settings", "/app/delegations",
+];
+export const menuRank = (href: string) => {
+  if (href === "/app") return -1; // the landing Dashboard leads
+  const i = MENU_ORDER.indexOf(href);
+  return i === -1 ? MENU_ORDER.length : i;
+};
+
 /** Menu entries for a Spring identity: by role, or by a permission the roles hold; empty for no identity or no match. */
 export function runtimeNavFor(
   roles: readonly { role: string }[] | null | undefined,
@@ -284,5 +336,5 @@ export function runtimeNavFor(
   if (!roles?.length) return [];
   return RUNTIME_ROUTES.filter(
     (r) => roles.some((g) => r.navRoles.includes(g.role)) || (r.navCapabilities ?? []).some((c) => capabilities.includes(c)),
-  );
+  ).sort((a, b) => menuRank(a.href) - menuRank(b.href));
 }

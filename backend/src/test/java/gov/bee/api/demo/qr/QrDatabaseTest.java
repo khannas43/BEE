@@ -228,4 +228,37 @@ class QrDatabaseTest {
         assertFalse(pub.findBySerial("BEEQ-ZZZZZZZZZZ").isPresent(), "unknown");
         assertNotNull(pub.find("BEE/RAC/2026/10901"));
     }
+
+    @Test
+    void aCertificateHasACapAndARevokedOneGetsNoNewBatchesSerialsOrBindings() {
+        UUID approvedB = UUID.fromString("00000000-0000-4000-c000-0000000009a2");
+        // the cap: all batches of one certificate together hold at most 100,000 serials
+        int made = 0;
+        DemoResult r;
+        do {
+            r = post(NOVA, null, null, Map.of("applicationId", approvedB.toString(), "quantity", 5000));
+            if (r.status().value() == 201) {
+                made++;
+            }
+        } while (r.status().value() == 201 && made < 40);
+        assertTrue(made >= 15 && made <= 20, "made " + made);
+        assertEquals(400, r.status().value());
+        assertTrue(r.detail().contains("at most"), r.detail());
+
+        // revoke 9a1 on the simulated ledger (submit, a second person commits, revoke, a second person commits)
+        UUID cert = owner.queryForObject("SELECT id FROM certificate WHERE application_id = ?", UUID.class, APPROVED_A);
+        UUID other = FINANCE_USER;
+        owner.queryForList("SELECT * FROM ledger_submit(?, ?)", cert, PROGRAMME_USER);
+        owner.queryForList("SELECT * FROM ledger_decide(?, ?, ARRAY[?]::uuid[], 'commit', NULL)", cert, other, other);
+        owner.queryForList("SELECT * FROM ledger_change(?, ?, 'revoke', NULL, 'test')", cert, PROGRAMME_USER);
+        owner.queryForList("SELECT * FROM ledger_decide(?, ?, ARRAY[?]::uuid[], 'commit', NULL)", cert, other, other);
+        DemoResult create = post(NOVA, null, null, Map.of("applicationId", APPROVED_A.toString(), "quantity", 10));
+        assertEquals(409, create.status().value());
+        assertTrue(create.detail().contains("revoked"), create.detail());
+        String batch = owner.queryForObject("SELECT id::text FROM qr_batch WHERE certificate_id = ? ORDER BY created_at LIMIT 1", String.class, cert);
+        assertEquals(409, post(NOVA, batch, "serials", Map.of("count", 1)).status().value());
+        assertEquals(409, post(NOVA, batch, "bind", Map.of("serials", List.of("BEEQ-0000000000"))).status().value());
+        // reading is still fine
+        assertEquals(200, module.handle(NOVA, "GET", batch, null, Map.of(), Map.of()).status().value());
+    }
 }

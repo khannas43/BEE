@@ -35,7 +35,8 @@ type Reconciliation = {
   models: { modelApplicationId: string; modelNumber: string; registrationId: string; declaredUnits: number; boundSerials: number | null; flag: string }[];
 };
 
-const CSV_SAMPLE = "registration_id,units,period_start,period_end\nBEE/RAC/2026/10101,4200,2026-10-01,2026-10-31\nBEE/RAC/2026/10102,2600,2026-10-01,2026-10-31\n";
+/** A full quarter (three months for each of two models), sized like the earlier quarters so the demo's AI anomaly run does not flag it. */
+const CSV_SAMPLE = "registration_id,units,period_start,period_end\nBEE/RAC/2026/10101,4100,2026-10-01,2026-10-31\nBEE/RAC/2026/10101,4200,2026-11-01,2026-11-30\nBEE/RAC/2026/10101,4300,2026-12-01,2026-12-31\nBEE/RAC/2026/10102,2600,2026-10-01,2026-10-31\nBEE/RAC/2026/10102,2650,2026-11-01,2026-11-30\nBEE/RAC/2026/10102,2700,2026-12-01,2026-12-31\n";
 const STATE_WORD: Record<string, string> = { draft: "Draft", submitted: "Submitted", accepted: "Accepted", query: "Query raised" };
 const inputCls = "w-full rounded border border-outline-variant bg-surface px-space-sm py-space-xs font-body-md text-on-surface";
 const btnCls = "rounded bg-primary px-space-md py-space-xs font-label-md text-on-primary disabled:opacity-50";
@@ -181,9 +182,9 @@ export function ProductionDemo() {
     });
   }
 
-  async function validate(commit: boolean) {
+  async function validate(commit: boolean, replace = false) {
     if (!selected) return;
-    await run<DemoBody & Validation>(demoPath("production", selected, "rows"), { csv, commit }, (v) => {
+    await run<DemoBody & Validation>(demoPath("production", selected, "rows"), { csv, commit, ...(replace ? { replace: true } : {}) }, (v) => {
       setValidation(v);
       setStatus(v.message);
     });
@@ -273,7 +274,14 @@ export function ProductionDemo() {
                 <button type="button" className={btnCls} disabled={busy} onClick={() => validate(true)}>
                   Store rows (all or nothing)
                 </button>
+                {detail?.state === "query" && (
+                  <button type="button" className={btnCls} disabled={busy} onClick={() => validate(true, true)} data-testid="prod-replace-rows">
+                    Replace all rows with these
+                  </button>
+                )}
               </div>
+              {csv.trim() && detail.rows.length === 0 ? <p role="status" className="font-label-md text-error" data-testid="prod-rows-pending">Not stored yet: Validate only checks the rows. Click Store rows to save them.</p> : null}
+              {detail?.state === "query" && <p className="font-body-sm text-on-surface-variant">After a query you can correct the figures: this replaces every stored row of the submission with the rows above, all or nothing.</p>}
               {validation && (
                 <table className="w-full text-left font-body-md" data-testid="prod-results">
                   <caption className="text-left font-label-md">
@@ -328,10 +336,14 @@ export function ProductionDemo() {
                   <span className="font-label-md">Evidence file (up to 1 MiB)</span>
                   <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
                 </label>
-                <div>
+                <div className="md:col-span-2">
                   <button type="button" className={btnCls} disabled={busy} onClick={addEvidence}>
                     Attach evidence
                   </button>
+                  <p className="font-label-sm text-on-surface-variant mt-1">Filling in the details is not enough: click Attach evidence. The file then appears in the list above, and the Programme Officer sees it only after that.</p>
+                  {(file || ev.caName.trim() || ev.statement.trim()) && detail.evidence.length === 0 ? (
+                    <p role="status" className="font-label-md text-error mt-1" data-testid="prod-evidence-pending">Not attached yet: nothing is stored until you click Attach evidence.</p>
+                  ) : null}
                 </div>
               </div>
             )}
@@ -350,7 +362,7 @@ export function ProductionDemo() {
             <Section title="Reviewer">
               <label className="block">
                 <span className="font-label-md">Note (required for a query)</span>
-                <textarea className={inputCls} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+                <textarea className={inputCls} rows={2} maxLength={800} value={note} onChange={(e) => setNote(e.target.value)} />
               </label>
               <div className="flex gap-space-sm">
                 <button type="button" className={btnCls} disabled={busy} onClick={() => run(demoPath("production", detail.id, "review"), { decision: "accepted", note }, () => setStatus("Accepted."))}>

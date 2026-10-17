@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
+import { Pill } from "@/components/app/demo/DemoShell";
 import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { useCommand, type CommandState } from "@/components/app/kit/CommandPanel";
 import { ReadPanel } from "@/components/app/kit/StatePanels";
@@ -20,10 +21,14 @@ import {
   runDecideDelegation,
   runRequestDelegation,
 } from "@/lib/client/runtimeDelegations";
+import { istStamp } from "@/lib/client/istTime";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
 const loadDelegations = () => readDelegations();
+
+const card = "rounded-lg bg-surface-container-low p-space-md";
+const th = "py-2 pr-3 font-label-sm text-label-sm uppercase tracking-wide";
 
 const ROLE_WORD: Record<string, string> = { programme: "Programme", director: "Director", finance: "Finance" };
 
@@ -78,7 +83,7 @@ export function Delegations({ module, screen }: { module: Module; screen: Screen
     <ScreenChrome module={module} screen={screen} subtitle="Delegations" implemented={runtimeRouteFor(delegationsHref())?.implemented}>
       <div className="space-y-space-md" data-testid="del-screen">
         <IdentityStrip identity={identity} testId="del-identity" />
-        <p className="font-body-sm text-on-surface-variant" data-testid="del-provisional">Provisional local rules, not BEE rules.</p>
+        <p role="note" className="font-body-sm text-on-surface-variant rounded-lg bg-surface-container-low px-space-md py-space-sm" data-testid="del-provisional">Provisional local rules, not BEE rules.</p>
         <ReadPanel
           title="Delegations"
           read={read}
@@ -110,7 +115,7 @@ function DelegationsBody({
       {data.delegableRoles.length > 0 ? (
         <AskForm key={formKey} data={data} onChanged={onChanged} onRefresh={onRefresh} />
       ) : (
-        <p className="font-body-sm" data-testid="del-none">You do not hold a role that can be delegated, or you hold more than one stage role</p>
+        <p className={`${card} font-body-sm text-on-surface-variant`} data-testid="del-none">You do not hold a role that can be delegated, or you hold more than one stage role</p>
       )}
       <Mine data={data} onChanged={onChanged} onRefresh={onRefresh} />
       {data.canApprove ? <Pending data={data} onChanged={onChanged} onRefresh={onRefresh} /> : null}
@@ -142,7 +147,7 @@ function AskForm({ data, onChanged, onRefresh }: { data: DelegationsView; onChan
   }
 
   return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="del-form">
+    <section className={card} data-testid="del-form">
       <h2 className="font-title-md text-title-md text-on-surface">Ask to delegate</h2>
       <p className="font-body-sm text-on-surface-variant mt-1" data-testid="del-rules">
         The start is today or later. The end is after the start and at most 30 days later. The Secretary&apos;s final approval, administrative roles and registration review cannot be delegated. The approver is never the person who asks or the person who receives the role. A person who holds a second stage role cannot delegate.
@@ -185,28 +190,30 @@ function AskForm({ data, onChanged, onRefresh }: { data: DelegationsView; onChan
 
 function Mine({ data, onChanged, onRefresh }: { data: DelegationsView; onChanged: () => void; onRefresh: () => void }) {
   return (
-    <section data-testid="del-mine">
+    <section className={card} data-testid="del-mine">
       <h2 className="font-title-md text-title-md text-on-surface">My delegations</h2>
       {data.mine.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">You have no delegations.</p> : (
+        <div className="overflow-x-auto">
         <table className="w-full font-body-sm text-body-sm mt-space-sm">
           <caption className="sr-only">My delegations</caption>
           <thead>
-            <tr className="text-left text-on-surface-variant font-label-sm">
-              <th className="py-1 pr-3">Role</th>
-              <th className="py-1 pr-3">From</th>
-              <th className="py-1 pr-3">Ends on (not included)</th>
-              <th className="py-1 pr-3">Delegator</th>
-              <th className="py-1 pr-3">Delegate</th>
-              <th className="py-1 pr-3">State</th>
-              <th className="py-1 pr-3">Uses</th>
-              <th className="py-1 pr-3">Decided by</th>
-              <th className="py-1"><span className="sr-only">Actions</span></th>
+            <tr className="text-left text-on-surface-variant bg-surface-container-low">
+              <th className={`${th} pl-3`}>Role</th>
+              <th className={th}>From</th>
+              <th className={th}>Ends on (not included)</th>
+              <th className={th}>Delegator</th>
+              <th className={th}>Delegate</th>
+              <th className={th}>State</th>
+              <th className={th}>Uses</th>
+              <th className={th}>Decided by</th>
+              <th className="py-2"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {data.mine.map((item) => <MineRow key={item.id} item={item} data={data} onChanged={onChanged} onRefresh={onRefresh} />)}
           </tbody>
         </table>
+        </div>
       )}
     </section>
   );
@@ -228,13 +235,13 @@ function MineRow({ item, data, onChanged, onRefresh }: { item: Delegation; data:
   }
 
   return (
-    <tr data-testid={`del-row-${item.id}`}>
+    <tr className="border-t border-outline-variant align-top" data-testid={`del-row-${item.id}`}>
       <td className="py-1 pr-3">{roleWord(item.role)}</td>
       <td className="py-1 pr-3">{item.validFrom}</td>
       <td className="py-1 pr-3">{item.validTo}</td>
       <td className="py-1 pr-3">{item.delegator}</td>
       <td className="py-1 pr-3">{item.delegate}</td>
-      <td className="py-1 pr-3" data-testid={`del-state-${item.id}`}>{stateWord(item)}</td>
+      <td className="py-2 pr-3" data-testid={`del-state-${item.id}`}><Pill>{stateWord(item)}</Pill></td>
       <td className="py-1 pr-3">{item.uses}</td>
       <td className="py-1 pr-3">{item.decidedBy ?? item.revokedBy ?? ""}</td>
       <td className="py-1">
@@ -262,7 +269,7 @@ function MineRow({ item, data, onChanged, onRefresh }: { item: Delegation; data:
 
 function Pending({ data, onChanged, onRefresh }: { data: DelegationsView; onChanged: () => void; onRefresh: () => void }) {
   return (
-    <section data-testid="del-pending">
+    <section className={card} data-testid="del-pending">
       <h2 className="font-title-md text-title-md text-on-surface">Waiting for approval</h2>
       {data.pending.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">Nothing is waiting for approval.</p> : (
         <ul className="mt-space-sm space-y-space-sm">
@@ -287,8 +294,13 @@ function PendingRow({ item, data, onChanged, onRefresh }: { item: Delegation; da
   }
 
   return (
-    <li className="font-body-sm border border-outline-variant rounded-lg p-space-sm" data-testid={`del-pending-${item.id}`}>
-      <p>{item.delegator} · {item.delegate} · {roleWord(item.role)} · from {item.validFrom}, ends on {item.validTo} (not included) · {item.reason}</p>
+    <li className="font-body-sm border border-outline-variant rounded-lg p-space-md bg-surface-ground" data-testid={`del-pending-${item.id}`}>
+      <p className="flex flex-wrap items-center gap-x-space-sm gap-y-1">
+        <Pill>Waiting</Pill>
+        <span className="font-title-md text-title-md text-on-surface">{item.delegator} → {item.delegate}</span>
+        <span className="text-on-surface-variant">· {roleWord(item.role)} · from {item.validFrom}, ends on {item.validTo} (not included)</span>
+      </p>
+      <p className="mt-1 text-on-surface-variant">Reason: {item.reason}</p>
       <p className="mt-1" data-testid={`del-confirm-${item.id}`}>This lets {item.delegate} act as {roleWord(item.role)} from {item.validFrom} to the day before {item.validTo} for {item.delegator}.</p>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         Reason for a rejection
@@ -306,13 +318,14 @@ function PendingRow({ item, data, onChanged, onRefresh }: { item: Delegation; da
 
 function History({ data }: { data: DelegationsView }) {
   return (
-    <section data-testid="del-history">
+    <section className={card} data-testid="del-history">
       <h2 className="font-title-md text-title-md text-on-surface">History</h2>
       {data.decided.length === 0 ? <p className="font-body-sm text-on-surface-variant mt-1">No delegation has been decided.</p> : (
         <ul className="mt-space-sm space-y-space-sm">
           {data.decided.map((item) => (
-            <li key={item.id} className="font-body-sm" data-testid={`del-history-${item.id}`} data-state={item.state}>
-              {stateWord(item)} · {roleWord(item.role)} · {item.delegator} · {item.delegate} · from {item.validFrom}, ends on {item.validTo} (not included) · {item.decidedBy ?? item.revokedBy ?? ""} · {item.decidedAt ?? item.revokedAt ?? ""}
+            <li key={item.id} className="font-body-sm border-t border-outline-variant pt-space-sm first:border-t-0 first:pt-0" data-testid={`del-history-${item.id}`} data-state={item.state}>
+              <span className="mr-space-sm"><Pill>{stateWord(item)}</Pill></span>
+              {roleWord(item.role)} · {item.delegator} · {item.delegate} · from {item.validFrom}, ends on {item.validTo} (not included) · {item.decidedBy ?? item.revokedBy ?? ""} · {item.decidedAt || item.revokedAt ? `${istStamp(item.decidedAt ?? item.revokedAt)} IST` : ""}
               {item.decisionNote ? ` · ${item.decisionNote}` : ""}
               {item.revokeNote ? ` · ${item.revokeNote}` : ""}
             </li>

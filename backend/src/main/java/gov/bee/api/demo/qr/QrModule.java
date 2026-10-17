@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,6 +21,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class QrModule implements DemoModule {
 
+    static final long MAX_PER_CERTIFICATE = 100_000L;
+    static final String REVOKED_MESSAGE = "This certificate is revoked on the simulated ledger: no new batches, serials or bindings.";
     static final Set<String> WRITERS = Set.of("manufacturer", "agency");
     static final Set<String> ALL_READERS = Set.of("programme", "admin", "auditor");
     static final int MAX_QUANTITY = 5000;
@@ -37,8 +40,9 @@ public class QrModule implements DemoModule {
         return "qr";
     }
 
+    /** Writers are own-organisation roles (any scope is fine, the organisation is checked); the all-batch readers must hold their role for all records (BL-231). */
     private static boolean has(Caller c, Set<String> roles) {
-        return c.roles().stream().anyMatch(g -> roles.contains(g.role()));
+        return roles == WRITERS ? gov.bee.api.demo.DemoAccess.holdsRole(c, roles) : gov.bee.api.demo.DemoAccess.holdsAll(c, roles);
     }
 
     private static UUID uuid(Object o) {
@@ -172,11 +176,20 @@ public class QrModule implements DemoModule {
         if (cert.isEmpty()) {
             return DemoResult.invalid("The application has no issued certificate yet.");
         }
+        if (repo.ledgerRevoked(cert.get())) {
+            return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", REVOKED_MESSAGE);
+        }
+        if (repo.quantityOfCertificate(cert.get()) + quantity > MAX_PER_CERTIFICATE) {
+            return DemoResult.invalid("A certificate can have at most " + MAX_PER_CERTIFICATE + " serials in all its batches (the demonstration cap).");
+        }
         UUID id = repo.createBatch(appId, cert.get(), app.get().organisationId(), quantity, caller.accountId());
         return DemoResult.created(summary(repo.batch(id).orElseThrow()));
     }
 
     private DemoResult allocate(Caller caller, QrRepository.Batch batch, Map<String, Object> body) {
+        if (repo.ledgerRevoked(batch.certificateId())) {
+            return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", REVOKED_MESSAGE);
+        }
         repo.lock(batch.id());
         int existing = repo.serialCount(batch.id());
         int remaining = batch.quantity() - existing;
@@ -204,6 +217,9 @@ public class QrModule implements DemoModule {
     }
 
     private DemoResult bind(Caller caller, QrRepository.Batch batch, Map<String, Object> body) {
+        if (repo.ledgerRevoked(batch.certificateId())) {
+            return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", REVOKED_MESSAGE);
+        }
         if (!(body.get("serials") instanceof List<?> raw) || raw.isEmpty() || raw.size() > MAX_QUANTITY) {
             return DemoResult.invalid("Give the serials to bind (1 to " + MAX_QUANTITY + ").");
         }
@@ -230,10 +246,12 @@ public class QrModule implements DemoModule {
                 return DemoResult.invalid(s + " is void and cannot be bound.");
             }
         }
+        List<String> already = serials.stream().filter(s -> "bound".equals(states.get(s))).limit(20).toList();
         int changed = repo.bind(batch.id(), serials, caller.accountId());
         Map<String, Object> out = new LinkedHashMap<>(summary(repo.batch(batch.id()).orElseThrow()));
         out.put("newlyBound", changed);
         out.put("alreadyBound", serials.size() - changed);
+        out.put("alreadyBoundSerials", already);
         return DemoResult.ok(out);
     }
 

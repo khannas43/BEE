@@ -77,7 +77,11 @@ function Result({ result }: { result: VerificationResult | "loading" }) {
     const tone = c.status === "valid" ? "border-primary/40 bg-primary/5" : "border-error/40 bg-error/5";
     return (
       <div role="status" className={`mt-space-lg rounded-xl border ${tone} p-space-lg`} data-testid="verify-result" data-outcome={c.status}>
-        <p className="font-title-lg text-title-lg text-on-surface" data-testid="verify-status">{VERIFICATION_COPY.statusText[c.status]}</p>
+        <p className={`-mx-space-lg -mt-space-lg mb-space-md rounded-t-xl px-space-lg py-3 font-title-lg text-title-lg font-bold flex items-center gap-2 ${c.status === "valid" ? "bg-primary text-on-primary" : "bg-error text-on-error"}`} >
+          <Icon name={c.status === "valid" ? "verified" : "block"} size={24} />
+          <span data-testid="verify-status">{VERIFICATION_COPY.statusText[c.status]}</span>
+        </p>
+        {c.status === "revoked" ? <p className="font-body-md text-body-md font-semibold text-error mb-space-sm" data-testid="verify-revoked-note">This registration has been revoked and is no longer valid. The details below are shown for reference only.</p> : null}
         <p className="font-mono font-title-md text-title-md mt-1" data-testid="verify-registration">{c.registrationId}</p>
         <dl className="grid grid-cols-2 gap-x-space-lg gap-y-space-xs mt-space-md font-body-md text-body-md">
           <dt className="text-on-surface-variant">Manufacturer</dt>
@@ -88,7 +92,7 @@ function Result({ result }: { result: VerificationResult | "loading" }) {
           <dd data-testid="verify-category">{c.category}</dd>
           <dt className="text-on-surface-variant">Star rating</dt>
           <dd data-testid="verify-rating">{"★".repeat(c.stars)}{"☆".repeat(5 - c.stars)} ({c.stars}) · efficiency {c.verifiedIseer}</dd>
-          <dt className="text-on-surface-variant">Validity period</dt>
+          <dt className="text-on-surface-variant">{c.status === "revoked" ? "Was valid (before revocation)" : "Validity period"}</dt>
           <dd data-testid="verify-validity">{c.validFrom} to {c.validTo}</dd>
         </dl>
         <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-md" data-testid="verify-demo">{VERIFICATION_COPY.demo}</p>

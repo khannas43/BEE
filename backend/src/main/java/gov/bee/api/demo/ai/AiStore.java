@@ -60,6 +60,13 @@ public class AiStore {
             });
     }
 
+    /** True when the application (by reference or id) was ever assigned to the person at any stage; an unknown application is false. */
+    public boolean assignedTo(UUID account, String applicationRef) {
+        Integer n = jdbc.queryForObject("SELECT count(*) FROM assignment s JOIN model_application a ON a.id = s.subject_id "
+            + "WHERE s.user_id = ? AND s.subject_type = 'model_application' AND (a.reference = ? OR a.id::text = ?)", Integer.class, account, applicationRef, applicationRef);
+        return n != null && n > 0;
+    }
+
     public Optional<String> modelVersion(String useCase) {
         return jdbc.query("SELECT id || '@' || version FROM ai_model WHERE use_case = ? AND status = 'registered'", (rs, i) -> rs.getString(1), useCase)
             .stream().findFirst();

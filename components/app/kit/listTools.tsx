@@ -3,7 +3,8 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { filterRows, paginate, sortRows, type SortDirection } from "@/components/app/kit/dataTableLogic";
-import { csvFileName, saveCsv, toCsv, type CsvCell } from "@/lib/client/csv";
+import { csvFileName, datedFileName, saveBytes, saveCsv, toCsv, type CsvCell } from "@/lib/client/csv";
+import { buildXlsx, XLSX_TYPE } from "@/lib/client/xlsx";
 
 /**
  * Search, an optional date range, sort on every column and paging for a list that is already loaded in the browser.
@@ -76,10 +77,16 @@ export function ListToolbar({ tools, placeholder = "Type to search", searchLabel
       ) : null}
       {tools.filtered ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={tools.clear} data-testid="list-clear">Clear filters</button> : null}
       {exportCsv ? (
-        <button type="button" disabled={exportCsv.rows.length === 0} onClick={() => saveCsv(csvFileName(exportCsv.filename), toCsv(exportCsv.header, exportCsv.rows))}
-          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 font-label-md text-primary disabled:opacity-40" data-testid="list-export">
-          <Icon name="download" size={16} /> Download CSV
-        </button>
+        <span className="ml-auto inline-flex flex-wrap gap-space-sm">
+          <button type="button" disabled={exportCsv.rows.length === 0} onClick={() => saveCsv(csvFileName(exportCsv.filename), toCsv(exportCsv.header, exportCsv.rows))}
+            className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 font-label-md text-primary disabled:opacity-40" data-testid="list-export">
+            <Icon name="download" size={16} /> Download CSV
+          </button>
+          <button type="button" disabled={exportCsv.rows.length === 0} onClick={() => saveBytes(datedFileName(exportCsv.filename, "xlsx"), buildXlsx(exportCsv.filename, exportCsv.header, exportCsv.rows), XLSX_TYPE)}
+            className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 font-label-md text-primary disabled:opacity-40" data-testid="list-export-xlsx">
+            <Icon name="table_view" size={16} /> Download Excel
+          </button>
+        </span>
       ) : null}
     </div>
   );

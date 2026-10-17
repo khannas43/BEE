@@ -104,7 +104,7 @@ class DelegationDatabaseTest {
         repo = new DelegationRepository(db);
         identity = new gov.bee.api.identity.IdentityRepository(db);
         service = new DelegationService(repo, new gov.bee.api.application.IdempotencyRepository(db), JSON);
-        assertEquals(66, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V66");
+        assertEquals(68, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V68");
     }
 
     @AfterAll

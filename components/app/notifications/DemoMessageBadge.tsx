@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { demoGet, demoPath } from "@/lib/client/runtimeDemo";
+import { readMessages } from "@/lib/client/runtimeMessages";
 
 /** Unread simulated email and SMS, beside the in-portal bell. Hidden unless the messages call succeeds. */
 const POLL_MS = 10000;
@@ -15,9 +15,11 @@ export function DemoMessageBadge() {
 
   useEffect(() => {
     let live = true;
-    void demoGet<{ unread: number }>(demoPath("messages")).then((r) => {
+    void readMessages().then((r) => {
       if (!live) return;
-      setUnread(r.ok && typeof r.value.unread === "number" ? r.value.unread : null);
+      // A failed poll keeps what was shown; the badge is hidden only until the first successful read, or when this person has no access (not signed in).
+      if (r.ok) setUnread(r.list.unread);
+      else if (r.failure.kind === "session" || r.failure.kind === "forbidden") setUnread(null);
     });
     return () => {
       live = false;

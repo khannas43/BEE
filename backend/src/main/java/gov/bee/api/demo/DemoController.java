@@ -54,6 +54,9 @@ public class DemoController {
 
     private ResponseEntity<Map<String, Object>> run(Jwt jwt, String method, String module, String id, String action,
                                                     Map<String, String> query, Map<String, Object> body) {
+        if (!DemoSwitch.enabled()) {
+            return ApiErrors.response(HttpStatus.NOT_FOUND, "not_found");
+        }
         var resolved = callers.resolve(jwt);
         if (resolved.caller() == null) {
             return ApiErrors.response(HttpStatus.FORBIDDEN, resolved.denial());

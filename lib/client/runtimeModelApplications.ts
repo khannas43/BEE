@@ -73,7 +73,7 @@ export interface ModelApplication {
     registrationId: string;
     validFrom: string;
     validTo: string;
-    status: "valid" | "expired" | "not_yet_valid";
+    status: "valid" | "expired" | "not_yet_valid" | "revoked";
     stars: number;
     declaredIseer: string;
     verifiedIseer: string;

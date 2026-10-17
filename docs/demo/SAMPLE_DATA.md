@@ -13,7 +13,7 @@ The original 40 applications and 9 registrations are untouched. A second transac
 - Approved applications take 8 to 15 days. Their certificates use sequences `91000 + n` (about 24 certificates), issued within about eight months so they stay newer than 90037–90040.
 - Fee confirmations on the 60 applications that have left fee due, amounts 25,000 / 27,500 / 30,000 / 32,500 with no tax, the same band as the original MIS history. Together with that original history (and the small registration and queue confirmations) the fee card should land near 29 lakh. Confirm the live card.
 - 4 queue applications: `DEMO-Q-0001` and `DEMO-Q-0002` (Nova, director review), `DEMO-Q-0003` (Nova, rating), `DEMO-Q-0004` (Pixel, director review). Fee snapshot 10,000 plus 18 percent, confirmation 11,800, no simulated payment.
-- 2 Nova brand registrations: `NOVA-REG-001` with programme, `NOVA-REG-002` with the director.
+- 2 Nova brand registrations: `REG-2026-9101` with programme, `REG-2026-9102` with the director.
 - 3 delegations: director to programme (approved, 14 days), finance to programme (approved, 10 days), programme to helpdesk (left pending, 7 days). Dates are `current_date`, so they are open on the day of the seed and then expire. A later seed cannot extend them: the table refuses a change of dates.
 
 ## Payments (`s1_payments.sql`)

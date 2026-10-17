@@ -128,6 +128,7 @@ export function LedgerDemo() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [readOnly, setReadOnly] = useState(true);
   const [blocks, setBlocks] = useState<Tx[]>([]);
+  const [blocksError, setBlocksError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +146,7 @@ export function LedgerDemo() {
     if (!list.ok) { setError(list.message); return; }
     setRows(list.value.certificates);
     setReadOnly(list.value.readOnly);
-    if (ex.ok) setBlocks(ex.value.transactions);
+    if (ex.ok) { setBlocks(ex.value.transactions); setBlocksError(null); } else setBlocksError(ex.message);
   }, []);
 
   const loadDetail = useCallback(async (id: string) => {
@@ -163,7 +164,7 @@ export function LedgerDemo() {
       if (!list.ok) { setError(list.message); return; }
       setRows(list.value.certificates);
       setReadOnly(list.value.readOnly);
-      if (ex.ok) setBlocks(ex.value.transactions);
+      if (ex.ok) { setBlocks(ex.value.transactions); setBlocksError(null); } else setBlocksError(ex.message);
     });
     return () => { live = false; };
   }, []);
@@ -193,7 +194,7 @@ export function LedgerDemo() {
 
   return (
     <div className="p-space-md lg:p-space-lg" data-testid="demo-ledger">
-      <h1 className="font-headline-md text-headline-md text-on-surface">Certificate ledger (simulated Fabric)</h1>
+      <h1 className="font-headline-md text-headline-md text-on-surface">Certificate ledger</h1>
       <p className="mt-1 font-body-sm text-on-surface-variant">
         Each certificate has a chain of transactions; every hash is sha256 of the previous hash and the certificate fields. A second person must commit what the first submitted.
         {readOnly ? " You can read this ledger but not change it." : ""}
@@ -286,7 +287,8 @@ export function LedgerDemo() {
       ) : null}
 
       <section className="mt-space-lg" aria-labelledby="ledger-explorer">
-        <h2 id="ledger-explorer" className="font-title-md text-title-md text-on-surface">Block explorer (simulated)</h2>
+        <h2 id="ledger-explorer" className="font-title-md text-title-md text-on-surface">Block explorer</h2>
+        {blocksError ? <p role="alert" className="text-error font-body-md mt-space-xs">The block explorer could not be loaded: {blocksError}</p> : null}
         <ExplorerTable blocks={blocks} />
       </section>
     </div>

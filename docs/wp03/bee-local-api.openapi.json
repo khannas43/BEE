@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.34.0",
+    "version": "0.36.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
     "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. Every route listed here is operational, including the draft, submit, stage, history, document, notification, fee-administration, registration, register-revocation and delegation routes; anything not listed is denied.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). The routes added since 0.5.0 are not itemised here: each minor version added operations and codes, recorded in docs/wp03 and in the evidence notes of the work package that added them (for example 0.28.0 registration, 0.29.0 registration review, 0.30.0 register revocation, 0.31.0 the register audit trail, 0.32.0 delegation). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
@@ -32497,6 +32497,1122 @@
           }
         }
       }
+    },
+    "/api/messages": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "get": {
+        "operationId": "springMessages",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [
+          {
+            "springBearer": []
+          }
+        ],
+        "summary": "The caller's own simulated email and SMS messages, newest first (the latest 50), and how many are unread. Nothing is sent anywhere.",
+        "description": "Simulated email and SMS for the local demonstration: nothing is ever sent. Rows are written by database triggers on the payment, ledger and production audit records (V66); a person reads only their own.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's own simulated email and SMS messages, newest first (the latest 50), and how many are unread. Nothing is sent anywhere.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/messages/{id}/read": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "post": {
+        "operationId": "springMessageRead",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [
+          {
+            "springBearer": []
+          }
+        ],
+        "summary": "Mark one of the caller's own messages read. Repeating it changes nothing; someone else's id and an unknown id both get 404.",
+        "description": "Simulated email and SMS for the local demonstration: nothing is ever sent. Rows are written by database triggers on the payment, ledger and production audit records (V66); a person reads only their own.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The message id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mark one of the caller's own messages read. Repeating it changes nothing; someone else's id and an unknown id both get 404.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/messages/read-all": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "post": {
+        "operationId": "springMessageReadAll",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [
+          {
+            "springBearer": []
+          }
+        ],
+        "summary": "Mark all of the caller's own messages read.",
+        "description": "Simulated email and SMS for the local demonstration: nothing is ever sent. Rows are written by database triggers on the payment, ledger and production audit records (V66); a person reads only their own.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mark all of the caller's own messages read.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageReadAll"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/messages": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "get": {
+        "operationId": "runtimeMessages",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "The caller's own simulated email and SMS messages, newest first (the latest 50), and how many are unread. Nothing is sent anywhere.",
+        "description": "Next.js calls the matching Spring route with the session's access token and this request's correlation ID. A 200 passes only if it matches the schema exactly at every depth; otherwise 502.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's own simulated email and SMS messages, newest first (the latest 50), and how many are unread. Nothing is sent anywhere.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/messages/{id}/read": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "post": {
+        "operationId": "runtimeMessageRead",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "Mark one of the caller's own messages read. Repeating it changes nothing; someone else's id and an unknown id both get 404.",
+        "description": "Next.js calls the matching Spring route with the session's access token and this request's correlation ID. A 200 passes only if it matches the schema exactly at every depth; otherwise 502.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The message id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mark one of the caller's own messages read. Repeating it changes nothing; someone else's id and an unknown id both get 404.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role"
+            ]
+          },
+          "404": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "error": "not_found",
+                      "message": "No such record is available to you."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "not_found"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/messages/read-all": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "post": {
+        "operationId": "runtimeMessageReadAll",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [
+          {
+            "portalSession": []
+          }
+        ],
+        "summary": "Mark all of the caller's own messages read.",
+        "description": "Next.js calls the matching Spring route with the session's access token and this request's correlation ID. A 200 passes only if it matches the schema exactly at every depth; otherwise 502.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mark all of the caller's own messages read.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageReadAll"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "no_session": {
+                    "value": {
+                      "error": "no_session",
+                      "message": "Sign in to continue."
+                    }
+                  },
+                  "session_expired": {
+                    "value": {
+                      "error": "session_expired",
+                      "message": "Your session has ended. Sign in again."
+                    }
+                  },
+                  "unauthenticated": {
+                    "value": {
+                      "error": "unauthenticated",
+                      "message": "A valid access token is required."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "no_session",
+              "session_expired",
+              "unauthenticated"
+            ]
+          },
+          "403": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "mfa_required": {
+                    "value": {
+                      "error": "mfa_required",
+                      "message": "Sign-in must include a verified one-time code."
+                    }
+                  },
+                  "no_active_account": {
+                    "value": {
+                      "error": "no_active_account",
+                      "message": "There is no active BEE account for this identity."
+                    }
+                  },
+                  "no_effective_role": {
+                    "value": {
+                      "error": "no_effective_role",
+                      "message": "There is no active BEE role for this identity."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "mfa_required",
+              "no_active_account",
+              "no_effective_role"
+            ]
+          },
+          "502": {
+            "description": "Spring answered outside the contract. Nothing from Spring's body is forwarded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_api_response": {
+                    "value": {
+                      "error": "invalid_api_response",
+                      "message": "The BEE service returned an unexpected response."
+                    }
+                  },
+                  "api_error": {
+                    "value": {
+                      "error": "api_error",
+                      "message": "The BEE service could not complete the request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "invalid_api_response",
+              "api_error"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
     }
   },
   "components": {
@@ -35488,7 +36604,8 @@
             "enum": [
               "valid",
               "expired",
-              "not_yet_valid"
+              "not_yet_valid",
+              "revoked"
             ],
             "description": "Worked out from the dates when read; revoked is designed in but not built."
           },
@@ -37324,6 +38441,119 @@
             "maxLength": 500
           }
         }
+      },
+      "MessageItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "channel",
+          "address",
+          "kind",
+          "reference",
+          "subject",
+          "body",
+          "createdAt",
+          "read"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "channel": {
+            "enum": [
+              "email",
+              "sms"
+            ]
+          },
+          "address": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "pattern": "^[a-z_]{3,40}$"
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "read": {
+            "type": "boolean"
+          }
+        },
+        "description": "One simulated message. An email has a subject and an SMS has none. The address is synthetic (@bee-demo.invalid or a masked made-up mobile number); nothing is ever sent."
+      },
+      "MessageList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unread",
+          "items"
+        ],
+        "properties": {
+          "unread": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageItem"
+            }
+          }
+        }
+      },
+      "MessageRead": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "unread"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unread": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MessageReadAll": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "marked",
+          "unread"
+        ],
+        "properties": {
+          "marked": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unread": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       }
     }
   },
@@ -37745,6 +38975,10 @@
       {
         "route": "POST /api/notifications/{id}/read and POST /api/notifications/read-all",
         "reason": "Marking read never goes back, so repeating it changes nothing; no Idempotency-Key is taken (WP10.1a)."
+      },
+      {
+        "route": "POST /api/messages/{id}/read and POST /api/messages/read-all",
+        "reason": "Marking read never goes back, so repeating it changes nothing; no Idempotency-Key is taken (BL-229)."
       }
     ]
   },

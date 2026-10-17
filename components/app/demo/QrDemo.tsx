@@ -5,8 +5,12 @@ import Link from "next/link";
 import { Pill } from "./DemoShell";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
-import { csvFileName, saveCsv, toCsv } from "@/lib/client/csv";
+import { csvFileName, datedFileName, saveBytes, saveCsv, toCsv } from "@/lib/client/csv";
+import { buildXlsx, XLSX_TYPE } from "@/lib/client/xlsx";
 import { istStamp } from "@/lib/client/istTime";
+
+/** The service calls a freshly made serial "allocated"; on screen it is "generated". */
+const stateLabel = (state: string) => (state === "allocated" ? "generated" : state);
 
 type Counts = { allocated: number; bound: number; void: number; remaining: number };
 export type QrBatch = Counts & {
@@ -127,7 +131,7 @@ function BatchTable({ items, selected, onSelect }: { items: QrBatch[]; selected:
     <div className="rounded-xl bg-surface-card shadow-md p-space-md overflow-x-auto space-y-space-sm">
       <h2 className="font-title-md text-title-md mb-space-sm">Batches</h2>
       <ListToolbar tools={tools} searchLabel="Search by model or registration" placeholder="Model, brand or registration" dateLabel="Created"
-        exportCsv={{ filename: "qr-batches", header: ["Reference", "Brand", "Model", "Registration ID", "Organisation", "Quantity", "Allocated", "Bound", "Void", "Status", "Created"],
+        exportCsv={{ filename: "qr-batches", header: ["Reference", "Brand", "Model", "Registration ID", "Organisation", "Quantity", "Generated", "Bound", "Void", "Status", "Created"],
           rows: tools.visible.map((b) => [b.reference, b.brandName, b.modelNumber, b.registrationId, b.organisation, b.quantity, b.allocated, b.bound, b.void, b.status, istStamp(b.createdAt)]) }} />
       {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No batches match.</p> : (
       <>
@@ -135,7 +139,7 @@ function BatchTable({ items, selected, onSelect }: { items: QrBatch[]; selected:
         <thead>
           <tr>
             <SortableTh tools={tools} k="model">Model</SortableTh><SortableTh tools={tools} k="registration">Registration</SortableTh><SortableTh tools={tools} k="quantity">Quantity</SortableTh>
-            <SortableTh tools={tools} k="allocated">Allocated</SortableTh><SortableTh tools={tools} k="bound">Bound</SortableTh><SortableTh tools={tools} k="void">Void</SortableTh>
+            <SortableTh tools={tools} k="allocated">Generated</SortableTh><SortableTh tools={tools} k="bound">Bound</SortableTh><SortableTh tools={tools} k="void">Void</SortableTh>
             <SortableTh tools={tools} k="status">Status</SortableTh><SortableTh tools={tools} k="created">Created</SortableTh><th scope="col"><span className="sr-only">Open</span></th>
           </tr>
         </thead>
@@ -167,6 +171,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
   const [offset, setOffset] = useState(0);
   const [count, setCount] = useState("");
   const [bindText, setBindText] = useState("");
+  const [bindMsg, setBindMsg] = useState<{ text: string; warn: boolean } | null>(null);
   const [voidSerial, setVoidSerial] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
@@ -193,7 +198,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
   }
 
   /** Every serial of the batch (the service gives 200 at a time) as one CSV: what a print shop needs for the labels. */
-  async function exportSerials() {
+  async function exportSerials(excel = false) {
     const rows: Serial[] = [];
     for (let at = 0; at < 20000; at += 200) {
       const r = await demoGet<BatchDetail>(`${demoPath("qr", id)}?offset=${at}&limit=200`);
@@ -205,8 +210,11 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
       if (r.value.serials.length < 200) break;
     }
     const origin = window.location.origin;
-    saveCsv(csvFileName(`qr-serials-${detail?.registrationId.replace(/\//g, "-") ?? id}`), toCsv(["Serial", "State", "Allocated", "Bound", "Voided", "Void reason", "Public check link"],
-      rows.map((x) => [x.serial, x.state, istStamp(x.allocatedAt), istStamp(x.boundAt), istStamp(x.voidedAt), x.voidReason, `${origin}${verifyHref(x.serial)}`])));
+    const header = ["Serial", "State", "Generated", "Bound", "Voided", "Void reason", "Public check link"];
+    const body = rows.map((x) => [x.serial, stateLabel(x.state), istStamp(x.allocatedAt), istStamp(x.boundAt), istStamp(x.voidedAt), x.voidReason, `${origin}${verifyHref(x.serial)}`]);
+    const stem = `qr-serials-${detail?.registrationId.replace(/\//g, "-") ?? id}`;
+    if (excel) saveBytes(datedFileName(stem, "xlsx"), buildXlsx("QR serials", header, body), XLSX_TYPE);
+    else saveCsv(csvFileName(stem), toCsv(header, body));
   }
 
   async function copy(serial: string) {
@@ -226,19 +234,25 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
     <section className="rounded-xl bg-surface-card shadow-md p-space-md space-y-space-md" aria-labelledby="qr-batch-h" data-testid="qr-detail">
       <h2 id="qr-batch-h" className="font-title-md text-title-md">Batch: {detail.brandName} {detail.modelNumber}</h2>
       <p className="font-body-sm" data-testid="qr-counts">
-        Quantity {detail.quantity}: {detail.allocated} allocated, {detail.bound} bound, {detail.void} void, {detail.remaining} still to allocate. Certificate {detail.registrationId}.
+        Quantity {detail.quantity}: {detail.allocated} generated, {detail.bound} bound, {detail.void} void, {detail.remaining} still to generate. Certificate {detail.registrationId}.
       </p>
       {canWrite ? (
         <div className="grid gap-space-md md:grid-cols-3">
-          <form className="flex flex-col gap-space-xs" onSubmit={(e) => { e.preventDefault(); void act(demoPath("qr", id, "serials"), count.trim() ? { count: Number(count) } : {}, (v) => `${v.newSerialCount} serials allocated.`); setCount(""); }} aria-label="Allocate serials">
-            <label className="font-label-md" htmlFor="qr-count">Serials to allocate (blank = all remaining)</label>
+          <form className="flex flex-col gap-space-xs" onSubmit={(e) => { e.preventDefault(); void act(demoPath("qr", id, "serials"), count.trim() ? { count: Number(count) } : {}, (v) => `${v.newSerialCount} serials generated.`); setCount(""); }} aria-label="Generate serials">
+            <label className="font-label-md" htmlFor="qr-count">Serials to generate (blank = all remaining)</label>
             <input id="qr-count" type="number" min={1} value={count} onChange={(e) => setCount(e.target.value)} className="px-3 py-2 rounded-lg bg-surface-container-low" data-testid="qr-count" />
-            <button type="submit" className="bg-primary text-on-primary px-space-md py-2 rounded-lg" data-testid="qr-allocate">Allocate</button>
+            <button type="submit" className="bg-primary text-on-primary px-space-md py-2 rounded-lg" data-testid="qr-allocate">Generate</button>
           </form>
-          <form className="flex flex-col gap-space-xs" onSubmit={(e) => { e.preventDefault(); const list = typed.length ? typed : bindable; void act(demoPath("qr", id, "bind"), { serials: list }, (v) => `${v.newlyBound} newly bound, ${v.alreadyBound} already bound.`); setBindText(""); }} aria-label="Bind serials">
-            <label className="font-label-md" htmlFor="qr-bind">Serials to bind (blank = allocated serials on this page)</label>
+          <form className="flex flex-col gap-space-xs" onSubmit={(e) => { e.preventDefault(); const list = typed.length ? typed : bindable; void act(demoPath("qr", id, "bind"), { serials: list }, (v) => {
+            const dup = Array.isArray(v.alreadyBoundSerials) ? (v.alreadyBoundSerials as string[]) : [];
+            const msg = `${v.newlyBound} newly bound, ${v.alreadyBound} already bound.${dup.length ? ` Already bound earlier, nothing changed: ${dup.join(", ")}${Number(v.alreadyBound) > dup.length ? " and more" : ""}.` : ""}`;
+            setBindMsg({ text: msg, warn: dup.length > 0 });
+            return msg;
+          }); setBindText(""); }} aria-label="Bind serials">
+            <label className="font-label-md" htmlFor="qr-bind">Serials to bind (blank = generated serials on this page)</label>
             <textarea id="qr-bind" rows={2} value={bindText} onChange={(e) => setBindText(e.target.value)} className="px-3 py-2 rounded-lg bg-surface-container-low font-mono" data-testid="qr-bind-text" />
             <button type="submit" className="bg-primary text-on-primary px-space-md py-2 rounded-lg" data-testid="qr-bind">Bind to certificate</button>
+            {bindMsg ? <p role="status" className={`font-body-sm ${bindMsg.warn ? "text-error font-semibold" : "text-on-surface"}`} data-testid="qr-bind-result">{bindMsg.text}</p> : null}
           </form>
           <form className="flex flex-col gap-space-xs" onSubmit={(e) => { e.preventDefault(); void act(demoPath("qr", id, "void"), { serial: voidSerial, reason: voidReason }, () => "Serial voided."); setVoidReason(""); }} aria-label="Void a serial">
             <label className="font-label-md" htmlFor="qr-void-serial">Serial to void</label>
@@ -258,7 +272,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
             {detail.serials.map((s) => (
               <tr key={s.serial} data-testid="qr-serial-row">
                 <td className="font-mono">{s.serial}</td>
-                <td><Pill>{s.state}</Pill></td>
+                <td><Pill>{stateLabel(s.state)}</Pill></td>
                 <td>{s.voidReason ?? ""}</td>
                 <td className="space-x-space-sm">
                   <button type="button" onClick={() => void copy(s.serial)} className="text-primary underline" aria-label={`Copy ${s.serial}`}>{copied === s.serial ? "Copied" : "Copy"}</button>
@@ -274,6 +288,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
         <span data-testid="qr-page">{detail.total === 0 ? "No serials yet" : `${offset + 1} to ${Math.min(offset + PAGE, detail.total)} of ${detail.total}`}</span>
         <button type="button" disabled={offset + PAGE >= detail.total} onClick={() => setOffset(offset + PAGE)} className="underline disabled:opacity-40">Next</button>
         <button type="button" disabled={detail.total === 0} onClick={() => void exportSerials()} className="ml-auto text-primary underline disabled:opacity-40" data-testid="qr-export-serials">Download all serials (CSV)</button>
+        <button type="button" disabled={detail.total === 0} onClick={() => void exportSerials(true)} className="text-primary underline disabled:opacity-40" data-testid="qr-export-serials-xlsx">Download all serials (Excel)</button>
       </div>
       <p className="font-label-sm text-on-surface-variant">A serial answers on the public check only once it is bound; a void or unbound serial is shown as not found.</p>
     </section>

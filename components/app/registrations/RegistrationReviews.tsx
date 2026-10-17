@@ -33,7 +33,6 @@ export function RegistrationReviews({ module, screen }: { module: Module; screen
     <ScreenChrome module={module} screen={screen} subtitle="Registration reviews" implemented={runtimeRouteFor(registrationReviewsHref())?.implemented}>
       <div className="space-y-space-md" data-testid="rev-queue">
         <IdentityStrip identity={identity} testId="rev-queue-identity" />
-        <p className="font-body-sm text-on-surface-variant" data-testid="rev-provisional">Provisional local rules, not BEE rules.</p>
         <ReadPanel
           title="Registration reviews"
           read={read}

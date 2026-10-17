@@ -16,6 +16,23 @@ import org.springframework.jdbc.core.RowMapper;
 /** The ledger status is SQL NULL for an active certificate: that row must read as "no override", not throw (found in the demo rehearsal). */
 class LedgerOverrideTest {
 
+    @org.junit.jupiter.api.BeforeEach
+    void demoOn() {
+        gov.bee.api.demo.DemoSwitch.forceForTest(true);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void demoBackToEnvironment() {
+        gov.bee.api.demo.DemoSwitch.forceForTest(null);
+    }
+
+    @Test
+    void outsideTheDemonstrationDeploymentTheLedgerNeverOverridesTheDates() {
+        gov.bee.api.demo.DemoSwitch.forceForTest(false);
+        assertNull(repoReturning(List.of("revoked")).ledgerOverride("x"));
+        assertNull(repoReturning(List.of("pending")).ledgerOverride("x"));
+    }
+
     @SuppressWarnings("unchecked")
     private PublicVerificationRepository repoReturning(List<String> rows) {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);

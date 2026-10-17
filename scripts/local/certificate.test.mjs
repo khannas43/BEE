@@ -26,7 +26,8 @@ test("each field of the certificate is checked", () => {
   assert.equal(bad({ registrationId: "RAC/2026/10001" }), null);
   assert.equal(bad({ validTo: "2026-10-06" }), null, "it must end after it starts");
   assert.equal(bad({ validFrom: "6 October 2026" }), null);
-  assert.equal(bad({ status: "revoked" }), null, "revoked is not built");
+  assert.equal(bad({ status: "cancelled" }), null, "only valid, expired, not yet valid and revoked exist");
+  assert.ok(bad({ status: "revoked" }), "revoked on the simulated ledger (contract 0.36.0)");
   assert.equal(bad({ stars: 0 }), null);
   assert.equal(bad({ stars: 6 }), null);
   assert.equal(bad({ localDemoCertificate: false }), null, "it is always a local demonstration");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { demoGet, demoPath, demoPost } from "@/lib/client/runtimeDemo";
+import { type MessageItem, type MessageList, markAllMessagesRead, markMessageRead, readMessages } from "@/lib/client/runtimeMessages";
 import { Icon } from "@/components/ui/Icon";
 import { istStamp } from "@/lib/client/istTime";
 
@@ -10,9 +10,6 @@ import { istStamp } from "@/lib/client/istTime";
  * needs a second signature or is committed, or a production submission is sent, queried or accepted. Nothing is sent anywhere: this screen is
  * the inbox and the phone. It re-reads every few seconds so a presenter can keep it open in a second window. Local demonstration, not a BEE system.
  */
-type Message = { id: string; channel: "email" | "sms"; address: string; kind: string; reference: string | null; subject: string | null; body: string; createdAt: string; read: boolean };
-type Body = { unread: number; items: Message[]; note: string };
-
 const FILTERS = [["all", "All"], ["email", "Email"], ["sms", "SMS"]] as const;
 const POLL_MS = 8000;
 
@@ -20,7 +17,7 @@ const when = (iso: string) => `${istStamp(iso)} IST`;
 
 export function MessagesDemo() {
   const [channel, setChannel] = useState<(typeof FILTERS)[number][0]>("all");
-  const [data, setData] = useState<Body | null>(null);
+  const [data, setData] = useState<MessageList | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [tick, setTick] = useState(0);
@@ -28,19 +25,19 @@ export function MessagesDemo() {
 
   useEffect(() => {
     let live = true;
-    void demoGet<Body>(demoPath("messages") + (channel === "all" ? "" : `?channel=${channel}`)).then((r) => {
+    void readMessages().then((r) => {
       if (!live) return;
       if (r.ok) {
-        setData(r.value);
+        setData(r.list);
         setError(null);
       } else {
-        setError(r.message);
+        setError(r.failure.message);
       }
     });
     return () => {
       live = false;
     };
-  }, [channel, tick]);
+  }, [tick]);
 
   useEffect(() => {
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") reload(); }, POLL_MS);
@@ -48,16 +45,18 @@ export function MessagesDemo() {
   }, [reload]);
 
   async function markRead(id: string) {
-    const r = await demoPost(demoPath("messages", id, "read"));
+    const r = await markMessageRead(id);
     if (r.ok) reload();
-    else setError(r.message);
+    else setError(r.failure.message);
   }
 
   async function markAll() {
-    const r = await demoPost(demoPath("messages", "read-all"));
+    const r = await markAllMessagesRead();
     if (r.ok) reload();
-    else setError(r.message);
+    else setError(r.failure.message);
   }
+
+  const shown = (data?.items ?? []).filter((m) => channel === "all" || m.channel === channel);
 
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-messages">
@@ -82,9 +81,9 @@ export function MessagesDemo() {
       </div>
       {error ? <p role="alert" className="text-error font-body-md">{error}</p> : null}
       {!data && !error ? <p role="status" className="font-body-md">Loading…</p> : null}
-      {data && data.items.length === 0 ? <p className="font-body-md" data-testid="messages-empty">No messages yet. They appear here as payments, ledger steps and production submissions happen.</p> : null}
+      {data && shown.length === 0 ? <p className="font-body-md" data-testid="messages-empty">No messages yet. They appear here as payments, ledger steps and production submissions happen.</p> : null}
       <ul className="space-y-space-sm" data-testid="messages-list">
-        {data?.items.map((m) => (
+        {shown.map((m: MessageItem) => (
           <li key={m.id} data-testid="message" data-channel={m.channel} data-read={m.read}
             className={`rounded-xl border p-space-md ${m.read ? "border-outline-variant bg-surface-card" : "border-primary/40 bg-primary/5"} ${m.channel === "sms" ? "max-w-xl" : ""}`}>
             <div className="flex flex-wrap items-center gap-space-sm font-label-sm text-on-surface-variant">

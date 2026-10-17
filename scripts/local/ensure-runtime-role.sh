@@ -157,6 +157,11 @@ GRANT EXECUTE ON FUNCTION app.demo_message_mark_read(uuid, uuid), app.demo_messa
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.demo_message FROM ${BEE_RUNTIME_DB_USER};
 SQL
 fi
+if psql_super -d bee_app -c "SELECT to_regprocedure('app.production_replace_rows(uuid, uuid)') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.production_replace_rows(uuid, uuid) TO ${BEE_RUNTIME_DB_USER};
+SQL
+fi
 if psql_super -d bee_app -c "SELECT to_regclass('app.ai_run') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 REVOKE UPDATE, DELETE, TRUNCATE ON app.ai_model, app.ai_run, app.ai_disposition, app.ai_audit_event FROM ${BEE_RUNTIME_DB_USER};

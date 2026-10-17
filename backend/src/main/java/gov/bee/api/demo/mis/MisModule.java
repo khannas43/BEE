@@ -39,8 +39,8 @@ public class MisModule implements DemoModule {
 
     @Override
     public DemoResult handle(Caller caller, String method, String id, String action, Map<String, String> query, Map<String, Object> body) {
-        boolean full = caller.roles().stream().map(IdentityRepository.RoleGrant::role).anyMatch(FULL_ROLES::contains);
-        boolean finance = caller.roles().stream().map(IdentityRepository.RoleGrant::role).anyMatch("finance"::equals);
+        boolean full = gov.bee.api.demo.DemoAccess.holdsAll(caller, FULL_ROLES);
+        boolean finance = gov.bee.api.demo.DemoAccess.holdsAll(caller, Set.of("finance"));
         if (!full && !finance) {
             return DemoResult.denied();
         }

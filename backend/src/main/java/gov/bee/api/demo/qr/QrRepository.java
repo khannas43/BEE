@@ -62,6 +62,21 @@ public class QrRepository {
         return jdbc().query("SELECT id FROM certificate WHERE application_id = ?", (rs, i) -> rs.getObject(1, UUID.class), applicationId).stream().findFirst();
     }
 
+    /** True when the certificate's revoke is committed on the simulated ledger: no new batches or serials for a revoked certificate (BL-232). */
+    public boolean ledgerRevoked(UUID certificateId) {
+        try {
+            return Boolean.TRUE.equals(jdbc().queryForObject("SELECT EXISTS (SELECT 1 FROM ledger_tx WHERE certificate_id = ? AND kind = 'revoke' AND state = 'committed')", Boolean.class, certificateId));
+        } catch (org.springframework.dao.DataAccessException e) {
+            return false; // the demonstration ledger is not there: nothing can be revoked on it
+        }
+    }
+
+    /** All serial capacity already made for the certificate, over every batch. */
+    public long quantityOfCertificate(UUID certificateId) {
+        Long n = jdbc().queryForObject("SELECT COALESCE(sum(quantity), 0) FROM qr_batch WHERE certificate_id = ?", Long.class, certificateId);
+        return n == null ? 0 : n;
+    }
+
     public UUID createBatch(UUID applicationId, UUID certificateId, UUID organisationId, int quantity, UUID actor) {
         UUID id = jdbc().queryForObject("INSERT INTO qr_batch (model_application_id, certificate_id, organisation_id, quantity, created_by) "
             + "VALUES (?, ?, ?, ?, ?) RETURNING id", UUID.class, applicationId, certificateId, organisationId, quantity, actor);

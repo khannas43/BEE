@@ -63,6 +63,9 @@ export type WebRoute =
   | "/api/runtime/notifications"
   | "/api/runtime/notifications/read-all"
   | "/api/runtime/notifications/{id}/read"
+  | "/api/runtime/messages"
+  | "/api/runtime/messages/read-all"
+  | "/api/runtime/messages/{id}/read"
   | "/api/runtime/demo";
 
 export type SpringRoute =
@@ -114,6 +117,9 @@ export type SpringRoute =
   | "/api/notifications"
   | "/api/notifications/read-all"
   | "/api/notifications/{id}/read"
+  | "/api/messages"
+  | "/api/messages/read-all"
+  | "/api/messages/{id}/read"
   | "/api/demo";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
@@ -138,7 +144,7 @@ export const safeOutcome = (code: unknown): string => (typeof code === "string" 
 export function springRoute(path: string): SpringRoute {
   const p = path.split("?")[0];
   if (p === "/api/me" || p === "/api/model-applications" || p === "/api/model-applications/eligible-brands" || p === "/actuator/health") return p;
-  if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/business-settings" || p === "/api/business-settings/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/fee-corrections/reversals" || p === "/api/public/verification" || p === "/api/notifications" || p === "/api/notifications/read-all") return p;
+  if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/business-settings" || p === "/api/business-settings/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/fee-corrections/reversals" || p === "/api/public/verification" || p === "/api/notifications" || p === "/api/notifications/read-all" || p === "/api/messages" || p === "/api/messages/read-all") return p;
   if (p === "/api/registrations" || p === "/api/registrations/eligible-brands") return p;
   if (/^\/api\/registrations\/[^/]+\/submit$/.test(p)) return "/api/registrations/{id}/submit";
   if (/^\/api\/registrations\/[^/]+\/fee-confirmation$/.test(p)) return "/api/registrations/{id}/fee-confirmation";
@@ -151,6 +157,7 @@ export function springRoute(path: string): SpringRoute {
   if (/^\/api\/registrations\/[^/]+$/.test(p)) return "/api/registrations/{id}";
   if (p.startsWith("/api/demo/")) return "/api/demo";
   if (/^\/api\/notifications\/[^/]+\/read$/.test(p)) return "/api/notifications/{id}/read";
+  if (/^\/api\/messages\/[^/]+\/read$/.test(p)) return "/api/messages/{id}/read";
   if (/^\/api\/fee-corrections\/proposals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/proposals/{id}/decision";
   if (/^\/api\/fee-corrections\/reversals\/[^/]+\/decision$/.test(p)) return "/api/fee-corrections/reversals/{id}/decision";
   if (/^\/api\/rating-schemes\/proposals\/[^/]+\/decision$/.test(p)) return "/api/rating-schemes/proposals/{id}/decision";

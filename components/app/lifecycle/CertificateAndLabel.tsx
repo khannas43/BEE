@@ -10,6 +10,8 @@ import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntime
 import { QrCode } from "@/components/app/lifecycle/QrCode";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { verificationUrl } from "@/lib/client/qr";
+import { datedFileName, saveBytes } from "@/lib/client/csv";
+import { buildCertificatePdf, PDF_TYPE } from "@/lib/client/pdf";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { type ModelApplication, readModelApplication, readModelApplicationList } from "@/lib/client/runtimeModelApplications";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
@@ -107,10 +109,17 @@ function Documents({ application }: { application: ModelApplication }) {
   }
   const url = verificationUrl(typeof window === "undefined" ? "" : window.location.origin, cert.registrationId);
   const stars = `${"★".repeat(cert.stars)}${"☆".repeat(5 - cert.stars)}`;
+  const revoked = cert.status === "revoked";
   return (
     <div className="space-y-space-md">
-      <div className="print-hidden">
-        <button type="button" onClick={() => window.print()} className="px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md" data-testid="certdocs-print">
+      <div className="print-hidden flex flex-wrap gap-space-sm">
+        <button type="button" onClick={() => saveBytes(datedFileName(`certificate-${cert.registrationId.replace(/\//g, "-")}`, "pdf"), buildCertificatePdf({
+          registrationId: cert.registrationId, organisation: application.organisation, brandName: application.brandName, modelNumber: application.modelNumber, category: application.category,
+          stars: cert.stars, verifiedIseer: cert.verifiedIseer, validFrom: cert.validFrom, validTo: cert.validTo, status: cert.status, schemeKey: cert.schemeKey, verifyUrl: url,
+        }), PDF_TYPE)} className="px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md" data-testid="certdocs-download-pdf">
+          Download PDF (certificate and label)
+        </button>
+        <button type="button" onClick={() => window.print()} className="px-space-md py-2 rounded-lg border border-primary text-primary font-label-md" data-testid="certdocs-print">
           Print or save as PDF
         </button>
       </div>
@@ -118,6 +127,7 @@ function Documents({ application }: { application: ModelApplication }) {
         <article className="border-2 border-on-surface rounded-xl p-space-lg bg-white text-black" data-testid="certificate-document" data-status={cert.status}>
           <p className="font-label-sm text-label-sm tracking-wide text-center" data-testid="certificate-demo">{CERTIFICATE_DOC_COPY.demo}</p>
           <h2 className="font-headline-md text-headline-md text-center mt-space-sm">Certificate of registration</h2>
+          {revoked ? <p className="mt-space-sm border-4 border-error text-error text-center font-headline-md text-headline-md font-bold tracking-widest py-2" role="alert" data-testid="certificate-revoked">REVOKED: THIS CERTIFICATE IS NO LONGER VALID</p> : null}
           <p className="text-center font-title-md text-title-md font-mono mt-space-sm" data-testid="certificate-registration">{cert.registrationId}</p>
           <dl className="grid grid-cols-2 gap-x-space-lg gap-y-space-xs mt-space-md font-body-md text-body-md">
             <dt className="text-on-surface-variant">Manufacturer</dt>
@@ -142,6 +152,7 @@ function Documents({ application }: { application: ModelApplication }) {
         <article className="border-4 border-on-surface rounded-xl p-space-lg bg-white text-black max-w-sm mx-auto print-break-before" data-testid="label-document">
           <p className="font-label-sm text-label-sm text-center" data-testid="label-demo">{CERTIFICATE_DOC_COPY.demo}</p>
           <h2 className="font-title-lg text-title-lg text-center mt-space-xs">Star label</h2>
+          {revoked ? <p className="mt-space-sm border-4 border-error text-error text-center font-headline-md text-headline-md font-bold tracking-widest py-2" role="alert" data-testid="label-revoked">REVOKED</p> : null}
           <p className="text-center text-4xl mt-space-sm" aria-label={`${cert.stars} stars`} data-testid="label-stars">{stars}</p>
           <p className="text-center font-title-md text-title-md mt-space-xs" data-testid="label-iseer">ISEER {cert.verifiedIseer}</p>
           <p className="text-center font-body-md text-body-md mt-space-sm" data-testid="label-model">{application.brandName} {application.modelNumber}</p>
@@ -149,7 +160,7 @@ function Documents({ application }: { application: ModelApplication }) {
           <div className="flex justify-center mt-space-md">
             <QrCode text={url} size={120} title={`Verification code for ${cert.registrationId}`} testId="label-qr" />
           </div>
-          <p className="text-center font-label-sm text-label-sm mt-1" data-testid="label-validity">Valid until {cert.validTo}</p>
+          <p className="text-center font-label-sm text-label-sm mt-1" data-testid="label-validity">{revoked ? "Revoked: no longer valid" : `Valid until ${cert.validTo}`}</p>
         </article>
       </div>
     </div>

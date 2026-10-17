@@ -1,6 +1,6 @@
-# Client demonstration: presenter script by use case (40 minutes)
+# Client demonstration: presenter script by use case (59 minutes)
 
-Rehearsed end to end on 16 October 2026. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username). The role dropdown at the top right of every console page switches to that role's demo account in one step, so you can change persona without signing out. Sign out with the arrow icon at the top right.
+Updated 17 October 2026. **Use case 9 (registration) was rehearsed end to end on screen on 17 October 2026 (the agency variant was checked through the lists and the Register only).** Use cases 1 to 6 were rehearsed end to end on screen; use case 7, the exports and use case 8 were checked screen by screen and through the live API. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username). The role dropdown at the top right of every console page switches to that role's demo account in one step, so you can change persona without signing out. Sign out with the arrow icon at the top right. More than ten sign-in attempts in a minute for one person pauses the sign-in for a minute, so type the password once, carefully. The left menu is one list under **Home**: dashboards first, then My work and approvals, registrations, applications, money, and the demonstration screens (Payments, QR batches, Certificate ledger and the others).
 
 **How to run this demo:** tell it as stories about people, not screens. Each use case below names the person, the problem they have today, what they do, and the outcome the audience should take away. Say the persona's name out loud and keep to their view of the work.
 
@@ -18,6 +18,7 @@ Rehearsed end to end on 16 October 2026. Every account uses the password `demo12
 | **Ravi**, helpdesk agent at BEE | Answers manufacturers' questions | `bee.helpdesk` | "Can I reply faster without guessing?" |
 | **Meera**, technical reviewer at BEE | Checks test reports against declarations | `bee.reviewer` | "Does the report say what the application claims?" |
 | **Dr. Rao**, Director | Needs the whole picture | `bee.director` | "How is the programme doing, right now?" |
+| **Anil**, auditor at BEE | Checks that the records can be trusted | `bee.auditor` | "Can I prove who did what, and that nothing was altered?" |
 | **Imran**, a shopper (no sign-in) | Checks a label in a shop | public `/verify` | "Is this AC's rating real?" |
 | **Pixel's compliance manager** | Another manufacturer | `pixel.applicant` | (used once, to show data separation) |
 
@@ -33,15 +34,19 @@ Rehearsed end to end on 16 October 2026. Every account uses the password `demo12
 | 31-36 | UC5. The Director sees the programme at a glance | Dr. Rao, Farid |
 | 36-40 | UC6. Five AI helpers that advise, never decide | Priya, Ravi, Meera |
 | 40-43 | UC7. Everyone is told | Neha, Farid, Sunita, Arjun, Priya |
-| 43-45 | Exports | Neha |
+| 43-45 | Exports (CSV, Excel, PDF certificate) | Neha |
+| 45-47 | UC8. The auditor checks the trail | Anil |
+| 47-59 | UC9. Becoming a registered brand: four people, nobody marks their own work | Neha, Farid, Priya, Dr. Rao, Pixel's manager |
 
-Keep three minutes spare. If you run late, drop the "if time" lines. UC1 to UC6 are unchanged; UC7 and the exports sit after them.
+For an audience of BEE officers, **move UC9 to minute 3**, straight after the Opening (it is where the programme starts, and each use case stands alone). The times of the other use cases then shift by twelve minutes.
+
+Keep three minutes spare. If you run late, drop the "if time" lines, then shorten UC7 and the exports, which can be shown in a few clicks each. Before you start: `docs/demo/DEMO_DAY_CHECKLIST.md`, a fresh reset and seed (see "If something goes wrong"), and an empty Downloads folder so the exports are easy to find.
 
 ---
 
 ## Opening (0-3 min). Persona: Dr. Rao, Director
 1. Open `/login`; point at the demo panel on the left and "Password for every demo account: demo123".
-2. Sign in as `bee.director`. You land on the MIS dashboard.
+2. Sign in as `bee.director`. You land on the **Executive dashboard**: eight figures across the top (applications received, in progress now, certificates issued, approval rate, days to approval, fees confirmed, ledger needs a look, high compliance risk) and ten charts below. Use the date range or the Manufacturer filter in the green banner (or click a manufacturer in "Certificates by manufacturer": every figure narrows to that one; **Reset filters** widens it). The **Director's dashboard** in the menu is the older, card-by-card view: six figures (awaiting approval, certificates issued, ledger needs a look, production with BEE, paid but fee not confirmed, highest compliance risk). Each card has its own chart (a ring for the mix, a small trend for the months). Use the date range in the green banner (**Last 30 days**, **Last 90 days**, **This year**, or From and To): every card, chart and list changes with it. Click **Highest compliance risk**: the list shows each organisation's score and **Why it is high**; click the arrow on a row to see every factor with its points (for example "33% of its applications were rejected, +24.5 of 25"). Search, sort, **Download CSV** and **Download Excel** work on any list. Say: "Every number is calculated at this moment, and each one opens the records behind it and says why." The MIS dashboard (UC5) is one click away in the menu.
 3. Say: "Dr. Rao will see the whole programme at the end. First, the people whose work feeds it." Point at the role dropdown: "Choosing a role signs in as that person, so we change hats in one click."
 
 ---
@@ -70,9 +75,9 @@ Keep three minutes spare. If you run late, drop the "if time" lines. UC1 to UC6 
 **Take-away:** only an approved model with a certificate can get QR codes, duplicates are blocked in the database, and anyone can check a code without an account.
 
 **Neha's story.** Menu: **QR batches and serials**.
-1. "Neha already has batches for her models, some partly used." Show allocated, bound and void counts (the newest are at the top).
+1. "Neha already has batches for her models, some partly used." Show generated, bound and void counts (the newest are at the top).
 2. Create a batch: choose "Nova Cool NC-RAC-12D (BEE/RAC/2026/10101)", quantity 100, **Create batch**. Say: "Only an approved model with a certificate can have QR codes."
-3. Open the new batch. **Allocate** 5 serials (format `BEEQ-` plus ten characters). In "Serials to bind" paste one serial and click **Bind to certificate** (do not press Enter, it only adds a line; the box clears after each bind; a blank box binds every allocated serial, so paste a serial each time). Paste the same serial again and bind: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
+3. Open the new batch. **Generate** 5 serials (format `BEEQ-` plus ten characters). In "Serials to bind" paste one serial and click **Bind to certificate** (do not press Enter, it only adds a line; the box clears after each bind; a blank box binds every allocated serial, so paste a serial each time). Paste the same serial again and bind: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
 4. Click **Verify this serial** on a bound serial: the public page confirms the certificate.
 
 **Imran's story.** Open `/verify` in a private window (no sign-in).
@@ -96,10 +101,10 @@ Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real databa
 
 **Imran checks.** `/verify` with `BEE/RAC/2026/10101`: valid.
 
-**Revocation.** As Arjun, **Revoke** with a reason (the pending revoke needs Sunita): switch to Secretary and commit it. Reload `/verify` for 10101: **Revoked**. Say: "The public verifier follows the ledger."
+**Revocation.** As Arjun, **Revoke** with a reason (the pending revoke needs Sunita): switch to Secretary and commit it. Reload `/verify` for 10101: **Revoked**. Say: "The public verifier follows the ledger." *If time:* switch to Neha: her own certificate card for 10101 now says **Revoked (simulated ledger)** too, and on **QR batches and serials** a new batch for 10101 is refused ("revoked on the simulated ledger: no new batches, serials or bindings"). Say: "A revoked certificate cannot be labelled any more."
 
 **Tamper detection.** As Sunita open the seeded 2025 certificates: `BEE/RAC/2025/90040` active; `90039` pending; `90038` failed (two attempts kept, **Retry**); `90037` **MISMATCH at transaction 1**. Say: "This record's hash was altered in the seed. Verification recomputes every hash and catches it."
-*If time:* **Amend** valid-to on an active certificate and commit as the other person.
+*If time:* **Amend** valid-to on an active certificate (a date up to ten years from today) and commit as the other person.
 
 ---
 
@@ -110,12 +115,12 @@ Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real databa
 
 **Neha files.** Menu: **Quarterly production**.
 1. "Neha's earlier quarters are accepted; 2026-Q3 is with BEE." New submission: quarter `2026-Q4`, **Create submission**, open it.
-2. Paste CSV rows (the screen shows the format) with one deliberately bad line, **Validate (dry run)**: per-row errors and "nothing was written". Fix the line, **Store rows**.
+2. The box is pre-filled with a full quarter (six rows, three months for each of two models). Change one number to text such as `abc` for one deliberately bad line, **Validate (dry run)**: per-row errors and "nothing was written". Fix the line, **Store rows**. Say: "Two rows for the same model whose periods overlap are refused too, so the same units cannot be counted twice."
 3. Attach evidence: CA name, membership number, statement and a small file. Say: "Stored and fingerprinted (SHA-256): recorded, not verified." **Submit for review**: editing is now closed.
 
 **Priya reviews.** Switch role to Programme officer. Same menu.
-4. Open the new submission or 2026-Q3. Show **Reconciliation against QR serials**: declared units against bound serials, flagged "Review" when over the 10 percent margin. Say: "A flag is a prompt for a person, not a decision." **Accept**, or **Raise a query** with a note.
-5. *If time:* back as Neha, see the query, edit and resubmit. Neha cannot review, and a reviewer from the submitting organisation is refused.
+4. Open the new submission or 2026-Q3. Show **Reconciliation against QR serials**: declared units against bound serials, flagged "Review" when over the 10 percent margin. Say: "A flag is a prompt for a person, not a decision." **Accept**, or **Raise a query** with a note (up to 800 characters).
+5. *If time:* back as Neha, see the query and correct the figures: change the rows in the box and click **Replace all rows with these** (it swaps every stored row, all or nothing, and only while there is a query), then **Submit for review**. Neha cannot review, and a reviewer from the submitting organisation is refused.
 
 ---
 
@@ -124,9 +129,11 @@ Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real databa
 **Problem today:** programme numbers come from different offices and are weeks old.
 **Take-away:** every number is calculated live from the database, and each role sees only its own tab.
 
-Menu: **MIS dashboard**.
+**Start on the Executive dashboard** (menu **Executive dashboard**; it is where the Director and the Secretary land after sign-in). Read the eight figures across the top, then the charts: received against issued by month, where the applications are now, decisions, star ratings, fees by month, certificates by manufacturer, the ledger, waiting time, production, payments, and the two lists (waiting longest, highest compliance risk). Click a manufacturer in "Certificates by manufacturer": every figure narrows to that one; **Reset filters** widens it again. Try **Last 30 days**. Say: "One page, every number live."
+
+Then the full set: menu **MIS dashboard** (the Director's dashboard from the opening is the one-page version; this is the full set of panels, in the same look: cards with icons, rings and trends, and **Show the figures** under each chart for the table behind it).
 1. Read the cards: applications, approvals, average days to approval, certificates, fees collected, open delegations, and the "as of ... data version" line. Say: "Every number is calculated at this moment."
-2. Tabs: Summary, Applications, Finance, Production, Certificates. Open a table under a chart. Click **Last 12 months**, **Refresh**. **Download CSV**.
+2. Tabs: Summary, Applications, Finance, Production, Certificates. Open a table under a chart. Click **Last 12 months**, **Refresh**. **Download CSV** or **Download Excel**.
 3. Say: "Some history is synthetic, which is why twelve months of data exist."
 4. *If time:* switch to Finance: only the Finance tab (role scoping).
 
@@ -143,8 +150,8 @@ Say: "Transparent rules and statistics, not machine learning. Every run records 
 4. **Helpdesk assist**: ask "How do I pay the fee?": a draft reply with ranked source articles and a confidence. Then ask a nonsense question: it escalates to a person instead of guessing.
 
 **Meera checks a test report** (`bee.reviewer`).
-5. **Document extraction**: run for `LOCAL-MA-0004` (already filled in); read the extracted fields against the declared ones. One field differs (efficiency): that is the point. Then **Record disposition** (accept, override or reject) as Meera.
-6. Reload: the history and dispositions persist. The auditor (`bee.auditor`) can read but not run or record; the Director and Secretary can also run the models; the AI never writes to any record.
+5. **Document extraction**: run for `LOCAL-MA-0004` (already filled in; Meera may check only applications assigned to her, and this one is); read the extracted fields against the declared ones. One field differs (efficiency): that is the point. Then **Record disposition** (accept, override or reject) as Meera.
+6. Reload: the history and dispositions persist. The auditor (`bee.auditor`) can read but not run or record; the Director and Secretary can also run the models (Meera, whose scope is "assigned", cannot run the models that look across all manufacturers); the AI never writes to any record.
 
 ---
 
@@ -166,17 +173,73 @@ Say clearly, once: "Simulated. No email and no text message is sent. Every addre
 ## Exports (43-45 min)
 **Persona: Neha** (`nova.applicant`), with one look at Priya's production list and Dr. Rao's MIS.
 **Problem today:** a list on screen is not a file the office can keep.
-**Take-away:** each list saves the rows the filters currently show, as a spreadsheet, and a label can be saved as a PDF.
+**Take-away:** each list saves the rows the filters currently show, as CSV or as a real Excel workbook, and the certificate with its label is a real PDF with a QR code a phone can scan.
 
-1. On **Payments**, **QR batches and serials**, **Certificate ledger** (both the certificate list and the block explorer) and **Quarterly production**, point at **Download CSV**. Type in the search box first. Say: "This file is what the filter shows, not only this page. It opens in Excel. It is saved to Downloads." Do not open the file on the projector unless someone asks.
-2. Open one QR batch and click **Download all serials (CSV)**. Say: "This is the print shop's file. Every serial is in it, with the public check link for that serial."
-3. On the **MIS dashboard**, **Download CSV** is one file for the panel that is open, not for every chart at once.
-4. Menu: **Model label**, then **Label preview** (`/app/model-label/label-preview`). Pick an approved application. Use the browser's Print and choose **Save as PDF**. Say: "That PDF is the certificate with its QR code, for a file or a printer. It is not sent anywhere."
+1. On **Payments**, **QR batches and serials**, **Certificate ledger** (both the certificate list and the block explorer) and **Quarterly production**, point at **Download CSV** and **Download Excel**. Type in the search box first. Say: "This file is what the filter shows, not only this page. The Excel file is a real workbook, with a bold header row and numbers as numbers. It is saved to Downloads." Do not open the file on the projector unless someone asks.
+2. Open one QR batch and click **Download all serials (CSV)** (or **(Excel)**). Say: "This is the print shop's file. Every serial is in it, with the public check link for that serial."
+3. On the **MIS dashboard**, **Download CSV** and **Download Excel** are one file for the panel that is open, not for every chart at once.
+4. Menu: **Model label**, then **Label preview** (`/app/model-label/label-preview`). Pick an approved application and click **Download PDF (certificate and label)**: page one is the certificate, page two the star label, each with a QR code that opens the public verification page when scanned. Say: "That PDF is for a file or a printer. It is not sent anywhere." **Print or save as PDF** still prints the on-screen layout.
+
+---
+
+## UC8. The auditor checks the trail (45-47 min)
+**Persona: Anil** (`bee.auditor`).
+**Problem today:** an auditor has to ask each office for its own records and trust the answers.
+**Take-away:** one screen shows whether every ledger chain still matches, who sent and who committed each change, where a person set aside an AI advice, and every recorded step in order.
+
+Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
+1. Click **Ledger chains**: the list puts the broken chain first, `BEE/RAC/2025/90037`, **MISMATCH** at transaction 1, and then every other certificate as **MATCH**. Say: "Every hash is recomputed now. This is the record that was altered in the seed."
+2. Click **Two-person commits**: "Committed by the same person who sent it: 0". Each row names the sender and the committer.
+3. Click **AI overrides and rejections**: each row has the person, their own value and the reason they gave.
+4. Click **All recorded activity**: payments, ledger, production and AI steps together, newest first. Set **Last 30 days** in the banner, type a name or a certificate in the search box, then **Download Excel**.
+5. Say: "The auditor can read everything and change nothing."
+
+---
+
+## UC9. Becoming a registered brand: four people, nobody marks their own work (47-59 min, or minute 3)
+**Personas: Neha** (`nova.applicant`), **Farid** (`bee.finance`), **Priya** (`bee.programme`), **Dr. Rao** (`bee.director`); optionally **Pixel's compliance manager** (`pixel.applicant`).
+**Problem today:** a brand is registered on paper. Nobody outside can see where the request is, and one official could do every step.
+**Take-away:** four people, four steps, and the database itself refuses a shortcut. The register changes the moment the Director approves, and taking an entry out needs a second person too. Say: "The rules are not a screen setting. They are in the database."
+
+**Part A. Neha files the request (3 min)** (menu: Registration requests)
+1. Sign in as `nova.applicant`. Open **Registration requests** (her own requests, with state and fee) and click **New request** (top right). The page is **Register a brand**.
+2. First type a brand name that is already on the register, `Nova Cool`, and click **Save draft**: the page answers "A brand with this name is already registered." Say: "A live brand name cannot be taken twice by the same owner." Then type a fresh name, `Nova Horizon` (do not use `Nova Aurora`; it is taken by a sample request), and **Save draft**.
+3. The request page opens in **Draft**. Under **Trade licence**, upload any small PDF (the certificate PDF from the Exports step will do) and click **Upload trade licence**. Point at the **Submit review** panel: the two readiness checks read "Trade licence uploaded: Unmet" and "Brand name still free: Met"; after the upload both are Met. The panel also shows the fee: INR 5000.00, tax 0.00%, rule REG:brand_registration, "Local demo fee (not BEE-approved)".
+4. Click **Submit**. The state becomes **Fee due**: "Fee due: INR 5000.00. Finance confirms it when it is received." Say: "Neha cannot confirm her own fee."
+5. Open **Notifications (email and SMS)**: "Registration filed", one email and one SMS. Say: "She is told at every step."
+
+**Part B. Farid confirms the fee (1.5 min)** (menu: Registration fees)
+1. Switch to `bee.finance`. **Notifications** has "Registration fee to confirm". Open **Registration fees** in the menu (between Finance queue and Fee receipts): the list shows every registration waiting for its fee. Click **Review** on Neha's request: the reference, organisation, brand, fee and tax are shown.
+2. Enter a receipt reference (for example `RCPT-REG-0001`) and the date received (the amount is filled in), then **Confirm fee received**. The screen says "It is now with the Programme officer for review."
+3. Say: "First separation: the person who pays is not the person who confirms. Finance staff who took any other part, and anyone from the payer's organisation, cannot confirm." Neha and Priya are both told.
+
+**Part C. Priya recommends, Dr. Rao approves (3 min)** (menu: Registration reviews)
+1. Switch to `bee.programme`. **Registration reviews**, tab **Waiting for me**, open Neha's request (or open the request from the link in the queue). The **Trail** shows who did what and when (in IST). Click **Recommend**. The state becomes "With the Director".
+2. Switch to `bee.director`. **Registration reviews** shows it waiting. Open it: the page says "This registers the brand for NOVA." Click **Approve**. The page says "Registered. Nova Horizon. It is on the register."
+3. Say: "Second separation: the person who recommends cannot approve. The person who filed, or anyone from the applicant's organisation, can never review their own request. The database refuses it even if a screen were changed." (The rules are covered by automated tests; do not try to break them live.)
+4. Switch to `nova.applicant`, **Notifications**: "Registration approved". Open the request: Neha sees the decisions; officers see every step with the person and the time. Say: "The applicant sees the decisions, the officers see the full trail."
+
+**Part D. The register updates at once (1.5 min)** (menu: Register)
+1. As `bee.director`, **Register**: four cards (brands, agency authorisations, waiting for a decision, decided) and four tabs. On **Brands**, search `Horizon`: the new brand is **Active**. Show a filter (Status, Owner), a sort and the page controls.
+2. As `nova.applicant`, start a **New model application**: the brand list now offers Nova Horizon. Say: "Only active brands can be used. The register is the single source of truth."
+
+**Part E. Taking an entry out also needs two people (2.5 min)**
+1. Switch to `bee.programme`. **Register**, tab **Brands**, search `Horizon`, click **Propose...**, reason "The owner has stopped trading.", **Submit**.
+2. Open the tab **Waiting for a decision**: Priya's row says "You proposed this; another person decides", with only a Withdraw button and no Approve. Say: "Third separation."
+3. Switch to `bee.director` (a message "Register revocation to decide" is waiting). The card **Waiting for a decision** counts it. Open that tab: the line reads "This revokes the brand and its authorisations." Click **Approve**.
+4. The brand now reads **Revoked** on the Brands tab; **History** lists the decision with the person and the time. Switch to `nova.applicant`: **Notifications** has "Register entry revoked", and Nova Horizon is no longer offered when starting a model application. Priya was told the outcome as well. Say: "One decision, and the brand's authorisations went with it."
+5. *If time:* propose another revocation and **Reject** it with a reason; it appears under History as Rejected with the note.
+
+**Part F. Agency variant (1.5 min, optional)**
+1. Switch to `pixel.applicant` (an agency). **Registration requests** lists its four agency requests: approved (Frostbyte, with its authorisation), with the Director (Cooldrift), with Programme (Arctic Pulse) and waiting for its fee (Glacier One).
+2. As `bee.director`, **Register**, tab **Agency authorisations**: filter Agency = Pixel. Say: "An agency may act for a brand only inside its authorisation period, and two overlapping authorisations for the same agency and brand are refused by the database."
+
+**Repeating the demo:** a revoked name can be filed again, so UC9 can be rerun without a reset (use a new name each time, for example `Nova Horizon 2`); the register then shows the earlier entries as history. For a clean start use the fresh reset and seed (see "If something goes wrong").
 
 ---
 
 ## Closing (1 min)
-"Neha pays and labels, Farid reconciles, Sunita and Arjun issue with two signatures, Priya checks production against QR, Dr. Rao sees it live, and Imran can verify at the shop. One audited database, role scoping and separation of duties. What is simulated here (Fabric, gateway, AI models) is replaced by the real integrations in the next phase."
+"Neha pays and labels, Farid reconciles, Sunita and Arjun issue with two signatures, Priya checks production against QR, Dr. Rao sees it live, Anil can prove who did what, and Imran can verify at the shop. One audited database, role scoping and separation of duties. What is simulated here (Fabric, gateway, AI models) is replaced by the real integrations in the next phase."
 
 ## What is simulated, and how to say it
 - **Fabric:** "A simulated Fabric test network. Same rules (pending, committed, failed, a second person commits, hash chain), no blockchain nodes."
@@ -185,13 +248,16 @@ Say clearly, once: "Simulated. No email and no text message is sent. Every addre
 - **CA evidence:** "Stored and fingerprinted, not verified."
 - **Data:** synthetic. Not a BEE record.
 - **Email and SMS:** "Simulated. Nothing is sent. Addresses end @bee-demo.invalid and the mobile numbers are made up. The inbox is Notifications (email and SMS); the mail icon beside the bell counts what is unread there."
-- **Exports:** "Download CSV saves the filtered rows to Downloads and opens in Excel. Do not open it on the projector unless asked. Label preview, then the browser's Print, Save as PDF, is the certificate with its QR code."
+- **Exports:** "Download CSV and Download Excel save the filtered rows to Downloads; the Excel file is a real workbook. Download PDF on the label preview is a real PDF of the certificate and the star label, each with a QR code that opens the public verification page. Do not open the files on the projector unless asked."
 
 ## If something goes wrong
 | Symptom | Do |
 |---|---|
 | A screen is blank or shows an error | Reload once. |
-| Sign-in is refused | Check the username (lower case, no spaces) and the password `demo123`. |
+| Sign-in is refused | Check the username (lower case, no spaces) and the password `demo123`. If it says too many attempts, wait a minute. |
+| Every demo screen says "not found" or the dashboards stay empty | The API was started without `BEE_DEMO_LOGIN=1`. Use the "Everything is down" row: the variables must be exported before `npm run local:up`. |
+| A figure looks out of date | Click **Refresh** on the dashboard; every figure is recalculated on each read. |
+| A download does nothing | The browser may be asking to allow several downloads: allow it for 127.0.0.1 and click again. |
 | Ledger screen fails or says permission denied for everyone | `bash scripts/local/ensure-runtime-role.sh`, reload. |
 | A step was already used | `npm run demo:seed` is safe to re-run but does not undo ledger or payments already made. For a fresh start: `npm run local:reset`, `bash scripts/local/ensure-runtime-role.sh`, `npm run demo:seed`. |
 | Everything is down | `export BEE_DEMO_LOGIN=1 BEE_MFA_REQUIRED=false; npm run local:down && npm run local:up`, then `node scripts/demo/login-setup.cjs apply` and `npm run demo:seed`. |
@@ -201,18 +267,18 @@ Say clearly, once: "Simulated. No email and no text message is sent. Every addre
 ## Cheat sheet (password for all: `demo123`)
 | Username | Persona | Use case |
 |---|---|---|
-| `bee.director` | Dr. Rao, Director | Opening, UC5 (lands on MIS), exports (MIS CSV) |
-| `nova.applicant` | Neha, manufacturer (Nova Cool) | UC1, UC2, UC4, UC7 (payment received, certificate on the ledger), exports |
-| `bee.finance` | Farid, Finance | UC1 (reconcile), UC5 (Finance tab), UC7 (Payment to confirm) |
+| `bee.director` | Dr. Rao, Director | Opening (lands on the Executive dashboard), UC5 (MIS), UC9 (approves, decides the revocation), exports (MIS CSV and Excel) |
+| `bee.auditor` | Anil, Auditor | UC8 (lands on the Auditor's dashboard) |
+| `nova.applicant` | Neha, manufacturer (Nova Cool) | UC1, UC2, UC4, UC7 (payment received, certificate on the ledger), UC9 (files the registration), exports |
+| `bee.finance` | Farid, Finance | UC1 (reconcile), UC5 (Finance tab), UC7 (Payment to confirm), UC9 (confirms the registration fee) |
 | `bee.secretary` | Sunita, Secretary | UC3 (submit, retry, amend, commit revoke), UC7 (second signature when she did not send it) |
 | `bee.admin` | Arjun, Administrator | UC3 (commit, revoke), UC7 (second signature when he did not send it) |
-| `bee.programme` | Priya, Programme officer | UC4 (review), UC6 (AI), UC7 (production figures to review) |
+| `bee.programme` | Priya, Programme officer | UC4 (review), UC6 (AI), UC7 (production figures to review), UC9 (recommends, proposes the revocation) |
 | `bee.helpdesk` | Ravi, Helpdesk | UC6 (helpdesk assist) |
-| `bee.reviewer` | Meera, Reviewer | UC6 (document extraction) |
-| `bee.auditor` | Auditor | read only |
-| `pixel.applicant` | Manufacturer, other organisation | shows data separation (UC2) |
+| `bee.reviewer` | Meera, Reviewer | UC6 (document extraction for an application assigned to her) |
+| `pixel.applicant` | Manufacturer, other organisation | shows data separation (UC2); UC9 agency variant |
 | public | Imran, shopper | `/verify` in UC2, UC3 |
 
 The persona names are only for storytelling; the demo accounts carry no personal names.
 
-Order of screens: sign in as Dr. Rao (MIS) → Neha, Payments → QR batches and serials → Sunita then Arjun, Certificate ledger → Neha then Priya, Quarterly production → Dr. Rao, MIS dashboard → Priya, Ravi and Meera, AI use cases → Notifications (email and SMS) for the people named in UC7 → Download CSV on the lists, then Model label, Label preview, Save as PDF.
+Order of screens: sign in as Dr. Rao (Executive dashboard, then MIS) → Neha, Payments → QR batches and serials → Sunita then Arjun, Certificate ledger → Neha then Priya, Quarterly production → Dr. Rao, MIS dashboard → Priya, Ravi and Meera, AI use cases → Notifications (email and SMS) for the people named in UC7 → Download CSV and Excel on the lists, then Model label, Label preview, Download PDF → Anil, Auditor's dashboard.

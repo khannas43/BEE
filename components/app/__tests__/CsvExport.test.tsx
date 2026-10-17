@@ -113,7 +113,7 @@ describe("CSV exports", () => {
     const button = await screen.findByTestId("list-export");
     expect((button as HTMLButtonElement).disabled).toBe(false);
     const all = await exported(button);
-    expect(all.text.startsWith(`${BOM}Reference,Brand,Model,Registration ID,Organisation,Quantity,Allocated,Bound,Void,Status,Created`)).toBe(true);
+    expect(all.text.startsWith(`${BOM}Reference,Brand,Model,Registration ID,Organisation,Quantity,Generated,Bound,Void,Status,Created`)).toBe(true);
     expect(all.name.startsWith("qr-batches-")).toBe(true);
     expect(all.name.endsWith(".csv")).toBe(true);
     vi.restoreAllMocks();

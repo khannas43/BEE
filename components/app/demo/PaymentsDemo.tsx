@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Pill } from "./DemoShell";
+import { DescriptionList } from "@/components/app/kit/StatePanels";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
+import { datedFileName, saveBytes } from "@/lib/client/csv";
+import { buildReceiptPdf, PDF_TYPE } from "@/lib/client/pdf";
 import { istStamp } from "@/lib/client/istTime";
 
 type Receipt = {
@@ -53,17 +56,24 @@ const th = "py-1 pr-3";
 const inr = (v: string) => `INR ${v}`;
 
 function ReceiptView({ receipt }: { receipt: Receipt }) {
+  const rows = [
+    { label: "Application", value: receipt.applicationReference },
+    { label: "Gateway reference", value: receipt.gatewayRef, mono: true },
+    { label: "Fee", value: receipt.feeInr ? inr(receipt.feeInr) : "-" },
+    { label: `Tax (${receipt.taxRatePercent ?? "0"}%)`, value: receipt.taxInr ? inr(receipt.taxInr) : "-" },
+    { label: "Paid in total", value: inr(receipt.amountInr) },
+    { label: "Paid at", value: receipt.paidAt ?? "-" },
+  ];
   return (
     <section className={card} aria-label={`Receipt ${receipt.receiptNumber}`} data-testid="pay-receipt">
-      <h3 className="font-title-md text-title-md text-on-surface">Receipt {receipt.receiptNumber}</h3>
-      <dl className="font-body-sm mt-1 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
-        <dt>Application</dt><dd>{receipt.applicationReference}</dd>
-        <dt>Gateway reference</dt><dd>{receipt.gatewayRef}</dd>
-        <dt>Fee</dt><dd>{receipt.feeInr ? inr(receipt.feeInr) : "-"}</dd>
-        <dt>Tax ({receipt.taxRatePercent ?? "0"}%)</dt><dd>{receipt.taxInr ? inr(receipt.taxInr) : "-"}</dd>
-        <dt>Paid in total</dt><dd>{inr(receipt.amountInr)}</dd>
-        <dt>Paid at</dt><dd>{receipt.paidAt ?? "-"}</dd>
-      </dl>
+      <div className="flex items-center justify-between gap-space-sm flex-wrap">
+        <h3 className="font-title-md text-title-md text-on-surface">Receipt {receipt.receiptNumber}</h3>
+        <button type="button" className={btn} data-testid="pay-receipt-download"
+          onClick={() => saveBytes(datedFileName(`receipt-${receipt.receiptNumber}`, "pdf"), buildReceiptPdf({ receiptNumber: receipt.receiptNumber, rows, note: receipt.note }), PDF_TYPE)}>
+          Download Receipt
+        </button>
+      </div>
+      <DescriptionList rows={rows} />
       <p className="font-body-sm text-on-surface-variant mt-1">{receipt.note}</p>
     </section>
   );

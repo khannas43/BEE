@@ -2,9 +2,9 @@
 
 **Holder:** cursor, from 18 October 2026.
 
-- Brief: `BRIEF_17_SNL_WP01_TRACEABILITY_BASELINE.md`
+- Brief: `BRIEF_17A_SNL_WP01_REVIEW_CORRECTIONS.md`
 - Branch: `cursor/snl-wp01-traceability`
-- Work package: `SNL-WP01 — traceability baseline`
-- Scope: documentation and analysis only; no application code, schema, migration, OpenAPI, generated-file, runtime, demo-data, or Word-document changes.
+- Work package: `SNL-WP01 — review corrections`
+- Scope: correct the source citations, role matrix, state models, public-form limitation and branch-wide Markdown whitespace identified by ChatGPT review.
 - Governing source: `SnL_Disha_Advisory_Manual.pdf`; use printed footer page numbers.
-- Completion: run `/bee-handback`, do not push, and return the handover report to the owner for ChatGPT review.
+- Completion: commit the corrections, run `/bee-handback`, do not push, and return the complete report for final ChatGPT acceptance.

@@ -216,4 +216,23 @@ export function buildCertificatePdf(c: CertificateFacts): Uint8Array {
   return buildPdf([certificatePage(c), labelPage(c)], { title: `Certificate ${c.registrationId}`, subject: "Local demonstration certificate and label" });
 }
 
+export type ReceiptFacts = { receiptNumber: string; rows: { label: string; value: string }[]; note?: string };
+
+/** One-page payment receipt: the receipt number as heading, one "Label: value" line per fact. */
+export function buildReceiptPdf(r: ReceiptFacts): Uint8Array {
+  const page = new Page();
+  page.text(50, 70, 18, "Payment receipt", "F2");
+  page.text(50, 94, 11, r.receiptNumber, "F3");
+  page.line(50, 106, PAGE_W - 50, 106);
+  let y = 134;
+  for (const row of r.rows) {
+    page.text(50, y, 11, `${row.label}:`, "F2");
+    page.text(200, y, 11, row.value);
+    y += 22;
+  }
+  if (r.note) page.text(50, y + 14, 9, r.note, "F1", 0.35);
+  page.text(50, 800, 8, "Local demonstration: simulated gateway, not a real payment.", "F1", 0.4);
+  return buildPdf([page], { title: `Receipt ${r.receiptNumber}`, subject: "Local demonstration payment receipt" });
+}
+
 export const PDF_TYPE = "application/pdf";

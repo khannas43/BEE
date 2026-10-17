@@ -17,8 +17,8 @@
 ### `payments` (simulated gateway; V52, V53)
 | Route | Who | What |
 |---|---|---|
-| `GET payments` | manufacturer, agency (own organisation); finance, admin (all) | payments and, for payers, the applications whose fee is due |
-| `GET payments/reconciliation` | finance, admin, auditor | paid versus confirmed totals, differences, receipts |
+| `GET payments` | manufacturer, agency (own organisation); finance, admin, auditor, director, secretary, programme (all, read only) | payments and, for payers, the applications whose fee is due |
+| `GET payments/reconciliation` | finance, admin, auditor, director, secretary, programme | paid versus confirmed totals, differences, receipts |
 | `POST payments` | manufacturer, agency, own organisation only | start a payment of exactly the fee snapshot total (`applicationId`; any amount in the body is ignored) |
 | `POST payments/{id}/callback` | the person who started it | the simulated gateway callback (`gatewayRef`, `outcome` paid or failed, `nonce`); a replay with the same nonce is recognised and has no effect |
 
@@ -34,7 +34,7 @@ Writers: manufacturer and agency (own organisation). All-batch readers: programm
 | `POST qr/{batch}/void` | void one serial with a reason |
 
 ### `ledger` (simulated Fabric; V56 to V58)
-Readers: programme, secretary, admin, auditor (all), manufacturer (own). Writers: programme, secretary, admin. A second person must commit what the first sent (`segregation_refused` otherwise).
+Readers: programme, secretary, director, admin, auditor (all), manufacturer (own). Writers: programme, secretary, admin. A second person must commit what the first sent (`segregation_refused` otherwise).
 | Route | What |
 |---|---|
 | `GET ledger` | certificates and their ledger status |

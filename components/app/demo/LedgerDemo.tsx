@@ -194,7 +194,7 @@ export function LedgerDemo() {
 
   return (
     <div className="p-space-md lg:p-space-lg" data-testid="demo-ledger">
-      <h1 className="font-headline-md text-headline-md text-on-surface">Certificate ledger (simulated Fabric)</h1>
+      <h1 className="font-headline-md text-headline-md text-on-surface">Certificate ledger</h1>
       <p className="mt-1 font-body-sm text-on-surface-variant">
         Each certificate has a chain of transactions; every hash is sha256 of the previous hash and the certificate fields. A second person must commit what the first submitted.
         {readOnly ? " You can read this ledger but not change it." : ""}

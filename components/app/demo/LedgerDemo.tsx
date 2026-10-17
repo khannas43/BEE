@@ -287,7 +287,7 @@ export function LedgerDemo() {
       ) : null}
 
       <section className="mt-space-lg" aria-labelledby="ledger-explorer">
-        <h2 id="ledger-explorer" className="font-title-md text-title-md text-on-surface">Block explorer (simulated)</h2>
+        <h2 id="ledger-explorer" className="font-title-md text-title-md text-on-surface">Block explorer</h2>
         {blocksError ? <p role="alert" className="text-error font-body-md mt-space-xs">The block explorer could not be loaded: {blocksError}</p> : null}
         <ExplorerTable blocks={blocks} />
       </section>

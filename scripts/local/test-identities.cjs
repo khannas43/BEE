@@ -36,6 +36,11 @@ function sql(statement) {
 }
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
+/** The maintenance login: the only one allowed to delete from the append-only message outbox (V66 guard). */
+function sqlMaint(statement) {
+  return execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${env("BEE_MAINT_DB_PASSWORD", "bee-local-maint")}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", env("BEE_MAINT_DB_USER", "bee_local_maint"), "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", statement]).toString().trim();
+}
+
 async function kc(pathname, init = {}) {
   const r = await fetch(`${KC}/admin/realms/${REALM}${pathname}`, { ...init, headers: { Authorization: `Bearer ${await totp.adminToken()}`, "Content-Type": "application/json", ...(init.headers || {}) } });
   if (!r.ok && r.status !== 404) throw new Error(`Keycloak ${init.method || "GET"} ${pathname}: HTTP ${r.status} ${await r.text()}`);
@@ -51,6 +56,8 @@ async function kcTwins(tag) {
 async function teardown(tag = "test") {
   for (const u of await kcTwins(tag)) await kc(`/users/${u.id}`, { method: "DELETE" });
   const ids = USERS.map((u) => q(usr(TAGS[tag] + u.n))).join(",");
+  // Steps a twin takes (a registration, a revocation, a payment) can write simulated messages to it; they block deleting the account.
+  sqlMaint(`DELETE FROM app.demo_message WHERE recipient_account_id IN (${ids})`);
   sql(`BEGIN; DELETE FROM app.idempotency_record WHERE account_id IN (${ids}); DELETE FROM app.assignment WHERE user_id IN (${ids}); DELETE FROM app.role_assignment WHERE user_id IN (${ids}); DELETE FROM app.organisation_membership WHERE user_id IN (${ids}); DELETE FROM app.user_account WHERE id IN (${ids}); COMMIT;`);
   for (const u of USERS) { try { fs.unlinkSync(path.join(totp.DIR, `${name(u.username, tag)}.json`)); } catch {} }
 }

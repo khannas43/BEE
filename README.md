@@ -38,7 +38,7 @@ Open http://127.0.0.1:3100/login. Every demo account uses the password `demo123`
 | Database tests (throwaway schemas on the local PostgreSQL) | `cd backend && mvn test -Dgroups=db -Dbee.test.excludedGroups=none` with the variables from `scripts/local/lib.sh` exported |
 | Full gate (about 25 minutes; needs the runtime up and **demo mode off**) | `npm run local:check` |
 
-The full gate counts records, so run it on a reset database **without** `demo:seed`, with `BEE_DEMO_LOGIN` unset, and with Keycloak sessions of the sample users cleared. Details: `docs/demo/DEMO_DAY_CHECKLIST.md` ("After the demo") and `docs/kit/`.
+The full gate counts records, so run it on a reset database **without** `demo:seed` (after `npm run local:reset` run `bash scripts/local/ensure-runtime-role.sh`: a reset leaves the API's database login with broader rights than the gate allows), with `BEE_DEMO_LOGIN` unset, and with Keycloak sessions of the sample users cleared (`node scripts/demo/end-sessions.cjs`). Details: `docs/demo/DEMO_DAY_CHECKLIST.md` ("After the demo") and `docs/kit/`.
 
 ## Where things are
 - `app/`, `components/`, `lib/`: portal pages, screens, client libraries (CSV, Excel, PDF and QR are hand-written, no libraries), server layer.

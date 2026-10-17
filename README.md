@@ -12,7 +12,7 @@ A working local demonstration of a Bureau of Energy Efficiency portal: manufactu
 - **Local runtime:** PostgreSQL and Keycloak in Docker (`local/compose.yaml`); API on 8090, portal on 3100, Keycloak on 8180, PostgreSQL on 5434.
 
 ## Run it
-Needs Node 20+, Java 17, Maven, Docker and `jq`.
+Needs Node 22 (the version used here), Java 17, Maven, Docker and `jq`.
 ```bash
 npm install
 npm run local:up        # database, Keycloak, API, portal

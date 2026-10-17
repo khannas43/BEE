@@ -1,6 +1,6 @@
 -- Demo slice S5 (MIS dashboard): extra SYNTHETIC history so the charts have shape. Applied only for the demonstration (not part of
 -- local/seed/seed.sql, so no existing seeded-row count changes). Idempotent: the whole block is skipped when SYN-MA-0001 exists.
--- Everything here is marked synthetic: organisations SYNTH-MFG-1..3, references SYN-MA-nnnn and SYN-REG-nnn, receipts SYN-RCPT-*,
+-- Everything here is marked synthetic: organisations SYNTH-MFG-1..3, references SYN-MA-nnnn and REG-2026-90nn (the format the registration screens accept), receipts SYN-RCPT-*,
 -- certificates BEE/RAC/<year>/9nnnn (local demonstration, not issued by BEE). Dates are relative to the day the seed runs.
 -- Requires local/seed/seed.sql first (people, the BEE organisation). Not BEE data and not BEE rules.
 BEGIN;
@@ -126,7 +126,7 @@ BEGIN
         VALUES (brand, 'Synthetic Registered Brand ' || n, org_ids[o], 'active', 'S5 MIS demo seed (synthetic)', 'synthetic', 'Synthetic registered brand') ON CONFLICT (id) DO NOTHING;
     END IF;
     INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version, created_at, registered_brand_id)
-      VALUES (reg, 'SYN-REG-' || lpad(n::text, 3, '0'), 'brand', org_ids[o], 'Synthetic Registered Brand ' || n, reg_state, 3, reg_sub - interval '2 days', brand)
+      VALUES (reg, 'REG-2026-' || (9000 + n)::text, 'brand', org_ids[o], 'Synthetic Registered Brand ' || n, reg_state, 3, reg_sub - interval '2 days', brand)
       ON CONFLICT (id) DO NOTHING;
     reg_ev := md5('s5-regsub-' || n)::uuid;
     INSERT INTO registration_submission_event (id, application_id, from_state, to_state, actor_account_id, actor_role, filing_organisation_id, occurred_at)
@@ -306,8 +306,8 @@ BEGIN
 
   -- Two Nova brand registrations sitting with Programme and the Director, so those lists are not empty.
   INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version, created_at) VALUES
-    ('00000000-0000-4000-c000-00000000e001', 'NOVA-REG-001', 'brand', nova, 'Nova Breeze Line (synthetic)', 'programme_review', 2, now() - interval '12 days'),
-    ('00000000-0000-4000-c000-00000000e002', 'NOVA-REG-002', 'brand', nova, 'Nova Quiet Line (synthetic)', 'director_approval', 3, now() - interval '20 days')
+    ('00000000-0000-4000-c000-00000000e001', 'REG-2026-9101', 'brand', nova, 'Nova Breeze Line (synthetic)', 'programme_review', 2, now() - interval '12 days'),
+    ('00000000-0000-4000-c000-00000000e002', 'REG-2026-9102', 'brand', nova, 'Nova Quiet Line (synthetic)', 'director_approval', 3, now() - interval '20 days')
   ON CONFLICT (id) DO NOTHING;
   INSERT INTO registration_submission_event (id, application_id, from_state, to_state, actor_account_id, actor_role, filing_organisation_id, occurred_at) VALUES
     ('00000000-0000-4000-c000-00000000e011', '00000000-0000-4000-c000-00000000e001', 'draft', 'fee_due', applicant, 'manufacturer', nova, now() - interval '12 days'),

@@ -8,7 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { categoriesForRole, categoryForPath } from "@/lib/categories";
 import { useRole } from "./RoleContext";
 import { useSpringIdentity } from "./SessionBadge";
-import { runtimeNavFor } from "@/lib/runtimeRoutes";
+import { menuRank, runtimeNavFor } from "@/lib/runtimeRoutes";
 import { useLang } from "@/components/i18n/LangProvider";
 
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -45,9 +45,12 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
             const records = isHome ? runtimeNav : [];
             const taken = new Set(records.map((r) => r.href));
             const kept = c.items.filter((it) => !taken.has(it.href));
-            // The Dashboard (the landing page) leads; then the working screens; then whatever else Home holds.
-            const lead = kept.filter((it) => it.href === "/app");
-            const rest = kept.filter((it) => it.href !== "/app");
+            const entries = [
+              ...kept.map((it) => ({ href: it.href, icon: it.icon, label: lang === "hi" ? it.hi : it.en, testId: undefined as string | undefined })),
+              ...records.map((r) => ({ href: r.href, icon: r.icon, label: lang === "hi" ? r.hi : r.en, testId: `runtime-nav-${r.href.split("/").pop()}` as string | undefined })),
+            ];
+            // Home is in one fixed order (the landing Dashboard first, then see runtimeRoutes); the other groups keep their own order.
+            if (isHome) entries.sort((x, y) => menuRank(x.href) - menuRank(y.href));
             return (
               <div key={c.id}>
                 <button
@@ -63,45 +66,9 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
                 </button>
                 {(isOpen || (isHome && records.length > 0)) && (
                   <div className="pb-space-xs" hidden={!isOpen} data-testid={isHome && records.length > 0 ? "runtime-nav" : undefined}>
-                    {lead.map((it) => {
-                      const active = pathname === it.href;
-                      return (
-                        <Link
-                          key={it.href + it.en}
-                          href={it.href}
-                          onClick={onNavigate}
-                          className={`flex items-center gap-space-sm pl-[30px] pr-space-md py-1.5 font-body-sm text-body-sm transition-colors ${
-                            active
-                              ? "bg-primary-container text-on-primary font-semibold"
-                              : "text-forest-light/80 hover:text-on-primary hover:bg-white/5"
-                          }`}
-                        >
-                          <Icon name={it.icon} size={16} className={active ? "text-solar-gold" : "text-forest-light/40"} fill={active} />
-                          <span className="flex-1">{lang === "hi" ? it.hi : it.en}</span>
-                        </Link>
-                      );
-                    })}
-                    {records.map((r) => (
-                      <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} compact />
+                    {entries.map((e) => (
+                      <SidebarLink key={e.href} href={e.href} icon={e.icon} label={e.label} active={pathname === e.href} onNavigate={onNavigate} testId={e.testId} compact />
                     ))}
-                    {rest.map((it) => {
-                      const active = pathname === it.href;
-                      return (
-                        <Link
-                          key={it.href + it.en}
-                          href={it.href}
-                          onClick={onNavigate}
-                          className={`flex items-center gap-space-sm pl-[30px] pr-space-md py-1.5 font-body-sm text-body-sm transition-colors ${
-                            active
-                              ? "bg-primary-container text-on-primary font-semibold"
-                              : "text-forest-light/80 hover:text-on-primary hover:bg-white/5"
-                          }`}
-                        >
-                          <Icon name={it.icon} size={16} className={active ? "text-solar-gold" : "text-forest-light/40"} fill={active} />
-                          <span className="flex-1">{lang === "hi" ? it.hi : it.en}</span>
-                        </Link>
-                      );
-                    })}
                   </div>
                 )}
               </div>

@@ -300,6 +300,26 @@ export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {
   return RUNTIME_ROUTES.find((r) => r.href === pathname);
 }
 
+/**
+ * The order of the menu, whatever the role: dashboards, then the person's own work, registrations, applications and certificates, then the
+ * scrutiny and approval steps, money, the demonstration screens and finally administration. A route not listed goes last, in the order above.
+ */
+const MENU_ORDER: string[] = [
+  "/app/demo/executive", "/app/demo/director", "/app/demo/auditor", "/app/demo/mis",
+  "/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval", "/app/workflow/application-review", "/app/workflow/workflow-history", "/app/workflow/escalation-dashboard",
+  "/app/registrations/requests", "/app/registrations/new", "/app/registrations/request", "/app/registrations/reviews", "/app/registrations/register",
+  "/app/model-label/new-model-application", "/app/model-label/model-dashboard", "/app/model-label/label-preview", "/app/model-label/notifications",
+  "/app/model-label/iame-scrutiny", "/app/model-label/bee-scrutiny", "/app/model-label/rating-calculation",
+  "/app/finance/finance-queue", "/app/finance/receipt", "/app/demo/payments",
+  "/app/demo/qr", "/app/demo/ledger", "/app/demo/production", "/app/demo/ai", "/app/demo/notifications",
+  "/app/administration/fee-rules", "/app/administration/rating-formula", "/app/administration/business-settings", "/app/delegations",
+];
+export const menuRank = (href: string) => {
+  if (href === "/app") return -1; // the landing Dashboard leads
+  const i = MENU_ORDER.indexOf(href);
+  return i === -1 ? MENU_ORDER.length : i;
+};
+
 /** Menu entries for a Spring identity: by role, or by a permission the roles hold; empty for no identity or no match. */
 export function runtimeNavFor(
   roles: readonly { role: string }[] | null | undefined,
@@ -308,5 +328,5 @@ export function runtimeNavFor(
   if (!roles?.length) return [];
   return RUNTIME_ROUTES.filter(
     (r) => roles.some((g) => r.navRoles.includes(g.role)) || (r.navCapabilities ?? []).some((c) => capabilities.includes(c)),
-  );
+  ).sort((a, b) => menuRank(a.href) - menuRank(b.href));
 }

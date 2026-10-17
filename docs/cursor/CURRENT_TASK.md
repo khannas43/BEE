@@ -1,8 +1,10 @@
 # Current Cursor task
 
-**Holder:** claude (ChatGPT-compatible baton), from 18 October 2026.
+**Holder:** cursor, from 18 October 2026.
 
-- Active Cursor task: none.
-- Last completed task: `BRIEF_17A_SNL_WP01_REVIEW_CORRECTIONS.md` on `cursor/snl-wp01-traceability`.
-- Result: WP1 accepted; BL-252 remains a non-blocking WP3 follow-up.
-- Next task: WP2 common workflow tasks and SLA brief to be prepared by ChatGPT.
+- Brief: `BRIEF_18C_SNL_WP02A_CLOCK_IDENTITY.md`
+- Branch: `cursor/snl-wp02a-workflow-foundation`
+- Work package: `SNL-WP02A — clock identity and due-date closure`
+- Scope: give each task/stage its own policy-pinned SLA clock, make due-dated task creation usable and atomic, and stop V69 from changing unrelated security-definer functions.
+- Boundaries: no journey wiring, API/OpenAPI, UI, outbox, scheduler, demo data, Word or PDF changes.
+- Completion: commit corrections, run full default and DB-tagged suites plus required web/type checks, run `/bee-handback`, and return the complete report for final ChatGPT review. Leave the owner-controlled untracked Word file untouched.

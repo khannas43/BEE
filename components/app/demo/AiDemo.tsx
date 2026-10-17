@@ -438,7 +438,8 @@ function UseCasePanel({ model, ctl }: { model: ModelCard; ctl: UseCaseController
   );
 }
 
-type ConfidenceWhy = { formula: string; table?: { head: string[]; rows: string[][] }; result: string };
+type ConfidenceWhy = { meaning: string; steps: string[]; table?: { head: string[]; rows: string[][] }; calc: string; example?: string };
+const GENERIC_MEANING = "How much data the model had to go on for this run. It is not the chance that the result is right, and a person still decides.";
 
 const p1 = (v: number) => `${Math.round(v * 100)}%`;
 
@@ -447,24 +448,40 @@ function confidenceWhy(run: RunDetail): ConfidenceWhy {
   const o = run.output as Record<string, unknown>;
   if (run.useCase === "compliance-risk") {
     const ents = (o.entities as RiskEntity[]) ?? [];
+    const conf = (apps: number) => (apps > 0 ? Math.min(0.95, 0.3 + 0.12 * apps) : 0.3);
     const groups = new Map<number, number>();
-    ents.forEach((e) => groups.set(e.applications, (groups.get(e.applications) ?? 0) + 1));
-    const rows = [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([apps, n]) => [String(apps), String(n), apps > 0 ? p1(Math.min(0.95, 0.3 + 0.12 * apps)) : "30%"]);
+    ents.forEach((e) => { const k = Math.min(e.applications, 6); groups.set(k, (groups.get(k) ?? 0) + 1); }); // 6 or more all reach the 95% cap
+    const sorted = [...groups.entries()].sort((a, b) => a[0] - b[0]);
+    const total = sorted.reduce((t, [apps, n]) => t + conf(apps) * n, 0);
+    const exApps = sorted.find(([a]) => a >= 1 && a <= 4)?.[0] ?? sorted[0]?.[0] ?? 0;
     return {
-      formula: "For each manufacturer the model starts at 30% and adds 12 points for every application on record, up to a limit of 95%: the more applications it has seen, the more it has to go on. The run's confidence is the average over all manufacturers.",
-      table: { head: ["Applications on record", "Manufacturers", "Confidence each"], rows },
-      result: `Average over ${ents.length} manufacturers = ${p1(run.confidence)}.`,
+      meaning: "How much evidence stands behind the scores in this run. A manufacturer with many applications on record has a score built on more evidence than one with few. It is not the chance that a manufacturer is non-compliant.",
+      steps: [
+        "Every manufacturer gets its own confidence: it starts at 30% and gains 12% for each application on record, and never goes above 95%. So 1 application = 42%, 3 = 66%, 5 = 90%, and 6 or more = 95%. A manufacturer with no applications stays at 30%.",
+        `The run's confidence is the plain average of those ${ents.length} figures: add them up and divide by ${ents.length}.`,
+      ],
+      table: { head: ["Applications on record", "Manufacturers", "Confidence of each", "Subtotal"], rows: sorted.map(([apps, n]) => [apps >= 6 ? "6 or more" : String(apps), String(n), p1(conf(apps)), `${(conf(apps) * n * 100).toFixed(0)} points`]) },
+      calc: `Total ${(total * 100).toFixed(0)} points ÷ ${ents.length} manufacturers = ${(total / Math.max(1, ents.length) * 100).toFixed(1)}%, shown as ${p1(run.confidence)}.`,
+      example: sorted.length ? `Example: a manufacturer with ${exApps} application${exApps === 1 ? "" : "s"} gets 30% + ${exApps} × 12% = ${p1(conf(exApps))}.` : undefined,
     };
   }
   if (run.useCase === "production-anomaly") {
     const series = (o.series as SeriesRow[]) ?? [];
+    const conf = (q: number) => Math.min(0.9, 0.3 + 0.1 * q);
     const groups = new Map<number, number>();
-    series.forEach((x) => groups.set(x.quarters.length, (groups.get(x.quarters.length) ?? 0) + 1));
-    const rows = [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([q, n]) => [String(q), String(n), p1(Math.min(0.9, 0.3 + 0.1 * q))]);
+    series.forEach((x) => { const k = Math.min(x.quarters.length, 6); groups.set(k, (groups.get(k) ?? 0) + 1); }); // 6 or more all reach the 90% cap
+    const sorted = [...groups.entries()].sort((a, b) => a[0] - b[0]);
+    const total = sorted.reduce((t, [q, n]) => t + conf(q) * n, 0);
+    const exQ = sorted.find(([q]) => q >= 1 && q <= 5)?.[0] ?? sorted[0]?.[0] ?? 0;
     return {
-      formula: "For each production series the model starts at 30% and adds 10 points for every quarter of history, up to a limit of 90%: a longer history gives a steadier idea of what is normal. The run's confidence is the average over all series.",
-      table: { head: ["Quarters of history", "Series", "Confidence each"], rows },
-      result: `Average over ${series.length} series = ${p1(run.confidence)}.`,
+      meaning: "How much production history stands behind the checks in this run. To decide whether a quarter looks unusual, the model compares it with the series' other quarters, so a series with a long history gives a firmer answer, flagged or not. It is not the chance that a flag is a real problem.",
+      steps: [
+        "Every production series (one model of one manufacturer) gets its own confidence: it starts at 30% and gains 10% for each quarter of history, and never goes above 90%. So 2 quarters = 50%, 4 = 70%, and 6 or more = 90%.",
+        `The run's confidence is the plain average of those ${series.length} figures: add them up and divide by ${series.length}.`,
+      ],
+      table: { head: ["Quarters of history", "Series", "Confidence of each", "Subtotal"], rows: sorted.map(([q, n]) => [q >= 6 ? "6 or more" : String(q), String(n), p1(conf(q)), `${(conf(q) * n * 100).toFixed(0)} points`]) },
+      calc: `Total ${(total * 100).toFixed(0)} points ÷ ${series.length} series = ${(total / Math.max(1, series.length) * 100).toFixed(1)}%, shown as ${p1(run.confidence)}.`,
+      example: sorted.length ? `Example: a series with ${exQ} quarter${exQ === 1 ? "" : "s"} of history gets 30% + ${exQ} × 10% = ${p1(conf(exQ))}.` : undefined,
     };
   }
   if (run.useCase === "rating-trends") {
@@ -474,9 +491,10 @@ function confidenceWhy(run: RunDetail): ConfidenceWhy {
       return [c.category, c.rSquared.toFixed(2), String(c.months.length), p1(conf)];
     });
     return {
-      formula: "For each category: 60% of the R² (how closely the monthly averages follow a straight line, 0 to 1) plus 40% of the months of data (8 months or more counts as full). The run's confidence is the average over the categories.",
+      meaning: GENERIC_MEANING,
+      steps: ["Each category's confidence is 60% of its R² (how closely the monthly averages follow a straight line, 0 to 1) plus 40% of its months of data (8 months or more counts as full).", `The run's confidence is the plain average over the ${cats.length} categories.`],
       table: { head: ["Category", "R² (line fit)", "Months of data", "Confidence"], rows },
-      result: `Average over ${cats.length} categories = ${p1(run.confidence)}.`,
+      calc: `Average over ${cats.length} categories = ${p1(run.confidence)}.`,
     };
   }
   if (run.useCase === "helpdesk-assist") {
@@ -484,18 +502,20 @@ function confidenceWhy(run: RunDetail): ConfidenceWhy {
     const best = top[0]?.score ?? 0;
     const threshold = Number(o.escalateThreshold ?? 0.45);
     return {
-      formula: "The model compares the question with every FAQ article by shared keywords (a cosine score from 0 to 1). Confidence is twice the best score, up to 95%. Below the escalation limit it does not draft an answer and asks a person.",
+      meaning: GENERIC_MEANING,
+      steps: ["The model compares the question with every FAQ article by shared keywords (a score from 0 to 1).", "Confidence is twice the best score, up to 95%. Below the escalation limit it does not draft an answer and asks a person."],
       table: { head: ["Best matching article", "Match score", "Confidence (2 × score)", "Escalation limit"], rows: [[top[0]?.title ?? "none", best.toFixed(3), p1(run.confidence), p1(threshold)]] },
-      result: `${p1(run.confidence)} is ${run.confidence < threshold ? "below" : "at or above"} the ${p1(threshold)} limit, so ${run.confidence < threshold ? "the question goes to a person" : "a draft reply is offered for an officer to review"}.`,
+      calc: `${p1(run.confidence)} is ${run.confidence < threshold ? "below" : "at or above"} the ${p1(threshold)} limit, so ${run.confidence < threshold ? "the question goes to a person" : "a draft reply is offered for an officer to review"}.`,
     };
   }
   const fields = (o.fields as ExField[]) ?? [];
   const found = fields.filter((f) => f.extracted !== null);
   const minConf = found.length ? Math.min(...found.map((f) => f.confidence)) : 0;
   return {
-    formula: "Each field is read from the report text by a pattern; the pattern has its own confidence. The run's confidence is the weakest found field's confidence, scaled by how many of the fields were found at all.",
+    meaning: GENERIC_MEANING,
+    steps: ["Each field is read from the report text by a pattern, and each pattern has its own confidence.", "The run's confidence is the weakest found field's confidence, scaled by how many of the fields were found at all."],
     table: { head: ["Field", "Found in report", "Field confidence"], rows: fields.map((f) => [f.field, f.extracted !== null ? "yes" : "no", f.extracted !== null ? p1(f.confidence) : "n/a"]) },
-    result: found.length === 0 ? "No field was found, so the confidence is the 10% floor." : `Lowest found field ${p1(minConf)} × ${found.length} of ${fields.length} found = ${p1(run.confidence)}.`,
+    calc: found.length === 0 ? "No field was found, so the confidence is the 10% floor." : `Lowest found field ${p1(minConf)} × ${found.length} of ${fields.length} found = ${p1(run.confidence)}.`,
   };
 }
 
@@ -505,8 +525,12 @@ function ConfidenceBox({ run }: { run: RunDetail }) {
   return (
     <Collapsible title="Confidence" icon="speed" testId="ai-confidence-box" hint={`Why ${pct(run.confidence)}?`}
       aside={<><span className="text-[22px] leading-6 font-extrabold text-[#14315E]" data-testid="ai-confidence">{pct(run.confidence)}</span><div className="w-24"><Meter value={run.confidence} /></div></>}>
-      <div className="space-y-2 font-body-sm" data-testid="ai-confidence-why">
-        <p>{why.formula}</p>
+      <div className="space-y-3 font-body-sm" data-testid="ai-confidence-why">
+        <div><div className="text-[11px] font-bold uppercase tracking-wider text-[#64748b]">What it means</div><p>{why.meaning}</p></div>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748b]">How it is worked out</div>
+          <ol className="list-decimal pl-5 space-y-1">{why.steps.map((t, i) => <li key={i}>{t}</li>)}</ol>
+        </div>
         {why.table ? (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -515,8 +539,8 @@ function ConfidenceBox({ run }: { run: RunDetail }) {
             </table>
           </div>
         ) : null}
-        <p className="font-semibold text-[#14315E]">{why.result}</p>
-        <p className="text-on-surface-variant">Confidence says how much data the model had to go on. It is not the chance that the result is right, and a person still decides.</p>
+        <p className="font-semibold text-[#14315E]">{why.calc}</p>
+        {why.example ? <p className="text-on-surface-variant">{why.example}</p> : null}
         <p className="text-[12px] text-[#475569]">model {run.modelVersion} · data version <code data-testid="ai-data-version">{run.dataVersion}</code></p>
       </div>
     </Collapsible>

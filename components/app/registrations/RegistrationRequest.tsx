@@ -41,6 +41,7 @@ import {
   uploadLicenceSignature,
 } from "@/lib/client/runtimeRegistrations";
 import { commandAdvice, gateRead } from "@/lib/client/runtimeHttp";
+import { istStamp } from "@/lib/client/istTime";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
@@ -157,8 +158,7 @@ function RequestBody({
       {registration.state === "approved" ? (
         <p data-testid="reg-registered">
           Registered. {registration.kind === "brand" ? registration.brandName : `${registration.brandName}${registration.validFrom ? ` from ${registration.validFrom}` : ""}${registration.validTo ? ` to ${registration.validTo}` : ""}`}
-          {registration.registeredBrandId ? ` · ${registration.registeredBrandId}` : ""}
-          {registration.registeredAuthorisationId ? ` · ${registration.registeredAuthorisationId}` : ""}
+          {registration.registeredBrandId || registration.registeredAuthorisationId ? " It is on the register." : ""}
         </p>
       ) : null}
       {registration.state === "rejected" ? (
@@ -336,7 +336,7 @@ function Trail({ steps }: { steps: NonNullable<Registration["trail"]> }) {
             {" · "}
             {REGISTRATION_ACTOR_LABEL[step.actorRole] ?? step.actorRole}
             {step.note ? ` · ${step.note}` : ""}
-            {` · ${step.at}`}
+            {` · ${istStamp(step.at, false)} IST`}
           </li>
         ))}
       </ul>

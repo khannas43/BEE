@@ -253,7 +253,7 @@ describe("registration reviews", () => {
     await resolveAt(1, docs);
     expect(screen.getByTestId("reg-registered").textContent).toContain("Registered.");
     expect(screen.getByTestId("reg-registered").textContent).toContain("Acme Cool");
-    expect(screen.getByTestId("reg-registered").textContent).toContain("11111111-1111-4111-8111-111111111111");
+    expect(screen.getByTestId("reg-registered").textContent).toContain("It is on the register.");
 
     mount(<RegistrationRequest {...frame} />);
     await resolveAt(0, registration({

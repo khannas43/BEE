@@ -1,6 +1,6 @@
 # Client demonstration: presenter script by use case (59 minutes)
 
-Updated 17 October 2026. **Use case 9 (registration) is a draft: it is written from the code and the screens and has not been rehearsed on screen yet; lines marked (check) need confirming at the first rehearsal, once the registration sample data is loaded.** Use cases 1 to 6 were rehearsed end to end on screen; use case 7, the exports and use case 8 were checked screen by screen and through the live API. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username). The role dropdown at the top right of every console page switches to that role's demo account in one step, so you can change persona without signing out. Sign out with the arrow icon at the top right. More than ten sign-in attempts in a minute for one person pauses the sign-in for a minute, so type the password once, carefully. The left menu is one list under **Home**: dashboards first, then My work and approvals, registrations, applications, money, and the demonstration screens (Payments, QR batches, Certificate ledger and the others).
+Updated 17 October 2026. **Use case 9 (registration) was rehearsed end to end on screen on 17 October 2026 (the agency variant was checked through the lists and the Register only).** Use cases 1 to 6 were rehearsed end to end on screen; use case 7, the exports and use case 8 were checked screen by screen and through the live API. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username). The role dropdown at the top right of every console page switches to that role's demo account in one step, so you can change persona without signing out. Sign out with the arrow icon at the top right. More than ten sign-in attempts in a minute for one person pauses the sign-in for a minute, so type the password once, carefully. The left menu is one list under **Home**: dashboards first, then My work and approvals, registrations, applications, money, and the demonstration screens (Payments, QR batches, Certificate ledger and the others).
 
 **How to run this demo:** tell it as stories about people, not screens. Each use case below names the person, the problem they have today, what they do, and the outcome the audience should take away. Say the persona's name out loud and keep to their view of the work.
 
@@ -202,38 +202,39 @@ Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
 **Take-away:** four people, four steps, and the database itself refuses a shortcut. The register changes the moment the Director approves, and taking an entry out needs a second person too. Say: "The rules are not a screen setting. They are in the database."
 
 **Part A. Neha files the request (3 min)** (menu: Registration requests)
-1. Sign in as `nova.applicant`. Open **Registration requests** and start a new brand request (check: the button name on the list).
-2. First type a brand name that is already on the register (for example `Nova Cool`) and read the answer (check: wording). Say: "A live brand name cannot be taken twice by the same owner." Then use a fresh name, for example `Nova Aurora`.
-3. Upload the trade licence: any small PDF (the certificate PDF from the Exports step will do). Point at the **readiness checks** (trade licence uploaded, brand name free and the others the page lists): they must be met before **Submit**.
-4. Click **Submit**. The page shows **Fee due: INR ...** with tax on its own line and the label "Local demo fee (not BEE-approved)". Say: "Neha cannot confirm her own fee."
-5. Open **Notifications (email and SMS)**: "Registration filed" with an email and an SMS. Say: "She is told at every step."
+1. Sign in as `nova.applicant`. Open **Registration requests** (her own requests, with state and fee) and click **New request** (top right). The page is **Register a brand**.
+2. First type a brand name that is already on the register, `Nova Cool`, and click **Save draft**: the page answers "A brand with this name is already registered." Say: "A live brand name cannot be taken twice by the same owner." Then type a fresh name, `Nova Horizon` (do not use `Nova Aurora`; it is taken by a sample request), and **Save draft**.
+3. The request page opens in **Draft**. Under **Trade licence**, upload any small PDF (the certificate PDF from the Exports step will do) and click **Upload trade licence**. Point at the **Submit review** panel: the two readiness checks read "Trade licence uploaded: Unmet" and "Brand name still free: Met"; after the upload both are Met. The panel also shows the fee: INR 5000.00, tax 0.00%, rule REG:brand_registration, "Local demo fee (not BEE-approved)".
+4. Click **Submit**. The state becomes **Fee due**: "Fee due: INR 5000.00. Finance confirms it when it is received." Say: "Neha cannot confirm her own fee."
+5. Open **Notifications (email and SMS)**: "Registration filed", one email and one SMS. Say: "She is told at every step."
 
-**Part B. Farid confirms the fee (1.5 min)**
-1. Switch to `bee.finance`. Open **Notifications**: "Registration fee to confirm". Open the request and confirm the fee (check: which screen Finance uses for a registration fee, the Finance queue or the request page).
-2. Say: "First separation: the person who pays is not the person who confirms." The request now waits with the Programme officer; Neha and Priya are both told.
+**Part B. Farid confirms the fee (1.5 min)** (menu: Registration fees)
+1. Switch to `bee.finance`. **Notifications** has "Registration fee to confirm". Open **Registration fees** in the menu (between Finance queue and Fee receipts): the list shows every registration waiting for its fee. Click **Review** on Neha's request: the reference, organisation, brand, fee and tax are shown.
+2. Enter a receipt reference (for example `RCPT-REG-0001`) and the date received (the amount is filled in), then **Confirm fee received**. The screen says "It is now with the Programme officer for review."
+3. Say: "First separation: the person who pays is not the person who confirms. Finance staff who took any other part, and anyone from the payer's organisation, cannot confirm." Neha and Priya are both told.
 
 **Part C. Priya recommends, Dr. Rao approves (3 min)** (menu: Registration reviews)
-1. Switch to `bee.programme`. **Registration reviews**, tab **Waiting for me**. Open Neha's request: the trail shows who did what and when (filed, fee confirmed). Click **Recommend**.
-2. Switch to `bee.director`. **Registration reviews** shows it waiting. Open it, read the line "This registers the brand for NOVA", click **Approve**.
-3. Say: "Second separation: the person who recommends cannot approve. And the person who filed, or anyone from the applicant's organisation, can never review their own request. The database refuses it even if a screen were changed." (If asked to prove it, the rules are covered by automated tests; do not try to break it live.)
-4. Switch to `nova.applicant`, **Notifications**: "Registration approved. You are on the register." Open the request: Neha sees the decisions; officers see every step, with the person and the time. Say: "The applicant sees the decisions, the officers see the full trail."
+1. Switch to `bee.programme`. **Registration reviews**, tab **Waiting for me**, open Neha's request (or open the request from the link in the queue). The **Trail** shows who did what and when (in IST). Click **Recommend**. The state becomes "With the Director".
+2. Switch to `bee.director`. **Registration reviews** shows it waiting. Open it: the page says "This registers the brand for NOVA." Click **Approve**. The page says "Registered. Nova Horizon. It is on the register."
+3. Say: "Second separation: the person who recommends cannot approve. The person who filed, or anyone from the applicant's organisation, can never review their own request. The database refuses it even if a screen were changed." (The rules are covered by automated tests; do not try to break them live.)
+4. Switch to `nova.applicant`, **Notifications**: "Registration approved". Open the request: Neha sees the decisions; officers see every step with the person and the time. Say: "The applicant sees the decisions, the officers see the full trail."
 
 **Part D. The register updates at once (1.5 min)** (menu: Register)
-1. Switch to `bee.director`. **Register**: the cards (brands, agency authorisations, waiting for a decision, decided). Search `Aurora`: the new brand is **Active** and its source is the registration. Show a filter (Status, Owner), a sort and the page controls.
-2. Switch to `nova.applicant`, start a **New model application** and open the brand list: the new brand is offered (check). Say: "Only active brands can be used. The register is the single source of truth."
+1. As `bee.director`, **Register**: four cards (brands, agency authorisations, waiting for a decision, decided) and four tabs. On **Brands**, search `Horizon`: the new brand is **Active**. Show a filter (Status, Owner), a sort and the page controls.
+2. As `nova.applicant`, start a **New model application**: the brand list now offers Nova Horizon. Say: "Only active brands can be used. The register is the single source of truth."
 
 **Part E. Taking an entry out also needs two people (2.5 min)**
-1. Switch to `bee.programme`. **Register**, tab **Brands**, find `Nova Aurora`, click **Propose...**, give a reason ("The owner has stopped trading"), **Submit**.
-2. Open the tab **Waiting for a decision**: Priya sees "You proposed this; another person decides" and no Approve button. Say: "Third separation."
-3. Switch to `bee.director`. The card **Waiting for a decision** shows 1 (and the Director has a message "Register revocation to decide"). Open it: "This revokes the brand and its authorisations". Click **Approve**.
-4. The brand now reads **Revoked** on the Brands tab; **History** lists the decision with the person and the time (Decided column, in IST). Switch to `nova.applicant`: **Notifications** has "Register entry revoked", and the brand is no longer offered when starting a model application (check). Say: "One decision, and the brand's authorisations went with it."
+1. Switch to `bee.programme`. **Register**, tab **Brands**, search `Horizon`, click **Propose...**, reason "The owner has stopped trading.", **Submit**.
+2. Open the tab **Waiting for a decision**: Priya's row says "You proposed this; another person decides", with only a Withdraw button and no Approve. Say: "Third separation."
+3. Switch to `bee.director` (a message "Register revocation to decide" is waiting). The card **Waiting for a decision** counts it. Open that tab: the line reads "This revokes the brand and its authorisations." Click **Approve**.
+4. The brand now reads **Revoked** on the Brands tab; **History** lists the decision with the person and the time. Switch to `nova.applicant`: **Notifications** has "Register entry revoked", and Nova Horizon is no longer offered when starting a model application. Priya was told the outcome as well. Say: "One decision, and the brand's authorisations went with it."
 5. *If time:* propose another revocation and **Reject** it with a reason; it appears under History as Rejected with the note.
 
 **Part F. Agency variant (1.5 min, optional)**
-1. Switch to `pixel.applicant` (an agency). **Registration requests** lists its agency requests (sample data): one approved with its authorisation, one with Programme, one with the Director, one waiting for its fee (check once the sample data is loaded).
+1. Switch to `pixel.applicant` (an agency). **Registration requests** lists its four agency requests: approved (Frostbyte, with its authorisation), with the Director (Cooldrift), with Programme (Arctic Pulse) and waiting for its fee (Glacier One).
 2. As `bee.director`, **Register**, tab **Agency authorisations**: filter Agency = Pixel. Say: "An agency may act for a brand only inside its authorisation period, and two overlapping authorisations for the same agency and brand are refused by the database."
 
-**Repeating the demo:** a revoked name can be filed again, so UC9 can be rerun without a reset; the register then shows the earlier entries as history. For a clean start use the fresh reset and seed (see "If something goes wrong").
+**Repeating the demo:** a revoked name can be filed again, so UC9 can be rerun without a reset (use a new name each time, for example `Nova Horizon 2`); the register then shows the earlier entries as history. For a clean start use the fresh reset and seed (see "If something goes wrong").
 
 ---
 

@@ -199,6 +199,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["See the request", "Upload the trade licence", "See the fee and submit", "Follow the request until Programme review", "Recommend or return", "Approve, return or reject", "See why it was returned and resubmit"],
   },
   {
+    href: "/app/registrations/fees",
+    en: "Registration fees",
+    hi: "पंजीकरण शुल्क",
+    icon: "request_quote",
+    navRoles: ["finance"],
+    implemented: ["List registrations waiting for their fee", "Confirm that the fee was received"],
+  },
+  {
     href: "/app/registrations/reviews",
     en: "Registration reviews",
     hi: "पंजीकरण समीक्षा",
@@ -310,7 +318,7 @@ const MENU_ORDER: string[] = [
   "/app/registrations/requests", "/app/registrations/new", "/app/registrations/request", "/app/registrations/reviews", "/app/registrations/register",
   "/app/model-label/new-model-application", "/app/model-label/model-dashboard", "/app/model-label/label-preview", "/app/model-label/notifications",
   "/app/model-label/iame-scrutiny", "/app/model-label/bee-scrutiny", "/app/model-label/rating-calculation",
-  "/app/finance/finance-queue", "/app/finance/receipt", "/app/demo/payments",
+  "/app/finance/finance-queue", "/app/registrations/fees", "/app/finance/receipt", "/app/demo/payments",
   "/app/demo/qr", "/app/demo/ledger", "/app/demo/production", "/app/demo/ai", "/app/demo/notifications",
   "/app/administration/fee-rules", "/app/administration/rating-formula", "/app/administration/business-settings", "/app/delegations",
 ];

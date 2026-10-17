@@ -51,6 +51,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
+    href: "/app/demo/executive",
+    en: "Executive dashboard",
+    hi: "कार्यकारी डैशबोर्ड",
+    icon: "space_dashboard",
+    navRoles: ["director", "secretary", "programme", "admin"],
+    implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
+  },
+  {
     href: "/app/demo/director",
     en: "Director's dashboard",
     hi: "निदेशक डैशबोर्ड",

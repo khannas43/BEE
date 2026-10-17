@@ -111,9 +111,9 @@ class DashboardDatabaseTest {
 
     @Test
     void whoMayOpenWhichDashboard() {
-        assertEquals(List.of("director"), get(DIRECTOR, null, null).body().get("views"));
+        assertEquals(List.of("executive", "director"), get(DIRECTOR, null, null).body().get("views"));
         assertEquals(List.of("auditor"), get(AUDITOR, null, null).body().get("views"));
-        assertEquals(List.of("director", "auditor"), get(ADMIN, null, null).body().get("views"));
+        assertEquals(List.of("executive", "director", "auditor"), get(ADMIN, null, null).body().get("views"));
         assertEquals("role_not_permitted", get(AUDITOR, "director", null).code());
         assertEquals("role_not_permitted", get(DIRECTOR, "auditor", null).code());
         assertEquals("role_not_permitted", get(REVIEWER, null, null).code());
@@ -217,6 +217,44 @@ class DashboardDatabaseTest {
         assertEquals(0, ((Number) drillNone.get("total")).intValue());
         var trend = ((List<Map<String, Object>>) drillNone.get("charts")).stream().filter(c -> "trend".equals(c.get("kind"))).findFirst().orElseThrow();
         assertEquals(1, ((List<?>) trend.get("data")).size(), "a one-month range is a one-month trend");
+    }
+
+    @SuppressWarnings("unchecked")
+    static Number kpi(Map<String, Object> body, String key) {
+        return (Number) ((List<Map<String, Object>>) body.get("kpis")).stream().filter(k -> key.equals(k.get("key"))).findFirst().orElseThrow().get("value");
+    }
+
+    @SuppressWarnings("unchecked")
+    static List<Map<String, Object>> chartData(Map<String, Object> body, String key) {
+        return (List<Map<String, Object>>) ((List<Map<String, Object>>) body.get("charts")).stream().filter(c -> key.equals(c.get("key"))).findFirst().orElseThrow().get("data");
+    }
+
+    @Test
+    void theExecutiveDashboardCountsWhatIsInTheTablesAndFollowsTheFilters() {
+        assertEquals("role_not_permitted", get(AUDITOR, "executive", null).code());
+        assertEquals("role_not_permitted", get(REVIEWER, "executive", null).code());
+        assertEquals("not_found", get(DIRECTOR, "executive", "x").code());
+        var all = get(DIRECTOR, "executive", null).body();
+        assertEquals(8, ((List<?>) all.get("kpis")).size());
+        assertEquals(10, ((List<?>) all.get("charts")).size());
+        int certificates = owner.queryForObject("SELECT count(*) FROM certificate", Integer.class);
+        assertEquals(certificates, kpi(all, "issued").intValue());
+        assertEquals(certificates, chartData(all, "stars").stream().mapToInt(p -> ((Number) p.get("value")).intValue()).sum(), "the star chart adds up to the certificates");
+        assertEquals(certificates, chartData(all, "ledger").stream().mapToInt(p -> ((Number) p.get("value")).intValue()).sum(), "the ledger chart adds up to the certificates");
+        int received = owner.queryForObject("SELECT count(*) FROM model_application WHERE state <> 'draft'", Integer.class);
+        assertEquals(received, kpi(all, "received").intValue());
+        assertEquals(received, chartData(all, "pipeline").stream().mapToInt(p -> ((Number) p.get("value")).intValue()).sum());
+        // one manufacturer: fewer or equal everywhere, and exactly its own certificates
+        var org = module.handle(DIRECTOR, "GET", "executive", null, Map.of("organisation", NOVA_ORG.toString()), Map.of());
+        assertEquals("ok", org.code() == null ? "ok" : org.code());
+        int novaCerts = owner.queryForObject("SELECT count(*) FROM certificate c JOIN model_application a ON a.id = c.application_id WHERE a.organisation_id = ?::uuid", Integer.class, NOVA_ORG.toString());
+        assertEquals(novaCerts, kpi(org.body(), "issued").intValue());
+        // a range that holds nothing: zero everywhere, no failure
+        var none = module.handle(DIRECTOR, "GET", "executive", null, Map.of("from", "2001-01-01", "to", "2001-01-31"), Map.of());
+        assertEquals(0, kpi(none.body(), "issued").intValue());
+        assertEquals(0, kpi(none.body(), "received").intValue());
+        assertEquals("validation_failed", module.handle(DIRECTOR, "GET", "executive", null, Map.of("from", "2026-02-01", "to", "2026-01-01"), Map.of()).code());
+        assertEquals("validation_failed", module.handle(DIRECTOR, "GET", "executive", null, Map.of("organisation", "nope"), Map.of()).code());
     }
 
     @SuppressWarnings("unchecked")

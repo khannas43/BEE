@@ -85,6 +85,7 @@ Read only; everything is computed from the live tables on each call. Director's 
 | Route | What |
 |---|---|
 | `GET dashboard` | the dashboards the caller may open (`views`) |
+| `GET dashboard/executive` | the one executive dashboard (Director view roles): eight headline figures and ten charts (received against issued by month, pipeline now, decisions, star ratings, fees by month, certificates by manufacturer, ledger state, waiting time, accepted production by quarter, payments), the six open applications waiting longest and the highest compliance risks. Optional `from`, `to` (yyyy-mm-dd) and `organisation` (one manufacturer's identifier) narrow every figure; with no dates the monthly charts show the last twelve months |
 | `GET dashboard/{director\|auditor}` | the six tiles: figure, unit, icon, colour tone, the columns, the first five rows and the charts (a donut, ranked bars and a monthly trend, each following the date range; the trend is the last twelve months when no range is set) |
 | `GET dashboard/{view}/{tile}` | the full list behind a tile (up to 200 rows, with the true total) and the same charts. Director tiles: `awaiting_approval`, `certificates`, `ledger_attention`, `production_review`, `fees_unconfirmed`, `ai_risk`. Auditor tiles: `ledger_integrity` (every chain re-verified, broken ones first), `two_person_proof`, `overrides`, `payment_trail`, `production_reviews`, `activity` (all recorded steps, newest first) |
 

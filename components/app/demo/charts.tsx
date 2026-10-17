@@ -109,3 +109,40 @@ export function TrendChart({ data, title, colour = "#1f6f4a", height = 110, unit
     </div>
   );
 }
+
+export type TwoPoint = { label: string; a: number; b: number };
+
+/** Two series side by side for each month (for example received against issued), with a legend and a text alternative. */
+export function GroupedBars({ data, title, aName, bName, height = 150 }: { data: TwoPoint[]; title: string; aName: string; bName: string; height?: number }) {
+  const w = 640;
+  const pad = { l: 4, r: 4, t: 8, b: 20 };
+  const max = Math.max(1, ...data.flatMap((d) => [d.a, d.b]));
+  const slot = (w - pad.l - pad.r) / Math.max(1, data.length);
+  const bw = Math.min(14, slot / 2.6);
+  const y = (v: number) => pad.t + (1 - v / max) * (height - pad.t - pad.b);
+  const sa = data.reduce((n, d) => n + d.a, 0);
+  const sb = data.reduce((n, d) => n + d.b, 0);
+  return (
+    <div data-testid="dash-chart-grouped">
+      <div className="flex gap-4 font-label-md text-on-surface mb-1">
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#3b5ea8" }} />{aName} <strong className="tabular-nums">{formatNumber(sa)}</strong></span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#2e7d4f" }} />{bName} <strong className="tabular-nums">{formatNumber(sb)}</strong></span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height} role="img" aria-label={`${title}: ${aName} ${formatNumber(sa)}, ${bName} ${formatNumber(sb)} in all`} preserveAspectRatio="none">
+        <title>{title}</title>
+        {[0.25, 0.5, 0.75].map((f) => <line key={f} x1={pad.l} x2={w - pad.r} y1={pad.t + f * (height - pad.t - pad.b)} y2={pad.t + f * (height - pad.t - pad.b)} stroke="#e6eaf0" strokeWidth="1" />)}
+        {data.map((d, i) => {
+          const cx = pad.l + slot * i + slot / 2;
+          return (
+            <g key={d.label}>
+              <title>{`${monthName(d.label)}: ${aName} ${d.a}, ${bName} ${d.b}`}</title>
+              <rect x={cx - bw - 1} y={y(d.a)} width={bw} height={Math.max(0, height - pad.b - y(d.a))} rx="2" fill="#3b5ea8" />
+              <rect x={cx + 1} y={y(d.b)} width={bw} height={Math.max(0, height - pad.b - y(d.b))} rx="2" fill="#2e7d4f" />
+              {data.length <= 14 || i % 2 === 0 ? <text x={cx} y={height - 5} textAnchor="middle" style={{ font: "500 10px Inter, system-ui, sans-serif" }} fill="#667085">{monthName(d.label)}</text> : null}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}

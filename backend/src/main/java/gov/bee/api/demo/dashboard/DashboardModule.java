@@ -177,9 +177,13 @@ public class DashboardModule implements DemoModule {
         }
         if (id == null) {
             List<String> views = new ArrayList<>();
+            if (director) views.add("executive");
             if (director) views.add("director");
             if (auditor) views.add("auditor");
             return DemoResult.ok(Map.of("views", views, "note", NOTE));
+        }
+        if ("executive".equals(id)) {
+            return executive(director, action, query);
         }
         boolean isDirector = "director".equals(id);
         if (!isDirector && !"auditor".equals(id)) {
@@ -206,6 +210,41 @@ public class DashboardModule implements DemoModule {
             return DemoResult.notFound();
         }
         return DemoResult.ok(tileBody(id, action, range, DRILL, true));
+    }
+
+    /** The single executive dashboard: every chart and figure for one date range and, optionally, one manufacturer. */
+    private DemoResult executive(boolean director, String action, Map<String, String> query) {
+        if (!director) {
+            return DemoResult.denied();
+        }
+        if (action != null) {
+            return DemoResult.notFound();
+        }
+        LocalDate from;
+        LocalDate to;
+        try {
+            from = date(query.get("from"));
+            to = date(query.get("to"));
+        } catch (DateTimeParseException e) {
+            return DemoResult.invalid("Dates are written as yyyy-mm-dd.");
+        }
+        if (from != null && to != null && from.isAfter(to)) {
+            return DemoResult.invalid("The start date is after the end date.");
+        }
+        java.util.UUID org = null;
+        String o = query.get("organisation");
+        if (o != null && !o.isBlank()) {
+            try {
+                org = java.util.UUID.fromString(o.trim());
+            } catch (IllegalArgumentException e) {
+                return DemoResult.invalid("The manufacturer is not a valid identifier.");
+            }
+        }
+        return DemoResult.ok(new ExecutiveDashboard(jdbc(), () -> {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> e = (List<Map<String, Object>>) engines().complianceRisk().output().get("entities");
+            return e;
+        }).build(from, to, org));
     }
 
     private static LocalDate date(String s) {

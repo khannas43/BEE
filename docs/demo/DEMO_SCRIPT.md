@@ -126,7 +126,9 @@ Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real databa
 **Problem today:** programme numbers come from different offices and are weeks old.
 **Take-away:** every number is calculated live from the database, and each role sees only its own tab.
 
-Menu: **MIS dashboard** (the Director's dashboard from the opening is the one-page version; this is the full set of panels, in the same look: cards with icons, rings and trends, and **Show the figures** under each chart for the table behind it).
+**Start on the Executive dashboard** (menu **Executive dashboard**; it is where the Director and the Secretary land after sign-in). Read the eight figures across the top, then the charts: received against issued by month, where the applications are now, decisions, star ratings, fees by month, certificates by manufacturer, the ledger, waiting time, production, payments, and the two lists (waiting longest, highest compliance risk). Click a manufacturer in "Certificates by manufacturer": every figure narrows to that one; **Reset filters** widens it again. Try **Last 30 days**. Say: "One page, every number live."
+
+Then the full set: menu **MIS dashboard** (the Director's dashboard from the opening is the one-page version; this is the full set of panels, in the same look: cards with icons, rings and trends, and **Show the figures** under each chart for the table behind it).
 1. Read the cards: applications, approvals, average days to approval, certificates, fees collected, open delegations, and the "as of ... data version" line. Say: "Every number is calculated at this moment."
 2. Tabs: Summary, Applications, Finance, Production, Certificates. Open a table under a chart. Click **Last 12 months**, **Refresh**. **Download CSV** or **Download Excel**.
 3. Say: "Some history is synthetic, which is why twelve months of data exist."

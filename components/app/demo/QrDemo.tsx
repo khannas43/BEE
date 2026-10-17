@@ -168,6 +168,7 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
   const [offset, setOffset] = useState(0);
   const [count, setCount] = useState("");
   const [bindText, setBindText] = useState("");
+  const [bindMsg, setBindMsg] = useState<{ text: string; warn: boolean } | null>(null);
   const [voidSerial, setVoidSerial] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
@@ -239,10 +240,16 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
             <input id="qr-count" type="number" min={1} value={count} onChange={(e) => setCount(e.target.value)} className="px-3 py-2 rounded-lg bg-surface-container-low" data-testid="qr-count" />
             <button type="submit" className="bg-primary text-on-primary px-space-md py-2 rounded-lg" data-testid="qr-allocate">Allocate</button>
           </form>
-          <form className="flex flex-col gap-space-xs" onSubmit={(e) => { e.preventDefault(); const list = typed.length ? typed : bindable; void act(demoPath("qr", id, "bind"), { serials: list }, (v) => `${v.newlyBound} newly bound, ${v.alreadyBound} already bound.`); setBindText(""); }} aria-label="Bind serials">
+          <form className="flex flex-col gap-space-xs" onSubmit={(e) => { e.preventDefault(); const list = typed.length ? typed : bindable; void act(demoPath("qr", id, "bind"), { serials: list }, (v) => {
+            const dup = Array.isArray(v.alreadyBoundSerials) ? (v.alreadyBoundSerials as string[]) : [];
+            const msg = `${v.newlyBound} newly bound, ${v.alreadyBound} already bound.${dup.length ? ` Already bound earlier, nothing changed: ${dup.join(", ")}${Number(v.alreadyBound) > dup.length ? " and more" : ""}.` : ""}`;
+            setBindMsg({ text: msg, warn: dup.length > 0 });
+            return msg;
+          }); setBindText(""); }} aria-label="Bind serials">
             <label className="font-label-md" htmlFor="qr-bind">Serials to bind (blank = allocated serials on this page)</label>
             <textarea id="qr-bind" rows={2} value={bindText} onChange={(e) => setBindText(e.target.value)} className="px-3 py-2 rounded-lg bg-surface-container-low font-mono" data-testid="qr-bind-text" />
             <button type="submit" className="bg-primary text-on-primary px-space-md py-2 rounded-lg" data-testid="qr-bind">Bind to certificate</button>
+            {bindMsg ? <p role="status" className={`font-body-sm ${bindMsg.warn ? "text-error font-semibold" : "text-on-surface"}`} data-testid="qr-bind-result">{bindMsg.text}</p> : null}
           </form>
           <form className="flex flex-col gap-space-xs" onSubmit={(e) => { e.preventDefault(); void act(demoPath("qr", id, "void"), { serial: voidSerial, reason: voidReason }, () => "Serial voided."); setVoidReason(""); }} aria-label="Void a serial">
             <label className="font-label-md" htmlFor="qr-void-serial">Serial to void</label>

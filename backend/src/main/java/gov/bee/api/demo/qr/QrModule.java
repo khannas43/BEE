@@ -246,10 +246,12 @@ public class QrModule implements DemoModule {
                 return DemoResult.invalid(s + " is void and cannot be bound.");
             }
         }
+        List<String> already = serials.stream().filter(s -> "bound".equals(states.get(s))).limit(20).toList();
         int changed = repo.bind(batch.id(), serials, caller.accountId());
         Map<String, Object> out = new LinkedHashMap<>(summary(repo.batch(batch.id()).orElseThrow()));
         out.put("newlyBound", changed);
         out.put("alreadyBound", serials.size() - changed);
+        out.put("alreadyBoundSerials", already);
         return DemoResult.ok(out);
     }
 

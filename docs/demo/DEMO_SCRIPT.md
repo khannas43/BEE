@@ -72,9 +72,9 @@ Keep three minutes spare. If you run late, drop the "if time" lines, then shorte
 **Take-away:** only an approved model with a certificate can get QR codes, duplicates are blocked in the database, and anyone can check a code without an account.
 
 **Neha's story.** Menu: **QR batches and serials**.
-1. "Neha already has batches for her models, some partly used." Show allocated, bound and void counts (the newest are at the top).
+1. "Neha already has batches for her models, some partly used." Show generated, bound and void counts (the newest are at the top).
 2. Create a batch: choose "Nova Cool NC-RAC-12D (BEE/RAC/2026/10101)", quantity 100, **Create batch**. Say: "Only an approved model with a certificate can have QR codes."
-3. Open the new batch. **Allocate** 5 serials (format `BEEQ-` plus ten characters). In "Serials to bind" paste one serial and click **Bind to certificate** (do not press Enter, it only adds a line; the box clears after each bind; a blank box binds every allocated serial, so paste a serial each time). Paste the same serial again and bind: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
+3. Open the new batch. **Generate** 5 serials (format `BEEQ-` plus ten characters). In "Serials to bind" paste one serial and click **Bind to certificate** (do not press Enter, it only adds a line; the box clears after each bind; a blank box binds every allocated serial, so paste a serial each time). Paste the same serial again and bind: the screen says "0 newly bound, 1 already bound". Say: "Duplicate control is enforced in the database, not only on screen."
 4. Click **Verify this serial** on a bound serial: the public page confirms the certificate.
 
 **Imran's story.** Open `/verify` in a private window (no sign-in).

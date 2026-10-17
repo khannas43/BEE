@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress | 5% | WP1 | R1 | Brief 18 / WP2A foundation in progress |
+| WP2 | Common workflow tasks and SLA | In progress | 35% | WP1 | R1 | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); V69; journey wiring deferred |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -252,23 +252,23 @@ At the end of each development session, update the package status, progress, com
 | Tracking field | Current value |
 |---|---|
 | Status | In progress |
-| Progress | 5% |
+| Progress | 35% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | Current registration and model flows already have assignments, returns, resubmission, decisions, history and notifications in separate implementations |
-| Next action | Implement Brief 18: shared workflow persistence and working-day SLA foundation without changing existing journeys |
+| Existing foundation | V69 workflow tables; `WorkingDaySla`; internal `WorkflowFoundationRepository`; legacy registration/model flows unchanged |
+| Next action | WP2B: wire journeys, common APIs, notifications, supervisor queue, 60-day job (BL-253/256) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
 #### WP2 checklist
 
-- [ ] Define the workflow configuration and transition policy.
-- [ ] Add task, assignment, SLA-clock and escalation migrations.
-- [ ] Add structured discrepancy, response and disposition records.
-- [ ] Add working-day calendar and paused-clock calculation.
-- [ ] Add supervisor queue and recorded reassignment.
-- [ ] Add immutable transition and assignment events.
+- [x] Define the workflow configuration and transition policy ([SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); policy as data, A08/BL-255/256 unresolved).
+- [x] Add task, assignment, SLA-clock and escalation migrations (V69; escalation deferred).
+- [x] Add structured discrepancy, response and disposition records.
+- [x] Add working-day calendar and paused-clock calculation (`WorkingDaySla`, clock events).
+- [ ] Add supervisor queue and recorded reassignment (reassignment events only; queue UI deferred).
+- [x] Add immutable transition and assignment events (`workflow_task_event`, append-only guards).
 - [ ] Add notification events in the same transaction as each transition.
 - [ ] Build common return, respond, recommend, approve and reject APIs.
 - [ ] Build common applicant and officer workflow components.
@@ -284,16 +284,16 @@ At the end of each development session, update the package status, progress, com
 
 | Evidence | Result or link |
 |---|---|
-| Plan and schema | Pending |
-| Migration range | Pending |
-| Contract version | Pending |
-| Unit and contract tests | Pending |
-| Database tests | Pending |
+| Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md) |
+| Migration range | V69 (`V69__workflow_foundation.sql`) |
+| Contract version | Pending (no OpenAPI in WP2A) |
+| Unit and contract tests | `WorkingDaySlaTest` |
+| Database tests | `WorkflowFoundationDatabaseTest` (@Tag db) |
 | UI tests | Pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | Pending |
-| Completion commit or PR | Pending |
+| Review | Pending ChatGPT after Brief 18 |
+| Completion commit or PR | Task branch commit |
 
 #### WP2 acceptance
 
@@ -777,7 +777,7 @@ Add one row whenever a package status or material result changes.
 |---|---|---|---|---|---|
 | 18 Oct 2026 | WP1 | In progress | Gate pending (90%) | WP01 baseline + Brief 17A review corrections; BL-252/256; live form not fetched (504) | ChatGPT WP1 acceptance; BL-252; then WP2 |
 | 18 Oct 2026 | WP1 | Gate pending (90%) | Complete (100%) | ChatGPT accepted the PDF-backed provisional baseline; A01–A20 remain provisional | Begin WP2; retry secondary live-form comparison in WP3 (BL-252) |
-| 18 Oct 2026 | WP2 | Not started | In progress (5%) | Brief 18 prepared for common workflow persistence and working-day SLA foundation | Cursor implements WP2A; ChatGPT reviews evidence before journey wiring |
+| 18 Oct 2026 | WP2 | In progress (5%) | In progress (35%) | Brief 18 WP2A: V69 schema, WorkingDaySla, db/unit tests | WP2B wiring, APIs, UI; BL-257 |
 
 ### 6.2 Standard completion record
 

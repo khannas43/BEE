@@ -742,7 +742,7 @@ function AnomalyTable({ series, synthetic, selKey, onSelect }: { series: SeriesR
   });
   const sel = series.find((s) => s.series === selKey) ?? null;
   const flaggedIdx = sel ? sel.quarters.map((q, i) => (sel.flags.some((f) => f.quarter === q.quarter) ? i : -1)).filter((i) => i >= 0) : [];
-  const fieldCls = "rounded-lg border border-outline-variant px-3 py-1.5 font-body-sm bg-surface-card";
+  const fieldCls = "rounded-lg border border-outline-variant px-3 !h-10 !py-0 box-border font-body-sm bg-surface-card";
   return (
     <div className="mt-4 space-y-3" data-testid="ai-output-anomaly">
       {synthetic ? <p className="font-body-sm font-semibold">Sample production data is shown because there are no live production submissions yet.</p> : null}

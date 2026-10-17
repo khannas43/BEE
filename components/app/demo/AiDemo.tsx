@@ -441,14 +441,19 @@ function UseCasePanel({ model, ctl }: { model: ModelCard; ctl: UseCaseController
 function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; onChanged: () => void }) {
   const out = run.output;
   const isRisk = run.useCase === "compliance-risk";
-  const entities = isRisk ? ((out.entities as RiskEntity[]) ?? []) : [];
-  const [selKey, setSelKey] = useState<string | null>(entities[0]?.key ?? null);
+  const isAnomaly = run.useCase === "production-anomaly";
+  // The results that can be selected, as (key, name used in the evidence field): the evidence of one result starts with "<name>: " (risk) or "<name> " (anomaly).
+  const choices: { key: string; name: string; sep: string }[] = isRisk
+    ? ((out.entities as RiskEntity[]) ?? []).map((e) => ({ key: e.key, name: e.name, sep: ": " }))
+    : isAnomaly ? ((out.series as SeriesRow[]) ?? []).map((x) => ({ key: x.series, name: x.series, sep: " " })) : [];
+  const [selKey, setSelKey] = useState<string | null>(isAnomaly ? (((out.series as SeriesRow[]) ?? []).find((x) => x.flags.length > 0) ?? ((out.series as SeriesRow[]) ?? [])[0])?.series ?? null : choices[0]?.key ?? null);
   const [showAll, setShowAll] = useState(false);
-  const selEntity = entities.find((e) => e.key === selKey) ?? null;
-  const prefix = selEntity ? `${selEntity.name}: ` : "";
-  const evidence = isRisk && selEntity && !showAll
+  const selChoice = choices.find((c) => c.key === selKey) ?? null;
+  const prefix = selChoice ? `${selChoice.name}${selChoice.sep}` : "";
+  const evidence = selChoice && !showAll
     ? out.evidence.filter((e) => e.field.startsWith(prefix)).map((e) => ({ ...e, field: e.field.slice(prefix.length) }))
     : out.evidence;
+  const what = isAnomaly ? "series" : "manufacturers";
   return (
     <div className="space-y-space-md" data-testid="ai-run-view">
       <Box title="Result" icon="insights" testId="ai-result" aside={<Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">run {when(run.createdAt)} by {run.createdBy}</Chip>}>
@@ -464,8 +469,9 @@ function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; 
         <Output run={run} selKey={selKey} onSelect={(k) => { setSelKey(k); setShowAll(false); }} />
         {out.note ? <p className="mt-space-sm font-body-sm text-on-surface-variant">{plainNote(String(out.note))}</p> : null}
       </Box>
-      <Box title={isRisk && selEntity && !showAll ? `Evidence for ${selEntity.name}` : "Evidence for this run"} icon="fact_check" testId="ai-evidence"
-        aside={isRisk && selEntity ? <button type="button" className="font-label-md text-primary underline" onClick={() => setShowAll(!showAll)} data-testid="ai-evidence-all">{showAll ? `Show only ${selEntity.name}` : "Show evidence for all manufacturers"}</button> : undefined}>
+      <Box title={selChoice && !showAll ? `Evidence for ${selChoice.name}` : "Evidence for this run"} icon="fact_check" testId="ai-evidence"
+        aside={selChoice ? <button type="button" className="font-label-md text-primary underline" onClick={() => setShowAll(!showAll)} data-testid="ai-evidence-all">{showAll ? `Show only ${selChoice.name}` : `Show evidence for all ${what}`}</button> : undefined}>
+        {isAnomaly && selChoice && !showAll && evidence.length === 0 ? <p className="font-body-sm mb-space-sm" data-testid="ai-evidence-none">This series was not flagged, so there is no anomaly evidence for it. The chart above shows its quarters.</p> : null}
         <EvidenceTable key={`${selKey}-${showAll}`} evidence={evidence} />
       </Box>
       <DispositionPanel run={run} canRun={canRun} onChanged={onChanged} />
@@ -566,7 +572,7 @@ function DispositionPanel({ run, canRun, onChanged }: { run: RunDetail; canRun: 
 interface Feature { feature: string; value: number; weight: number; contribution: number }
 interface RiskEntity { key: string; name: string; synthetic: boolean; applications: number; score: number; band: string; confidence: number; features: Feature[] }
 interface Quarter { quarter: string; units: number; zVsOthers: number }
-interface SeriesRow { series: string; quarters: Quarter[]; boundSerials: number | null; flags: { type: string; quarter: string; detail: string }[]; status: string }
+interface SeriesRow { series: string; organisation?: string; model?: string; quarters: Quarter[]; boundSerials: number | null; flags: { type: string; quarter: string; detail: string }[]; status: string }
 interface TrendCat { category: string; ratings: number; starDistribution: number[]; months: { month: string; meanIseer: number; count: number }[]; slopePerMonth: number; rSquared: number; forecast: { nextMonthMeanIseer: number; low95: number; high95: number } | null }
 interface Answer { articleId: number; title: string; category: string; score: number }
 interface ExField { field: string; extracted: string | null; declared: string | null; status: string; confidence: number }
@@ -636,34 +642,113 @@ function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; sel
   );
 }
 
+const ANOMALY_SORT = (s: SeriesRow, k: string): string | number => {
+  const last = s.quarters[s.quarters.length - 1];
+  return k === "series" ? s.series : k === "org" ? s.organisation ?? "" : k === "status" ? s.status : k === "flags" ? s.flags.length : k === "latest" ? last?.units ?? 0 : s.boundSerials ?? -1;
+};
+const FLAG_WORD: Record<string, string> = { iqr_fence: "Outside the usual range (IQR)", z_score_vs_own_history: "Jump against its own history (z-score)", units_exceed_bound_serials: "More units than QR serials bound" };
+
+/** Production series: filter by search, status and kind of flag; sortable and paged. One row is selected; the evidence below is for it only. */
+function AnomalyTable({ series, synthetic, selKey, onSelect }: { series: SeriesRow[]; synthetic: boolean; selKey: string | null; onSelect: (key: string) => void }) {
+  const [status, setStatus] = useState("");
+  const [flagType, setFlagType] = useState("");
+  const [quarter, setQuarter] = useState("");
+  const flagTypes = [...new Set(series.flatMap((s) => s.flags.map((f) => f.type)))].sort();
+  const quarters = [...new Set(series.flatMap((s) => s.flags.map((f) => f.quarter)))].sort();
+  const rows = series.filter((s) => (!status || s.status === status) && (!flagType || s.flags.some((f) => f.type === flagType)) && (!quarter || s.flags.some((f) => f.quarter === quarter)));
+  const tools = useListTools({
+    rows,
+    text: (s) => `${s.series} ${s.organisation ?? ""} ${s.model ?? ""}`,
+    sortValue: ANOMALY_SORT,
+    pageSize: 6,
+  });
+  const sel = series.find((s) => s.series === selKey) ?? null;
+  const flaggedIdx = sel ? sel.quarters.map((q, i) => (sel.flags.some((f) => f.quarter === q.quarter) ? i : -1)).filter((i) => i >= 0) : [];
+  const fieldCls = "rounded-lg border border-outline-variant px-3 py-1.5 font-body-sm bg-surface-card";
+  return (
+    <div className="mt-4 space-y-3" data-testid="ai-output-anomaly">
+      {synthetic ? <p className="font-body-sm font-semibold">Sample production data is shown because there are no live production submissions yet.</p> : null}
+      <p className="font-body-sm text-on-surface-variant">{series.length} production series checked. Click a row to select it: the evidence below is shown for the selected series only.</p>
+      <div className="flex flex-wrap items-end gap-space-sm" data-testid="ai-anomaly-filters">
+        <label className="font-label-md">Search
+          <input className={`${fieldCls} mt-1 block`} value={tools.query} placeholder="Series, organisation or model" onChange={(e) => tools.setQuery(e.target.value)} data-testid="ai-anomaly-search" />
+        </label>
+        <label className="font-label-md">Status
+          <select className={`${fieldCls} mt-1 block`} value={status} onChange={(e) => { setStatus(e.target.value); tools.setPage(1); }} data-testid="ai-anomaly-status">
+            <option value="">All</option><option value="flagged">Flagged</option><option value="normal">Normal</option>
+          </select>
+        </label>
+        <label className="font-label-md">Kind of flag
+          <select className={`${fieldCls} mt-1 block`} value={flagType} onChange={(e) => { setFlagType(e.target.value); tools.setPage(1); }} data-testid="ai-anomaly-type">
+            <option value="">Any</option>{flagTypes.map((t) => <option key={t} value={t}>{FLAG_WORD[t] ?? t}</option>)}
+          </select>
+        </label>
+        <label className="font-label-md">Quarter flagged
+          <select className={`${fieldCls} mt-1 block`} value={quarter} onChange={(e) => { setQuarter(e.target.value); tools.setPage(1); }} data-testid="ai-anomaly-quarter">
+            <option value="">Any</option>{quarters.map((q) => <option key={q} value={q}>{q}</option>)}
+          </select>
+        </label>
+        {(tools.query || status || flagType || quarter) ? (
+          <button type="button" className="font-label-md text-primary underline pb-2" onClick={() => { tools.clear(); setStatus(""); setFlagType(""); setQuarter(""); }} data-testid="ai-anomaly-clear">Clear filters</button>
+        ) : null}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full font-body-sm" data-testid="ai-anomaly-table">
+          <caption className="sr-only">Production series and their flags</caption>
+          <thead>
+            <tr>
+              <SortableTh tools={tools} k="series" className={cell}>Series</SortableTh>
+              <SortableTh tools={tools} k="org" className={cell}>Organisation</SortableTh>
+              <SortableTh tools={tools} k="status" className={cell}>Status</SortableTh>
+              <SortableTh tools={tools} k="flags" className={cell}>Flags</SortableTh>
+              <SortableTh tools={tools} k="latest" className={cell}>Latest quarter units</SortableTh>
+              <SortableTh tools={tools} k="bound" className={cell}>Serials bound</SortableTh>
+              <th scope="col" className={cell}><span className="sr-only">Select</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {tools.paged.pageRows.map((s) => {
+              const on = s.series === selKey;
+              const last = s.quarters[s.quarters.length - 1];
+              return (
+                <tr key={s.series} className={`border-t border-outline-variant cursor-pointer ${on ? "bg-[#e7effb]" : "hover:bg-[#f4f8ff]"}`} onClick={() => onSelect(s.series)} aria-selected={on} data-testid="ai-anomaly-row">
+                  <td className={`${cell} font-semibold text-[#14315E]`}>{s.series}</td>
+                  <td className={cell}>{s.organisation ?? ""}</td>
+                  <td className={cell}><span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${s.flags.length ? BAND.high.pill : BAND.low.pill}`}>{s.status}</span></td>
+                  <td className={cell}>{s.flags.length}</td>
+                  <td className={cell}>{last ? `${last.units} (${last.quarter})` : ""}</td>
+                  <td className={cell}>{s.boundSerials ?? "n/a"}</td>
+                  <td className={cell}><button type="button" className="text-primary underline" onClick={(ev) => { ev.stopPropagation(); onSelect(s.series); }} aria-label={`Select ${s.series}`}>{on ? "Selected" : "Select"}</button></td>
+                </tr>
+              );
+            })}
+            {tools.paged.total === 0 ? <tr><td className={cell} colSpan={7}>No series match these filters.</td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+      <ListPager tools={tools} />
+      {sel ? (
+        <div className={`rounded-xl border p-3 ${sel.flags.length ? "border-[#f5c2c0] bg-[#fffafa]" : "border-[#dbe6f7] bg-[#f4f8ff]"}`} data-testid="ai-anomaly-selected">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold text-[#14315E]">{sel.series}</span>
+            {sel.boundSerials !== null ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{sel.boundSerials} serials bound</Chip> : null}
+          </div>
+          <div className="mt-2"><MiniBars values={sel.quarters.map((q) => q.units)} labels={sel.quarters.map((q) => q.quarter)} flagged={flaggedIdx} /></div>
+          <div className="mt-1 text-[11px] text-[#64748b]">{sel.quarters.map((q) => `${q.quarter}: z ${q.zVsOthers}`).join(" · ")}</div>
+          {sel.flags.map((f, i) => <p key={i} className="mt-2 flex gap-1.5 text-[13px] text-[#93000a]"><Icon name="flag" size={16} /> Flag {f.type} ({f.quarter}): {f.detail}</p>)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Output({ run, selKey, onSelect }: { run: RunDetail; selKey: string | null; onSelect: (key: string) => void }) {
   const o = run.output as Record<string, unknown>;
   if (run.useCase === "compliance-risk") {
     return <RiskTable entities={(o.entities as RiskEntity[]) ?? []} selKey={selKey} onSelect={onSelect} />;
   }
   if (run.useCase === "production-anomaly") {
-    const series = (o.series as SeriesRow[]) ?? [];
-    return (
-      <div className="mt-4 space-y-3" data-testid="ai-output-anomaly">
-        {o.synthetic ? <p className="font-body-sm font-semibold">Sample production data is shown because there are no live production submissions yet.</p> : null}
-        <div className="grid gap-3 lg:grid-cols-2">
-          {series.map((s) => {
-            const flaggedIdx = s.quarters.map((q, i) => (s.flags.some((f) => f.quarter === q.quarter) ? i : -1)).filter((i) => i >= 0);
-            return (
-              <div key={s.series} className={`rounded-xl border p-3 ${s.flags.length ? "border-[#f5c2c0] bg-[#fffafa]" : "border-[#e2e8f0] bg-white"}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-[#14315E]">{s.series}</span>
-                  <span className="flex gap-1.5">{s.boundSerials !== null ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{s.boundSerials} serials bound</Chip> : null}<Chip tone={s.flags.length ? BAND.high.pill : BAND.low.pill}>{s.status}</Chip></span>
-                </div>
-                <div className="mt-2"><MiniBars values={s.quarters.map((q) => q.units)} labels={s.quarters.map((q) => q.quarter)} flagged={flaggedIdx} /></div>
-                <div className="mt-1 text-[11px] text-[#64748b]">{s.quarters.map((q) => `${q.quarter}: z ${q.zVsOthers}`).join(" · ")}</div>
-                {s.flags.map((f, i) => <p key={i} className="mt-2 flex gap-1.5 text-[13px] text-[#93000a]"><Icon name="flag" size={16} /> Flag {f.type} ({f.quarter}): {f.detail}</p>)}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+    return <AnomalyTable series={(o.series as SeriesRow[]) ?? []} synthetic={Boolean(o.synthetic)} selKey={selKey} onSelect={onSelect} />;
   }
   if (run.useCase === "rating-trends") {
     const cats = (o.categories as TrendCat[]) ?? [];

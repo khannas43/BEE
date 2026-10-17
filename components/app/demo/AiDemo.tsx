@@ -225,15 +225,30 @@ export function AiDemo() {
 }
 
 function ModelCardBox({ model }: { model: ModelCard }) {
+  const [open, setOpen] = useState(false);
   const rules = model.kind === "rules" || model.kind === "statistical" || model.kind === "retrieval" || model.kind === "extraction";
   return (
-    <Box title="Model card" icon="neurology" testId="ai-model-card" aside={<div className="flex flex-wrap gap-2"><Chip>{model.kind}{rules ? " · not machine learning" : ""}</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{model.id}@{model.version}</Chip></div>}>
-      <p className="text-[14px] leading-6 text-[#181c20]"><span className="sr-only">Model {model.name} ({model.id}@{model.version}). Kind {model.kind}{rules ? " (rules or statistics, not machine learning)" : ""}. </span><strong className="text-[#14315E]">{model.name}.</strong> {model.description}</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-lg border border-[#f3dc9c] bg-[#fffaf0] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#8a4b00] mb-1">Limitations</div><div className="text-[13px] leading-5">{model.limitations}</div></div>
-        <div className="rounded-lg border border-[#c9d9f7] bg-[#f4f8ff] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#14315E] mb-1">Trained on</div><div className="text-[13px] leading-5">{model.trainedOn}</div></div>
+    <section className="rounded-xl border border-outline-variant bg-surface p-space-md" data-testid="ai-model-card">
+      <button type="button" className="w-full flex items-center justify-between gap-space-sm text-left" aria-expanded={open} aria-controls="ai-model-card-body" onClick={() => setOpen(!open)} data-testid="ai-model-card-toggle">
+        <h3 className="font-title-sm text-title-sm text-on-surface flex items-center gap-2">
+          <Icon name="neurology" size={18} className="text-[#254e9e]" />
+          Model card
+          <span className="font-label-md text-on-surface-variant font-normal">{open ? "Hide details" : "Show details"}</span>
+        </h3>
+        <span className="flex flex-wrap items-center gap-2">
+          <Chip>{model.kind}{rules ? " · not machine learning" : ""}</Chip>
+          <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{model.id}@{model.version}</Chip>
+          <Icon name={open ? "expand_less" : "expand_more"} size={20} className="text-on-surface-variant" />
+        </span>
+      </button>
+      <div id="ai-model-card-body" hidden={!open} className="mt-space-sm">
+        <p className="text-[14px] leading-6 text-[#181c20]"><span className="sr-only">Model {model.name} ({model.id}@{model.version}). Kind {model.kind}{rules ? " (rules or statistics, not machine learning)" : ""}. </span><strong className="text-[#14315E]">{model.name}.</strong> {model.description}</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-[#f3dc9c] bg-[#fffaf0] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#8a4b00] mb-1">Limitations</div><div className="text-[13px] leading-5">{model.limitations}</div></div>
+          <div className="rounded-lg border border-[#c9d9f7] bg-[#f4f8ff] p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-[#14315E] mb-1">Trained on</div><div className="text-[13px] leading-5">{model.trainedOn}</div></div>
+        </div>
       </div>
-    </Box>
+    </section>
   );
 }
 

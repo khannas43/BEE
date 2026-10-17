@@ -438,6 +438,91 @@ function UseCasePanel({ model, ctl }: { model: ModelCard; ctl: UseCaseController
   );
 }
 
+type ConfidenceWhy = { formula: string; table?: { head: string[]; rows: string[][] }; result: string };
+
+const p1 = (v: number) => `${Math.round(v * 100)}%`;
+
+/** Why the run's confidence is what it is: the same rule the service used, worked out from this run's own output. */
+function confidenceWhy(run: RunDetail): ConfidenceWhy {
+  const o = run.output as Record<string, unknown>;
+  if (run.useCase === "compliance-risk") {
+    const ents = (o.entities as RiskEntity[]) ?? [];
+    const groups = new Map<number, number>();
+    ents.forEach((e) => groups.set(e.applications, (groups.get(e.applications) ?? 0) + 1));
+    const rows = [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([apps, n]) => [String(apps), String(n), apps > 0 ? p1(Math.min(0.95, 0.3 + 0.12 * apps)) : "30%"]);
+    return {
+      formula: "For each manufacturer the model starts at 30% and adds 12 points for every application on record, up to a limit of 95%: the more applications it has seen, the more it has to go on. The run's confidence is the average over all manufacturers.",
+      table: { head: ["Applications on record", "Manufacturers", "Confidence each"], rows },
+      result: `Average over ${ents.length} manufacturers = ${p1(run.confidence)}.`,
+    };
+  }
+  if (run.useCase === "production-anomaly") {
+    const series = (o.series as SeriesRow[]) ?? [];
+    const groups = new Map<number, number>();
+    series.forEach((x) => groups.set(x.quarters.length, (groups.get(x.quarters.length) ?? 0) + 1));
+    const rows = [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([q, n]) => [String(q), String(n), p1(Math.min(0.9, 0.3 + 0.1 * q))]);
+    return {
+      formula: "For each production series the model starts at 30% and adds 10 points for every quarter of history, up to a limit of 90%: a longer history gives a steadier idea of what is normal. The run's confidence is the average over all series.",
+      table: { head: ["Quarters of history", "Series", "Confidence each"], rows },
+      result: `Average over ${series.length} series = ${p1(run.confidence)}.`,
+    };
+  }
+  if (run.useCase === "rating-trends") {
+    const cats = (o.categories as TrendCat[]) ?? [];
+    const rows = cats.map((c) => {
+      const conf = Math.max(0, Math.min(1, 0.6 * c.rSquared + 0.4 * Math.min(c.months.length, 8) / 8));
+      return [c.category, c.rSquared.toFixed(2), String(c.months.length), p1(conf)];
+    });
+    return {
+      formula: "For each category: 60% of the R² (how closely the monthly averages follow a straight line, 0 to 1) plus 40% of the months of data (8 months or more counts as full). The run's confidence is the average over the categories.",
+      table: { head: ["Category", "R² (line fit)", "Months of data", "Confidence"], rows },
+      result: `Average over ${cats.length} categories = ${p1(run.confidence)}.`,
+    };
+  }
+  if (run.useCase === "helpdesk-assist") {
+    const top = (o.topAnswers as Answer[]) ?? [];
+    const best = top[0]?.score ?? 0;
+    const threshold = Number(o.escalateThreshold ?? 0.45);
+    return {
+      formula: "The model compares the question with every FAQ article by shared keywords (a cosine score from 0 to 1). Confidence is twice the best score, up to 95%. Below the escalation limit it does not draft an answer and asks a person.",
+      table: { head: ["Best matching article", "Match score", "Confidence (2 × score)", "Escalation limit"], rows: [[top[0]?.title ?? "none", best.toFixed(3), p1(run.confidence), p1(threshold)]] },
+      result: `${p1(run.confidence)} is ${run.confidence < threshold ? "below" : "at or above"} the ${p1(threshold)} limit, so ${run.confidence < threshold ? "the question goes to a person" : "a draft reply is offered for an officer to review"}.`,
+    };
+  }
+  const fields = (o.fields as ExField[]) ?? [];
+  const found = fields.filter((f) => f.extracted !== null);
+  const minConf = found.length ? Math.min(...found.map((f) => f.confidence)) : 0;
+  return {
+    formula: "Each field is read from the report text by a pattern; the pattern has its own confidence. The run's confidence is the weakest found field's confidence, scaled by how many of the fields were found at all.",
+    table: { head: ["Field", "Found in report", "Field confidence"], rows: fields.map((f) => [f.field, f.extracted !== null ? "yes" : "no", f.extracted !== null ? p1(f.confidence) : "n/a"]) },
+    result: found.length === 0 ? "No field was found, so the confidence is the 10% floor." : `Lowest found field ${p1(minConf)} × ${found.length} of ${fields.length} found = ${p1(run.confidence)}.`,
+  };
+}
+
+/** The run's confidence figure, closed by default; open it to see why it is this number. */
+function ConfidenceBox({ run }: { run: RunDetail }) {
+  const why = confidenceWhy(run);
+  return (
+    <Collapsible title="Confidence" icon="speed" testId="ai-confidence-box" hint={`Why ${pct(run.confidence)}?`}
+      aside={<><span className="text-[22px] leading-6 font-extrabold text-[#14315E]" data-testid="ai-confidence">{pct(run.confidence)}</span><div className="w-24"><Meter value={run.confidence} /></div></>}>
+      <div className="space-y-2 font-body-sm" data-testid="ai-confidence-why">
+        <p>{why.formula}</p>
+        {why.table ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead><tr>{why.table.head.map((h) => <th key={h} scope="col" className={cell}>{h}</th>)}</tr></thead>
+              <tbody>{why.table.rows.map((r, i) => <tr key={i} className="border-t border-outline-variant">{r.map((c, j) => <td key={j} className={cell}>{c}</td>)}</tr>)}</tbody>
+            </table>
+          </div>
+        ) : null}
+        <p className="font-semibold text-[#14315E]">{why.result}</p>
+        <p className="text-on-surface-variant">Confidence says how much data the model had to go on. It is not the chance that the result is right, and a person still decides.</p>
+        <p className="text-[12px] text-[#475569]">model {run.modelVersion} · data version <code data-testid="ai-data-version">{run.dataVersion}</code></p>
+      </div>
+    </Collapsible>
+  );
+}
+
 function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; onChanged: () => void }) {
   const out = run.output;
   const isRisk = run.useCase === "compliance-risk";
@@ -457,15 +542,8 @@ function RunView({ run, canRun, onChanged }: { run: RunDetail; canRun: boolean; 
   return (
     <div className="space-y-space-md" data-testid="ai-run-view">
       <Box title="Result" icon="insights" testId="ai-result" aside={<Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">run {when(run.createdAt)} by {run.createdBy}</Chip>}>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl bg-[#f4f8ff] border border-[#dbe6f7] p-4">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748b]">Confidence</div>
-            <div className="text-[34px] leading-9 font-extrabold text-[#14315E]" data-testid="ai-confidence">{pct(run.confidence)}</div>
-          </div>
-          <div className="w-40"><Meter value={run.confidence} /></div>
-          <div className="text-[12px] text-[#475569] leading-5">model {run.modelVersion}<br />data version <code data-testid="ai-data-version">{run.dataVersion}</code></div>
-        </div>
-        <p role="status" className="ai-summary mt-3" data-testid="ai-summary">{String(out.summary ?? "")}</p>
+        <ConfidenceBox run={run} />
+        <p role="status" className="ai-summary mt-space-md" data-testid="ai-summary">{String(out.summary ?? "")}</p>
         <Output run={run} selKey={selKey} onSelect={(k) => { setSelKey(k); setShowAll(false); }} />
         {out.note ? <p className="mt-space-sm font-body-sm text-on-surface-variant">{plainNote(String(out.note))}</p> : null}
       </Box>

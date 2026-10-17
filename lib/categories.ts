@@ -54,7 +54,7 @@ export const CATEGORIES: Category[] = [
     hi: "मुख्य",
     icon: "home",
     items: [
-      { en: "Dashboard", hi: "डैशबोर्ड", href: "/app", icon: "dashboard", ext: ALL_EXTERNAL },
+      { en: "Dashboard", hi: "डैशबोर्ड", href: "/app", icon: "dashboard", ext: ALL_EXTERNAL, hideFrom: ["director", "secretary"] },
       { en: "My work", hi: "मेरा कार्य", href: "/app/workflow/personal-inbox", icon: "inbox", ext: ALL_EXTERNAL },
       { en: "Approvals", hi: "अनुमोदन", href: "/app/workflow/my-approvals", icon: "task_alt" },
       { en: "SLA and escalations", hi: "एसएलए एवं एस्केलेशन", href: "/app/workflow/escalation-dashboard", icon: "priority_high" },

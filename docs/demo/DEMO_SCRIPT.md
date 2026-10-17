@@ -1,6 +1,6 @@
-# Client demonstration: presenter script by use case (47 minutes)
+# Client demonstration: presenter script by use case (59 minutes)
 
-Updated 16 October 2026. Use cases 1 to 6 were rehearsed end to end on screen; use case 7, the exports and use case 8 were checked screen by screen and through the live API. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username). The role dropdown at the top right of every console page switches to that role's demo account in one step, so you can change persona without signing out. Sign out with the arrow icon at the top right. More than ten sign-in attempts in a minute for one person pauses the sign-in for a minute, so type the password once, carefully. The left menu group **Your BEE records** (Payments, QR batches, Certificate ledger and the other demo screens) starts closed after sign-in: click it once to open it, and it stays open while you present.
+Updated 17 October 2026. **Use case 9 (registration) is a draft: it is written from the code and the screens and has not been rehearsed on screen yet; lines marked (check) need confirming at the first rehearsal, once the registration sample data is loaded.** Use cases 1 to 6 were rehearsed end to end on screen; use case 7, the exports and use case 8 were checked screen by screen and through the live API. Every account uses the password `demo123`. Sign in at `http://127.0.0.1:3100/login` (type the username). The role dropdown at the top right of every console page switches to that role's demo account in one step, so you can change persona without signing out. Sign out with the arrow icon at the top right. More than ten sign-in attempts in a minute for one person pauses the sign-in for a minute, so type the password once, carefully. The left menu is one list under **Home**: dashboards first, then My work and approvals, registrations, applications, money, and the demonstration screens (Payments, QR batches, Certificate ledger and the others).
 
 **How to run this demo:** tell it as stories about people, not screens. Each use case below names the person, the problem they have today, what they do, and the outcome the audience should take away. Say the persona's name out loud and keep to their view of the work.
 
@@ -36,6 +36,9 @@ Updated 16 October 2026. Use cases 1 to 6 were rehearsed end to end on screen; u
 | 40-43 | UC7. Everyone is told | Neha, Farid, Sunita, Arjun, Priya |
 | 43-45 | Exports (CSV, Excel, PDF certificate) | Neha |
 | 45-47 | UC8. The auditor checks the trail | Anil |
+| 47-59 | UC9. Becoming a registered brand: four people, nobody marks their own work | Neha, Farid, Priya, Dr. Rao, Pixel's manager |
+
+For an audience of BEE officers, **move UC9 to minute 3**, straight after the Opening (it is where the programme starts, and each use case stands alone). The times of the other use cases then shift by twelve minutes.
 
 Keep three minutes spare. If you run late, drop the "if time" lines, then shorten UC7 and the exports, which can be shown in a few clicks each. Before you start: `docs/demo/DEMO_DAY_CHECKLIST.md`, a fresh reset and seed (see "If something goes wrong"), and an empty Downloads folder so the exports are easy to find.
 
@@ -43,7 +46,7 @@ Keep three minutes spare. If you run late, drop the "if time" lines, then shorte
 
 ## Opening (0-3 min). Persona: Dr. Rao, Director
 1. Open `/login`; point at the demo panel on the left and "Password for every demo account: demo123".
-2. Sign in as `bee.director`. You land on the **Director's dashboard**: six figures (awaiting approval, certificates issued, ledger needs a look, production with BEE, paid but fee not confirmed, highest compliance risk). Each card has its own chart (a ring for the mix, a small trend for the months). Use the date range in the green banner (**Last 30 days**, **Last 90 days**, **This year**, or From and To): every card, chart and list changes with it. Click **Highest compliance risk**: the list shows each organisation's score and **Why it is high**; click the arrow on a row to see every factor with its points (for example "33% of its applications were rejected, +24.5 of 25"). Search, sort, **Download CSV** and **Download Excel** work on any list. Say: "Every number is calculated at this moment, and each one opens the records behind it and says why." The MIS dashboard (UC5) is one click away in the menu.
+2. Sign in as `bee.director`. You land on the **Executive dashboard**: eight figures across the top (applications received, in progress now, certificates issued, approval rate, days to approval, fees confirmed, ledger needs a look, high compliance risk) and ten charts below. Use the date range or the Manufacturer filter in the green banner (or click a manufacturer in "Certificates by manufacturer": every figure narrows to that one; **Reset filters** widens it). The **Director's dashboard** in the menu is the older, card-by-card view: six figures (awaiting approval, certificates issued, ledger needs a look, production with BEE, paid but fee not confirmed, highest compliance risk). Each card has its own chart (a ring for the mix, a small trend for the months). Use the date range in the green banner (**Last 30 days**, **Last 90 days**, **This year**, or From and To): every card, chart and list changes with it. Click **Highest compliance risk**: the list shows each organisation's score and **Why it is high**; click the arrow on a row to see every factor with its points (for example "33% of its applications were rejected, +24.5 of 25"). Search, sort, **Download CSV** and **Download Excel** work on any list. Say: "Every number is calculated at this moment, and each one opens the records behind it and says why." The MIS dashboard (UC5) is one click away in the menu.
 3. Say: "Dr. Rao will see the whole programme at the end. First, the people whose work feeds it." Point at the role dropdown: "Choosing a role signs in as that person, so we change hats in one click."
 
 ---
@@ -193,6 +196,47 @@ Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
 
 ---
 
+## UC9. Becoming a registered brand: four people, nobody marks their own work (47-59 min, or minute 3)
+**Personas: Neha** (`nova.applicant`), **Farid** (`bee.finance`), **Priya** (`bee.programme`), **Dr. Rao** (`bee.director`); optionally **Pixel's compliance manager** (`pixel.applicant`).
+**Problem today:** a brand is registered on paper. Nobody outside can see where the request is, and one official could do every step.
+**Take-away:** four people, four steps, and the database itself refuses a shortcut. The register changes the moment the Director approves, and taking an entry out needs a second person too. Say: "The rules are not a screen setting. They are in the database."
+
+**Part A. Neha files the request (3 min)** (menu: Registration requests)
+1. Sign in as `nova.applicant`. Open **Registration requests** and start a new brand request (check: the button name on the list).
+2. First type a brand name that is already on the register (for example `Nova Cool`) and read the answer (check: wording). Say: "A live brand name cannot be taken twice by the same owner." Then use a fresh name, for example `Nova Aurora`.
+3. Upload the trade licence: any small PDF (the certificate PDF from the Exports step will do). Point at the **readiness checks** (trade licence uploaded, brand name free and the others the page lists): they must be met before **Submit**.
+4. Click **Submit**. The page shows **Fee due: INR ...** with tax on its own line and the label "Local demo fee (not BEE-approved)". Say: "Neha cannot confirm her own fee."
+5. Open **Notifications (email and SMS)**: "Registration filed" with an email and an SMS. Say: "She is told at every step."
+
+**Part B. Farid confirms the fee (1.5 min)**
+1. Switch to `bee.finance`. Open **Notifications**: "Registration fee to confirm". Open the request and confirm the fee (check: which screen Finance uses for a registration fee, the Finance queue or the request page).
+2. Say: "First separation: the person who pays is not the person who confirms." The request now waits with the Programme officer; Neha and Priya are both told.
+
+**Part C. Priya recommends, Dr. Rao approves (3 min)** (menu: Registration reviews)
+1. Switch to `bee.programme`. **Registration reviews**, tab **Waiting for me**. Open Neha's request: the trail shows who did what and when (filed, fee confirmed). Click **Recommend**.
+2. Switch to `bee.director`. **Registration reviews** shows it waiting. Open it, read the line "This registers the brand for NOVA", click **Approve**.
+3. Say: "Second separation: the person who recommends cannot approve. And the person who filed, or anyone from the applicant's organisation, can never review their own request. The database refuses it even if a screen were changed." (If asked to prove it, the rules are covered by automated tests; do not try to break it live.)
+4. Switch to `nova.applicant`, **Notifications**: "Registration approved. You are on the register." Open the request: Neha sees the decisions; officers see every step, with the person and the time. Say: "The applicant sees the decisions, the officers see the full trail."
+
+**Part D. The register updates at once (1.5 min)** (menu: Register)
+1. Switch to `bee.director`. **Register**: the cards (brands, agency authorisations, waiting for a decision, decided). Search `Aurora`: the new brand is **Active** and its source is the registration. Show a filter (Status, Owner), a sort and the page controls.
+2. Switch to `nova.applicant`, start a **New model application** and open the brand list: the new brand is offered (check). Say: "Only active brands can be used. The register is the single source of truth."
+
+**Part E. Taking an entry out also needs two people (2.5 min)**
+1. Switch to `bee.programme`. **Register**, tab **Brands**, find `Nova Aurora`, click **Propose...**, give a reason ("The owner has stopped trading"), **Submit**.
+2. Open the tab **Waiting for a decision**: Priya sees "You proposed this; another person decides" and no Approve button. Say: "Third separation."
+3. Switch to `bee.director`. The card **Waiting for a decision** shows 1 (and the Director has a message "Register revocation to decide"). Open it: "This revokes the brand and its authorisations". Click **Approve**.
+4. The brand now reads **Revoked** on the Brands tab; **History** lists the decision with the person and the time (Decided column, in IST). Switch to `nova.applicant`: **Notifications** has "Register entry revoked", and the brand is no longer offered when starting a model application (check). Say: "One decision, and the brand's authorisations went with it."
+5. *If time:* propose another revocation and **Reject** it with a reason; it appears under History as Rejected with the note.
+
+**Part F. Agency variant (1.5 min, optional)**
+1. Switch to `pixel.applicant` (an agency). **Registration requests** lists its agency requests (sample data): one approved with its authorisation, one with Programme, one with the Director, one waiting for its fee (check once the sample data is loaded).
+2. As `bee.director`, **Register**, tab **Agency authorisations**: filter Agency = Pixel. Say: "An agency may act for a brand only inside its authorisation period, and two overlapping authorisations for the same agency and brand are refused by the database."
+
+**Repeating the demo:** a revoked name can be filed again, so UC9 can be rerun without a reset; the register then shows the earlier entries as history. For a clean start use the fresh reset and seed (see "If something goes wrong").
+
+---
+
 ## Closing (1 min)
 "Neha pays and labels, Farid reconciles, Sunita and Arjun issue with two signatures, Priya checks production against QR, Dr. Rao sees it live, Anil can prove who did what, and Imran can verify at the shop. One audited database, role scoping and separation of duties. What is simulated here (Fabric, gateway, AI models) is replaced by the real integrations in the next phase."
 
@@ -222,18 +266,18 @@ Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
 ## Cheat sheet (password for all: `demo123`)
 | Username | Persona | Use case |
 |---|---|---|
-| `bee.director` | Dr. Rao, Director | Opening (lands on the Director's dashboard), UC5 (MIS), exports (MIS CSV and Excel) |
+| `bee.director` | Dr. Rao, Director | Opening (lands on the Executive dashboard), UC5 (MIS), UC9 (approves, decides the revocation), exports (MIS CSV and Excel) |
 | `bee.auditor` | Anil, Auditor | UC8 (lands on the Auditor's dashboard) |
-| `nova.applicant` | Neha, manufacturer (Nova Cool) | UC1, UC2, UC4, UC7 (payment received, certificate on the ledger), exports |
-| `bee.finance` | Farid, Finance | UC1 (reconcile), UC5 (Finance tab), UC7 (Payment to confirm) |
+| `nova.applicant` | Neha, manufacturer (Nova Cool) | UC1, UC2, UC4, UC7 (payment received, certificate on the ledger), UC9 (files the registration), exports |
+| `bee.finance` | Farid, Finance | UC1 (reconcile), UC5 (Finance tab), UC7 (Payment to confirm), UC9 (confirms the registration fee) |
 | `bee.secretary` | Sunita, Secretary | UC3 (submit, retry, amend, commit revoke), UC7 (second signature when she did not send it) |
 | `bee.admin` | Arjun, Administrator | UC3 (commit, revoke), UC7 (second signature when he did not send it) |
-| `bee.programme` | Priya, Programme officer | UC4 (review), UC6 (AI), UC7 (production figures to review) |
+| `bee.programme` | Priya, Programme officer | UC4 (review), UC6 (AI), UC7 (production figures to review), UC9 (recommends, proposes the revocation) |
 | `bee.helpdesk` | Ravi, Helpdesk | UC6 (helpdesk assist) |
 | `bee.reviewer` | Meera, Reviewer | UC6 (document extraction for an application assigned to her) |
-| `pixel.applicant` | Manufacturer, other organisation | shows data separation (UC2) |
+| `pixel.applicant` | Manufacturer, other organisation | shows data separation (UC2); UC9 agency variant |
 | public | Imran, shopper | `/verify` in UC2, UC3 |
 
 The persona names are only for storytelling; the demo accounts carry no personal names.
 
-Order of screens: sign in as Dr. Rao (Director's dashboard, then MIS) → open **Your BEE records** → Neha, Payments → QR batches and serials → Sunita then Arjun, Certificate ledger → Neha then Priya, Quarterly production → Dr. Rao, MIS dashboard → Priya, Ravi and Meera, AI use cases → Notifications (email and SMS) for the people named in UC7 → Download CSV and Excel on the lists, then Model label, Label preview, Download PDF → Anil, Auditor's dashboard.
+Order of screens: sign in as Dr. Rao (Executive dashboard, then MIS) → Neha, Payments → QR batches and serials → Sunita then Arjun, Certificate ledger → Neha then Priya, Quarterly production → Dr. Rao, MIS dashboard → Priya, Ravi and Meera, AI use cases → Notifications (email and SMS) for the people named in UC7 → Download CSV and Excel on the lists, then Model label, Label preview, Download PDF → Anil, Auditor's dashboard.

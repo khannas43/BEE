@@ -239,6 +239,35 @@ Each decision below gives what the system does today, the realistic options, a r
 | B15 | (c) supervisor role only, may reassign; role not named | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | C1 | (a) with (c): administrators with a second approver, no past dates | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 
+## S&L implementation plan — provisional assumptions A01–A20 (18 October 2026)
+
+**Status:** **Provisional — owner confirmation pending.** These items mirror [snl/BEE_SNL_IMPLEMENTATION_PLAN.md](snl/BEE_SNL_IMPLEMENTATION_PLAN.md) §3 and the WP01 traceability baseline. They are **not** final BEE policy decisions. Traceability: [snl/SNL_WP01_BASELINE.md](snl/SNL_WP01_BASELINE.md).
+
+| ID | Provisional assumption (summary) | Manual basis (printed pp.) | Label |
+|---|---|---|---|
+| A01 | One legal-entity master; brands and appliance categories as separate child registrations | §3.1.1–§3.1.2 (pp. 22–23) | Provisional — owner confirmation pending |
+| A02 | Registration scrutiny by Registration Scrutiny Officer or designated agency | §3.2 pattern (p. 24) for models; entity roles silent | Provisional — owner confirmation pending |
+| A03 | Programme recommends; Director approves entity, brand and category registration | Entity roles not named in manual | Provisional — owner confirmation pending |
+| A04 | Model path: technical scrutiny → Programme Director recommend → Secretary approve | §3.3 (p. 24) | Provisional — owner confirmation pending |
+| A05 | Required documents configured by applicant type, registration type, category, effective date | §3.1.1, §3.1.3; Annexures 1 & 3 | Provisional — owner confirmation pending |
+| A06 | Issue/expiry dates recorded for trademark, SSI, BIS, ISO, lab accreditation, etc. | §3.1, §3.4 (pp. 22–25) | Provisional — owner confirmation pending |
+| A07 | Default fees: ₹5,000 company; ₹3,00,000 category deposit (₹50,000 SSI); ₹5,000 model | §4.1–§4.3 (pp. 30–31) | Provisional — owner confirmation pending |
+| A08 | Seven working days as discrepancy communication ceiling until tables reconciled | §3.10 narrative vs Tables 2–3 (pp. 28–30) | Provisional — owner confirmation pending |
+| A09 | Internal targets: 1 day first scrutiny; 2–3 days clean entity; 3–5 days clean model | Improves on manual ceilings without changing authority | Provisional — owner confirmation pending |
+| A10 | Prepaid QR label fees from 1 April 2027; accrued settlement before | §4.5 (p. 32) | Provisional — owner confirmation pending |
+| A11 | One QR serial per physical unit; opaque, server-resolved; no reuse after bind/void | §5(b) (p. 33); technical detail not in manual | Provisional — owner confirmation pending |
+| A12 | Quarterly production/fee statements; annual CA reconciliation; no separate annual charge unless BEE adds one | §1.3.5(g) (p. 15); §4.5 (p. 32) | Provisional — owner confirmation pending |
+| A13 | Non-zero production–QR variance needs explanation; materiality rule (default 1% or 100 units) for BEE review; no auto penalty | Derived from reconciliation needs | Provisional — owner confirmation pending |
+| A14 | Manufacturer 360: BEE officers all permitted records; agencies assigned only; manufacturers own org | Least privilege for consolidated view | Provisional — owner confirmation pending |
+| A15 | Renewal: scrutiny → Programme → Secretary; withdrawal: financial clearance + Director; cancellation: Programme → Director → Secretary | §3.5–§3.9 (pp. 25–28); roles partly unspecified | Provisional — owner confirmation pending |
+| A16 | Gateway success auto-confirms payment; Finance handles exceptions | §4 electronic payment (p. 30) | Provisional — owner confirmation pending |
+| A17 | Working-day calendar; clock stops while awaiting applicant | §3.10 (pp. 28–29) | Provisional — owner confirmation pending |
+| A18 | Portal notifications authoritative; email when provider approved; SMS for high-value events | §3.4 portal communication (pp. 24–25) | Provisional — owner confirmation pending |
+| A19 | Uploaded signed/stamped documents suffice until BEE confirms eSign/digital signature | §3, §3.1 (pp. 22–23) | Provisional — owner confirmation pending |
+| A20 | Configurable registration ID sequences; model IDs stay `BEE/<category>/<year>/<number>` until BEE supplies format | §3.1.1 permittee number (p. 22) | Provisional — owner confirmation pending |
+
+**Policy conflicts recorded in WP01 (not decisions):** discrepancy day counts (A08); entity approval roles silent (A02–A03); portal `agency` registration kind not described as such in the manual.
+
 ## References for the engineering team
 
 Source decision records and the build's provisional values: [wp01/SCREEN_ACTION_MATRIX.md](wp01/SCREEN_ACTION_MATRIX.md) (D1 to D6), [wp04/WP04.1_MASTERS.md](wp04/WP04.1_MASTERS.md) section 10 (M1 to M7), [wp05/WP05.1d_DECISIONS.md](wp05/WP05.1d_DECISIONS.md) and [wp05/WP05.1d_EVIDENCE_GATES.md](wp05/WP05.1d_EVIDENCE_GATES.md) (B1 to B8). Tracked in [BACKLOG.md](BACKLOG.md): BL-040 to BL-043, BL-064, BL-065, BL-068, BL-073, BL-084, BL-085, BL-086.

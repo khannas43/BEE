@@ -167,6 +167,10 @@ function certificatePage(c: CertificateFacts): Page {
   p.centered(150, 11, "Bureau of Energy Efficiency - Standards and Labelling (local demonstration)", "F1", 0.3);
   p.line(90, 170, PAGE_W - 90, 170, 0.8);
   p.centered(206, 18, c.registrationId, "F3");
+  if (c.status === "revoked") {
+    p.rect(120, 216, PAGE_W - 240, 30, { stroke: 3 });
+    p.centered(238, 16, "REVOKED: NO LONGER VALID", "F2");
+  }
   const rows: [string, string][] = [
     ["Manufacturer", c.organisation],
     ["Brand and model", `${c.brandName} ${c.modelNumber}`],
@@ -200,13 +204,17 @@ function labelPage(c: CertificateFacts): Page {
   p.rect(x, 120, w, 520, { stroke: 4 });
   p.text(x + 18, 150, 8, DEMO, "F1", 0.25);
   p.centered(196, 24, "Star label", "F2");
+  if (c.status === "revoked") {
+    p.rect(x + 40, 206, w - 80, 22, { stroke: 3 });
+    p.centered(222, 13, "REVOKED", "F2");
+  }
   for (let i = 0; i < 5; i++) p.star(PAGE_W / 2 - 80 + i * 40, 250, 17, i < c.stars);
   p.centered(300, 14, `${c.stars} of 5 stars`, "F2");
   p.centered(330, 16, `ISEER ${c.verifiedIseer}`, "F2");
   p.centered(362, 12, `${c.brandName} ${c.modelNumber}`, "F1");
   p.centered(384, 11, c.registrationId, "F3");
   p.qr((PAGE_W - 140) / 2, 410, 140, c.verifyUrl);
-  p.centered(572, 10, `Valid until ${c.validTo}`, "F1");
+  p.centered(572, 10, c.status === "revoked" ? "Revoked: no longer valid" : `Valid until ${c.validTo}`, "F1");
   p.centered(592, 8, "Scan to verify on the public page", "F1", 0.4);
   return p;
 }

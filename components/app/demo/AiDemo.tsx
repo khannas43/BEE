@@ -322,8 +322,8 @@ type UseCaseController = ReturnType<typeof useUseCase>;
 function RunButton({ model, ctl }: { model: ModelCard | null; ctl: UseCaseController }) {
   return (
     <div className="flex flex-col items-end gap-1 shrink-0">
-      <button className="ai-run bg-primary text-on-primary" disabled={!model?.canRun || ctl.busy} onClick={() => void ctl.run()} data-testid="ai-run">
-        <Icon name={ctl.busy ? "hourglass_top" : "play_arrow"} size={18} /> {ctl.busy ? "Running…" : "Run"}
+      <button className="ai-run ai-run-round bg-primary text-on-primary" disabled={!model?.canRun || ctl.busy} onClick={() => void ctl.run()} data-testid="ai-run" aria-label={ctl.busy ? "Running" : "Run"}>
+        <Icon name={ctl.busy ? "hourglass_top" : "play_arrow"} size={30} /> {ctl.busy ? "Running" : "Run"}
       </button>
       {model && !model.canRun ? <span className="font-label-sm text-on-surface-variant">Read only for your role</span> : null}
     </div>

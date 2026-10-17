@@ -20,6 +20,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
@@ -30,6 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** The simulated email and SMS outbox (V66) against throwaway PostgreSQL with the real migrations: triggers, seeding switch, own-only reads. */
 @Tag("db")
+@TestMethodOrder(MethodOrderer.MethodName.class)
 class MessagesDatabaseTest {
 
     static final String MAIN = "demo_msg_test_" + HexFormat.of().toHexDigits(ThreadLocalRandom.current().nextInt());
@@ -132,6 +135,41 @@ class MessagesDatabaseTest {
         assertEquals(0, (int) tx.execute(s -> messages.markRead(PIXEL.accountId(), messageId)), "another person's mark changes nothing");
         assertEquals(1, (int) tx.execute(s -> messages.markAllRead(NOVA.accountId())), "the SMS was still unread");
         assertEquals(0, messages.unread(NOVA.accountId()));
+    }
+
+    static final String PROG = "00000000-0000-4000-a000-000000000006";
+    static final String DIRECTOR_ID = "00000000-0000-4000-a000-000000000007";
+
+    @Test
+    void zzRegistrationStepsWriteMessagesToTheRightPeopleAndAProposalAsksTheDirector() {
+        String reg = "00000000-0000-4000-c000-0000000019a1";
+        owner.update("INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version) VALUES (?::uuid, 'REG-2026-9990', 'brand', ?::uuid, 'Msg Test Brand', 'fee_due', 1)", reg, NOVA_ORG.toString());
+        owner.update("INSERT INTO registration_submission_event (application_id, from_state, to_state, actor_account_id, actor_role, filing_organisation_id) VALUES (?::uuid, 'draft', 'fee_due', ?::uuid, 'manufacturer', ?::uuid)",
+            reg, NOVA.accountId().toString(), NOVA_ORG.toString());
+        String step = "INSERT INTO registration_transition_event (application_id, action, from_state, to_state, actor_account_id, actor_role, version_after, occurred_at, note) VALUES (?::uuid, ?, ?, ?, ?::uuid, ?, ?, now(), 'a note')";
+        owner.update(step, reg, "confirm_fee", "fee_due", "programme_review", FINANCE.accountId().toString(), "finance", 2);
+        owner.update(step, reg, "recommend", "programme_review", "director_approval", PROG, "programme", 3);
+        owner.update(step, reg, "approve", "director_approval", "approved", DIRECTOR_ID, "director", 4);
+        List<String> kinds = owner.queryForList("SELECT recipient_account_id::text || ':' || channel || ':' || event_kind FROM demo_message WHERE reference = 'REG-2026-9990'", String.class);
+        String nova = NOVA.accountId().toString();
+        assertTrue(kinds.contains(nova + ":email:registration_filed") && kinds.contains(nova + ":sms:registration_filed"), "the applicant is told when the request is filed");
+        assertTrue(kinds.contains(FINANCE.accountId() + ":email:registration_fee_to_confirm"), "Finance is asked to confirm the fee");
+        assertTrue(kinds.contains(nova + ":email:registration_fee_confirmed"), "the applicant is told the fee is confirmed");
+        assertTrue(kinds.contains(PROG + ":email:registration_to_review"), "Programme is asked to review");
+        assertTrue(kinds.contains(DIRECTOR_ID + ":email:registration_to_approve"), "the Director is asked to approve");
+        assertTrue(kinds.contains(nova + ":email:registration_approved") && kinds.contains(nova + ":sms:registration_approved"), "the applicant is told it is approved");
+        assertTrue(kinds.stream().noneMatch(k -> k.startsWith(PIXEL.accountId() + ":")), "another organisation hears nothing");
+
+        // a revocation proposal asks the Director (not the proposer); the outcome goes to the proposer and the owner
+        String brand = owner.queryForObject("SELECT id::text FROM brand WHERE owner_organisation_id = ?::uuid AND status = 'active' LIMIT 1", String.class, NOVA_ORG.toString());
+        String prop = "00000000-0000-4000-c000-0000000019b1";
+        owner.update("INSERT INTO register_revocation_proposal (id, target_brand_id, action, reason, proposed_by) VALUES (?::uuid, ?::uuid, 'revoke', 'Test reason.', ?::uuid)", prop, brand, PROG);
+        List<String> asked = owner.queryForList("SELECT recipient_account_id::text FROM demo_message WHERE event_kind = 'register_to_decide'", String.class);
+        assertTrue(asked.contains(DIRECTOR_ID) && !asked.contains(PROG), "the Director is asked, the proposer is not");
+        owner.update("UPDATE register_revocation_proposal SET state = 'approved', decided_by = ?::uuid, decided_at = now() WHERE id = ?::uuid", DIRECTOR_ID, prop);
+        List<String> told = owner.queryForList("SELECT recipient_account_id::text || ':' || event_kind FROM demo_message WHERE event_kind IN ('register_decided', 'register_entry_closed')", String.class);
+        assertTrue(told.contains(PROG + ":register_decided"), "the proposer is told the outcome");
+        assertTrue(told.contains(nova + ":register_entry_closed"), "the brand's owner is told it was revoked");
     }
 
     @Test

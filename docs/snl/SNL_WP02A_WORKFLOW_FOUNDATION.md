@@ -1,73 +1,58 @@
 # SNL WP02A — workflow foundation (implementation note)
 
-**Status:** Foundation slice complete; journey wiring deferred to WP2B.
+**Status:** Foundation slice corrected (Brief 18A); ChatGPT acceptance pending. Journey wiring deferred to WP2B.
 **Date:** 18 October 2026
-**Migration:** `V69__workflow_foundation.sql`
+**Migration:** `V69__workflow_foundation.sql` (editable in place until merge)
 **Code:** `gov.bee.api.workflow.WorkingDaySla`, `WorkflowFoundationRepository`
 **Tests:** `WorkingDaySlaTest`, `WorkflowFoundationDatabaseTest`
 
 ## Relation to existing journeys
 
-Registration and model applications keep their current state columns and transition tables (`registration_application`, `model_application_*` events). WP2A tables are **parallel**: they key off `subject_kind` + `subject_id` without triggers on existing applications. No backfill and no change to existing APIs or screens.
+Registration and model applications keep their current state columns and transition tables. WP2A tables are **parallel** (`subject_kind` + `subject_id`). No backfill and no change to existing APIs or screens.
 
-| Existing | WP2A foundation |
-|---|---|
-| `registration_application.state` | Optional future link via `workflow_task.subject_kind = registration_application` |
-| `model_application_return` / `resubmission` | Future mapping to `workflow_discrepancy` + responses |
-| Ad hoc assignments | Future mapping to `workflow_task` owner fields + `workflow_task_event` |
+## Transaction and security boundaries
 
-## Tables
+- Multi-row commands use **`TransactionTemplate`** in `WorkflowFoundationRepository` (same pattern as other transactional repositories).
+- Runtime **`UPDATE` on `workflow_task` is revoked**; owner/status/due changes go through **`workflow_foundation_set_task_fields`** (SECURITY DEFINER) plus an immutable **`workflow_task_event`** in one transaction.
+- Task identity fields (`subject_*`, `stage`, `action`, `command_id`, `command_payload_hash`, `created_at`) are immutable after insert (trigger).
+- Discrepancy identity fields are immutable; **status** changes only when `bee.workflow_discrepancy_status=allow` is set inside repository commands.
+- **`workflow_sla_policy_version`** rows are append-only for runtime (maint may delete in tests).
+- **Calendars/policies:** runtime has **SELECT only**; no calendar closure inserts at runtime.
 
-| Table | Purpose | Mutable by runtime | Retention |
-|---|---|---|---|
-| `workflow_calendar` | Named calendar, `Asia/Kolkata`, ISO weekday non-working set | Admin/maint configure | Indefinite |
-| `workflow_calendar_closure` | Dated public holidays / closures | Admin/maint | Indefinite |
-| `workflow_sla_policy_version` | Effective-dated SLA policy (**working_day_limit** is data, not 7/12/15/60) | Admin/maint insert; overlap refused | Version history |
-| `workflow_task` | Open work item per subject/stage/action | Update status, owner, due, version | Life of subject |
-| `workflow_task_event` | Immutable audit of create/reassign/complete/cancel | Append-only | Permanent |
-| `workflow_discrepancy` | Structured line item | Status only | Permanent |
-| `workflow_discrepancy_response` | Applicant reply versions | Append-only | Permanent |
-| `workflow_discrepancy_disposition` | Reviewer outcome (requires ≥1 response) | Append-only, one per discrepancy | Permanent |
-| `workflow_sla_clock_event` | Start/pause/resume/stop for SLA proof | Append-only | Permanent |
+## Idempotency
 
-**Subject integrity:** only `registration_application` and `model_application` kinds; `workflow_validate_subject()` checks row existence (polymorphic FK pattern).
+- Optional **`command_id`** + **`command_payload_hash`** (SHA-256 of canonical payload) on `workflow_task`.
+- Same command + same payload → replay original task (including after **completed/cancelled**); no extra event.
+- Same command + different payload → **`WorkflowIdempotencyConflictException`**.
 
-## Task ownership and concurrency
+## Policy versions
 
-- At most **one open** task per `(subject_kind, subject_id, stage, action)` (partial unique index).
-- **Optimistic locking:** `workflow_task.version` must increment by exactly 1 per update (`workflow_task_version_guard`).
-- **Reassignment:** append `workflow_task_event` with from/to owner and reason, then update task owner and version.
-- **Idempotency:** optional `command_id` UUID with unique index; duplicate command returns existing task (repository helper).
+- Effective ranges are half-open **`[effective_from, effective_to)`** enforced with **`btree_gist` EXCLUDE**.
+- Adjacent non-overlapping versions are allowed in either insert order.
+- **`workflow_sla_clock_event.policy_version_id`** references the applied version row (not a free-text key).
 
-## SLA semantics (A17 provisional)
+## SLA clock
 
-- Calendar days use **Asia/Kolkata** (`WorkingDaySla.ZONE`).
-- **Due date:** `dueAtEndOfWorkingDay(start, working_day_limit, calendar)` — limit comes from `workflow_sla_policy_version`, not hard-coded manual tables.
-- **Pause:** `workflow_sla_clock_event` with `responsible_party = applicant` marks applicant-wait; `WorkingDaySla.elapsedWorkingMillis` subtracts pause intervals.
-- **A08 / BL-255 / BL-256:** which limit and whether expiry means cancel vs reject are **not** encoded in this slice.
+- **`responsible_party`:** `bureau` on `start`/`stop`; `applicant` on `pause`/`resume` while applicant must act (A17 pause semantics).
+- **`WorkingDaySla.validateClockSequence`** refuses invalid sequences before insert.
+- Open applicant pauses use an injected **`asOf`** end instant for elapsed-time calculation (no failure while still waiting).
 
-## Discrepancy linkage
+## Discrepancy cycles
 
-1. Officer opens `workflow_discrepancy` (`line_code` stable per subject).
-2. Applicant appends `workflow_discrepancy_response` (monotonic `response_seq`).
-3. Reviewer appends `workflow_discrepancy_disposition` (DB trigger requires a response first).
-4. Status on parent discrepancy moves `open` → `responded` → `disposed`.
+Statuses: `open` → `awaiting_review` → (`needs_more` → …)* → `closed`.
 
-## Notifications (deferred)
+- Each **`workflow_discrepancy_disposition`** references a **`response_seq`** (FK to response); multiple dispositions per discrepancy when cycles continue.
+- At most one **`needs_more`** disposition per discrepancy; later cycles must end with **`accepted`** or **`rejected`**. `needs_more` reopens applicant response; finals close the row.
 
-Later WP2 slice will insert notification/outbox rows in the **same transaction** as task/discrepancy transitions. No outbox table in WP2A.
+## Subject delete integrity
+
+**`BEFORE DELETE`** triggers on `registration_application` and `model_application` refuse delete when foundation rows reference the subject.
 
 ## Explicit deferrals (WP2B+)
 
-- Common transition HTTP APIs and OpenAPI
-- Next.js workflow UI, My work, supervisor queue
-- Wiring registration/model services to foundation tables
-- Notification outbox in transition transaction
-- 60-day scheduled job (BL-253) and cancel/reject normalization (BL-256)
-- Supervisor queue (legacy B15) as first-class tasks
+Common transition APIs, UI, journey wiring, notification outbox, supervisor queue, 60-day job (BL-253), cancel/reject normalization (BL-256). A08/BL-255 remain unresolved in code.
 
 ## Evidence
 
-- Flyway **V69** on throwaway schema through existing chain (rank 69).
-- Database tests under `WorkflowFoundationDatabaseTest` (@Tag `db`).
-- Unit tests under `WorkingDaySlaTest`.
+- Flyway **V69** through rank 69 on throwaway schemas.
+- **`WorkingDaySlaTest`** (unit) and **`WorkflowFoundationDatabaseTest`** (@Tag `db`).

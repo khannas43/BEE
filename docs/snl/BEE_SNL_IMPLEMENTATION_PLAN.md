@@ -292,8 +292,8 @@ At the end of each development session, update the package status, progress, com
 | UI tests | Pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | Pending ChatGPT after Brief 18 |
-| Completion commit or PR | Task branch commit |
+| Review | Brief 18A integrity corrections; ChatGPT acceptance pending |
+| Completion commit or PR | Task branch commits (18 + 18A) |
 
 #### WP2 acceptance
 

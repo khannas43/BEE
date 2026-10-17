@@ -24,7 +24,7 @@ public final class WorkingDaySla {
     public record CalendarSpec(Set<DayOfWeek> nonWorkingWeekdays, Set<LocalDate> closureDates) {
     }
 
-    /** Half-open interval [start, end) during which the SLA clock does not count working time (e.g. applicant wait, A17). */
+    /** Half-open interval [start, end) during which the SLA clock does not count working time (applicant wait, A17). */
     public record PauseInterval(Instant start, Instant end) {
         public PauseInterval {
             if (!end.isAfter(start)) {
@@ -33,7 +33,72 @@ public final class WorkingDaySla {
         }
     }
 
-    /** Last instant of the Nth working day on or after {@code startInclusive} (end-of-day IST). */
+    public record ClockEvent(String eventKind, String responsibleParty, Instant occurredAt) {
+    }
+
+    /**
+     * {@code responsible_party}: {@code bureau} — BEE-side processing time counts toward SLA;
+     * {@code applicant} — used on {@code pause}/{@code resume} pairs while the applicant must act (clock paused).
+     */
+    public static void validateClockSequence(List<ClockEvent> prior, ClockEvent next) {
+        if (prior != null) {
+            for (ClockEvent e : prior) {
+                if (!next.occurredAt().isAfter(e.occurredAt()) && !next.occurredAt().equals(e.occurredAt())) {
+                    throw new IllegalArgumentException("workflow_clock_not_monotonic");
+                }
+            }
+        }
+        List<ClockEvent> all = new ArrayList<>(prior == null ? List.of() : prior);
+        all.add(next);
+        boolean started = false;
+        boolean paused = false;
+        boolean stopped = false;
+        for (ClockEvent e : all) {
+            if (stopped) {
+                throw new IllegalArgumentException("workflow_clock_after_stop");
+            }
+            switch (e.eventKind()) {
+                case "start" -> {
+                    if (started) {
+                        throw new IllegalArgumentException("workflow_clock_duplicate_start");
+                    }
+                    if (!"bureau".equals(e.responsibleParty())) {
+                        throw new IllegalArgumentException("workflow_clock_start_party");
+                    }
+                    started = true;
+                }
+                case "pause" -> {
+                    if (!started || paused) {
+                        throw new IllegalArgumentException("workflow_clock_pause_invalid");
+                    }
+                    if (!"applicant".equals(e.responsibleParty())) {
+                        throw new IllegalArgumentException("workflow_clock_pause_party");
+                    }
+                    paused = true;
+                }
+                case "resume" -> {
+                    if (!paused) {
+                        throw new IllegalArgumentException("workflow_clock_resume_invalid");
+                    }
+                    if (!"applicant".equals(e.responsibleParty())) {
+                        throw new IllegalArgumentException("workflow_clock_resume_party");
+                    }
+                    paused = false;
+                }
+                case "stop" -> {
+                    if (!started || paused) {
+                        throw new IllegalArgumentException("workflow_clock_stop_invalid");
+                    }
+                    if (!"bureau".equals(e.responsibleParty())) {
+                        throw new IllegalArgumentException("workflow_clock_stop_party");
+                    }
+                    stopped = true;
+                }
+                default -> throw new IllegalArgumentException("workflow_clock_unknown_kind");
+            }
+        }
+    }
+
     public static Instant dueAtEndOfWorkingDay(Instant startInclusive, int workingDays, CalendarSpec calendar) {
         if (workingDays < 1) {
             throw new IllegalArgumentException("workingDays must be at least 1");
@@ -58,17 +123,14 @@ public final class WorkingDaySla {
         return !calendar.nonWorkingWeekdays().contains(day.getDayOfWeek());
     }
 
-    /** Whole working days between start and end in IST, excluding time spent in pause intervals. */
     public static long elapsedWorkingMillis(Instant startInclusive, Instant endExclusive, CalendarSpec calendar, List<PauseInterval> pauses) {
         if (!endExclusive.isAfter(startInclusive)) {
             return 0;
         }
-        List<PauseInterval> sorted = pauses == null || pauses.isEmpty() ? List.of() : pauses.stream().sorted(Comparator.comparing(PauseInterval::start)).toList();
+        List<PauseInterval> sorted = normalizePauses(pauses);
         long total = 0;
-        ZonedDateTime zStart = startInclusive.atZone(ZONE);
-        ZonedDateTime zEnd = endExclusive.atZone(ZONE);
-        LocalDate day = zStart.toLocalDate();
-        LocalDate lastDay = zEnd.toLocalDate();
+        LocalDate day = startInclusive.atZone(ZONE).toLocalDate();
+        LocalDate lastDay = endExclusive.atZone(ZONE).toLocalDate();
         while (!day.isAfter(lastDay)) {
             if (isWorkingDay(day, calendar)) {
                 Instant dayStart = day.atStartOfDay(ZONE).toInstant();
@@ -84,6 +146,19 @@ public final class WorkingDaySla {
         return total;
     }
 
+    static List<PauseInterval> normalizePauses(List<PauseInterval> pauses) {
+        if (pauses == null || pauses.isEmpty()) {
+            return List.of();
+        }
+        var sorted = pauses.stream().sorted(Comparator.comparing(PauseInterval::start)).toList();
+        for (int i = 1; i < sorted.size(); i++) {
+            if (sorted.get(i).start().isBefore(sorted.get(i - 1).end())) {
+                throw new IllegalArgumentException("workflow_pause_overlap");
+            }
+        }
+        return sorted;
+    }
+
     static long sliceMillisMinusPauses(Instant sliceStart, Instant sliceEnd, List<PauseInterval> pauses) {
         long millis = sliceEnd.toEpochMilli() - sliceStart.toEpochMilli();
         for (PauseInterval p : pauses) {
@@ -96,7 +171,6 @@ public final class WorkingDaySla {
         return Math.max(0, millis);
     }
 
-    /** ISO weekday numbers 1=Monday … 7=Sunday, as stored in {@code workflow_calendar.non_working_weekdays}. */
     public static Set<DayOfWeek> weekdaysFromIsoNumbers(short[] isoDays) {
         var out = new java.util.HashSet<DayOfWeek>();
         for (short n : isoDays) {
@@ -110,12 +184,19 @@ public final class WorkingDaySla {
     }
 
     public static List<PauseInterval> applicantPausesFromClockEvents(List<ClockEvent> events) {
+        return applicantPausesFromClockEvents(events, Instant.now());
+    }
+
+    public static List<PauseInterval> applicantPausesFromClockEvents(List<ClockEvent> events, Instant asOf) {
         var pauses = new ArrayList<PauseInterval>();
         Instant pauseStart = null;
         for (ClockEvent e : events) {
             switch (e.eventKind()) {
                 case "pause" -> {
                     if ("applicant".equals(e.responsibleParty())) {
+                        if (pauseStart != null) {
+                            throw new IllegalStateException("workflow_clock_nested_pause");
+                        }
                         pauseStart = e.occurredAt();
                     }
                 }
@@ -129,11 +210,11 @@ public final class WorkingDaySla {
             }
         }
         if (pauseStart != null) {
-            throw new IllegalStateException("unclosed applicant pause");
+            if (!asOf.isAfter(pauseStart)) {
+                throw new IllegalArgumentException("workflow_pause_asof_before_start");
+            }
+            pauses.add(new PauseInterval(pauseStart, asOf));
         }
-        return pauses;
-    }
-
-    public record ClockEvent(String eventKind, String responsibleParty, Instant occurredAt) {
+        return normalizePauses(pauses);
     }
 }

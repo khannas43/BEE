@@ -21,7 +21,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Tag("db")
 class WorkflowFoundationDatabaseTest {
@@ -36,8 +38,10 @@ class WorkflowFoundationDatabaseTest {
     static JdbcTemplate admin;
     static JdbcTemplate owner;
     static JdbcTemplate runtime;
+    static TransactionTemplate tx;
     static WorkflowFoundationRepository repo;
     static UUID registrationId;
+    static UUID policyVersionId;
     static int appModelCountBefore;
 
     static String env(String k, String d) {
@@ -57,6 +61,10 @@ class WorkflowFoundationDatabaseTest {
             env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime"));
     }
 
+    static WorkflowFoundationRepository.TaskCommand cmd(String kind, UUID subject, String stage, String action) {
+        return new WorkflowFoundationRepository.TaskCommand(kind, subject, stage, action, "programme", PROGRAMME);
+    }
+
     @BeforeAll
     static void migrateAndSeed() throws Exception {
         admin = new JdbcTemplate(migrateSource(null));
@@ -69,11 +77,13 @@ class WorkflowFoundationDatabaseTest {
         assertEquals(69, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
         owner.execute(Files.readString(Path.of("..", "local", "seed", "seed.sql")));
         runtime = new JdbcTemplate(runtimeSource(MAIN));
-        repo = new WorkflowFoundationRepository(runtime);
+        tx = new TransactionTemplate(new DataSourceTransactionManager(runtime.getDataSource()));
+        repo = new WorkflowFoundationRepository(runtime, tx);
         registrationId = UUID.randomUUID();
         owner.update(
             "INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version) VALUES (?, ?, 'brand', ?, ?, 'draft', 0)",
             registrationId, "WF2A-" + TAG, NOVA_ORG, "WF Brand " + TAG);
+        policyVersionId = insertPolicy("sla_demo", 1, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), 10);
     }
 
     @AfterAll
@@ -84,86 +94,127 @@ class WorkflowFoundationDatabaseTest {
         }
     }
 
-    @Test
-    void policyOverlapIsRefused() {
-        insertPolicy("demo_policy", 1, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 6, 30), 14);
-        assertThrows(DataIntegrityViolationException.class, () -> insertPolicy("demo_policy", 2, LocalDate.of(2026, 6, 1), null, 20));
-    }
-
-    static void insertPolicy(String key, int version, LocalDate from, LocalDate to, int limit) {
-        owner.update(
+    static UUID insertPolicy(String key, int version, LocalDate from, LocalDate to, int limit) {
+        return owner.queryForObject(
             "INSERT INTO workflow_sla_policy_version (policy_key, version, effective_from, effective_to, calendar_key, working_day_limit, pause_while_applicant) "
-                + "VALUES (?, ?, ?, ?, 'india_bee_default', ?, true)",
-            key, version, java.sql.Date.valueOf(from), to == null ? null : java.sql.Date.valueOf(to), limit);
+                + "VALUES (?, ?, ?, ?, 'india_bee_default', ?, true) RETURNING id",
+            UUID.class, key, version, java.sql.Date.valueOf(from), to == null ? null : java.sql.Date.valueOf(to), limit);
     }
 
     @Test
-    void invalidSubjectKindAndMissingSubjectFail() {
-        UUID cmd = UUID.randomUUID();
-        assertThrows(DataAccessException.class, () -> runtime.update(
-            "INSERT INTO workflow_task (subject_kind, subject_id, stage, action, owner_role, command_id) VALUES ('other_kind', ?, 's', 'a', 'programme', ?)",
-            MODEL_ID, cmd));
-        assertThrows(DataAccessException.class, () -> repo.createTask(WorkflowFoundationRepository.SUBJECT_MODEL, UUID.randomUUID(), "scrutiny", "review", "programme",
-            PROGRAMME, cmd, PROGRAMME, "programme"));
+    void policyAdjacentVersionsAcceptedAndOverlapRefused() {
+        insertPolicy("adj_a", 1, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 6, 1), 5);
+        insertPolicy("adj_a", 2, LocalDate.of(2026, 6, 1), null, 7);
+        insertPolicy("adj_b", 1, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 7, 1), 5);
+        assertThrows(DataIntegrityViolationException.class, () -> insertPolicy("adj_b", 2, LocalDate.of(2026, 6, 1), null, 6));
+        assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_sla_policy_version SET note = 'x' WHERE policy_key = 'adj_a'"));
     }
 
     @Test
-    void registrationAndModelSubjectsAcceptTasksWithReplayAndUniqueness() {
-        UUID cmd = UUID.randomUUID();
-        var regTask = repo.createTaskIdempotent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scrutiny", "review", "programme", PROGRAMME, cmd,
-            PROGRAMME, "programme");
-        var replay = repo.createTaskIdempotent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scrutiny", "review", "programme", PROGRAMME, cmd,
-            PROGRAMME, "programme");
-        assertEquals(regTask.id(), replay.id());
-        assertEquals(1, repo.countTaskEvents(regTask.id()));
-
-        UUID cmd2 = UUID.randomUUID();
-        var modelTask = repo.createTask(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scrutiny", "review", "programme", PROGRAMME, cmd2, PROGRAMME, "programme");
-        assertNotEquals(regTask.id(), modelTask.id());
-        assertThrows(DataIntegrityViolationException.class, () -> repo.createTask(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scrutiny", "review", "programme",
-            PROGRAMME, UUID.randomUUID(), PROGRAMME, "programme"));
+    void idempotentReplayAndConflictAndTerminalRetention() {
+        UUID command = UUID.randomUUID();
+        var first = repo.createTaskIdempotent(cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_a", "review"), command, PROGRAMME,
+            "programme");
+        var replay = repo.createTaskIdempotent(cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_a", "review"), command, PROGRAMME,
+            "programme");
+        assertEquals(first.id(), replay.id());
+        assertEquals(1, repo.countTaskEvents(first.id()));
+        var conflict = cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_a", "other_action");
+        assertThrows(WorkflowIdempotencyConflictException.class,
+            () -> repo.createTaskIdempotent(conflict, command, PROGRAMME, "programme"));
+        repo.completeTask(first.id(), first.version(), PROGRAMME, "programme", "done");
+        var afterTerminal = repo.findTaskByCommandId(command).orElseThrow();
+        assertEquals("completed", afterTerminal.status());
+        assertEquals(command, afterTerminal.commandId());
     }
 
     @Test
-    void reassignmentKeepsImmutableEvidenceAndVersioning() {
-        UUID cmd = UUID.randomUUID();
-        var task = repo.createTask(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "stage_b", "act_b", "programme", PROGRAMME, cmd, PROGRAMME, "programme");
-        repo.reassignTask(task.id(), task.version(), "director", NOVA_USER, PROGRAMME, "programme", "supervisor reroute");
-        var after = repo.findTask(task.id()).orElseThrow();
-        assertEquals(1, after.version());
-        assertEquals(2, repo.countTaskEvents(task.id()));
+    void staleReassignRollsBackWithoutEvent() {
+        UUID command = UUID.randomUUID();
+        var task = repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scr_b", "review"), command, PROGRAMME, "programme");
+        assertThrows(DataIntegrityViolationException.class,
+            () -> repo.reassignTask(task.id(), task.version() + 1, "director", NOVA_USER, PROGRAMME, "programme", "nope"));
+        assertEquals(1, repo.countTaskEvents(task.id()));
+        assertEquals("programme", repo.findTask(task.id()).orElseThrow().ownerRole());
     }
 
     @Test
-    void appendOnlyTablesRejectRuntimeUpdates() {
-        UUID cmd = UUID.randomUUID();
-        var task = repo.createTask(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "stage_c", "act_c", "programme", PROGRAMME, cmd, PROGRAMME, "programme");
+    void createTaskRollsBackWhenSecondInsertFails() {
+        UUID c1 = UUID.randomUUID();
+        UUID c2 = UUID.randomUUID();
+        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
+            repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scr_rb", "review"), c1, PROGRAMME, "programme");
+            repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scr_rb", "review"), c2, PROGRAMME, "programme");
+        }));
+        assertTrue(repo.findTaskByCommandId(c1).isEmpty());
+        assertTrue(repo.findTaskByCommandId(c2).isEmpty());
+    }
+
+    @Test
+    void runtimeCannotTamperProtectedColumns() {
+        UUID command = UUID.randomUUID();
+        var task = repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_c", "review"), command, PROGRAMME, "programme");
+        assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_task SET stage = 'x' WHERE id = ?", task.id()));
+        UUID disc = repo.openDiscrepancy(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "tamper", "orig", PROGRAMME);
+        assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_discrepancy SET summary = 'x' WHERE id = ?", disc));
         UUID eventId = runtime.queryForObject("SELECT id FROM workflow_task_event WHERE task_id = ? LIMIT 1", UUID.class, task.id());
         assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_task_event SET reason = 'tamper' WHERE id = ?", eventId));
+        assertThrows(DataAccessException.class, () -> runtime.update("INSERT INTO workflow_calendar_closure (calendar_key, closure_date) VALUES ('india_bee_default', DATE '2099-01-01')"));
     }
 
     @Test
-    void discrepancyResponseAndDispositionStayLinked() {
-        UUID disc = repo.openDiscrepancy(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "doc_missing", "Upload trademark", PROGRAMME);
-        assertThrows(DataAccessException.class, () -> repo.disposeDiscrepancy(disc, "accepted", "ok", PROGRAMME));
-        repo.addDiscrepancyResponse(disc, 1, "Attached file", NOVA_USER);
-        repo.disposeDiscrepancy(disc, "accepted", "ok", PROGRAMME);
-        assertThrows(DataIntegrityViolationException.class, () -> repo.addDiscrepancyResponse(disc, 1, "duplicate seq", NOVA_USER));
-        assertThrows(DataAccessException.class, () -> runtime.update("UPDATE workflow_discrepancy_response SET body = 'x' WHERE discrepancy_id = ?", disc));
+    void discrepancyTwoCycleNeedsMoreThenClose() {
+        UUID disc = repo.openDiscrepancy(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "line1", "Need docs", PROGRAMME);
+        repo.addDiscrepancyResponse(disc, 1, "First upload", NOVA_USER);
+        assertThrows(DataIntegrityViolationException.class, () -> repo.addDiscrepancyResponse(disc, 2, "too soon", NOVA_USER));
+        repo.disposeDiscrepancy(disc, 1, "needs_more", "more detail", PROGRAMME);
+        assertThrows(DataIntegrityViolationException.class, () -> repo.disposeDiscrepancy(disc, 1, "accepted", "dup", PROGRAMME));
+        repo.addDiscrepancyResponse(disc, 2, "Second upload", NOVA_USER);
+        assertThrows(DataIntegrityViolationException.class, () -> repo.disposeDiscrepancy(disc, 2, "needs_more", "again", PROGRAMME));
+        repo.disposeDiscrepancy(disc, 2, "accepted", "ok", PROGRAMME);
+        assertEquals("closed", owner.queryForObject("SELECT status FROM workflow_discrepancy WHERE id = ?", String.class, disc));
+        assertThrows(DataIntegrityViolationException.class, () -> repo.addDiscrepancyResponse(disc, 3, "late", NOVA_USER));
     }
 
     @Test
-    void workingDayDueUsesPersistedCalendarAndPauseEvents() {
-        owner.update("INSERT INTO workflow_calendar_closure (calendar_key, closure_date, reason) VALUES ('india_bee_default', DATE '2026-5-1', 'holiday')");
-        var spec = repo.loadCalendarSpec("india_bee_default").orElseThrow();
-        Instant start = LocalDate.of(2026, 4, 30).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
-        Instant due = WorkingDaySla.dueAtEndOfWorkingDay(start, 2, spec);
-        assertTrue(due.atZone(WorkingDaySla.ZONE).toLocalDate().isAfter(LocalDate.of(2026, 5, 1)));
+    void registrationAndModelSubjectsWithOpenTaskUniqueness() {
+        UUID c1 = UUID.randomUUID();
+        UUID c2 = UUID.randomUUID();
+        var reg = repo.createTaskIdempotent(cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, registrationId, "scr_d", "review"), c1, PROGRAMME, "programme");
+        var model = repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scr_d", "review"), c2, PROGRAMME, "programme");
+        assertNotEquals(reg.id(), model.id());
+        assertThrows(DataAccessException.class,
+            () -> repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "scr_d", "review"), UUID.randomUUID(), PROGRAMME, "programme"));
+    }
 
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "demo_policy", "start", "bureau", start, null);
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "demo_policy", "pause", "applicant", start.plusSeconds(60), null);
-        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID, "demo_policy", "resume", "applicant", start.plusSeconds(86400), null);
-        var pauses = WorkingDaySla.applicantPausesFromClockEvents(repo.loadClockEvents(WorkflowFoundationRepository.SUBJECT_MODEL, MODEL_ID));
-        assertEquals(1, pauses.size());
+    @Test
+    void subjectDeleteBlockedWhenFoundationRowsExist() {
+        UUID reg2 = UUID.randomUUID();
+        owner.update(
+            "INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version) VALUES (?, ?, 'brand', ?, ?, 'draft', 0)",
+            reg2, "WF2A-DEL-" + TAG, NOVA_ORG, "WF Del " + TAG);
+        repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_REGISTRATION, reg2, "scr_del", "review"), UUID.randomUUID(), PROGRAMME, "programme");
+        assertThrows(DataAccessException.class, () -> owner.update("DELETE FROM registration_application WHERE id = ?", reg2));
+        UUID modelOnly = UUID.fromString("00000000-0000-4000-c000-000000000002");
+        repo.createTask(cmd(WorkflowFoundationRepository.SUBJECT_MODEL, modelOnly, "scr_del_m", "review"), UUID.randomUUID(), PROGRAMME, "programme");
+        assertThrows(DataAccessException.class, () -> owner.update("DELETE FROM model_application WHERE id = ?", modelOnly));
+    }
+
+    @Test
+    void clockEventsRequireValidSequenceAndPolicyVersion() {
+        Instant start = LocalDate.of(2026, 4, 1).atTime(9, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant();
+        UUID clockSubject = registrationId;
+        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "start", "bureau", start, null);
+        assertThrows(IllegalArgumentException.class,
+            () -> repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "resume", "applicant",
+                start.plusSeconds(5), null));
+        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "pause", "applicant", start.plusSeconds(10),
+            null);
+        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "resume", "applicant", start.plusSeconds(20),
+            null);
+        repo.appendClockEvent(WorkflowFoundationRepository.SUBJECT_REGISTRATION, clockSubject, policyVersionId, "stop", "bureau", start.plusSeconds(30), null);
+        UUID storedPolicy = runtime.queryForObject(
+            "SELECT policy_version_id FROM workflow_sla_clock_event WHERE subject_id = ? LIMIT 1", UUID.class, clockSubject);
+        assertEquals(policyVersionId, storedPolicy);
     }
 }

@@ -23,8 +23,6 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const activeCat = categoryForPath(pathname)?.id ?? categories[0]?.id ?? null;
   // The category the current route belongs to opens by itself; a manual toggle is kept until the route moves to another category.
   const [toggle, setToggle] = useState<{ cat: string | null; open: string | null } | null>(null);
-  // "Your BEE records" starts closed after sign-in; the person opens it when they want it.
-  const [recordsOpen, setRecordsOpen] = useState(false);
   const open = toggle?.cat === activeCat ? toggle.open : activeCat;
   const setOpen = (next: string | null) => setToggle({ cat: activeCat, open: next });
 
@@ -38,29 +36,18 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
 
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">
-        {runtimeNav.length > 0 && (
-          <div className="pb-space-sm mb-space-sm border-b border-white/10" data-testid="runtime-nav">
-            <button
-              type="button"
-              onClick={() => setRecordsOpen((v) => !v)}
-              aria-expanded={recordsOpen}
-              className="w-full flex items-center gap-space-sm px-space-md py-2 text-left text-forest-light hover:text-on-primary transition-colors"
-            >
-              <Icon name="folder_open" size={20} />
-              <span className="flex-1 font-label-lg text-label-lg">Your BEE records</span>
-              <Icon name={recordsOpen ? "expand_less" : "expand_more"} size={18} />
-            </button>
-            <div hidden={!recordsOpen}>
-            {runtimeNav.map((r) => (
-              <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} compact />
-            ))}
-            </div>
-          </div>
-        )}
         <div>
           {categories.map((c) => {
             const isOpen = open === c.id;
             const inCat = activeCat === c.id;
+            // The signed-in person's working screens are part of Home: one menu, not two. Home's own entries that the list already carries are not shown twice.
+            const isHome = c.id === "home";
+            const records = isHome ? runtimeNav : [];
+            const taken = new Set(records.map((r) => r.href));
+            const kept = c.items.filter((it) => !taken.has(it.href));
+            // The Dashboard (the landing page) leads; then the working screens; then whatever else Home holds.
+            const lead = kept.filter((it) => it.href === "/app");
+            const rest = kept.filter((it) => it.href !== "/app");
             return (
               <div key={c.id}>
                 <button
@@ -74,9 +61,30 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
                   <span className="flex-1 font-label-lg text-label-lg">{lang === "hi" ? c.hi : c.en}</span>
                   <Icon name={isOpen ? "expand_less" : "expand_more"} size={18} />
                 </button>
-                {isOpen && (
-                  <div className="pb-space-xs">
-                    {c.items.map((it) => {
+                {(isOpen || (isHome && records.length > 0)) && (
+                  <div className="pb-space-xs" hidden={!isOpen} data-testid={isHome && records.length > 0 ? "runtime-nav" : undefined}>
+                    {lead.map((it) => {
+                      const active = pathname === it.href;
+                      return (
+                        <Link
+                          key={it.href + it.en}
+                          href={it.href}
+                          onClick={onNavigate}
+                          className={`flex items-center gap-space-sm pl-[30px] pr-space-md py-1.5 font-body-sm text-body-sm transition-colors ${
+                            active
+                              ? "bg-primary-container text-on-primary font-semibold"
+                              : "text-forest-light/80 hover:text-on-primary hover:bg-white/5"
+                          }`}
+                        >
+                          <Icon name={it.icon} size={16} className={active ? "text-solar-gold" : "text-forest-light/40"} fill={active} />
+                          <span className="flex-1">{lang === "hi" ? it.hi : it.en}</span>
+                        </Link>
+                      );
+                    })}
+                    {records.map((r) => (
+                      <SidebarLink key={r.href} href={r.href} icon={r.icon} label={lang === "hi" ? r.hi : r.en} active={pathname === r.href} onNavigate={onNavigate} testId={`runtime-nav-${r.href.split("/").pop()}`} compact />
+                    ))}
+                    {rest.map((it) => {
                       const active = pathname === it.href;
                       return (
                         <Link

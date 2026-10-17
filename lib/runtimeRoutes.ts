@@ -19,6 +19,14 @@ export interface RuntimeRoute {
 
 export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   {
+    href: "/app/demo/executive",
+    en: "Executive dashboard",
+    hi: "कार्यकारी डैशबोर्ड",
+    icon: "space_dashboard",
+    navRoles: ["director", "secretary", "programme", "admin"],
+    implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
+  },
+  {
     href: "/app/demo/payments",
     en: "Payments",
     hi: "भुगतान",
@@ -48,14 +56,6 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     hi: "त्रैमासिक उत्पादन",
     icon: "factory",
     navRoles: ["manufacturer", "agency", "programme", "admin"],
-    implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
-  },
-  {
-    href: "/app/demo/executive",
-    en: "Executive dashboard",
-    hi: "कार्यकारी डैशबोर्ड",
-    icon: "space_dashboard",
-    navRoles: ["director", "secretary", "programme", "admin"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {

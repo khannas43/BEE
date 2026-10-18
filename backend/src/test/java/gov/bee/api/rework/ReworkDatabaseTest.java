@@ -123,11 +123,11 @@ class ReworkDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         secretaryRepo = transactional(new SecretaryApprovalRepository(db));
-        returns = transactional(new StageReturnRepository(db));
+        returns = transactional(new StageReturnRepository(owner));
         resub = transactional(new ResubmitApplicationRepository(db));
         rejects = transactional(new StageRejectRepository(db));
         history = new HistoryRepository(db);
-        assertEquals(70, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V70");
+        assertEquals(71, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V71");
     }
 
     @AfterAll

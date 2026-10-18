@@ -25,14 +25,15 @@ public class ResubmitApplicationRepository {
 
     public enum Outcome { RESUBMITTED, STALE }
 
-    public record Result(Outcome outcome, int versionAfter, Instant resubmittedAt) {
+    public record Result(Outcome outcome, int versionAfter, Instant resubmittedAt, UUID resubmissionId) {
         static Result of(Outcome outcome) {
-            return new Result(outcome, 0, null);
+            return new Result(outcome, 0, null, null);
         }
     }
 
     /** The latest return that no resubmission has answered yet, with the rating-input fingerprint taken at the return. */
-    public record OpenReturn(UUID id, String returnedFromState, BigDecimal declaredIseer, String laboratoryCode, LocalDate testedOn, int reportVersions) {
+    public record OpenReturn(UUID id, String returnedFromState, BigDecimal declaredIseer, String laboratoryCode, LocalDate testedOn, int reportVersions,
+                             String reason, Instant returnedAt) {
     }
 
     private final JdbcTemplate jdbc;
@@ -43,11 +44,12 @@ public class ResubmitApplicationRepository {
 
     public Optional<OpenReturn> openReturn(UUID applicationId) {
         return jdbc.query(
-            "SELECT r.id, r.returned_from_state, r.fp_declared_iseer, r.fp_laboratory_code, r.fp_tested_on, r.fp_report_versions "
+            "SELECT r.id, r.returned_from_state, r.fp_declared_iseer, r.fp_laboratory_code, r.fp_tested_on, r.fp_report_versions, r.reason, r.returned_at "
                 + "FROM model_application_return r LEFT JOIN model_application_resubmission s ON s.return_id = r.id "
                 + "WHERE r.application_id = ? AND s.id IS NULL ORDER BY r.returned_at DESC LIMIT 1",
             (rs, i) -> new OpenReturn(rs.getObject("id", UUID.class), rs.getString("returned_from_state"), rs.getBigDecimal("fp_declared_iseer"),
-                rs.getString("fp_laboratory_code"), rs.getObject("fp_tested_on", LocalDate.class), rs.getInt("fp_report_versions")),
+                rs.getString("fp_laboratory_code"), rs.getObject("fp_tested_on", LocalDate.class), rs.getInt("fp_report_versions"), rs.getString("reason"),
+                rs.getTimestamp("returned_at").toInstant()),
             applicationId).stream().findFirst();
     }
 
@@ -83,10 +85,11 @@ public class ResubmitApplicationRepository {
             "INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING occurred_at",
             Timestamp.class, eventId, applicationId, ACTION, FROM_STATE, resumedState, actorAccountId, actorRole, versionAfter);
+        UUID resubmissionId = UUID.randomUUID();
         jdbc.update(
             "INSERT INTO model_application_resubmission (id, application_id, return_id, transition_event_id, resumed_state, rating_superseded, note, "
                 + "resubmitted_by_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            UUID.randomUUID(), applicationId, returnId, eventId, resumedState, ratingSuperseded, note, actorAccountId);
-        return new Result(Outcome.RESUBMITTED, versionAfter, at.toInstant());
+            resubmissionId, applicationId, returnId, eventId, resumedState, ratingSuperseded, note, actorAccountId);
+        return new Result(Outcome.RESUBMITTED, versionAfter, at.toInstant(), resubmissionId);
     }
 }

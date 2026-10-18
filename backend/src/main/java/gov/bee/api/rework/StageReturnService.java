@@ -9,8 +9,13 @@ import gov.bee.api.identity.Caller;
 import gov.bee.api.policy.ApplicationFacts;
 import gov.bee.api.policy.StageReturn;
 import gov.bee.api.policy.SlicePolicy;
+import gov.bee.api.snl.WorkflowReturnResponseWiring;
 import gov.bee.api.web.ApiErrors;
+import gov.bee.api.workflow.WorkflowFoundationRepository;
+import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.security.MessageDigest;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -21,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
  * The owner of a scrutiny or approval stage returns the application to the applicant with a reason (FIRST_SLICE.md
@@ -38,13 +44,15 @@ public class StageReturnService {
 
     private final ModelApplicationRepository applications;
     private final StageReturnRepository repository;
+    private final WorkflowReturnResponseWiring returnWiring;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
 
-    public StageReturnService(ModelApplicationRepository applications, StageReturnRepository repository,
+    public StageReturnService(ModelApplicationRepository applications, StageReturnRepository repository, WorkflowReturnResponseWiring returnWiring,
                                      IdempotencyRepository idempotency, ObjectMapper json) {
         this.applications = applications;
         this.repository = repository;
+        this.returnWiring = returnWiring;
         this.idempotency = idempotency;
         this.json = json;
     }
@@ -91,10 +99,40 @@ public class StageReturnService {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
         String fromState = row.state();
-        var done = repository.doReturn(appId, row.version(), caller.accountId(), StageReturn.forState(fromState).orElseThrow().actor().role(), fromState, input.get().reason());
-        if (done.outcome() != StageReturnRepository.Outcome.RETURNED) {
+        StageReturnRepository.Result done;
+        UUID returnId = UUID.randomUUID();
+        try {
+            var trans = repository.transitionToReturned(appId, row.version(), caller.accountId(), StageReturn.forState(fromState).orElseThrow().actor().role(),
+                fromState);
+            if (trans.outcome() != StageReturnRepository.Outcome.RETURNED) {
+                idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+                return error(HttpStatus.CONFLICT, "version_conflict");
+            }
+            done = new StageReturnRepository.Result(StageReturnRepository.Outcome.RETURNED, trans.versionAfter(), trans.returnedAt(), returnId);
+            returnWiring.completeWiredReturn(appId, returnId, trans.transitionEventId(), fromState, input.get().reason(), trans.returnedAt(), caller.accountId(),
+                StageReturn.forState(fromState).orElseThrow().actor().role(), idempotencyKey);
+        } catch (WorkflowIdempotencyConflictException ex) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
-            return error(HttpStatus.CONFLICT, "version_conflict");
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+        } catch (DataAccessException ex) {
+            if (ex instanceof DataAccessResourceFailureException) {
+                throw ex;
+            }
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            if (WorkflowFoundationRepository.isSqlMessage(ex, "model_return_officer_ambiguous")
+                || WorkflowFoundationRepository.isSqlMessage(ex, "notification_recipient_inactive")) {
+                return error(HttpStatus.CONFLICT, "assignee_unavailable");
+            }
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            throw ex;
+        } catch (IllegalStateException ex) {
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            if ("model_return_officer_ambiguous".equals(ex.getMessage()) || "model_return_officer_unavailable".equals(ex.getMessage())) {
+                return error(HttpStatus.CONFLICT, "assignee_unavailable");
+            }
+            throw ex;
         }
         Map<String, Object> receipt = new LinkedHashMap<>();
         receipt.put("applicationId", appId.toString());

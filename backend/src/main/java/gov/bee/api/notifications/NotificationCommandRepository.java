@@ -6,8 +6,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
 
-/** Replay-safe delivery of in-portal notifications via {@code notification_foundation_deliver} (V70). Internal; not wired to HTTP yet. */
+/** Replay-safe delivery of in-portal notifications via {@code notification_foundation_deliver} (V70). */
+@Repository
 public class NotificationCommandRepository {
 
     public record DeliverCommand(String subjectKind, UUID subjectId, String kind, String messageSuffix) {
@@ -23,7 +25,10 @@ public class NotificationCommandRepository {
     }
 
     public static String payloadHash(DeliverCommand command) {
-        String canonical = command.subjectKind() + "|" + command.subjectId() + "|" + command.kind() + "|" + command.messageSuffix();
+        return sha256(command.subjectKind() + "|" + command.subjectId() + "|" + command.kind() + "|" + command.messageSuffix());
+    }
+
+    public static String sha256(String canonical) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
@@ -43,6 +48,20 @@ public class NotificationCommandRepository {
             command.subjectId(),
             command.kind(),
             command.messageSuffix(),
+            actorAccountId);
+        return new DeliverResult(count == null ? 0 : count);
+    }
+
+    public DeliverResult deliverModelResubmitOfficer(UUID commandId, UUID applicationId, UUID returnId, UUID resubmissionId, String resumedStage,
+                                                   UUID actorAccountId) {
+        Integer count = jdbc.queryForObject(
+            "SELECT model_return_response_officer_resubmit_notify(?, ?, ?, ?, ?, ?)",
+            Integer.class,
+            commandId,
+            applicationId,
+            returnId,
+            resubmissionId,
+            resumedStage,
             actorAccountId);
         return new DeliverResult(count == null ? 0 : count);
     }

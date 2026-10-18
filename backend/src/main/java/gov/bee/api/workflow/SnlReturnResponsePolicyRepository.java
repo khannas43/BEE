@@ -7,8 +7,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
 
-/** Selects the persisted {@code snl_return_response} policy and computes due dates via {@link WorkingDaySla}. Internal; not wired to HTTP yet. */
+/** Selects the persisted {@code snl_return_response} policy and computes due dates via {@link WorkingDaySla}. */
+@Repository
 public class SnlReturnResponsePolicyRepository {
 
     public static final String POLICY_KEY = "snl_return_response";

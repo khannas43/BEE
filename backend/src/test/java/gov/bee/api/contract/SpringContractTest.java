@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -156,6 +157,21 @@ class SpringContractTest {
 
     @MockitoBean
     gov.bee.api.rework.StageReturnRepository returnRepo;
+
+    @MockitoBean
+    gov.bee.api.snl.WorkflowReturnResponseWiring returnWiring;
+
+    @MockitoBean
+    gov.bee.api.snl.ModelReturnResponseWiringRepository modelReturnWiringRepo;
+
+    @MockitoBean
+    gov.bee.api.notifications.NotificationCommandRepository notificationCommandRepo;
+
+    @MockitoBean
+    gov.bee.api.workflow.WorkflowFoundationRepository workflowFoundationRepo;
+
+    @MockitoBean
+    gov.bee.api.workflow.SnlReturnResponsePolicyRepository snlReturnPolicyRepo;
 
     @MockitoBean
     gov.bee.api.rework.ResubmitApplicationRepository resubmitRepo;
@@ -1501,11 +1517,15 @@ class SpringContractTest {
         String path = "/api/model-applications/" + NOVA_APP + "/return";
         String ok = "{\"version\":3,\"reason\":\"The laboratory name on the report does not match.\"}";
         var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("iame"))));
-        var done = new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.RETURNED, 4, Instant.parse("2026-10-04T10:00:00Z"));
+        var done = new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.RETURNED, 4, Instant.parse("2026-10-04T10:00:00Z"),
+            UUID.randomUUID());
+        var transOk = new gov.bee.api.rework.StageReturnRepository.TransitionResult(gov.bee.api.rework.StageReturnRepository.Outcome.RETURNED, 4,
+            Instant.parse("2026-10-04T10:00:00Z"), UUID.randomUUID());
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
         when(returnRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of());
-        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
+        when(returnRepo.transitionToReturned(any(), anyInt(), any(), any(), any())).thenReturn(transOk);
+        doNothing().when(returnWiring).completeWiredReturn(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         // Each stage owner returns from its own stage, and the receipt names the stage it came from.
         record Owner(String role, String scope, String state, Set<String> assigned) {
@@ -1527,10 +1547,9 @@ class SpringContractTest {
 
         // Version, idempotency and replay.
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
-        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(
-            new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.STALE, 0, null));
+        when(returnRepo.transitionToReturned(any(), anyInt(), any(), any(), any())).thenReturn(gov.bee.api.rework.StageReturnRepository.TransitionResult.stale());
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
-        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
+        when(returnRepo.transitionToReturned(any(), anyInt(), any(), any(), any())).thenReturn(transOk);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
@@ -1574,7 +1593,7 @@ class SpringContractTest {
         when(identity.activeAccount(any())).thenReturn(Optional.empty());
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
         officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
-        doThrow(new DataAccessResourceFailureException("down")).when(returnRepo).doReturn(any(), anyInt(), any(), any(), any(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(returnRepo).transitionToReturned(any(), anyInt(), any(), any(), any());
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 
@@ -2409,8 +2428,10 @@ class SpringContractTest {
         String path = "/api/model-applications/" + NOVA_APP + "/resubmit";
         String ok = "{\"version\":5,\"note\":\"Corrected the laboratory name.\"}";
         var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
-        var done = new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.RESUBMITTED, 6, Instant.parse("2026-10-04T10:00:00Z"));
-        var openIame = new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "iame_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1);
+        var done = new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.RESUBMITTED, 6,
+            Instant.parse("2026-10-04T10:00:00Z"), UUID.randomUUID());
+        var openIame = new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "iame_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1,
+            "reason", Instant.parse("2026-10-04T09:00:00Z"));
 
         account("manufacturer", "own-org");
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
@@ -2426,18 +2447,21 @@ class SpringContractTest {
         when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(openIame));
         when(resubmitRepo.ratingInputsChanged(any(), any())).thenReturn(false);
         when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(done);
+        doNothing().when(returnWiring).afterResubmit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         // Back to the stage that returned it; and through rating again when a rating input changed after the rating existed.
         var back = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(back.getContentAsString().contains("\"toState\":\"iame_scrutiny\"") && back.getContentAsString().contains("\"ratingSuperseded\":false"), back.getContentAsString());
         conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":5}"), 200, null);
-        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "director_review", new BigDecimal("4.50"), "LAB", TESTED_ON, 1)));
+        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "director_review",
+            new BigDecimal("4.50"), "LAB", TESTED_ON, 1, "reason", Instant.parse("2026-10-04T09:00:00Z"))));
         var unchanged = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(unchanged.getContentAsString().contains("\"toState\":\"director_review\"") && unchanged.getContentAsString().contains("\"ratingSuperseded\":false"), unchanged.getContentAsString());
         when(resubmitRepo.ratingInputsChanged(any(), any())).thenReturn(true);
         var superseded = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(superseded.getContentAsString().contains("\"toState\":\"rating\"") && superseded.getContentAsString().contains("\"ratingSuperseded\":true"), superseded.getContentAsString());
-        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "bee_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1)));
+        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "bee_scrutiny",
+            new BigDecimal("4.50"), "LAB", TESTED_ON, 1, "reason", Instant.parse("2026-10-04T09:00:00Z"))));
         var early = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(early.getContentAsString().contains("\"toState\":\"bee_scrutiny\"") && early.getContentAsString().contains("\"ratingSuperseded\":false"), "before the rating exists nothing is superseded: " + early.getContentAsString());
         when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(openIame));
@@ -2457,7 +2481,7 @@ class SpringContractTest {
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
         conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":5", "\"version\":4")), 409, "version_conflict");
         when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(
-            new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.STALE, 0, null));
+            new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.STALE, 0, null, null));
         conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
         when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(done);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));

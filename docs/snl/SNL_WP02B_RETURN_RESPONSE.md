@@ -1,6 +1,6 @@
 # SNL WP02B — return, applicant response and review-task wiring
 
-**Status:** Umbrella design recorded; Briefs 19A and 19B accepted; Brief 19B-2 and Briefs 19C–19D remain.
+**Status:** Umbrella design recorded; Briefs 19A and 19B accepted; **Brief 19B-2 implemented (ChatGPT review pending)**; Briefs 19C–19D remain.
 **Depends on:** WP2A merge `80b1da7`, `WorkflowFoundationRepository`, V69 command functions.
 **Migration sequence:** V70 starts the policy and generic notification foundation; later migrations wire model and registration journeys. V69 remains unchanged.
 
@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Accepted (`64accd5` plus acceptance corrections) |
 | 19B | Model return/resubmit/response wiring | Accepted (V71 trusted orchestrate commands + `WorkflowReturnResponseWiring`; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
+| 19B-2 | Model stage-forward closure + repeat-cycle safety | **Review pending** (V72 cycle lifecycle + `model_return_response_orchestrate_forward_closure`; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
 | 19C | Registration return/resubmit/response wiring | Planned |
 | 19D | Common read projection, consolidated concurrency/rollback proof and plan evidence | Planned |
 
@@ -22,7 +23,7 @@
 | Registration | `recommend` / `approve` after resubmit | `RegistrationReviewService` | forward states | task stays open | running | disposition `accepted` | — |
 | Model | `POST …/model-applications/{id}/return` | `StageReturnService` → `StageReturnRepository` + `WorkflowReturnResponseWiring` | `{stage}` → `returned` | `{fromState}` / `review` | start + pause | open `return_response` | applicant once inside the V71 trusted orchestrate command |
 | Model | `POST …/model-applications/{id}/resubmit` | `ResubmitApplicationService` + wiring | `returned` → `{resumed}` | same stage task | resume | response N | database-resolved officer inside the V71 trusted orchestrate command |
-| Model | next forward at stage | existing forward services | varies | task open | running | `accepted` or `needs_more` on re-return | — |
+| Model | next forward at stage | `IameRecommendationService`, `ReviewerForwardService`, `RatingService`, `DirectorRecommendationService`, `SecretaryApprovalService` + `WorkflowReturnResponseWiring.afterAcceptedForward` | varies | task **completed** when open return cycle present | **stop** | `accepted` on forward; `needs_more` on re-return before forward | — |
 
 Officer **re-return** after resubmit: disposition `needs_more` on the undisposed response, then pause clock again (same discrepancy, next cycle).
 
@@ -63,4 +64,4 @@ Applicant notifications: reference, return reason, due date, required action onl
 
 ## Deferrals (still WP2B / BL-257)
 
-Model stage-forward closure after resubmit (19B-2), registration wiring (19C), common public read API and consolidated proof (19D), BFF, UI, supervisor queue, 60-day job (BL-253), cancel/reject normalization (BL-256), and other non-return transitions.
+Registration wiring (19C), common public read API and consolidated proof (19D), BFF, UI, supervisor queue, 60-day job (BL-253), cancel/reject normalization (BL-256), and other non-return transitions. Model stage-forward closure (19B-2) is implemented and awaiting ChatGPT review before acceptance.

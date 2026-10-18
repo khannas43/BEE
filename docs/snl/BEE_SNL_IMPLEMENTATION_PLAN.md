@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress — Brief 19B accepted | 60% | WP1 | R1 | V69–V71 accepted; model return/resubmit is wired, while 19B-2 and 19C–19D remain |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19B-2 review pending | 65% | WP1 | R1 | V69–V72 landed; model return/resubmit and forward closure wired; 19C–19D remain |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -252,12 +252,12 @@ At the end of each development session, update the package status, progress, com
 | Tracking field | Current value |
 |---|---|
 | Status | In progress |
-| Progress | 60% |
+| Progress | 65% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
 | Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation and V71 model return/resubmit wiring. Model commands now commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response and evidence writes. Registration remains unwired. |
-| Next action | Implement 19B-2 stage-forward closure, then 19C registration wiring and 19D read projection/consolidated proof (BL-257) |
+| Next action | ChatGPT review of 19B-2, then 19C registration wiring and 19D read projection/consolidated proof (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 

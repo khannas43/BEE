@@ -28,9 +28,9 @@ public class RatingRepository {
 
     public enum Outcome { COMPUTED, STALE }
 
-    public record Result(Outcome outcome, int versionAfter, int ratingVersion, Instant computedAt) {
+    public record Result(Outcome outcome, int versionAfter, UUID transitionEventId, int ratingVersion, Instant computedAt) {
         static Result of(Outcome outcome) {
-            return new Result(outcome, 0, 0, null);
+            return new Result(outcome, 0, null, 0, null);
         }
     }
 
@@ -87,6 +87,6 @@ public class RatingRepository {
             "INSERT INTO model_application_rating (id, application_id, transition_event_id, rating_version, basis, scheme_key, declared_iseer, "
                 + "verified_iseer, stars, computed_by_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             UUID.randomUUID(), applicationId, eventId, ratingVersion, BASIS, schemeKey, declaredIseer, verifiedIseer, stars, actorAccountId);
-        return new Result(Outcome.COMPUTED, versionAfter, ratingVersion, at.toInstant());
+        return new Result(Outcome.COMPUTED, versionAfter, eventId, ratingVersion, at.toInstant());
     }
 }

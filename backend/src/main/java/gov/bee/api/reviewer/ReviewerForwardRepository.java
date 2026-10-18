@@ -24,9 +24,9 @@ public class ReviewerForwardRepository {
 
     public enum Outcome { FORWARDED, STALE }
 
-    public record Result(Outcome outcome, int versionAfter, Instant forwardedAt) {
+    public record Result(Outcome outcome, int versionAfter, UUID transitionEventId, Instant forwardedAt) {
         static Result of(Outcome outcome) {
-            return new Result(outcome, 0, null);
+            return new Result(outcome, 0, null, null);
         }
     }
 
@@ -68,6 +68,6 @@ public class ReviewerForwardRepository {
         jdbc.update(
             "UPDATE assignment SET active = false WHERE subject_type = 'model_application' AND subject_id = ? AND stage = ? AND user_id = ? AND active",
             applicationId, FROM_STATE, actorAccountId);
-        return new Result(Outcome.FORWARDED, versionAfter, at.toInstant());
+        return new Result(Outcome.FORWARDED, versionAfter, eventId, at.toInstant());
     }
 }

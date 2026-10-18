@@ -9,8 +9,13 @@ import gov.bee.api.identity.Caller;
 import gov.bee.api.policy.ApplicationFacts;
 import gov.bee.api.policy.SliceAction;
 import gov.bee.api.policy.SlicePolicy;
+import gov.bee.api.snl.WorkflowReturnResponseWiring;
 import gov.bee.api.web.ApiErrors;
+import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.math.BigDecimal;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.util.List;
@@ -45,15 +50,17 @@ public class RatingService {
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
     private final gov.bee.api.settings.BusinessSettingService settings;
+    private final WorkflowReturnResponseWiring returnWiring;
 
     public RatingService(ModelApplicationRepository applications, RatingRepository repository,
                                      IdempotencyRepository idempotency, ObjectMapper json,
-                                     gov.bee.api.settings.BusinessSettingService settings) {
+                                     gov.bee.api.settings.BusinessSettingService settings, WorkflowReturnResponseWiring returnWiring) {
         this.settings = settings;
         this.applications = applications;
         this.repository = repository;
         this.idempotency = idempotency;
         this.json = json;
+        this.returnWiring = returnWiring;
     }
 
     @Transactional
@@ -126,6 +133,21 @@ public class RatingService {
         if (done.outcome() != RatingRepository.Outcome.COMPUTED) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
+        }
+        try {
+            returnWiring.afterAcceptedForward(appId, done.transitionEventId(), RatingRepository.ACTION, RatingRepository.FROM_STATE, RatingRepository.TO_STATE,
+                done.versionAfter(), caller.accountId(), "programme", done.computedAt(), idempotencyKey);
+        } catch (WorkflowIdempotencyConflictException ex) {
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+        } catch (DataAccessException ex) {
+            if (ex instanceof DataAccessResourceFailureException) {
+                throw ex;
+            }
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            throw ex;
         }
         Map<String, Object> receipt = new LinkedHashMap<>();
         receipt.put("applicationId", appId.toString());

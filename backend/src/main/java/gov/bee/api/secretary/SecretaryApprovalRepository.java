@@ -24,9 +24,9 @@ public class SecretaryApprovalRepository {
 
     public enum Outcome { APPROVED, STALE }
 
-    public record Result(Outcome outcome, int versionAfter, Instant approvedAt) {
+    public record Result(Outcome outcome, int versionAfter, UUID transitionEventId, Instant approvedAt) {
         static Result of(Outcome outcome) {
-            return new Result(outcome, 0, null);
+            return new Result(outcome, 0, null, null);
         }
     }
 
@@ -67,6 +67,6 @@ public class SecretaryApprovalRepository {
             UUID.randomUUID(), applicationId, eventId, note, actorAccountId);
         // The certificate is issued in this same transaction; if it cannot be, the approval does not happen.
         jdbc.queryForObject("SELECT issue_certificate(?, ?, ?)", String.class, applicationId, eventId, actorAccountId);
-        return new Result(Outcome.APPROVED, versionAfter, at.toInstant());
+        return new Result(Outcome.APPROVED, versionAfter, eventId, at.toInstant());
     }
 }

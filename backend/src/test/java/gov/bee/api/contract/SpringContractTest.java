@@ -1108,7 +1108,7 @@ class SpringContractTest {
         UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
         String ok = "{\"version\":3,\"verification\":\"verified\",\"note\":\"Report matches the declared laboratory and date.\"}";
         var done = new gov.bee.api.iame.IameRecommendationRepository.Result(gov.bee.api.iame.IameRecommendationRepository.Outcome.RECOMMENDED, 4,
-            Instant.parse("2026-10-04T10:00:00Z"));
+            UUID.fromString("00000000-0000-4000-e000-000000000001"), Instant.parse("2026-10-04T10:00:00Z"));
 
         iameAccount(staff);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
@@ -1133,10 +1133,10 @@ class SpringContractTest {
         // Version, idempotency and assignment conflicts.
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
         when(iameRepo.recommend(any(), anyInt(), any(), any(), any(), any())).thenReturn(
-            new gov.bee.api.iame.IameRecommendationRepository.Result(gov.bee.api.iame.IameRecommendationRepository.Outcome.STALE, 0, null));
+            new gov.bee.api.iame.IameRecommendationRepository.Result(gov.bee.api.iame.IameRecommendationRepository.Outcome.STALE, 0, null, null));
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
         when(iameRepo.recommend(any(), anyInt(), any(), any(), any(), any())).thenReturn(
-            new gov.bee.api.iame.IameRecommendationRepository.Result(gov.bee.api.iame.IameRecommendationRepository.Outcome.NO_ASSIGNEE, 0, null));
+            new gov.bee.api.iame.IameRecommendationRepository.Result(gov.bee.api.iame.IameRecommendationRepository.Outcome.NO_ASSIGNEE, 0, null, null));
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "assignee_unavailable");
         when(iameRepo.recommend(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
@@ -1188,7 +1188,7 @@ class SpringContractTest {
         UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
         String ok = "{\"version\":3,\"note\":\"Checked against the application and the IAME note.\"}";
         var done = new gov.bee.api.reviewer.ReviewerForwardRepository.Result(gov.bee.api.reviewer.ReviewerForwardRepository.Outcome.FORWARDED, 4,
-            Instant.parse("2026-10-04T10:00:00Z"));
+            UUID.fromString("00000000-0000-4000-e000-000000000002"), Instant.parse("2026-10-04T10:00:00Z"));
 
         reviewerAccount(staff);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
@@ -1211,7 +1211,7 @@ class SpringContractTest {
         // Version, idempotency and assignment conflicts.
         conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
         when(reviewerRepo.forward(any(), anyInt(), any(), any(), any())).thenReturn(
-            new gov.bee.api.reviewer.ReviewerForwardRepository.Result(gov.bee.api.reviewer.ReviewerForwardRepository.Outcome.STALE, 0, null));
+            new gov.bee.api.reviewer.ReviewerForwardRepository.Result(gov.bee.api.reviewer.ReviewerForwardRepository.Outcome.STALE, 0, null, null));
         conforms(r, post(path).with(token("reviewer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
         when(reviewerRepo.forward(any(), anyInt(), any(), any(), any())).thenReturn(done);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
@@ -1263,7 +1263,7 @@ class SpringContractTest {
         UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
         String ok = "{\"version\":6,\"note\":\"Rating reviewed; approved.\"}";
         var done = new gov.bee.api.secretary.SecretaryApprovalRepository.Result(gov.bee.api.secretary.SecretaryApprovalRepository.Outcome.APPROVED, 7,
-            Instant.parse("2026-10-04T10:00:00Z"));
+            UUID.fromString("00000000-0000-4000-e000-000000000003"), Instant.parse("2026-10-04T10:00:00Z"));
 
         secretaryAccount(staff);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
@@ -1286,7 +1286,7 @@ class SpringContractTest {
         // Version, idempotency and assignment conflicts.
         conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":6", "\"version\":5")), 409, "version_conflict");
         when(secretaryRepo.approve(any(), anyInt(), any(), any(), any())).thenReturn(
-            new gov.bee.api.secretary.SecretaryApprovalRepository.Result(gov.bee.api.secretary.SecretaryApprovalRepository.Outcome.STALE, 0, null));
+            new gov.bee.api.secretary.SecretaryApprovalRepository.Result(gov.bee.api.secretary.SecretaryApprovalRepository.Outcome.STALE, 0, null, null));
         conforms(r, post(path).with(token("secretary")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
         when(secretaryRepo.approve(any(), anyInt(), any(), any(), any())).thenReturn(done);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
@@ -1338,7 +1338,7 @@ class SpringContractTest {
         UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
         String ok = "{\"version\":5,\"note\":\"Rating reviewed; recommend approval.\"}";
         var done = new gov.bee.api.director.DirectorRecommendationRepository.Result(gov.bee.api.director.DirectorRecommendationRepository.Outcome.RECOMMENDED, 6,
-            "secretary_approval", Instant.parse("2026-10-04T10:00:00Z"));
+            UUID.fromString("00000000-0000-4000-e000-000000000004"), "secretary_approval", Instant.parse("2026-10-04T10:00:00Z"));
 
         directorAccount(staff);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
@@ -1352,7 +1352,7 @@ class SpringContractTest {
         when(directorRepo.directorFinal(any(), any())).thenReturn(true);
         when(directorRepo.recommend(any(), anyInt(), any(), any(), any(), anyBoolean())).thenReturn(
             new gov.bee.api.director.DirectorRecommendationRepository.Result(gov.bee.api.director.DirectorRecommendationRepository.Outcome.RECOMMENDED, 6,
-                "approved", Instant.parse("2026-10-04T10:00:00Z")));
+                UUID.fromString("00000000-0000-4000-e000-000000000005"), "approved", Instant.parse("2026-10-04T10:00:00Z")));
         var finalRes = conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(finalRes.getContentAsString().contains("\"toState\":\"approved\"") && finalRes.getContentAsString().contains("\"directorFinal\":true"), finalRes.getContentAsString());
         when(directorRepo.directorFinal(any(), any())).thenReturn(false);
@@ -1371,7 +1371,7 @@ class SpringContractTest {
         // Version, idempotency and assignment conflicts.
         conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":5", "\"version\":4")), 409, "version_conflict");
         when(directorRepo.recommend(any(), anyInt(), any(), any(), any(), anyBoolean())).thenReturn(
-            new gov.bee.api.director.DirectorRecommendationRepository.Result(gov.bee.api.director.DirectorRecommendationRepository.Outcome.STALE, 0, null, null));
+            new gov.bee.api.director.DirectorRecommendationRepository.Result(gov.bee.api.director.DirectorRecommendationRepository.Outcome.STALE, 0, null, null, null));
         conforms(r, post(path).with(token("director")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
         when(directorRepo.recommend(any(), anyInt(), any(), any(), any(), anyBoolean())).thenReturn(done);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
@@ -1422,8 +1422,8 @@ class SpringContractTest {
         String path = "/api/model-applications/" + NOVA_APP + "/rating";
         UUID staff = UUID.fromString("00000000-0000-4000-b000-0000000000aa");
         String ok = "{\"version\":4,\"verifiedIseer\":\"4.62\"}";
-        var done = new gov.bee.api.rating.RatingRepository.Result(gov.bee.api.rating.RatingRepository.Outcome.COMPUTED, 5, 1,
-            Instant.parse("2026-10-04T10:00:00Z"));
+        var done = new gov.bee.api.rating.RatingRepository.Result(gov.bee.api.rating.RatingRepository.Outcome.COMPUTED, 5,
+            UUID.fromString("00000000-0000-4000-e000-000000000006"), 1, Instant.parse("2026-10-04T10:00:00Z"));
         var bands = List.of(
             new gov.bee.api.rating.RatingRepository.Band("RAC-ISEER-DEMO-1", 1, new BigDecimal("3.30")),
             new gov.bee.api.rating.RatingRepository.Band("RAC-ISEER-DEMO-1", 2, new BigDecimal("3.50")),
@@ -1465,7 +1465,7 @@ class SpringContractTest {
         // Version, idempotency and assignment conflicts.
         conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":4", "\"version\":3")), 409, "version_conflict");
         when(ratingRepo.compute(any(), anyInt(), any(), any(), any(), any(), any(), anyInt())).thenReturn(
-            new gov.bee.api.rating.RatingRepository.Result(gov.bee.api.rating.RatingRepository.Outcome.STALE, 0, 0, null));
+            new gov.bee.api.rating.RatingRepository.Result(gov.bee.api.rating.RatingRepository.Outcome.STALE, 0, null, 0, null));
         conforms(r, post(path).with(token("programme")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
         when(ratingRepo.compute(any(), anyInt(), any(), any(), any(), any(), any(), anyInt())).thenReturn(done);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));

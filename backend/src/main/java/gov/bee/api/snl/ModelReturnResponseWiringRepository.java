@@ -9,7 +9,29 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ModelReturnResponseWiringRepository {
 
-    public record CycleRow(UUID id, UUID applicationId, String reviewStage, UUID taskId, UUID discrepancyId, String lastResumedStage) {
+    public record CycleRow(
+        UUID id,
+        UUID applicationId,
+        int cycleSeq,
+        String status,
+        String reviewStage,
+        UUID taskId,
+        UUID discrepancyId,
+        String lastResumedStage) {
+    }
+
+    public record OrchestrateForwardClosureCommand(
+        UUID applicationId,
+        UUID transitionEventId,
+        String action,
+        String fromState,
+        String toState,
+        int versionAfter,
+        UUID actorAccount,
+        String actorRole,
+        Instant forwardOccurredAt,
+        UUID wiringCommandId,
+        String wiringPayloadHash) {
     }
 
     public record OrchestrateWiredReturnCommand(
@@ -65,17 +87,43 @@ public class ModelReturnResponseWiringRepository {
         this.jdbc = jdbc;
     }
 
-    public Optional<CycleRow> findCycle(UUID applicationId) {
+    public Optional<CycleRow> findOpenCycle(UUID applicationId) {
         return jdbc.query(
-            "SELECT id, application_id, review_stage, task_id, discrepancy_id, last_resumed_stage FROM model_return_response_cycle WHERE application_id = ?",
+            "SELECT id, application_id, cycle_seq, status, review_stage, task_id, discrepancy_id, last_resumed_stage "
+                + "FROM model_return_response_cycle WHERE application_id = ? AND status = 'open'",
             (rs, i) -> new CycleRow(
                 rs.getObject("id", UUID.class),
                 rs.getObject("application_id", UUID.class),
+                rs.getInt("cycle_seq"),
+                rs.getString("status"),
                 rs.getString("review_stage"),
                 rs.getObject("task_id", UUID.class),
                 rs.getObject("discrepancy_id", UUID.class),
                 rs.getString("last_resumed_stage")),
             applicationId).stream().findFirst();
+    }
+
+    /** @deprecated prefer {@link #findOpenCycle(UUID)} */
+    public Optional<CycleRow> findCycle(UUID applicationId) {
+        return findOpenCycle(applicationId);
+    }
+
+    public void orchestrateForwardClosure(OrchestrateForwardClosureCommand cmd) {
+        jdbc.query(
+            "SELECT model_return_response_orchestrate_forward_closure(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rs -> {
+            },
+            cmd.applicationId(),
+            cmd.transitionEventId(),
+            cmd.action(),
+            cmd.fromState(),
+            cmd.toState(),
+            cmd.versionAfter(),
+            cmd.actorAccount(),
+            cmd.actorRole(),
+            java.sql.Timestamp.from(cmd.forwardOccurredAt()),
+            cmd.wiringCommandId(),
+            cmd.wiringPayloadHash());
     }
 
     public UUID orchestrateWiredReturn(OrchestrateWiredReturnCommand cmd) {

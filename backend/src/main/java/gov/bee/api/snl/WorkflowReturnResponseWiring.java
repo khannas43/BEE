@@ -69,6 +69,35 @@ public class WorkflowReturnResponseWiring {
         }
     }
 
+    public void afterAcceptedForward(
+        UUID applicationId,
+        UUID transitionEventId,
+        String action,
+        String fromState,
+        String toState,
+        int versionAfter,
+        UUID actorAccountId,
+        String actorRole,
+        Instant forwardOccurredAt,
+        String idempotencyKey) {
+        Runnable hook = testMidWiringFailureHook;
+        if (hook != null) {
+            hook.run();
+        }
+        UUID wiringCommand = commandId(idempotencyKey, "model_forward_closure", applicationId);
+        String wiringHash = sha256(transitionEventId + "|" + fromState + "|" + toState + "|" + forwardOccurredAt + "|forward_closure");
+        try {
+            wiringRepo.orchestrateForwardClosure(new ModelReturnResponseWiringRepository.OrchestrateForwardClosureCommand(
+                applicationId, transitionEventId, action, fromState, toState, versionAfter, actorAccountId, actorRole, forwardOccurredAt, wiringCommand,
+                wiringHash));
+        } catch (DataAccessException ex) {
+            if (WorkflowFoundationRepository.isSqlMessage(ex, "model_return_response_wiring_idempotency_conflict")) {
+                throw new WorkflowIdempotencyConflictException();
+            }
+            throw ex;
+        }
+    }
+
     public void afterResubmit(UUID applicationId, UUID returnId, UUID resubmissionId, String returnedFromStage, Instant returnedAt, String returnReason,
                               String resumedStage, String note, Instant resubmittedAt, UUID actorAccountId, String actorRole, String idempotencyKey) {
         Runnable hook = testMidWiringFailureHook;

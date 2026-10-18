@@ -2,7 +2,7 @@
 
 **Branch:** `cursor/snl-wp02b-model-forward-closure` (19B-2)
 **Migrations:** V71 (return/resubmit), V72 (cycle lifecycle + forward closure)
-**Status:** 19B accepted 18 Oct 2026; **19B-2A corrections complete, ChatGPT review pending**
+**Status:** 19B accepted 18 Oct 2026; **19B-2B corrections complete, ChatGPT review pending**
 
 ## Transaction boundary
 
@@ -61,7 +61,7 @@ No open cycle → orchestrate forward closure is a **no-op** (no evidence row).
 | `model_return_response_orchestrate_resubmit` | yes | V71 bundle; open cycle only |
 | `model_return_response_orchestrate_forward_closure` | yes | Accepted-forward closure bundle (V72) |
 | `notification_foundation_deliver` (V70) | yes | Applicant return notify inside wired return |
-| Internal helpers (`insert_return`, `link_cycle`, `append_response`, …) | no | Revoked from PUBLIC; `search_path` pinned |
+| Internal helpers (`bind_cycle_return`, `insert_return`, `link_cycle`, `append_response`, …) | no | Revoked from PUBLIC and `bee_runtime`; `bind_cycle_return` requires an **open** cycle; `search_path` pinned |
 
 **Runtime table access:** unchanged — SELECT only on cycle/evidence; no runtime INSERT on `model_application_return`.
 
@@ -75,13 +75,13 @@ Purposes include `model_forward_closure` for accepted-forward wiring.
 
 `WorkflowReturnResponseWiring.testMidWiringFailureHook` (test-only) and test-schema triggers for post-disposition rollback proofs.
 
-## Proof map (Brief 19B-2 / 19B-2A)
+## Proof map (Brief 19B-2 / 19B-2A / 19B-2B)
 
 | Section | Named tests |
 | --- | --- |
-| 1 Cycle / return binding | `v71ReturnsBackfillIntoMigratedCycle`, `eachNewAndRepeatReturnIsBoundToExactlyOneCycle`, `oldCycleReturnCannotResubmitOrNotifyCurrentCycle`, `currentCycleLatestReturnResubmitsNormally`, plus cycle normalization tests in `SnlWp02bModelForwardClosureDatabaseTest` |
-| 2 Forward closure command | `stalePreResubmitForwardEventCannotCloseCurrentCycle`, `rejectionOrReturnTransitionCannotCloseCycleAsAccepted`, `forgedForwardTimestampCannotChangeAuditOrClockTime`, `allAllowedForwardMappingsStillCloseNormally`, `forwardClosureAcceptsLatestResponseStopsClockAndCompletesTask`, `forwardClosureWithoutOpenCycleIsNoOp`, `forwardClosureReplayIsStableAndChangedPayloadConflicts`, `runtimeHighLevelClosureRejectsStaleRejectionAndWrongCycleInputs`, `duplicateCycleSeqTaskOrDiscrepancyRefused` |
-| 3 Service wiring | Per-stage `*AcceptedForwardClosesReturnCycle`; `SnlWp02bModelForwardServiceDatabaseTest`: `serviceForwardClosureConflictReturns409AndRollsBackAssignment`, `serviceFinalApprovalClosureConflictReturns409AndRollsBackCertificate`, `serviceInjectedClosureFailureRollsBackCompleteBundle`; `concurrentChangedForwardPayloadHasOneWinnerAndOneConflict` |
+| 1 Privilege / cycle binding | `runtimeCannotExecuteCycleReturnBindingHelper`, `closedCycleCannotReceiveReturnBindingThroughInternalHelper`, `runtimeExecuteListContainsOnlyDocumentedHighLevelCommands`; `v71ReturnsBackfillIntoMigratedCycle` (Flyway target 71 → 72 isolated schema); `eachNewAndRepeatReturnIsBoundToExactlyOneCycle`, `oldCycleReturnCannotResubmitOrNotifyCurrentCycle` (persisted resubmission id), `currentCycleLatestReturnResubmitsNormally`, plus cycle normalization tests in `SnlWp02bModelForwardClosureDatabaseTest` |
+| 2 Forward closure command | `stalePreResubmitForwardEventCannotCloseCurrentCycle`, `rejectionOrReturnTransitionCannotCloseCycleAsAccepted` (return event + persisted `StageRejectRepository` rejection), `forgedForwardTimestampCannotChangeAuditOrClockTime`, `allAllowedForwardMappingsStillCloseNormally`, `forwardClosureAcceptsLatestResponseStopsClockAndCompletesTask`, `forwardClosureWithoutOpenCycleIsNoOp`, `forwardClosureReplayIsStableAndChangedPayloadConflicts`, `runtimeHighLevelClosureRejectsStaleRejectionAndWrongCycleInputs` (full survivor set), `duplicateCycleSeqTaskOrDiscrepancyRefused` (SQLSTATE `23505` + constraint names), `incompleteOpenOrClosedCycleLifecycleRefused` |
+| 3 Service wiring | Per-stage `*AcceptedForwardClosesReturnCycle`; `SnlWp02bModelForwardServiceDatabaseTest`: post-legacy `forward_closure` wiring-evidence conflict (not route idempotency replay), full legacy rollback bundle, route idempotency row rolled back; `serviceInjectedClosureFailureRollsBackCompleteBundle`; `concurrentChangedForwardPayloadHasOneWinnerAndOneConflict` (single closure bundle, no idempotency residue) |
 | 4 Multi-cycle journeys | IAME→BEE two-cycle, director/rating/secretary path, re-return before forward |
 
 Prior 19B proof map (items 1–14) remains in git history for V71 acceptance; regression covered by existing `SnlWp02bModelReturnWiringDatabaseTest` on V72 schema.

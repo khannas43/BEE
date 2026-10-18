@@ -113,7 +113,6 @@ public class DirectorRecommendationService {
                 idempotencyKey);
         } catch (WorkflowIdempotencyConflictException ex) {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
         } catch (DataAccessException ex) {
             if (ex instanceof DataAccessResourceFailureException) {

@@ -79,7 +79,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM model_return_response_cycle c
       JOIN model_application_return r ON r.id = p_return_id
-     WHERE c.id = p_cycle_id AND c.application_id = r.application_id
+     WHERE c.id = p_cycle_id AND c.application_id = r.application_id AND c.status = 'open'
   ) THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_return_cycle_bind_invalid';
   END IF;
@@ -601,6 +601,15 @@ END $$;
 
 REVOKE ALL ON FUNCTION model_return_response_orchestrate_forward_closure(
   uuid, uuid, text, text, text, integer, uuid, text, uuid, char(64)) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_bind_cycle_return(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_link_cycle(uuid, text, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_update_last_resumed_stage(uuid, uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_append_response(uuid, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_officer_resubmit_notify(uuid, uuid, uuid, uuid, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_orchestrate_wired_return(
+  uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid, char(64), uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_orchestrate_resubmit(
+  uuid, uuid, uuid, text, timestamptz, text, text, text, timestamptz, uuid, text, uuid, char(64), uuid, uuid, char(64), text, uuid, timestamptz, uuid, uuid) FROM PUBLIC;
 
 DROP FUNCTION IF EXISTS app_disposable_model_cleanup(uuid[]);
 
@@ -712,6 +721,11 @@ BEGIN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.app_disposable_model_cleanup(uuid[]) TO bee_local_maint', home_schema);
   END IF;
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_runtime') THEN
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.model_return_response_bind_cycle_return(uuid, uuid) FROM bee_runtime', home_schema);
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.model_return_response_link_cycle(uuid, text, uuid, uuid) FROM bee_runtime', home_schema);
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.model_return_response_update_last_resumed_stage(uuid, uuid, text) FROM bee_runtime', home_schema);
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.model_return_response_append_response(uuid, text, uuid) FROM bee_runtime', home_schema);
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.model_return_response_officer_resubmit_notify(uuid, uuid, uuid, uuid, text, uuid) FROM bee_runtime', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_orchestrate_forward_closure(uuid, uuid, text, text, text, integer, uuid, text, uuid, char(64)) TO bee_runtime', home_schema);
     EXECUTE format('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON %I.model_return_response_cycle_return FROM bee_runtime', home_schema);
     EXECUTE format('GRANT SELECT ON %I.model_return_response_cycle_return TO bee_runtime', home_schema);

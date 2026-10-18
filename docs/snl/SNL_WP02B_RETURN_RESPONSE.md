@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Accepted (`64accd5` plus acceptance corrections) |
 | 19B | Model return/resubmit/response wiring | Accepted (V71 trusted orchestrate commands + `WorkflowReturnResponseWiring`; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
-| 19B-2 | Model stage-forward closure + repeat-cycle safety | **Review pending** (V72 cycle/return binding, enforced forward map + stored event time, structural constraints; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
+| 19B-2 | Model stage-forward closure + repeat-cycle safety | **Review pending** (V72: cycle/return binding with revoked `bind_cycle_return`, enforced forward map + stored event time, structural constraints, post-legacy service 409 proofs; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
 | 19C | Registration return/resubmit/response wiring | Planned |
 | 19D | Common read projection, consolidated concurrency/rollback proof and plan evidence | Planned |
 

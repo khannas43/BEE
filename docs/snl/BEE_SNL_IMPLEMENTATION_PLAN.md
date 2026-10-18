@@ -6,7 +6,7 @@
 **Active work package:** WP2 Common workflow tasks and SLA
 **Primary source:** *SnL Disha Advisory Manual*
 **Secondary reference:** https://www.beestarlabel.com/Manufacturer/AgencyRegistration
-**Supplementary design reference:** 13-page S&L solution blueprint, mapped in [SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md](SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md)
+**Supplementary design reference:** 13-page S&L solution blueprint, mapped in [SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md](SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md) and catalogued as BP-001–BP-121 in [SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md](SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md)
 **Important:** The assumptions in this plan are implementation defaults selected because formal BEE decisions were not available. They are not BEE policy and must remain configurable.
 
 ## 1. Purpose
@@ -938,4 +938,4 @@ Optional blueprint capabilities are not core-completion blockers unless BEE expl
 
 ## 12. Supplementary solution-blueprint traceability
 
-The seven-screen experience, AI proposals, secure-QR architecture, conceptual data model and generated-template proposals from the 13-page solution blueprint are mapped to the work packages in [SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md](SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md). That mapping is subordinate to the manual traceability index above.
+The seven-screen experience, AI proposals, secure-QR architecture, conceptual data model and generated-template proposals from the 13-page solution blueprint are mapped to the work packages in [SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md](SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md). Every material point is individually tracked as BP-001–BP-121 in [SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md](SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md). Future implementation briefs must cite the relevant `BP-###` identifiers. Both documents are subordinate to the manual traceability index above.

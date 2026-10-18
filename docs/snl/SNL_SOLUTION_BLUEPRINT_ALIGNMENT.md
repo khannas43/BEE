@@ -4,6 +4,8 @@
 **Reference:** `bee1_merged_compressed.pdf` (13-page solution blueprint)  
 **Status:** Strategy baseline; the blueprint is a design input, not a governing BEE rule
 
+**Complete requirement catalogue:** [SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md](SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md), containing BP-001 through BP-121.
+
 ## 1. Verdict
 
 The implementation plan is aligned with the blueprint's principal journey:
@@ -130,3 +132,7 @@ Public verification works without collecting unnecessary personal data. Scan tel
 8. Whether one batch per production lot is mandatory or a lot may receive multiple paid batches.
 
 Until these are answered, the plan uses configurable interfaces and manual fallbacks and does not present the proposed behaviour as BEE policy.
+
+## 8. Traceability rule
+
+Every future brief that implements or changes a blueprint capability must cite its applicable `BP-###` identifiers from [SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md](SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md). Conditional items remain visible until implemented, superseded, deferred or rejected by a recorded decision.

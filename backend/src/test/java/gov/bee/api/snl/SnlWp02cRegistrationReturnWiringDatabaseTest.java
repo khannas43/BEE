@@ -1,6 +1,7 @@
 package gov.bee.api.snl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -243,12 +244,31 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         String wiringHash = sha256(returnId + "|programme_review|" + (note == null ? "" : note) + "|" + resubmittedAt + "|resubmit");
         UUID notifyCommand = commandId(idempotencyKey, "registration_resubmit_notify", applicationId);
         UUID taskCommand = commandId(idempotencyKey, "registration_resubmit_task", applicationId);
+        UUID taskOwner = owner.queryForObject("SELECT returned_by_account_id FROM registration_application_return WHERE id = ?", UUID.class, returnId);
+        String taskOwnerRole = owner.queryForObject(
+            "SELECT CASE returned_from_state WHEN 'programme_review' THEN 'programme' WHEN 'director_approval' THEN 'director' END "
+                + "FROM registration_application_return WHERE id = ?",
+            String.class, returnId);
         var taskCmd = new WorkflowFoundationRepository.TaskCommand(WorkflowFoundationRepository.SUBJECT_REGISTRATION, applicationId, returnedFrom, "review",
-            "programme", PROGRAMME_USER, dueAt, policy.id(), returnedAt);
+            taskOwnerRole, taskOwner, dueAt, policy.id(), returnedAt);
         wiringRepo.orchestrateResubmit(new RegistrationReturnResponseWiringRepository.OrchestrateResubmitCommand(
             applicationId, returnId, resubmissionId, transitionEventId, returnedFrom, returnedAt, returnReason, "programme_review", body, resubmittedAt,
             NOVA_USER, "manufacturer", wiringCommand, wiringHash, notifyCommand, taskCommand, WorkflowFoundationRepository.payloadHash(taskCmd),
-            "programme", PROGRAMME_USER, dueAt, policy.id(), NOVA_USER));
+            taskOwnerRole, taskOwner, dueAt, policy.id(), NOVA_USER));
+    }
+
+    void closeOpenCycleAsTestFixture(UUID applicationId, UUID closureTransitionEventId, UUID actor) {
+        UUID taskId = owner.queryForObject("SELECT task_id FROM registration_return_response_cycle WHERE application_id = ? AND status = 'open'", UUID.class, applicationId);
+        int taskVersion = owner.queryForObject("SELECT version FROM workflow_task WHERE id = ?", Integer.class, taskId);
+        UUID clockId = owner.queryForObject("SELECT id FROM workflow_sla_clock WHERE task_id = ?", UUID.class, taskId);
+        owner.query("SELECT workflow_foundation_append_clock_event(?, 'stop', 'bureau', now() + interval '1 millisecond', NULL)", rs -> {
+        }, clockId);
+        owner.query("SELECT workflow_foundation_terminal_task(?, ?, 'completed', ?, 'programme', 'wp02c_test_fixture_close')", rs -> {
+        }, taskId, taskVersion, actor);
+        owner.update(
+            "UPDATE registration_return_response_cycle SET status = 'closed', closed_at = now(), closure_transition_event_id = ?, "
+                + "closure_from_state = 'programme_review', closure_to_state = 'director_approval' WHERE application_id = ? AND status = 'open'",
+            closureTransitionEventId, applicationId);
     }
 
     static String sha256(String s) {
@@ -514,8 +534,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         UUID closeEvent = UUID.randomUUID();
         owner.update("INSERT INTO registration_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) "
             + "VALUES (?, ?, 'recommend', 'programme_review', 'director_approval', ?, 'programme', 99)", closeEvent, id, PROGRAMME_USER);
-        maint.query("SELECT registration_return_response_maint_close_cycle(?, ?, 'programme_review', 'director_approval', now())", rs -> {
-        }, id, closeEvent);
+        closeOpenCycleAsTestFixture(id, closeEvent, PROGRAMME_USER);
         wiredReturn(id, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), "Second cycle.");
         assertEquals(2, owner.queryForObject("SELECT count(*) FROM registration_return_response_cycle WHERE application_id = ?", Integer.class, id));
         assertEquals(1, owner.queryForObject("SELECT count(*) FROM registration_return_response_cycle WHERE application_id = ? AND status = 'open'", Integer.class, id));
@@ -555,8 +574,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         UUID closeEvent = UUID.randomUUID();
         owner.update("INSERT INTO registration_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) "
             + "VALUES (?, ?, 'recommend', 'programme_review', 'director_approval', ?, 'programme', 99)", closeEvent, id, PROGRAMME_USER);
-        maint.query("SELECT registration_return_response_maint_close_cycle(?, ?, 'programme_review', 'director_approval', now())", rs -> {
-        }, id, closeEvent);
+        closeOpenCycleAsTestFixture(id, closeEvent, PROGRAMME_USER);
         UUID extraReturn = UUID.randomUUID();
         var failure = assertThrows(DataAccessException.class, () -> owner.query("SELECT registration_return_response_bind_cycle_return(?, ?)", rs -> {
         }, cycle, extraReturn));
@@ -580,5 +598,125 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         }, id);
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM registration_application WHERE id = ?", Integer.class, id));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM registration_return_response_cycle WHERE application_id = ?", Integer.class, id));
+    }
+
+    @Test
+    void productionMaintClosureFunctionIsAbsentFromMigratedSchema() {
+        assertEquals(0, owner.queryForObject(
+            "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                + "WHERE n.nspname = ? AND p.proname = 'registration_return_response_maint_close_cycle'",
+            Integer.class, MAIN));
+    }
+
+    @Test
+    void wrongDueTimeIsRejectedWithNoPartialBundle() {
+        UUID id = atProgrammeReview("WP02C-DUE-REJ-" + TAG);
+        LegacyReturn leg = tx.execute(s -> {
+            int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
+            return legacyReturn(id, version, "programme_review", PROGRAMME_USER, "programme", REASON);
+        });
+        var policy = policyRepo.requireApplicableVersion(leg.returnedAt());
+        Instant wrongDue = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy).plusSeconds(3600);
+        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> wiringRepo.orchestrateWiredReturn(
+            new RegistrationReturnResponseWiringRepository.OrchestrateWiredReturnCommand(
+                leg.returnId(), id, leg.transitionEventId(), "programme_review", REASON, PROGRAMME_USER, leg.returnedAt(), "programme",
+                commandId(UUID.randomUUID().toString(), "registration_return_notify", id),
+                NotificationCommandRepository.payloadHash(new NotificationCommandRepository.DeliverCommand(
+                    WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "returned",
+                    "was returned to you: " + REASON + " Respond by " + DUE_LABEL.format(policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy))
+                        + ". Edit it and send it again.")),
+                "was returned to you: " + REASON + " Respond by " + DUE_LABEL.format(policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy))
+                    + ". Edit it and send it again.",
+                commandId(UUID.randomUUID().toString(), "registration_return_task", id),
+                "deadbeef".repeat(8), "programme", PROGRAMME_USER, wrongDue, policy.id(),
+                commandId(UUID.randomUUID().toString(), "registration_return_wiring", id),
+                sha256(leg.returnId() + "|programme_review|" + REASON + "|" + leg.returnedAt() + "|return"), PROGRAMME_USER))));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM registration_application_return WHERE application_id = ?", Integer.class, id));
+    }
+
+    @Test
+    void wrongTaskOwnerIsRejectedAtomically() {
+        UUID id = atProgrammeReview("WP02C-OWNER-REJ-" + TAG);
+        LegacyReturn leg = tx.execute(s -> {
+            int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
+            return legacyReturn(id, version, "programme_review", PROGRAMME_USER, "programme", REASON);
+        });
+        var policy = policyRepo.requireApplicableVersion(leg.returnedAt());
+        Instant dueAt = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy);
+        String suffix = "was returned to you: " + REASON + " Respond by " + DUE_LABEL.format(dueAt) + ". Edit it and send it again.";
+        var taskCmd = new WorkflowFoundationRepository.TaskCommand(WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "programme_review", "review",
+            "programme", PROGRAMME_USER, dueAt, policy.id(), leg.returnedAt());
+        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> wiringRepo.orchestrateWiredReturn(
+            new RegistrationReturnResponseWiringRepository.OrchestrateWiredReturnCommand(
+                leg.returnId(), id, leg.transitionEventId(), "programme_review", REASON, PROGRAMME_USER, leg.returnedAt(), "programme",
+                commandId(UUID.randomUUID().toString(), "registration_return_notify", id),
+                NotificationCommandRepository.payloadHash(new NotificationCommandRepository.DeliverCommand(
+                    WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "returned", suffix)),
+                suffix, commandId(UUID.randomUUID().toString(), "registration_return_task", id),
+                WorkflowFoundationRepository.payloadHash(taskCmd), "programme", DIRECTOR_USER, dueAt, policy.id(),
+                commandId(UUID.randomUUID().toString(), "registration_return_wiring", id),
+                sha256(leg.returnId() + "|programme_review|" + REASON + "|" + leg.returnedAt() + "|return"), PROGRAMME_USER))));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM registration_application_return WHERE application_id = ?", Integer.class, id));
+    }
+
+    @Test
+    void identicalReturnReplayAfterResubmitIsStable() {
+        UUID id = atProgrammeReview("WP02C-RET-REPLAY-LIFE-" + TAG);
+        String idem = UUID.randomUUID().toString();
+        LegacyReturn leg = tx.execute(s -> {
+            int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
+            var first = legacyReturn(id, version, "programme_review", PROGRAMME_USER, "programme", REASON);
+            completeWiredReturn(id, first.returnId(), first.transitionEventId(), "programme_review", REASON, first.returnedAt(), PROGRAMME_USER, "programme", idem);
+            return first;
+        });
+        wiredResubmit(id, leg.returnId(), "programme_review", leg.returnedAt(), REASON, UUID.randomUUID().toString(), null);
+        UUID replayed = tx.execute(s -> {
+            completeWiredReturn(id, leg.returnId(), leg.transitionEventId(), "programme_review", REASON, leg.returnedAt(), PROGRAMME_USER, "programme", idem);
+            return owner.queryForObject("SELECT id FROM registration_application_return WHERE transition_event_id = ?", UUID.class, leg.transitionEventId());
+        });
+        assertEquals(leg.returnId(), replayed);
+    }
+
+    @Test
+    void identicalResubmitReplayAfterReReturnIsStable() {
+        UUID id = atProgrammeReview("WP02C-SUB-REPLAY-LIFE-" + TAG);
+        wiredReturn(id, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
+        UUID returnId = latestReturnId(id);
+        Instant returnAt = owner.queryForObject("SELECT returned_at FROM registration_application_return WHERE id = ?", Instant.class, returnId);
+        String idem = UUID.randomUUID().toString();
+        UUID resubId = UUID.randomUUID();
+        LegacyReturn leg = tx.execute(s -> {
+            int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
+            var first = legacyResubmit(id, version, returnId, "programme_review", returnAt, REASON, NOVA_USER, "manufacturer");
+            completeResubmit(id, returnId, resubId, first.transitionEventId(), "programme_review", returnAt, REASON, null, first.returnedAt(), idem);
+            return first;
+        });
+        wiredReturn(id, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), "Need more.");
+        tx.executeWithoutResult(s -> completeResubmit(id, returnId, resubId, leg.transitionEventId(), "programme_review", returnAt, REASON, null, leg.returnedAt(), idem));
+        assertEquals(resubId, owner.queryForObject("SELECT id FROM registration_application_resubmission WHERE transition_event_id = ?", UUID.class, leg.transitionEventId()));
+    }
+
+    @Test
+    void returnFromApplicationACannotBindToApplicationBCycle() {
+        UUID idA = atProgrammeReview("WP02C-CROSS-A-" + TAG);
+        UUID idB = atProgrammeReview("WP02C-CROSS-B-" + TAG);
+        wiredReturn(idA, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
+        wiredReturn(idB, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
+        UUID cycleB = owner.queryForObject("SELECT id FROM registration_return_response_cycle WHERE application_id = ?", UUID.class, idB);
+        UUID returnA = latestReturnId(idA);
+        var failure = assertThrows(DataAccessException.class, () -> owner.query("SELECT registration_return_response_bind_cycle_return(?, ?)", rs -> {
+        }, cycleB, returnA));
+        assertTrue(String.valueOf(failure.getMostSpecificCause().getMessage()).contains("registration_return_response_return_cycle_bind_invalid"));
+    }
+
+    @Test
+    void runtimeCannotExecuteInternalRegistrationHelpers() {
+        var internal = owner.queryForList(
+            "SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                + "WHERE n.nspname = ? AND p.proname LIKE 'registration_return_response_%' AND p.prosecdef "
+                + "AND p.proname NOT IN ('registration_return_response_orchestrate_wired_return', 'registration_return_response_orchestrate_resubmit') "
+                + "AND has_function_privilege(?, p.oid, 'EXECUTE') ORDER BY 1",
+            String.class, MAIN, runtimeRole());
+        assertTrue(internal.isEmpty(), internal.toString());
     }
 }

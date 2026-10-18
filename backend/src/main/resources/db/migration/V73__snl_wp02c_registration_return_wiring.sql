@@ -186,9 +186,6 @@ BEGIN
      OR v_te.occurred_at IS DISTINCT FROM p_returned_at THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_transition_mismatch';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM registration_application a WHERE a.id = p_application_id AND a.state = 'returned') THEN
-    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_application_state_mismatch';
-  END IF;
 END $$;
 
 CREATE FUNCTION registration_return_response_assert_resubmit_transition(
@@ -211,9 +208,6 @@ BEGIN
      OR v_te.occurred_at IS DISTINCT FROM p_resubmitted_at THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_resubmit_transition_mismatch';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM registration_application a WHERE a.id = p_application_id AND a.state = 'programme_review') THEN
-    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_application_state_mismatch';
-  END IF;
 END $$;
 
 CREATE FUNCTION registration_return_response_assert_policy(
@@ -234,6 +228,162 @@ BEGIN
   END IF;
 END $$;
 
+
+CREATE FUNCTION workflow_calendar_is_working_day(p_calendar_key text, p_day date) RETURNS boolean
+  LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
+DECLARE
+  v_nwd smallint[];
+  v_isodow integer;
+BEGIN
+  SELECT non_working_weekdays INTO v_nwd FROM workflow_calendar WHERE calendar_key = p_calendar_key;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_calendar_missing';
+  END IF;
+  IF EXISTS (SELECT 1 FROM workflow_calendar_closure WHERE calendar_key = p_calendar_key AND closure_date = p_day) THEN
+    RETURN false;
+  END IF;
+  v_isodow := EXTRACT(ISODOW FROM p_day)::integer;
+  IF v_nwd @> ARRAY[v_isodow::smallint] THEN
+    RETURN false;
+  END IF;
+  RETURN true;
+END $$;
+
+CREATE FUNCTION workflow_sla_due_at_end_of_working_days(p_policy_version_id uuid, p_anchor timestamptz) RETURNS timestamptz
+  LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
+DECLARE
+  v_cal text;
+  v_limit integer;
+  v_cursor date;
+  v_counted integer := 0;
+BEGIN
+  SELECT calendar_key, working_day_limit INTO v_cal, v_limit
+    FROM workflow_sla_policy_version WHERE id = p_policy_version_id;
+  IF NOT FOUND OR v_limit < 1 THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_policy_mismatch';
+  END IF;
+  v_cursor := (p_anchor AT TIME ZONE 'Asia/Kolkata')::date;
+  WHILE v_counted < v_limit LOOP
+    IF workflow_calendar_is_working_day(v_cal, v_cursor) THEN
+      v_counted := v_counted + 1;
+    END IF;
+    IF v_counted < v_limit THEN
+      v_cursor := v_cursor + 1;
+    END IF;
+  END LOOP;
+  RETURN (v_cursor::timestamp + time '23:59:59.999') AT TIME ZONE 'Asia/Kolkata';
+END $$;
+
+CREATE FUNCTION registration_return_response_applicable_policy_id(p_anchor timestamptz) RETURNS uuid
+  LANGUAGE sql STABLE SET search_path FROM CURRENT AS $$
+  SELECT id FROM workflow_sla_policy_version
+   WHERE policy_key = 'snl_return_response'
+     AND (p_anchor AT TIME ZONE 'Asia/Kolkata')::date >= effective_from
+     AND (effective_to IS NULL OR (p_anchor AT TIME ZONE 'Asia/Kolkata')::date < effective_to)
+   ORDER BY effective_from DESC
+   LIMIT 1;
+$$;
+
+CREATE FUNCTION registration_return_response_format_due_label(p_due timestamptz) RETURNS text
+  LANGUAGE sql STABLE SET search_path FROM CURRENT AS $$
+  SELECT trim(to_char(p_due AT TIME ZONE 'Asia/Kolkata', 'FMDD Mon YYYY'));
+$$;
+
+CREATE FUNCTION registration_return_response_assert_stage_actor(
+  p_from_stage text, p_actor_role text, p_actor_account uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_required_role text;
+BEGIN
+  v_required_role := CASE p_from_stage
+    WHEN 'programme_review' THEN 'programme'
+    WHEN 'director_approval' THEN 'director'
+    ELSE NULL END;
+  IF v_required_role IS NULL OR p_actor_role IS DISTINCT FROM v_required_role THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_stage_role_mismatch';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM user_account u
+    JOIN role_assignment ra ON ra.user_id = u.id
+     WHERE u.id = p_actor_account AND u.status = 'active'
+       AND ra.role = v_required_role AND ra.active AND now() >= ra.valid_from AND now() < ra.valid_to
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_stage_role_mismatch';
+  END IF;
+END $$;
+
+CREATE FUNCTION registration_return_response_verify_return_notify_bundle(
+  p_application_id uuid,
+  p_reason text,
+  p_policy_version_id uuid,
+  p_anchor timestamptz,
+  p_suffix text,
+  p_hash char(64)
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_due timestamptz;
+  v_label text;
+  v_expected_suffix text;
+  v_expected_hash char(64);
+BEGIN
+  v_due := workflow_sla_due_at_end_of_working_days(p_policy_version_id, p_anchor);
+  v_label := registration_return_response_format_due_label(v_due);
+  v_expected_suffix := 'was returned to you: ' || p_reason || ' Respond by ' || v_label || '. Edit it and send it again.';
+  IF p_suffix IS DISTINCT FROM v_expected_suffix THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_notify_suffix_mismatch';
+  END IF;
+  v_expected_hash := encode(
+    sha256(convert_to('registration_application|' || p_application_id::text || '|returned|' || v_expected_suffix, 'UTF8')),
+    'hex');
+  IF p_hash IS DISTINCT FROM v_expected_hash THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_notify_hash_mismatch';
+  END IF;
+END $$;
+
+CREATE FUNCTION registration_return_response_assert_return_row_facts(
+  p_return_id uuid,
+  p_application_id uuid,
+  p_from_stage text,
+  p_returned_at timestamptz,
+  p_reason text
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_row registration_application_return%ROWTYPE;
+BEGIN
+  SELECT * INTO v_row FROM registration_application_return WHERE id = p_return_id AND application_id = p_application_id;
+  IF NOT FOUND
+     OR v_row.returned_from_state IS DISTINCT FROM p_from_stage
+     OR v_row.returned_at IS DISTINCT FROM p_returned_at
+     OR v_row.reason IS DISTINCT FROM p_reason THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_return_mismatch';
+  END IF;
+END $$;
+
+CREATE FUNCTION registration_return_response_assert_officer_recipient(
+  p_return_id uuid,
+  p_application_id uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_stage text;
+  v_officer uuid;
+  v_required_role text;
+BEGIN
+  SELECT returned_from_state, returned_by_account_id INTO v_stage, v_officer
+    FROM registration_application_return WHERE id = p_return_id AND application_id = p_application_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_return_mismatch';
+  END IF;
+  v_required_role := CASE v_stage WHEN 'programme_review' THEN 'programme' WHEN 'director_approval' THEN 'director' ELSE NULL END;
+  IF v_required_role IS NULL OR NOT EXISTS (
+    SELECT 1 FROM user_account u
+    JOIN role_assignment ra ON ra.user_id = u.id
+     WHERE u.id = v_officer AND u.status = 'active'
+       AND ra.role = v_required_role AND ra.active AND now() >= ra.valid_from AND now() < ra.valid_to
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'notification_recipient_inactive';
+  END IF;
+END $$;
+
 CREATE FUNCTION registration_return_response_resolve_officer(
   p_application_id uuid,
   p_return_id uuid
@@ -248,12 +398,8 @@ BEGIN
   ) THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_return_mismatch';
   END IF;
+  PERFORM registration_return_response_assert_officer_recipient(p_return_id, p_application_id);
   SELECT returned_by_account_id INTO v_recipient FROM registration_application_return WHERE id = p_return_id;
-  IF v_recipient IS NULL OR NOT EXISTS (
-    SELECT 1 FROM user_account u WHERE u.id = v_recipient AND u.status = 'active'
-  ) THEN
-    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'notification_recipient_inactive';
-  END IF;
   RETURN v_recipient;
 END $$;
 
@@ -574,11 +720,10 @@ DECLARE
   v_clock_id uuid;
   v_status text;
   v_seq integer;
+  v_persisted_return uuid;
+  v_computed_due timestamptz;
 BEGIN
   PERFORM workflow_validate_subject('registration_application', p_application_id);
-  PERFORM registration_return_response_assert_return_transition(
-    p_application_id, p_transition_event_id, p_from_stage, p_reason, p_returned_by, p_returned_at, p_actor_role);
-  PERFORM registration_return_response_assert_policy(p_policy_version_id, p_returned_at);
   PERFORM pg_advisory_xact_lock(hashtextextended(p_wiring_command_id::text, 0));
   SELECT * INTO v_prior FROM registration_return_response_wiring_evidence WHERE command_id = p_wiring_command_id;
   IF FOUND THEN
@@ -587,8 +732,34 @@ BEGIN
        OR v_prior.purpose IS DISTINCT FROM 'registration_return_wiring' THEN
       RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'registration_return_response_wiring_idempotency_conflict';
     END IF;
-    RETURN p_return_id;
+    SELECT id INTO v_persisted_return FROM registration_application_return
+     WHERE application_id = p_application_id AND transition_event_id = p_transition_event_id;
+    IF v_persisted_return IS NULL THEN
+      RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_replay_incomplete';
+    END IF;
+    RETURN v_persisted_return;
   END IF;
+  PERFORM registration_return_response_assert_return_transition(
+    p_application_id, p_transition_event_id, p_from_stage, p_reason, p_returned_by, p_returned_at, p_actor_role);
+  IF NOT EXISTS (SELECT 1 FROM registration_application a WHERE a.id = p_application_id AND a.state = 'returned') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_application_state_mismatch';
+  END IF;
+  PERFORM registration_return_response_assert_stage_actor(p_from_stage, p_actor_role, p_returned_by);
+  IF p_actor_account IS DISTINCT FROM p_returned_by THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_actor_mismatch';
+  END IF;
+  IF p_task_owner_account IS DISTINCT FROM p_returned_by OR p_task_owner_role IS DISTINCT FROM p_actor_role THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_task_owner_mismatch';
+  END IF;
+  v_computed_due := workflow_sla_due_at_end_of_working_days(p_policy_version_id, p_returned_at);
+  IF p_due_at IS DISTINCT FROM v_computed_due THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_due_at_mismatch';
+  END IF;
+  IF p_policy_version_id IS DISTINCT FROM registration_return_response_applicable_policy_id(p_returned_at) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_policy_mismatch';
+  END IF;
+  PERFORM registration_return_response_verify_return_notify_bundle(
+    p_application_id, p_reason, p_policy_version_id, p_returned_at, p_notify_message_suffix, p_notify_payload_hash);
   PERFORM notification_foundation_deliver(
     p_notify_command_id, p_notify_payload_hash, 'registration_application', p_application_id, 'returned', p_notify_message_suffix, p_actor_account);
   PERFORM registration_return_response_insert_return(
@@ -662,11 +833,10 @@ DECLARE
   v_clock_id uuid;
   v_notify_hash char(64);
   v_recipient uuid;
+  v_persisted_resub uuid;
+  v_computed_due timestamptz;
 BEGIN
   PERFORM workflow_validate_subject('registration_application', p_application_id);
-  PERFORM registration_return_response_assert_resubmit_transition(
-    p_application_id, p_transition_event_id, p_responded_by, p_resubmitted_at, p_responded_role);
-  PERFORM registration_return_response_assert_policy(p_policy_version_id, p_returned_at);
   PERFORM pg_advisory_xact_lock(hashtextextended(p_wiring_command_id::text, 0));
   SELECT * INTO v_prior FROM registration_return_response_wiring_evidence WHERE command_id = p_wiring_command_id;
   IF FOUND THEN
@@ -675,7 +845,40 @@ BEGIN
        OR v_prior.purpose IS DISTINCT FROM 'registration_resubmit_wiring' THEN
       RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'registration_return_response_wiring_idempotency_conflict';
     END IF;
+    SELECT id INTO v_persisted_resub FROM registration_application_resubmission
+     WHERE application_id = p_application_id AND transition_event_id = p_transition_event_id;
+    IF v_persisted_resub IS NULL THEN
+      RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_replay_incomplete';
+    END IF;
     RETURN;
+  END IF;
+  PERFORM registration_return_response_assert_resubmit_transition(
+    p_application_id, p_transition_event_id, p_responded_by, p_resubmitted_at, p_responded_role);
+  IF NOT EXISTS (SELECT 1 FROM registration_application a WHERE a.id = p_application_id AND a.state = 'programme_review') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_application_state_mismatch';
+  END IF;
+  PERFORM registration_return_response_assert_return_row_facts(
+    p_return_id, p_application_id, p_returned_from_stage, p_returned_at, p_return_reason);
+  PERFORM registration_return_response_assert_officer_recipient(p_return_id, p_application_id);
+  IF p_actor_account IS DISTINCT FROM p_responded_by THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_actor_mismatch';
+  END IF;
+  IF p_resumed_stage IS DISTINCT FROM 'programme_review' THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_resumed_stage_invalid';
+  END IF;
+  v_computed_due := workflow_sla_due_at_end_of_working_days(p_policy_version_id, p_returned_at);
+  IF p_due_at IS DISTINCT FROM v_computed_due THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_due_at_mismatch';
+  END IF;
+  IF p_policy_version_id IS DISTINCT FROM registration_return_response_applicable_policy_id(p_returned_at) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_policy_mismatch';
+  END IF;
+  IF p_task_owner_account IS DISTINCT FROM (
+    SELECT returned_by_account_id FROM registration_application_return WHERE id = p_return_id)
+     OR p_task_owner_role IS DISTINCT FROM (
+    SELECT CASE returned_from_state WHEN 'programme_review' THEN 'programme' WHEN 'director_approval' THEN 'director' END
+      FROM registration_application_return WHERE id = p_return_id) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'registration_return_response_task_owner_mismatch';
   END IF;
   SELECT * INTO v_cycle FROM registration_return_response_cycle WHERE application_id = p_application_id AND status = 'open' FOR UPDATE;
   IF NOT FOUND THEN
@@ -719,53 +922,14 @@ BEGIN
   PERFORM registration_return_response_record_wiring_evidence(p_notify_command_id, p_application_id, 'registration_resubmit_notify', v_notify_hash);
 END $$;
 
-CREATE FUNCTION registration_return_response_maint_close_cycle(
-  p_application_id uuid,
-  p_transition_event_id uuid,
-  p_from_state text,
-  p_to_state text,
-  p_closed_at timestamptz
-) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
-DECLARE
-  v_cycle registration_return_response_cycle;
-  v_response_seq integer;
-  v_task_version integer;
-  v_clock_id uuid;
-BEGIN
-  IF session_user <> 'bee_local_maint' AND current_user <> 'bee_local_maint' THEN
-    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'registration_return_response_maint_close_refused';
-  END IF;
-  SELECT * INTO v_cycle FROM registration_return_response_cycle WHERE application_id = p_application_id AND status = 'open' FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'registration_return_response_cycle_missing';
-  END IF;
-  SELECT r.response_seq INTO v_response_seq
-    FROM workflow_discrepancy_response r
-    LEFT JOIN workflow_discrepancy_disposition d ON d.discrepancy_id = r.discrepancy_id AND d.response_seq = r.response_seq
-   WHERE r.discrepancy_id = v_cycle.discrepancy_id AND d.id IS NULL
-   ORDER BY r.response_seq DESC LIMIT 1;
-  IF v_response_seq IS NOT NULL THEN
-    PERFORM workflow_foundation_discrepancy_dispose(v_cycle.discrepancy_id, v_response_seq, 'accepted', NULL,
-      (SELECT actor_account_id FROM registration_transition_event WHERE id = p_transition_event_id));
-  END IF;
-  SELECT version INTO v_task_version FROM workflow_task WHERE id = v_cycle.task_id FOR UPDATE;
-  SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_cycle.task_id;
-  IF v_clock_id IS NOT NULL THEN
-    PERFORM workflow_foundation_append_clock_event(v_clock_id, 'stop', 'bureau', p_closed_at + interval '1 millisecond', NULL);
-  END IF;
-  IF v_task_version IS NOT NULL THEN
-    PERFORM workflow_foundation_terminal_task(v_cycle.task_id, v_task_version, 'completed',
-      (SELECT actor_account_id FROM registration_transition_event WHERE id = p_transition_event_id), 'programme', 'maint_test_forward_closure');
-  END IF;
-  UPDATE registration_return_response_cycle
-     SET status = 'closed',
-         closed_at = p_closed_at,
-         closure_transition_event_id = p_transition_event_id,
-         closure_from_state = p_from_state,
-         closure_to_state = p_to_state
-   WHERE id = v_cycle.id AND status = 'open';
-END $$;
-
+REVOKE ALL ON FUNCTION workflow_calendar_is_working_day(text, date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION workflow_sla_due_at_end_of_working_days(uuid, timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION registration_return_response_applicable_policy_id(timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION registration_return_response_format_due_label(timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION registration_return_response_assert_stage_actor(text, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION registration_return_response_verify_return_notify_bundle(uuid, text, uuid, timestamptz, text, char(64)) FROM PUBLIC;
+REVOKE ALL ON FUNCTION registration_return_response_assert_return_row_facts(uuid, uuid, text, timestamptz, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION registration_return_response_assert_officer_recipient(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_resolve_officer(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_officer_resubmit_notify(uuid, uuid, uuid, uuid, text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_latest_cycle_return(uuid) FROM PUBLIC;
@@ -780,7 +944,6 @@ REVOKE ALL ON FUNCTION registration_return_response_assert_return_transition(uui
 REVOKE ALL ON FUNCTION registration_return_response_assert_resubmit_transition(uuid, uuid, uuid, timestamptz, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_assert_policy(uuid, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_require_open_cycle(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION registration_return_response_maint_close_cycle(uuid, uuid, text, text, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_orchestrate_wired_return(
   uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid, char(64), uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_orchestrate_resubmit(
@@ -883,6 +1046,14 @@ DO $$
 DECLARE
   home_schema text := current_schema();
 BEGIN
+  EXECUTE format('ALTER FUNCTION %I.workflow_calendar_is_working_day(text, date) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.workflow_sla_due_at_end_of_working_days(uuid, timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.registration_return_response_applicable_policy_id(timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.registration_return_response_format_due_label(timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.registration_return_response_assert_stage_actor(text, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.registration_return_response_verify_return_notify_bundle(uuid, text, uuid, timestamptz, text, char(64)) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.registration_return_response_assert_return_row_facts(uuid, uuid, text, timestamptz, text) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.registration_return_response_assert_officer_recipient(uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_resolve_officer(uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_officer_resubmit_notify(uuid, uuid, uuid, uuid, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_link_cycle(uuid, text, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
@@ -897,11 +1068,8 @@ BEGIN
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_assert_policy(uuid, timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_orchestrate_wired_return(uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid, char(64), uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_orchestrate_resubmit(uuid, uuid, uuid, uuid, text, timestamptz, text, text, text, timestamptz, uuid, text, uuid, char(64), uuid, uuid, char(64), text, uuid, timestamptz, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
-  EXECUTE format('ALTER FUNCTION %I.registration_return_response_maint_close_cycle(uuid, uuid, text, text, timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
-
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_local_maint') THEN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.app_disposable_registration_cleanup(uuid[]) TO bee_local_maint', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.registration_return_response_maint_close_cycle(uuid, uuid, text, text, timestamptz) TO bee_local_maint', home_schema);
     EXECUTE format('GRANT SELECT, DELETE ON %I.registration_return_response_cycle TO bee_local_maint', home_schema);
     EXECUTE format('GRANT SELECT, DELETE ON %I.registration_return_response_cycle_return TO bee_local_maint', home_schema);
     EXECUTE format('GRANT SELECT, DELETE ON %I.registration_return_response_wiring_evidence TO bee_local_maint', home_schema);

@@ -256,8 +256,8 @@ At the end of each development session, update the package status, progress, com
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | Accepted V69–V72; model journey wired. Brief 19C-A added the V73 registration candidate, but review found a production maint closure bypass, caller-trusted actor/owner/due metadata, lifecycle-unstable replay and incomplete proof assertions. HTTP registration journey remains unwired. |
-| Next action | Complete Brief 19C-A1 and repeat acceptance review; only then implement 19C-B service integration, 19C-C forward disposition/read prep and 19D queue work (BL-257) |
+| Existing foundation | Accepted V69–V72; model journey wired. Brief 19C-A1 corrected V73 in place (trusted derivation, lifecycle-stable replay, no production maint closure; 25 DB proofs). HTTP registration journey remains unwired — **review pending**, not accepted. |
+| Next action | Accept 19C-A1; implement 19C-B service integration, 19C-C forward disposition/read prep and 19D queue work (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 

@@ -11,7 +11,7 @@
 | 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Accepted (`64accd5` plus acceptance corrections) |
 | 19B | Model return/resubmit/response wiring | Accepted (V71 trusted orchestrate commands + `WorkflowReturnResponseWiring`; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
 | 19B-2 | Model stage-forward closure + repeat-cycle safety | Accepted (V72: cycle/return binding with revoked `bind_cycle_return`, enforced forward map + stored event time, structural constraints, post-legacy service 409 proofs; merged at `798667e`) |
-| 19C | Registration return/resubmit/response wiring | Design accepted (`SNL_WP02C_REGISTRATION_RETURN_DESIGN.md`); 19C-A–19C-C implementation pending |
+| 19C | Registration return/resubmit/response wiring | V73+19C-A accepted at `ae63275`; design in [`SNL_WP02C_REGISTRATION_RETURN_DESIGN.md`](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md); **19C-B1 / V74 review pending**; 19C-C open |
 | 19D | Common work projection, My work / supervisor queue read model, SLA display | Design accepted (`SNL_WP02D_WORK_QUEUE_DESIGN.md`, Brief 19D-0); 19D-A–19D-C implementation pending |
 
 ## Integration map (return / resubmit loop)

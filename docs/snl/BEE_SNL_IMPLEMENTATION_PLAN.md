@@ -22,8 +22,8 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress — Brief 19C-A2 corrections | 65% | WP1 | R1 | V69–V72, 19C-0 and 19D-0 accepted; V73 registration boundary remains unaccepted pending 19C-A2 |
-| WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19C-B1 review pending | 68% | WP1 | R1 | V69–V74; 19C-0 and 19D-0 accepted; V73+19C-A at `ae63275`; 19C-B service wiring review pending |
+| WP3 | Entity brand and category registration | In progress — **Brief C1 live integration** (A3 @ `b378900`, B2 UI @ `aeafc7c`) | 15% | WP2, WP5 foundation | R2 | [SNL_WP03_OPTIMIZED_MANUFACTURER_ONBOARDING.md](SNL_WP03_OPTIMIZED_MANUFACTURER_ONBOARDING.md); BL-261–BL-263 open |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
 | WP6 | QR requisition and serial register | Not started | 0% | WP4, WP5 | R4 | Pending |
@@ -283,13 +283,13 @@ At the end of each development session, update the package status, progress, com
 | Tracking field | Current value |
 |---|---|
 | Status | In progress |
-| Progress | 65% |
+| Progress | 68% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
 | Blueprint references | BP-002, BP-005, BP-007, BP-010–BP-011, BP-039–BP-046, BP-093, BP-096, BP-107 |
-| Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation, V71 model return/resubmit wiring and V72 accepted-forward closure with repeat-cycle safety. Model commands commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response, disposition and evidence writes. The accepted 19C-0 and 19D-0 designs define registration integration and the work queue. Agent B's V73 registration database boundary is a candidate only: 19C-A1 review identified a caller-hash replay weakness and incomplete proof depth, so it remains unaccepted while 19C-A2 is implemented. |
-| Next action | Complete and review 19C-A2; accept V73 only after corrected replay, trusted-boundary and proof checks pass. Then implement 19C-B service integration and 19C-C forward disposition/read preparation, followed by 19D-A read projection, 19D-B queue API and 19D-C My work/supervisor UI (BL-257). |
+| Existing foundation | Accepted V69–V72 model journey; V73+19C-A at `ae63275`; V74 + Brief 19C-B1 registration return/resubmit wiring (review pending). Accepted 19C-0 and 19D-0 designs define registration integration and the work queue. |
+| Next action | ChatGPT review 19C-B1; then 19C-C and 19D-A/B/C (BL-257). |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -317,16 +317,17 @@ At the end of each development session, update the package status, progress, com
 
 | Evidence | Result or link |
 |---|---|
-| Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md); [SNL_WP02D_WORK_QUEUE_DESIGN.md](SNL_WP02D_WORK_QUEUE_DESIGN.md) |
-| Migration range | Accepted: V69–V72. Candidate: V73, unaccepted pending Brief 19C-A2. |
+| Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md); [SNL_WP02C_REGISTRATION_DB_BOUNDARY.md](SNL_WP02C_REGISTRATION_DB_BOUNDARY.md); [SNL_WP02D_WORK_QUEUE_DESIGN.md](SNL_WP02D_WORK_QUEUE_DESIGN.md) |
+| Migration range | Accepted: V69–V73 at `ae63275`. V74 + Brief 19C-B1 — review pending. |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
-| Database tests | 482 passed after Brief 19B-2B; includes staged V71→V72 migration, privilege boundary, real post-legacy rollback, repeat-cycle, constraint and concurrency survivor proofs |
+| Database tests | V73 wiring suite (35) + 19C-B/B1 service proofs (11 in `SnlWp02cRegistrationReturnServiceDatabaseTest`, 46 total in that class with inherited wiring tests); full gate counts at handback |
 | UI tests | 251 web tests passed; live browser workflow remains pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design and corrected Brief 19D-0 work-queue design accepted. V73 and 19C-A/A1 are not accepted; Brief 19C-A2 corrections are in progress. |
-| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec`; corrected Brief 19D-0 design at `b62508b` |
+| Review | WP2A, Brief 19A, Brief 19B, Brief 19B-2, 19C-0, 19D-0 and V73+19C-A accepted at `ae63275`. Brief **19C-B1** implemented — ChatGPT review pending. |
+| Brief 19C-B1 evidence | V74 latest-open-cycle return read and `SnlWp02cRegistrationReturnServiceDatabaseTest` repeat-cycle proofs — review pending |
+| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec`; Brief 19D-0 design at `b62508b` |
 
 #### WP2 acceptance
 
@@ -342,8 +343,8 @@ At the end of each development session, update the package status, progress, com
 
 | Tracking field | Current value |
 |---|---|
-| Status | Not started |
-| Progress | 0% |
+| Status | In progress (backend slice) |
+| Progress | 15% |
 | Target release | R2 |
 | Depends on | WP2 and WP5 payment foundation |
 | Manual references | Sections 3.1.1, 3.1.2, 3.4, 3.10, 4.1 and 4.2; Annexures 1 and 2 |
@@ -840,10 +841,11 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2A implemented | In progress (60%), Brief 19B-2B corrections | Review found PUBLIC execute on the security-definer cycle-binding helper. The claimed service 409 tests exit at the HTTP replay check before any legacy/closure write, and several migration/constraint tests fail for masking reasons. V72 remains unmerged. | Complete Brief 19B-2B and repeat acceptance review (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2B implemented | In progress (60%), ChatGPT review pending | V72 corrected in place: revoked `bind_cycle_return` from PUBLIC/runtime, open-cycle bind guard, runtime execute audit, real post-legacy wiring-evidence 409 service proofs, staged V71→V72 backfill and constraint/cross-cycle/rejection proofs. Awaiting acceptance (BL-257). | Repeat acceptance review; then 19C registration wiring (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), ChatGPT review pending | In progress (65%), Brief 19B-2 and 19C-0 accepted | V72 privilege, post-legacy rollback, staged migration, constraint and concurrency proofs accepted and merged at `798667e`. The PDF-traced registration design was merged at `80d9aec`. | Implement 19C-A, 19C-B and 19C-C, then 19D (BL-257) |
-| 18 Oct 2026 | WP2 | In progress (65%), Brief 19D-0 review pending | In progress (65%), Brief 19D-0 accepted | PDF trace verified. Review corrected calendar table names, recipient-scoped notification summaries, ambiguous assignment handling and the distinction between the provisional portal due date and the Manual's 60-day response window. Merged at `b62508b`. | Continue 19C-A in Agent B; start 19D-A read projection only when its implementation brief is issued |
-| 18 Oct 2026 | WP2 | In progress (65%), Brief 19C-A1 review pending | In progress (65%), Brief 19C-A2 corrections underway | V73 remains a candidate. Review identified a caller-supplied command-hash replay weakness and proof gaps; 19C-A/A1 are not accepted. | Complete 19C-A2, repeat acceptance review, then proceed to 19C-B/C and 19D-A/B/C (BL-257) |
-| 18 Oct 2026 | Strategy | Manual-backed WP plan | Blueprint-aligned strategy | Reviewed the 13-page solution blueprint. Core seven-screen journey aligns; A21–A29, BL-258–BL-260 and the WP3/WP4/WP6/WP10 checklists now govern external verification, AI evidence, generated forms, signed QR, optional anchoring and scan privacy. | Keep WP2 sequence; obtain owner/BEE/provider decisions before activating conditional integrations |
-| 18 Oct 2026 | WP3–WP9 (demo) | — | Demo accelerator only | Guided WP3–WP9 showcase (`docs/demo/DEMO_WP3_WP9_SCRIPT.md`, seed **s9**, `npm run demo:wp3-wp9-check`) for rehearsal; **does not** change WP3–WP9 completion percentages; production implementation and package acceptance remain **pending** | Merge demo branch when gates pass; continue WP2 then WP3 build |
+| 18 Oct 2026 | WP2 | In progress (65%), Brief 19D-0 review pending | In progress (65%), Brief 19D-0 accepted | PDF trace verified. Merged at `b62508b`. | Continue 19C-B/C and 19D-A/B/C (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (68%), Brief 19C-A4 accepted at `ae63275` | In progress (68%), Brief 19C-B1 review pending | V73+19C-A accepted; V74 service wiring and proofs — review pending. | ChatGPT review 19C-B1; then 19C-C → 19D (BL-257) |
+| 18 Oct 2026 | Strategy | Manual-backed WP plan | Blueprint-aligned strategy | Reviewed the 13-page solution blueprint. A21–A29, BL-258–BL-260 govern conditional integrations. | Keep WP2 sequence; obtain owner/BEE decisions before activating integrations |
+| 18 Oct 2026 | WP3–WP9 (demo) | — | Demo accelerator | Guided WP3–WP9 showcase (`docs/demo/DEMO_WP3_WP9_SCRIPT.md`, seed **s9**, `npm run demo:wp3-wp9-check`) for rehearsal; does not alone complete WP3–WP9 packages | Brief C1 merges real onboarding with demo stack |
+| 18 Oct 2026 | WP3 | In progress (15%) | Brief C1 live integration | Merge demo @ `098b05c` + WP3 UI/backend @ `aeafc7c`; coordinated applicant → Director → anomaly smoke through ngrok | Record evidence; mark WP3 complete only if live journey passes |
 
 ### 6.2 Standard completion record
 

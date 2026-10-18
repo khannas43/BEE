@@ -274,6 +274,9 @@ Each decision below gives what the system does today, the realistic options, a r
 | A27 | QR batch records model, plant and production lot; one-batch-per-lot cardinality remains open | Blueprint p. 7; manual silent | Provisional — owner confirmation pending |
 | A28 | Scan intelligence, purchase registration and label photos require privacy/consent/retention rules; clone flags are advisory | Blueprint pp. 8–10 | Provisional — owner confirmation pending |
 | A29 | The blueprint's 90-day test-report limit is not adopted without an official rule | Blueprint p. 5; existing test-age decision remains unanswered | Provisional — owner confirmation pending |
+| A30 | Optimized manufacturer onboarding: director approval enters **15 calendar days** observation before permittee becomes **active** | Derived from Table 2 observation pattern; local slice | Provisional — owner confirmation pending |
+| A31 | Submit runs **simulated payment auto-settle** and automated document checks in one orchestrated step | Assumption A16; WP3 fast path | Provisional — owner confirmation pending |
+| A32 | `organisation.permittee_lifecycle` gates new model-application submit when **on_hold** or **revoked** | Least privilege for permittee status | Provisional — owner confirmation pending |
 
 **Policy conflicts recorded in WP01 (not decisions):** discrepancy day counts (A08); entity approval roles silent (A02–A03); portal `agency` registration kind not described as such in the manual.
 

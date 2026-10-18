@@ -199,7 +199,26 @@ public class RegistrationRepository {
         return Optional.of(new Confirmed(after, at.toInstant()));
     }
 
-    public record Moved(int versionAfter, java.time.Instant at) {
+    public record Moved(int versionAfter, java.time.Instant at, UUID transitionEventId) {
+    }
+
+    public record LatestOpenCycleReturn(UUID returnId, String returnedFromState, java.time.Instant returnedAt, String reason, UUID returnedByAccountId,
+                                      String returnedByRole) {
+    }
+
+    /** Latest return bound to the open cycle via trusted read function V74 (ordered by {@code returned_at}, then {@code id}). */
+    public Optional<LatestOpenCycleReturn> latestReturnForOpenCycle(UUID applicationId) {
+        return jdbc.query(
+            "SELECT return_id, returned_from_stage, reason, returned_at, returned_by_account_id, returned_by_role "
+                + "FROM registration_return_response_latest_open_cycle_return(?)",
+            (rs, i) -> new LatestOpenCycleReturn(
+                rs.getObject("return_id", UUID.class),
+                rs.getString("returned_from_stage"),
+                rs.getTimestamp("returned_at").toInstant(),
+                rs.getString("reason"),
+                rs.getObject("returned_by_account_id", UUID.class),
+                rs.getString("returned_by_role")),
+            applicationId).stream().findFirst();
     }
 
     /** A review step (recommend, return, reject) or the applicant's resubmit, with its transition event; empty if the state or version has moved. */
@@ -211,10 +230,11 @@ public class RegistrationRepository {
             return Optional.empty();
         }
         int after = expectedVersion + 1;
+        UUID eventId = UUID.randomUUID();
         java.sql.Timestamp at = jdbc.queryForObject("INSERT INTO registration_transition_event (id, application_id, action, from_state, to_state, "
             + "actor_account_id, actor_role, version_after, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING occurred_at",
-            java.sql.Timestamp.class, UUID.randomUUID(), applicationId, action, from, to, actorAccountId, actorRole, after, note);
-        return Optional.of(new Moved(after, at.toInstant()));
+            java.sql.Timestamp.class, eventId, applicationId, action, from, to, actorAccountId, actorRole, after, note);
+        return Optional.of(new Moved(after, at.toInstant(), eventId));
     }
 
     public record Approved(String outcome, Integer versionAfter, UUID brandId, UUID authorisationId) {

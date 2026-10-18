@@ -1,9 +1,10 @@
 # Current Cursor task
 
-**Holder:** claude (Cursor final demo integration handback), 18 October 2026.
+**Holder:** cursor (Brief C1 — final WP3 integration and live demo), 18 October 2026.
 
-- Brief: URGENT DEMO — WP3–WP9 scenario, rehearsal and reliability (integrate Manufacturer 360 from `cursor/demo-wp3-wp9-360`)
-- Branch: `cursor/demo-wp3-wp9-rehearsal`
+- Brief: **C1** — final WP3 integration, live browser journey, ngrok readiness
+- Branch: `cursor/demo-wp3-onboarding-final`
 - Worktree: `/Users/sameerkhanna/Developer/BEE-demo-rehearsal`
-- Base: `main` @ `06f51d5`
-- Deliverable: `docs/demo/DEMO_WP3_WP9_SCRIPT.md`, `s9_wp3_wp9_showcase.sql`, Manufacturer 360 UI, `npm run demo:wp3-wp9-check`
+- Base: demo rehearsal `098b05c` merged with WP3 integration `aeafc7c`
+- Rollback branch: `cursor/demo-wp3-wp9-rehearsal` @ `098b05c`
+- Status: in progress — coordinated live smoke and gates

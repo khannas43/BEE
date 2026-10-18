@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const CONTRACT_VERSION = "0.36.0";
+export const CONTRACT_VERSION = "0.37.1";
 export const CORRELATION_HEADER = "X-Correlation-Id";
 
 /** Same rule as Spring's CorrelationIdFilter. */
@@ -30,6 +30,11 @@ export const ERROR_MESSAGES = {
   brand_not_permitted: "This brand is not available to your organisation.",
   not_editable: "Only draft applications can be edited.",
   not_submittable: "Only draft applications can be submitted.",
+  organisation_not_eligible: "This organisation cannot start manufacturer onboarding in its current permittee state.",
+  not_permitted: "This role cannot perform this action.",
+  observation_not_ended: "The observation period has not ended yet.",
+  anomaly_open: "An anomaly is already open on this application.",
+  clock_override_refused: "A caller-supplied date cannot override the observation clock.",
   rule_not_available: "Required category, standard or fee rules are not available.",
   validation_failed: "The request could not be accepted.",
   role_not_permitted: "This role cannot perform this action.",

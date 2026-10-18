@@ -75,6 +75,13 @@ before(async () => {
     messages: await import("../../app/api/runtime/messages/route.ts"),
     messageRead: await import("../../app/api/runtime/messages/[id]/read/route.ts"),
     messageReadAll: await import("../../app/api/runtime/messages/read-all/route.ts"),
+    mobList: await import("../../app/api/runtime/manufacturer-onboarding/route.ts"),
+    mobDetail: await import("../../app/api/runtime/manufacturer-onboarding/[id]/route.ts"),
+    mobSubmit: await import("../../app/api/runtime/manufacturer-onboarding/[id]/submit/route.ts"),
+    mobDirector: await import("../../app/api/runtime/manufacturer-onboarding/[id]/director-decision/route.ts"),
+    mobAnomalies: await import("../../app/api/runtime/manufacturer-onboarding/[id]/anomalies/route.ts"),
+    mobAnomalyResolution: await import("../../app/api/runtime/manufacturer-onboarding/[id]/anomaly-resolution/route.ts"),
+    mobDocuments: await import("../../app/api/runtime/manufacturer-onboarding/[id]/documents/route.ts"),
   };
 });
 
@@ -769,6 +776,62 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
 }
 
 /* Spring unreachable on the two registration reads: the portal answers 503 api_unreachable (unit evidence for the pair). */
+/* WP03 manufacturer onboarding: session_expired when Keycloak refuses refresh (unit evidence). */
+{
+  const MOB_ID = "00000000-0000-4000-f000-000000000001";
+  const json = { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123472" };
+  const mobOps = [
+    ["GET", "/api/runtime/manufacturer-onboarding", "mobList", "GET", "/api/runtime/manufacturer-onboarding", {}, null],
+    ["POST", "/api/runtime/manufacturer-onboarding", "mobList", "POST", "/api/runtime/manufacturer-onboarding", json, "{}"],
+    ["GET", "/api/runtime/manufacturer-onboarding/{id}", "mobDetail", "GET", `/api/runtime/manufacturer-onboarding/${MOB_ID}`, {}, null],
+    ["PATCH", "/api/runtime/manufacturer-onboarding/{id}", "mobDetail", "PATCH", `/api/runtime/manufacturer-onboarding/${MOB_ID}`, json, "{}"],
+    ["GET", "/api/runtime/manufacturer-onboarding/{id}/submit", "mobSubmit", "GET", `/api/runtime/manufacturer-onboarding/${MOB_ID}/submit`, {}, null],
+    ["POST", "/api/runtime/manufacturer-onboarding/{id}/submit", "mobSubmit", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/submit`, json, "{}"],
+    ["POST", "/api/runtime/manufacturer-onboarding/{id}/director-decision", "mobDirector", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/director-decision`, json, "{}"],
+    ["POST", "/api/runtime/manufacturer-onboarding/{id}/anomalies", "mobAnomalies", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/anomalies`, json, "{}"],
+    ["POST", "/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution", "mobAnomalyResolution", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/anomaly-resolution`, json, "{}"],
+    ["GET", "/api/runtime/manufacturer-onboarding/{id}/documents", "mobDocuments", "GET", `/api/runtime/manufacturer-onboarding/${MOB_ID}/documents`, {}, null],
+  ];
+  for (const [method, route, handler, verb, url, headers, body] of mobOps) {
+    test(`unit-evidence: ${method} ${route} 401 session_expired | Keycloak refusing refresh on ${url.replace(MOB_ID, "{id}")}`, async () => {
+      refreshRefusedStub();
+      const cookie = nearExpiry();
+      const res = await routes[handler][verb](req(url, `unit-mob-${handler}-${method.toLowerCase()}-refresh-refused`, cookie, { method: verb, headers, ...(body ? { body } : {}) }),
+        { params: Promise.resolve({ id: MOB_ID }) });
+      assert.equal(res.status, 401);
+      assert.equal((await res.json()).error, "session_expired");
+    });
+  }
+  test("unit-evidence: manufacturer onboarding detail upstream passes BFF validator (not invalid_upstream_response)", async () => {
+    const { validateManufacturerOnboardingDetail, MANUFACTURER_ONBOARDING_DETAIL_FIXTURE } = await import(
+      "../../lib/server/contracts/manufacturer-onboarding.ts"
+    );
+    assert.notEqual(validateManufacturerOnboardingDetail(MANUFACTURER_ONBOARDING_DETAIL_FIXTURE), null);
+    assert.equal(
+      validateManufacturerOnboardingDetail({
+        ...MANUFACTURER_ONBOARDING_DETAIL_FIXTURE,
+        documents: [{ documentKind: "pan_card", latestVersion: 1, status: "uploaded", extra: true }],
+      }),
+      null,
+    );
+    assert.equal(validateManufacturerOnboardingDetail({ ...MANUFACTURER_ONBOARDING_DETAIL_FIXTURE, documents: [{ foo: "bar" }] }), null);
+  });
+
+  test("unit-evidence: POST /api/runtime/manufacturer-onboarding/{id}/documents 401 session_expired | Keycloak refusing refresh on a manufacturer document upload", async () => {
+    refreshRefusedStub();
+    const cookie = nearExpiry();
+    const boundary = "----beeUnitMob";
+    const body = `--${boundary}\r\nContent-Disposition: form-data; name="documentKind"\r\n\r\ntrade_licence\r\n--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="licence.pdf"\r\nContent-Type: application/pdf\r\n\r\n%PDF-1.4 mob\r\n--${boundary}--\r\n`;
+    const res = await routes.mobDocuments.POST(req(`/api/runtime/manufacturer-onboarding/${MOB_ID}/documents`, "unit-mob-upload-refresh-refused", cookie, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}`, "Content-Length": String(Buffer.byteLength(body)), "Idempotency-Key": "0123456789abcdef0123473" },
+      body,
+    }), { params: Promise.resolve({ id: MOB_ID }) });
+    assert.equal(res.status, 401);
+    assert.equal((await res.json()).error, "session_expired");
+  });
+}
+
 for (const [route, handler, url] of [["/api/runtime/registrations", "registrations", "/api/runtime/registrations"], ["/api/runtime/registrations/{id}", "registration", "/api/runtime/registrations/00000000-0000-4000-f000-000000000001"]]) {
   test(`unit-evidence: GET ${route} 503 api_unreachable | Spring unreachable on a registration read`, async () => {
     const fresh = session.createSession("00000000-0000-4000-a000-000000000001", "nova.applicant", { access_token: `access-${SECRET}`, refresh_token: `refresh-${SECRET}`, expires_in: 300, refresh_expires_in: 0 }, ["pwd", "otp"]).cookie;

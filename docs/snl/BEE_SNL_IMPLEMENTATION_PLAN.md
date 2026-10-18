@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress — Brief 19C-A3 review pending | 65% | WP1 | R1 | V69–V72 and 19C-0 accepted; V73 registration boundary unaccepted pending 19C-A3 review |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19C-A4 review pending | 65% | WP1 | R1 | V69–V72 and 19C-0 accepted; V73 registration boundary unaccepted pending 19C-A4 review |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -285,7 +285,7 @@ At the end of each development session, update the package status, progress, com
 | Evidence | Result or link |
 |---|---|
 | Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_DB_BOUNDARY.md](SNL_WP02C_REGISTRATION_DB_BOUNDARY.md) |
-| Migration range | Accepted: V69–V72; V73 (19C-A3 implemented, unaccepted pending review) |
+| Migration range | Accepted: V69–V72; V73 (19C-A4 implemented, unaccepted pending review) |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
 | Database tests | 482 passed after Brief 19B-2B; includes staged V71→V72 migration, privilege boundary, real post-legacy rollback, repeat-cycle, constraint and concurrency survivor proofs |

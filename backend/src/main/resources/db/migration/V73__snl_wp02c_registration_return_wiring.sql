@@ -314,9 +314,9 @@ END $$;
 
 
 
-CREATE OR REPLACE FUNCTION registration_return_response_wiring_instant_ms(p_at timestamptz)
+CREATE OR REPLACE FUNCTION registration_return_response_wiring_instant_us(p_at timestamptz)
 RETURNS bigint LANGUAGE sql IMMUTABLE SET search_path FROM CURRENT AS $$
-  SELECT (floor(extract(epoch from p_at) * 1000))::bigint;
+  SELECT (extract(epoch from p_at) * 1000000)::bigint;
 $$;
 
 CREATE OR REPLACE FUNCTION registration_return_response_wiring_return_hash(
@@ -341,10 +341,10 @@ CREATE OR REPLACE FUNCTION registration_return_response_wiring_return_hash(
 ) RETURNS char(64) LANGUAGE sql IMMUTABLE SET search_path FROM CURRENT AS $$
   SELECT encode(sha256(convert_to(
     'registration_return_wiring|' || p_application_id::text || '|' || p_transition_event_id::text || '|' || p_return_id::text || '|'
-    || p_from_stage || '|' || p_reason || '|' || p_returned_by::text || '|' || registration_return_response_wiring_instant_ms(p_returned_at)::text || '|' || p_actor_role || '|'
+    || p_from_stage || '|' || p_reason || '|' || p_returned_by::text || '|' || registration_return_response_wiring_instant_us(p_returned_at)::text || '|' || p_actor_role || '|'
     || p_notify_command_id::text || '|' || p_notify_payload_hash || '|' || p_notify_message_suffix || '|'
     || p_task_command_id::text || '|' || p_task_payload_hash || '|' || p_task_owner_role || '|' || p_task_owner_account::text || '|'
-    || registration_return_response_wiring_instant_ms(p_due_at)::text || '|' || p_policy_version_id::text || '|' || p_actor_account::text, 'UTF8')), 'hex');
+    || registration_return_response_wiring_instant_us(p_due_at)::text || '|' || p_policy_version_id::text || '|' || p_actor_account::text, 'UTF8')), 'hex');
 $$;
 
 CREATE OR REPLACE FUNCTION registration_return_response_wiring_resubmit_hash(
@@ -371,10 +371,10 @@ CREATE OR REPLACE FUNCTION registration_return_response_wiring_resubmit_hash(
 ) RETURNS char(64) LANGUAGE sql IMMUTABLE SET search_path FROM CURRENT AS $$
   SELECT encode(sha256(convert_to(
     'registration_resubmit_wiring|' || p_application_id::text || '|' || p_return_id::text || '|' || p_resubmission_id::text || '|'
-    || p_transition_event_id::text || '|' || p_returned_from_stage || '|' || registration_return_response_wiring_instant_ms(p_returned_at)::text || '|' || p_return_reason || '|'
-    || p_resumed_stage || '|' || coalesce(p_response_body, '') || '|' || registration_return_response_wiring_instant_ms(p_resubmitted_at)::text || '|' || p_responded_by::text || '|'
+    || p_transition_event_id::text || '|' || p_returned_from_stage || '|' || registration_return_response_wiring_instant_us(p_returned_at)::text || '|' || p_return_reason || '|'
+    || p_resumed_stage || '|' || coalesce(p_response_body, '') || '|' || registration_return_response_wiring_instant_us(p_resubmitted_at)::text || '|' || p_responded_by::text || '|'
     || p_responded_role || '|' || p_notify_command_id::text || '|' || p_task_command_id::text || '|' || p_task_payload_hash || '|' || p_task_owner_role || '|'
-    || p_task_owner_account::text || '|' || registration_return_response_wiring_instant_ms(p_due_at)::text || '|' || p_policy_version_id::text || '|' || p_actor_account::text, 'UTF8')), 'hex');
+    || p_task_owner_account::text || '|' || registration_return_response_wiring_instant_us(p_due_at)::text || '|' || p_policy_version_id::text || '|' || p_actor_account::text, 'UTF8')), 'hex');
 $$;
 
 CREATE FUNCTION registration_return_response_verify_return_notify_bundle(
@@ -1006,7 +1006,7 @@ BEGIN
   PERFORM registration_return_response_record_wiring_evidence(p_notify_command_id, p_application_id, 'registration_resubmit_notify', v_notify_hash);
 END $$;
 
-REVOKE ALL ON FUNCTION registration_return_response_wiring_instant_ms(timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION registration_return_response_wiring_instant_us(timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_wiring_return_hash(uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION registration_return_response_wiring_resubmit_hash(uuid, uuid, uuid, uuid, text, timestamptz, text, text, text, timestamptz, uuid, text, uuid, uuid, char(64), text, uuid, timestamptz, uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION workflow_calendar_is_working_day(text, date) FROM PUBLIC;
@@ -1137,7 +1137,7 @@ BEGIN
   EXECUTE format('ALTER FUNCTION %I.workflow_sla_due_at_end_of_working_days(uuid, timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_applicable_policy_id(timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_format_due_label(timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
-  EXECUTE format('ALTER FUNCTION %I.registration_return_response_wiring_instant_ms(timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.registration_return_response_wiring_instant_us(timestamptz) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_wiring_return_hash(uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.registration_return_response_wiring_resubmit_hash(uuid, uuid, uuid, uuid, text, timestamptz, text, text, text, timestamptz, uuid, text, uuid, uuid, char(64), text, uuid, timestamptz, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
 

@@ -366,6 +366,27 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         assertSnapshot(applicationId, baseline);
     }
 
+    CompleteBundleSnapshot expectedAfterReference(CompleteBundleSnapshot subjectBefore, CompleteBundleSnapshot refBefore, CompleteBundleSnapshot refAfter) {
+        return new CompleteBundleSnapshot(
+            refAfter.appState(),
+            subjectBefore.appVersion() + (refAfter.appVersion() - refBefore.appVersion()),
+            subjectBefore.transitionEvents() + (refAfter.transitionEvents() - refBefore.transitionEvents()),
+            subjectBefore.returns() + (refAfter.returns() - refBefore.returns()),
+            subjectBefore.resubmissions() + (refAfter.resubmissions() - refBefore.resubmissions()),
+            subjectBefore.cycles() + (refAfter.cycles() - refBefore.cycles()),
+            subjectBefore.cycleReturns() + (refAfter.cycleReturns() - refBefore.cycleReturns()),
+            subjectBefore.tasks() + (refAfter.tasks() - refBefore.tasks()),
+            subjectBefore.taskEvents() + (refAfter.taskEvents() - refBefore.taskEvents()),
+            subjectBefore.clocks() + (refAfter.clocks() - refBefore.clocks()),
+            subjectBefore.clockEvents() + (refAfter.clockEvents() - refBefore.clockEvents()),
+            subjectBefore.discrepancies() + (refAfter.discrepancies() - refBefore.discrepancies()),
+            subjectBefore.dispositions() + (refAfter.dispositions() - refBefore.dispositions()),
+            subjectBefore.responses() + (refAfter.responses() - refBefore.responses()),
+            subjectBefore.notificationCommands() + (refAfter.notificationCommands() - refBefore.notificationCommands()),
+            subjectBefore.notifications() + (refAfter.notifications() - refBefore.notifications()),
+            subjectBefore.wiringEvidence() + (refAfter.wiringEvidence() - refBefore.wiringEvidence()));
+    }
+
     void assertSqlMessage(DataAccessException ex, String code) {
         assertTrue(WorkflowFoundationRepository.isSqlMessage(ex, code), ex.toString());
     }
@@ -517,14 +538,11 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         assertNotNull(loser.get());
         assertInstanceOf(IllegalStateException.class, loser.get());
         assertTrue(loser.get().getMessage().contains("registration return transition stale"), loser.get().getMessage());
-        CompleteBundleSnapshot after = snapshot(id);
-        assertEquals("returned", after.appState());
-        assertEquals(before.transitionEvents() + 1, after.transitionEvents());
-        assertEquals(1, after.returns());
-        assertEquals(1, after.cycles());
-        assertEquals(2, after.wiringEvidence());
-        assertEquals(1, after.notificationCommands());
-        assertTrue(after.notifications() >= 1);
+        UUID refId = atProgrammeReview("WP02C-DELTA-RET-" + TAG);
+        CompleteBundleSnapshot refBefore = snapshot(refId);
+        wiredReturn(refId, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
+        CompleteBundleSnapshot expected = expectedAfterReference(before, refBefore, snapshot(refId));
+        assertSnapshot(id, expected);
     }
 
     @Test
@@ -641,12 +659,14 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         assertNotNull(loser.get());
         assertInstanceOf(IllegalStateException.class, loser.get());
         assertTrue(loser.get().getMessage().contains("registration resubmit transition stale"), loser.get().getMessage());
-        CompleteBundleSnapshot after = snapshot(id);
-        assertEquals("programme_review", after.appState());
-        assertEquals(afterReturn.transitionEvents() + 1, after.transitionEvents());
-        assertEquals(1, after.resubmissions());
-        assertEquals(1, after.responses());
-        assertEquals(afterReturn.wiringEvidence() + 2, after.wiringEvidence());
+        UUID refId = atProgrammeReview("WP02C-DELTA-SUB-" + TAG);
+        wiredReturn(refId, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
+        CompleteBundleSnapshot refAfterReturn = snapshot(refId);
+        wiredResubmit(refId, latestReturnId(refId), "programme_review",
+            owner.queryForObject("SELECT returned_at FROM registration_application_return WHERE application_id = ?", Instant.class, refId),
+            REASON, UUID.randomUUID().toString(), null);
+        CompleteBundleSnapshot expected = expectedAfterReference(afterReturn, refAfterReturn, snapshot(refId));
+        assertSnapshot(id, expected);
     }
 
     @Test
@@ -687,22 +707,31 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         wiredReturn(id, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
         UUID returnId = latestReturnId(id);
         UUID cycleId = owner.queryForObject("SELECT id FROM registration_return_response_cycle WHERE application_id = ?", UUID.class, id);
-        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_application_return (id, application_id, transition_event_id, returned_from_state, "
-            + "reason, returned_by_account_id, returned_at, foundation_notify_command_id) SELECT gen_random_uuid(), application_id, transition_event_id, returned_from_state, "
-            + "reason, returned_by_account_id, returned_at, foundation_notify_command_id FROM registration_application_return LIMIT 1"));
-        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_application_resubmission (id, application_id, return_id, transition_event_id, resumed_state, resubmitted_by_account_id, resubmitted_at) "
-            + "VALUES (gen_random_uuid(), ?, ?, gen_random_uuid(), 'programme_review', ?, now())", id, returnId, NOVA_USER));
-        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_return_response_cycle SET task_id = gen_random_uuid() WHERE application_id = ?", id));
-        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_return_response_cycle_return SET return_id = gen_random_uuid() WHERE cycle_id = ?", cycleId));
-        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_return_response_wiring_evidence SET payload_hash = repeat('a', 64) WHERE application_id = ?", id));
-        assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_application_return WHERE id = ?", returnId));
         wiredResubmit(id, returnId, "programme_review",
             owner.queryForObject("SELECT returned_at FROM registration_application_return WHERE id = ?", Instant.class, returnId),
             REASON, UUID.randomUUID().toString(), null);
         UUID resubId = owner.queryForObject("SELECT id FROM registration_application_resubmission WHERE application_id = ? ORDER BY resubmitted_at DESC LIMIT 1", UUID.class, id);
+        UUID evidenceId = owner.queryForObject("SELECT command_id FROM registration_return_response_wiring_evidence WHERE application_id = ? LIMIT 1", UUID.class, id);
+        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_application_return (id, application_id, transition_event_id, returned_from_state, "
+            + "reason, returned_by_account_id, returned_at, foundation_notify_command_id) SELECT gen_random_uuid(), application_id, transition_event_id, returned_from_state, "
+            + "reason, returned_by_account_id, returned_at, foundation_notify_command_id FROM registration_application_return WHERE id = ?", returnId));
+        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_application_return SET reason = reason WHERE id = ?", returnId));
+        assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_application_return WHERE id = ?", returnId));
+        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_application_resubmission (id, application_id, return_id, transition_event_id, resumed_state, resubmitted_by_account_id, resubmitted_at) "
+            + "VALUES (gen_random_uuid(), ?, ?, gen_random_uuid(), 'programme_review', ?, now())", id, returnId, NOVA_USER));
+        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_application_resubmission SET resumed_state = resumed_state WHERE id = ?", resubId));
         assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_application_resubmission WHERE id = ?", resubId));
-        assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_return_response_cycle_return WHERE cycle_id = ?", cycleId));
+        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_return_response_cycle (id, application_id, cycle_seq, status, review_stage, task_id, discrepancy_id) "
+            + "SELECT gen_random_uuid(), application_id, 99, 'open', review_stage, task_id, discrepancy_id FROM registration_return_response_cycle WHERE id = ?", cycleId));
+        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_return_response_cycle SET task_id = gen_random_uuid() WHERE id = ?", cycleId));
         assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_return_response_cycle WHERE id = ?", cycleId));
+        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_return_response_cycle_return (cycle_id, return_id) VALUES (?, gen_random_uuid())", cycleId));
+        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_return_response_cycle_return SET return_id = return_id WHERE cycle_id = ?", cycleId));
+        assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_return_response_cycle_return WHERE cycle_id = ?", cycleId));
+        assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_return_response_wiring_evidence (command_id, application_id, purpose, payload_hash) "
+            + "VALUES (gen_random_uuid(), ?, 'registration_return_wiring', repeat('b', 64))", id));
+        assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_return_response_wiring_evidence SET payload_hash = repeat('a', 64) WHERE command_id = ?", evidenceId));
+        assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_return_response_wiring_evidence WHERE command_id = ?", evidenceId));
     }
 
     @Test
@@ -808,6 +837,36 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
     }
 
     @Test
+    void returnReplayWithOldHashAndSubMillisecondTimestampConflicts() {
+        UUID id = atProgrammeReview("WP02C-SUBMS-RET-" + TAG);
+        String idem = UUID.randomUUID().toString();
+        UUID wiringCommand = commandId(idem, "registration_return_wiring", id);
+        LegacyReturn leg = tx.execute(s -> {
+            int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
+            var first = legacyReturn(id, version, "programme_review", PROGRAMME_USER, "programme", REASON);
+            completeWiredReturn(id, first.returnId(), first.transitionEventId(), "programme_review", REASON, first.returnedAt(), PROGRAMME_USER, "programme", idem);
+            return first;
+        });
+        String storedHash = owner.queryForObject("SELECT payload_hash FROM registration_return_response_wiring_evidence WHERE command_id = ?", String.class, wiringCommand);
+        Instant tamperedReturnedAt = Instant.ofEpochMilli(leg.returnedAt().toEpochMilli()).plusNanos(500_000);
+        assertTrue(tamperedReturnedAt.toEpochMilli() == leg.returnedAt().toEpochMilli());
+        assertFalse(tamperedReturnedAt.equals(leg.returnedAt()));
+        var policy = policyRepo.requireApplicableVersion(leg.returnedAt());
+        Instant dueAt = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy);
+        String suffix = "was returned to you: " + REASON + " Respond by " + DUE_LABEL.format(dueAt) + ". Edit it and send it again.";
+        assertThrows(WorkflowIdempotencyConflictException.class, () -> tx.executeWithoutResult(s -> wiringRepo.orchestrateWiredReturn(
+            new RegistrationReturnResponseWiringRepository.OrchestrateWiredReturnCommand(
+                leg.returnId(), id, leg.transitionEventId(), "programme_review", REASON, PROGRAMME_USER, tamperedReturnedAt, "programme",
+                commandId(idem, "registration_return_notify", id),
+                NotificationCommandRepository.payloadHash(new NotificationCommandRepository.DeliverCommand(
+                    WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "returned", suffix)),
+                suffix, commandId(idem, "registration_return_task", id),
+                WorkflowFoundationRepository.payloadHash(new WorkflowFoundationRepository.TaskCommand(
+                    WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "programme_review", "review", "programme", PROGRAMME_USER, dueAt, policy.id(), tamperedReturnedAt)),
+                "programme", PROGRAMME_USER, dueAt, policy.id(), wiringCommand, storedHash, PROGRAMME_USER))));
+    }
+
+    @Test
     void resubmitReplayWithOldHashAndChangedMaterialInputConflicts() {
         UUID id = atProgrammeReview("WP02C-OLD-HASH-SUB-" + TAG);
         wiredReturn(id, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
@@ -838,6 +897,37 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         assertEquals(NEUTRAL, owner.queryForObject(
             "SELECT body FROM workflow_discrepancy_response WHERE discrepancy_id = ? ORDER BY response_seq DESC LIMIT 1", String.class, discrepancyId));
         assertEquals(1, owner.queryForObject("SELECT count(*) FROM registration_return_response_wiring_evidence WHERE command_id = ?", Integer.class, wiringCommand));
+    }
+
+    @Test
+    void resubmitReplayWithOldHashAndSubMillisecondTimestampConflicts() {
+        UUID id = atProgrammeReview("WP02C-SUBMS-SUB-" + TAG);
+        wiredReturn(id, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
+        UUID returnId = latestReturnId(id);
+        Instant returnAt = owner.queryForObject("SELECT returned_at FROM registration_application_return WHERE id = ?", Instant.class, returnId);
+        String idem = UUID.randomUUID().toString();
+        UUID wiringCommand = commandId(idem, "registration_resubmit_wiring", id);
+        UUID resubmissionId = UUID.randomUUID();
+        LegacyReturn leg = tx.execute(s -> {
+            int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
+            var first = legacyResubmit(id, version, returnId, "programme_review", returnAt, REASON, NOVA_USER, "manufacturer");
+            completeResubmit(id, returnId, resubmissionId, first.transitionEventId(), "programme_review", returnAt, REASON, null, first.returnedAt(), idem);
+            return first;
+        });
+        String storedHash = owner.queryForObject("SELECT payload_hash FROM registration_return_response_wiring_evidence WHERE command_id = ?", String.class, wiringCommand);
+        Instant tamperedResubmittedAt = Instant.ofEpochMilli(leg.returnedAt().toEpochMilli()).plusNanos(500_000);
+        assertTrue(tamperedResubmittedAt.toEpochMilli() == leg.returnedAt().toEpochMilli());
+        assertFalse(tamperedResubmittedAt.equals(leg.returnedAt()));
+        var policy = policyRepo.requireApplicableVersion(returnAt);
+        Instant dueAt = policyRepo.dueAtEndOfWorkingDays(returnAt, policy);
+        UUID taskOwner = owner.queryForObject("SELECT returned_by_account_id FROM registration_application_return WHERE id = ?", UUID.class, returnId);
+        var taskCmd = new WorkflowFoundationRepository.TaskCommand(WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "programme_review", "review",
+            "programme", taskOwner, dueAt, policy.id(), returnAt);
+        assertThrows(WorkflowIdempotencyConflictException.class, () -> tx.executeWithoutResult(s -> wiringRepo.orchestrateResubmit(
+            new RegistrationReturnResponseWiringRepository.OrchestrateResubmitCommand(
+                id, returnId, resubmissionId, leg.transitionEventId(), "programme_review", returnAt, REASON, "programme_review", NEUTRAL, tamperedResubmittedAt,
+                NOVA_USER, "manufacturer", wiringCommand, storedHash, commandId(idem, "registration_resubmit_notify", id),
+                commandId(idem, "registration_resubmit_task", id), WorkflowFoundationRepository.payloadHash(taskCmd), "programme", taskOwner, dueAt, policy.id(), NOVA_USER))));
     }
 
     @Test
@@ -940,78 +1030,85 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
     @Test
     void resubmitOfficerRoleValidityUsesPersistedResubmitTransitionTime() {
         UUID id = atProgrammeReview("WP02C-RESUB-ROLE-" + TAG);
-        wiredReturn(id, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
+        UUID returningOfficer = UUID.randomUUID();
+        owner.update("INSERT INTO user_account (id, keycloak_subject, username, display_name, status) VALUES (?, ?, ?, ?, 'active')",
+            returningOfficer, UUID.randomUUID(), "wp02c-return-off-" + TAG, "WP02C return officer");
+        owner.update("INSERT INTO role_assignment (user_id, role, scope, active, valid_from, valid_to) VALUES (?, 'programme', 'all', true, '-infinity', 'infinity')",
+            returningOfficer);
+        wiredReturn(id, "programme_review", returningOfficer, "programme", UUID.randomUUID().toString(), REASON);
         CompleteBundleSnapshot afterReturn = snapshot(id);
         UUID returnId = latestReturnId(id);
-        Instant returnAt = owner.queryForObject("SELECT returned_at FROM registration_application_return WHERE id = ?", Instant.class, returnId);
-        owner.update("UPDATE role_assignment SET valid_to = now() - interval '1 day' WHERE user_id = ? AND role = 'programme'", PROGRAMME_USER);
-        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
+        Instant returnedAt = owner.queryForObject("SELECT returned_at FROM registration_application_return WHERE id = ?", Instant.class, returnId);
+        owner.query("SELECT registration_return_response_resolve_officer(?, ?)", rs -> {
+        }, id, returnId);
+        owner.update("UPDATE role_assignment SET valid_to = ? WHERE user_id = ? AND role = 'programme'",
+            java.sql.Timestamp.from(returnedAt.plusNanos(1_000)), returningOfficer);
+        var failure = assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
             int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
-            var leg = legacyResubmit(id, version, returnId, "programme_review", returnAt, REASON, NOVA_USER, "manufacturer");
-            completeResubmit(id, returnId, UUID.randomUUID(), leg.transitionEventId(), "programme_review", returnAt, REASON, null, leg.returnedAt(),
+            var leg = legacyResubmit(id, version, returnId, "programme_review", returnedAt, REASON, NOVA_USER, "manufacturer");
+            completeResubmit(id, returnId, UUID.randomUUID(), leg.transitionEventId(), "programme_review", returnedAt, REASON, null, leg.returnedAt(),
                 UUID.randomUUID().toString());
         }));
+        assertSqlMessage(failure, "notification_recipient_inactive");
         assertSnapshot(id, afterReturn);
-        owner.update("UPDATE role_assignment SET valid_to = 'infinity' WHERE user_id = ? AND role = 'programme'", PROGRAMME_USER);
+        owner.update("UPDATE role_assignment SET valid_to = 'infinity' WHERE user_id = ? AND role = 'programme'", returningOfficer);
     }
 
     @Test
     void wrongDueTimeIsRejectedWithNoPartialBundle() {
         UUID id = atProgrammeReview("WP02C-DUE-REJ-" + TAG);
-        LegacyReturn leg = tx.execute(s -> {
+        CompleteBundleSnapshot baseline = snapshot(id);
+        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
             int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
-            return legacyReturn(id, version, "programme_review", PROGRAMME_USER, "programme", REASON);
-        });
-        var policy = policyRepo.requireApplicableVersion(leg.returnedAt());
-        Instant wrongDue = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy).plusSeconds(3600);
-        Instant dueAt = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy);
-        String suffix = "was returned to you: " + REASON + " Respond by " + DUE_LABEL.format(dueAt) + ". Edit it and send it again.";
-        UUID notifyCommand = commandId(UUID.randomUUID().toString(), "registration_return_notify", id);
-        UUID taskCommand = commandId(UUID.randomUUID().toString(), "registration_return_task", id);
-        UUID wiringCommand = commandId(UUID.randomUUID().toString(), "registration_return_wiring", id);
-        var taskCmd = new WorkflowFoundationRepository.TaskCommand(WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "programme_review", "review",
-            "programme", PROGRAMME_USER, dueAt, policy.id(), leg.returnedAt());
-        String notifyHash = NotificationCommandRepository.payloadHash(new NotificationCommandRepository.DeliverCommand(
-            WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "returned", suffix));
-        String taskPayloadHash = WorkflowFoundationRepository.payloadHash(taskCmd);
-        String wiringHash = wiringReturnHash(id, leg.transitionEventId(), leg.returnId(), "programme_review", REASON, PROGRAMME_USER, leg.returnedAt(), "programme",
-            notifyCommand, notifyHash, suffix, taskCommand, taskPayloadHash, "programme", PROGRAMME_USER, wrongDue, policy.id(), PROGRAMME_USER);
-        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> wiringRepo.orchestrateWiredReturn(
-            new RegistrationReturnResponseWiringRepository.OrchestrateWiredReturnCommand(
+            var leg = legacyReturn(id, version, "programme_review", PROGRAMME_USER, "programme", REASON);
+            var policy = policyRepo.requireApplicableVersion(leg.returnedAt());
+            Instant wrongDue = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy).plusSeconds(3600);
+            Instant dueAt = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy);
+            String suffix = "was returned to you: " + REASON + " Respond by " + DUE_LABEL.format(dueAt) + ". Edit it and send it again.";
+            UUID notifyCommand = commandId(UUID.randomUUID().toString(), "registration_return_notify", id);
+            UUID taskCommand = commandId(UUID.randomUUID().toString(), "registration_return_task", id);
+            UUID wiringCommand = commandId(UUID.randomUUID().toString(), "registration_return_wiring", id);
+            var taskCmd = new WorkflowFoundationRepository.TaskCommand(WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "programme_review", "review",
+                "programme", PROGRAMME_USER, dueAt, policy.id(), leg.returnedAt());
+            String notifyHash = NotificationCommandRepository.payloadHash(new NotificationCommandRepository.DeliverCommand(
+                WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "returned", suffix));
+            String taskPayloadHash = WorkflowFoundationRepository.payloadHash(taskCmd);
+            String wiringHash = wiringReturnHash(id, leg.transitionEventId(), leg.returnId(), "programme_review", REASON, PROGRAMME_USER, leg.returnedAt(), "programme",
+                notifyCommand, notifyHash, suffix, taskCommand, taskPayloadHash, "programme", PROGRAMME_USER, wrongDue, policy.id(), PROGRAMME_USER);
+            wiringRepo.orchestrateWiredReturn(new RegistrationReturnResponseWiringRepository.OrchestrateWiredReturnCommand(
                 leg.returnId(), id, leg.transitionEventId(), "programme_review", REASON, PROGRAMME_USER, leg.returnedAt(), "programme",
                 notifyCommand, notifyHash, suffix, taskCommand, taskPayloadHash, "programme", PROGRAMME_USER, wrongDue, policy.id(), wiringCommand, wiringHash,
-                PROGRAMME_USER))));
-        CompleteBundleSnapshot afterLeg = snapshot(id);
-        assertNoReturnWorkflowResidue(id, afterLeg);
+                PROGRAMME_USER));
+        }));
+        assertNoReturnWorkflowResidue(id, baseline);
     }
 
     @Test
     void wrongTaskOwnerIsRejectedAtomically() {
         UUID id = atProgrammeReview("WP02C-OWNER-REJ-" + TAG);
-        LegacyReturn leg = tx.execute(s -> {
+        CompleteBundleSnapshot baseline = snapshot(id);
+        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
             int version = db.queryForObject("SELECT version FROM registration_application WHERE id = ?", Integer.class, id);
-            return legacyReturn(id, version, "programme_review", PROGRAMME_USER, "programme", REASON);
-        });
-        var policy = policyRepo.requireApplicableVersion(leg.returnedAt());
-        Instant dueAt = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy);
-        String suffix = "was returned to you: " + REASON + " Respond by " + DUE_LABEL.format(dueAt) + ". Edit it and send it again.";
-        var taskCmd = new WorkflowFoundationRepository.TaskCommand(WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "programme_review", "review",
-            "programme", PROGRAMME_USER, dueAt, policy.id(), leg.returnedAt());
-        UUID notifyCommand = commandId(UUID.randomUUID().toString(), "registration_return_notify", id);
-        UUID taskCommand = commandId(UUID.randomUUID().toString(), "registration_return_task", id);
-        UUID wiringCommand = commandId(UUID.randomUUID().toString(), "registration_return_wiring", id);
-        String notifyHash = NotificationCommandRepository.payloadHash(new NotificationCommandRepository.DeliverCommand(
-            WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "returned", suffix));
-        String taskPayloadHash = WorkflowFoundationRepository.payloadHash(taskCmd);
-        String wiringHash = wiringReturnHash(id, leg.transitionEventId(), leg.returnId(), "programme_review", REASON, PROGRAMME_USER, leg.returnedAt(), "programme",
-            notifyCommand, notifyHash, suffix, taskCommand, taskPayloadHash, "programme", DIRECTOR_USER, dueAt, policy.id(), PROGRAMME_USER);
-        CompleteBundleSnapshot afterLeg = snapshot(id);
-        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> wiringRepo.orchestrateWiredReturn(
-            new RegistrationReturnResponseWiringRepository.OrchestrateWiredReturnCommand(
+            var leg = legacyReturn(id, version, "programme_review", PROGRAMME_USER, "programme", REASON);
+            var policy = policyRepo.requireApplicableVersion(leg.returnedAt());
+            Instant dueAt = policyRepo.dueAtEndOfWorkingDays(leg.returnedAt(), policy);
+            String suffix = "was returned to you: " + REASON + " Respond by " + DUE_LABEL.format(dueAt) + ". Edit it and send it again.";
+            var taskCmd = new WorkflowFoundationRepository.TaskCommand(WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "programme_review", "review",
+                "programme", PROGRAMME_USER, dueAt, policy.id(), leg.returnedAt());
+            UUID notifyCommand = commandId(UUID.randomUUID().toString(), "registration_return_notify", id);
+            UUID taskCommand = commandId(UUID.randomUUID().toString(), "registration_return_task", id);
+            UUID wiringCommand = commandId(UUID.randomUUID().toString(), "registration_return_wiring", id);
+            String notifyHash = NotificationCommandRepository.payloadHash(new NotificationCommandRepository.DeliverCommand(
+                WorkflowFoundationRepository.SUBJECT_REGISTRATION, id, "returned", suffix));
+            String taskPayloadHash = WorkflowFoundationRepository.payloadHash(taskCmd);
+            String wiringHash = wiringReturnHash(id, leg.transitionEventId(), leg.returnId(), "programme_review", REASON, PROGRAMME_USER, leg.returnedAt(), "programme",
+                notifyCommand, notifyHash, suffix, taskCommand, taskPayloadHash, "programme", DIRECTOR_USER, dueAt, policy.id(), PROGRAMME_USER);
+            wiringRepo.orchestrateWiredReturn(new RegistrationReturnResponseWiringRepository.OrchestrateWiredReturnCommand(
                 leg.returnId(), id, leg.transitionEventId(), "programme_review", REASON, PROGRAMME_USER, leg.returnedAt(), "programme",
                 notifyCommand, notifyHash, suffix, taskCommand, taskPayloadHash, "programme", DIRECTOR_USER, dueAt, policy.id(), wiringCommand, wiringHash,
-                PROGRAMME_USER))));
-        assertNoReturnWorkflowResidue(id, afterLeg);
+                PROGRAMME_USER));
+        }));
+        assertNoReturnWorkflowResidue(id, baseline);
     }
 
     @Test

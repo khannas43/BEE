@@ -1,9 +1,9 @@
-# SNL WP02C — registration return/resubmit trusted database boundary (Brief 19C-A / 19C-A1 / 19C-A2 / 19C-A3)
+# SNL WP02C — registration return/resubmit trusted database boundary (Brief 19C-A / 19C-A1 / 19C-A2 / 19C-A3 / 19C-A4)
 
 **Branch:** `cursor/snl-wp02c-registration-db-boundary`
-**Migration:** V73 (`V73__snl_wp02c_registration_return_wiring.sql`) — corrected in place through Brief 19C-A3
+**Migration:** V73 (`V73__snl_wp02c_registration_return_wiring.sql`) — corrected in place through Brief 19C-A4
 **Design:** [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md)
-**Status:** Brief 19C-A3 implemented / **review pending**. No HTTP, OpenAPI, BFF or UI wiring. **V73 and 19C are not accepted.**
+**Status:** Brief 19C-A4 implemented / **review pending**. No HTTP, OpenAPI, BFF or UI wiring. **V73 and 19C are not accepted.**
 
 ## Schema
 
@@ -30,26 +30,26 @@ All other `registration_return_response_*` helpers are `SECURITY DEFINER` with p
 
 **Maintenance EXECUTE (not registration closure):** `app_disposable_registration_cleanup` only. There is **no** production cycle-closure command; forward closure remains 19C-C.
 
-## Canonical wiring payload (19C-A3)
+## Canonical wiring payload (19C-A4)
 
 Caller-supplied `p_wiring_payload_hash` remains on both orchestrators for Java compatibility. The database **always** recomputes the canonical hash and:
 
 - on **fresh** execution: rejects when `p_wiring_payload_hash` ≠ computed hash; persists **computed** hash in `registration_return_response_wiring_evidence`;
 - on **replay**: compares computed hash to stored evidence **before** returning success; any material orchestrator input change (including notify suffix and task payload hash) → `registration_return_response_wiring_idempotency_conflict`; requires matching `return_id` / `resubmission_id` and transition identity.
 
-Timestamps in the hash use **`registration_return_response_wiring_instant_ms(timestamptz)`** (UTC epoch milliseconds), not timezone-dependent text.
+Timestamps in the hash use **`registration_return_response_wiring_instant_us(timestamptz)`** (UTC epoch **microseconds**, lossless at PostgreSQL `timestamptz` precision).
 
 ### Return hash (`registration_return_response_wiring_return_hash`)
 
 SHA-256 over UTF-8:
 
-`registration_return_wiring|{application_id}|{transition_event_id}|{return_id}|{from_stage}|{reason}|{returned_by}|{returned_at_ms}|{actor_role}|{notify_command_id}|{notify_payload_hash}|{notify_message_suffix}|{task_command_id}|{task_payload_hash}|{task_owner_role}|{task_owner_account}|{due_at_ms}|{policy_version_id}|{actor_account}`
+`registration_return_wiring|{application_id}|{transition_event_id}|{return_id}|{from_stage}|{reason}|{returned_by}|{returned_at_us}|{actor_role}|{notify_command_id}|{notify_payload_hash}|{notify_message_suffix}|{task_command_id}|{task_payload_hash}|{task_owner_role}|{task_owner_account}|{due_at_us}|{policy_version_id}|{actor_account}`
 
 ### Resubmit hash (`registration_return_response_wiring_resubmit_hash`)
 
 SHA-256 over UTF-8:
 
-`registration_resubmit_wiring|{application_id}|{return_id}|{resubmission_id}|{transition_event_id}|{returned_from_stage}|{returned_at_ms}|{return_reason}|{resumed_stage}|{coalesce(response_body,'')}|{resubmitted_at_ms}|{responded_by}|{responded_role}|{notify_command_id}|{task_command_id}|{task_payload_hash}|{task_owner_role}|{task_owner_account}|{due_at_ms}|{policy_version_id}|{actor_account}`
+`registration_resubmit_wiring|{application_id}|{return_id}|{resubmission_id}|{transition_event_id}|{returned_from_stage}|{returned_at_us}|{return_reason}|{resumed_stage}|{coalesce(response_body,'')}|{resubmitted_at_us}|{responded_by}|{responded_role}|{notify_command_id}|{task_command_id}|{task_payload_hash}|{task_owner_role}|{task_owner_account}|{due_at_us}|{policy_version_id}|{actor_account}`
 
 Notify/task payload hashes remain separate V70/foundation checks; wiring evidence stores the wiring canonical hashes above.
 
@@ -87,7 +87,7 @@ Orchestrators acquire the wiring advisory lock and read wiring evidence **before
 
 `RegistrationReturnResponseWiringRepository` — internal; calls only the two orchestrators; maps idempotency SQL message to `WorkflowIdempotencyConflictException`. Not wired into `RegistrationReviewService` (19C-B).
 
-## Proof map (`SnlWp02cRegistrationReturnWiringDatabaseTest`, 33 tests)
+## Proof map (`SnlWp02cRegistrationReturnWiringDatabaseTest`, 35 tests)
 
 | # | Test | Section |
 | --- | --- | --- |
@@ -97,29 +97,31 @@ Orchestrators acquire the wiring advisory lock and read wiring evidence **before
 | 4 | `returnPersistsAndNotifiesExactCalendarDueDate` | Policy + calendar due |
 | 5 | `identicalReturnReplayIsStableAndChangedPayloadConflicts` | Return idempotency |
 | 6 | `returnReplayWithOldHashAndChangedMaterialInputConflicts` | Old-hash / material-input tamper |
-| 7 | `concurrentReturnHasOneCompleteSurvivorAndAssertedLoser` | Concurrency (loser: `IllegalStateException`, `registration return transition stale`) |
+| 6b | `returnReplayWithOldHashAndSubMillisecondTimestampConflicts` | **A4** same-ms timestamp drift vs stored hash |
+| 7 | `concurrentReturnHasOneCompleteSurvivorAndAssertedLoser` | **A4** concurrency + full expected `CompleteBundleSnapshot` |
 | 8 | `returnFailureLeavesNoLegacyOrWorkflowResidue` | Injected failure → **complete** snapshot rollback |
 | 9 | `resubmitRequiresLatestReturnBoundToOpenCycle` | Return/cycle binding |
 | 10 | `resubmitAppendsResponseResumesClockAndNotifiesResolvedOfficer` | Resubmit bundle |
 | 11 | `identicalResubmitReplayIsStableAndChangedPayloadConflicts` | Resubmit idempotency |
-| 12 | `concurrentResubmitHasOneCompleteSurvivorAndAssertedLoser` | Resubmit concurrency (loser: `registration resubmit transition stale`) |
+| 12 | `concurrentResubmitHasOneCompleteSurvivorAndAssertedLoser` | **A4** resubmit concurrency + full expected snapshot |
 | 13 | `reReturnUsesSameCycleNeedsMoreAndPausesClockAgain` | Same-cycle re-return |
 | 14 | `returnAfterClosedCycleStartsNextCycle` | Next cycle (test fixture close) |
-| 15 | `runtimeCannotInsertUpdateOrDeleteAnyRegistrationWorkflowHistory` | Runtime INSERT/UPDATE/DELETE on all five history families |
+| 15 | `runtimeCannotInsertUpdateOrDeleteAnyRegistrationWorkflowHistory` | **A4** separate runtime INSERT, UPDATE and DELETE per history family |
 | 16 | `registrationReturnResponseExecutePrivilegeInventory` | Runtime orchestrators only; PUBLIC empty; `bee_app` ownership note |
 | 17 | `internalHelperCannotBindReturnToClosedOrDifferentApplicationCycle` | Bind guard |
 | 18 | `subjectDeleteBlockedWhileRegistrationWorkflowHistoryExists` | Delete guard |
 | 19 | `disposableRegistrationCleanupRemovesNewRowsInDependencyOrder` | Maint cleanup |
 | 20 | `productionMaintClosureFunctionIsAbsentFromMigratedSchema` | No production closure bypass |
 | 21 | `resubmitReplayWithOldHashAndChangedMaterialInputConflicts` | Resubmit tamper |
+| 21b | `resubmitReplayWithOldHashAndSubMillisecondTimestampConflicts` | **A4** same-ms resubmit timestamp drift |
 | 22 | `notYetValidRoleRollBackCompleteBundle` | Rollback: role not yet valid |
 | 23 | `expiredRoleRollBackCompleteBundle` | Rollback: expired role |
 | 24 | `wrongRoleRollBackCompleteBundle` | Rollback: wrong stage role |
 | 25 | `wrongActorRollBackCompleteBundle` | Rollback: actor mismatch |
 | 26 | `inactiveOfficerRollBackCompleteBundle` | Rollback: inactive officer |
-| 27 | `resubmitOfficerRoleValidityUsesPersistedResubmitTransitionTime` | Officer role at **resubmit transition time** |
-| 28 | `wrongDueTimeIsRejectedWithNoPartialBundle` | Trusted due derivation + complete snapshot |
-| 29 | `wrongTaskOwnerIsRejectedAtomically` | Trusted task owner + complete snapshot |
+| 27 | `resubmitOfficerRoleValidityUsesPersistedResubmitTransitionTime` | **A4** valid at return time, expired at resubmit time (`notification_recipient_inactive`) |
+| 28 | `wrongDueTimeIsRejectedWithNoPartialBundle` | **A4** legacy+orchestrator one tx; baseline before legacy |
+| 29 | `wrongTaskOwnerIsRejectedAtomically` | **A4** same rollback discipline as wrong due |
 | 30 | `identicalReturnReplayAfterResubmitIsStable` | Lifecycle-stable return replay |
 | 31 | `identicalResubmitReplayAfterReReturnIsStable` | Lifecycle-stable resubmit replay |
 | 32 | `returnFromApplicationACannotBindToApplicationBCycle` | Cross-application bind guard |

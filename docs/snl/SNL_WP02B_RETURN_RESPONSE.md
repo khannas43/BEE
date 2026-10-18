@@ -8,7 +8,7 @@
 
 | Slice | Scope | Status |
 | --- | --- | --- |
-| 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Active |
+| 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Done (Brief 19A) |
 | 19B | Model return/resubmit/response wiring | Planned |
 | 19C | Registration return/resubmit/response wiring | Planned |
 | 19D | Common read projection, consolidated concurrency/rollback proof and plan evidence | Planned |
@@ -37,6 +37,19 @@ Deterministic UUID v5-style: `UUID.nameUUIDFromBytes((idempotencyKey + "|" + pur
 ## Policy selection (provisional A08)
 
 V70 seeds `workflow_sla_policy_version` key `snl_return_response` version 1, effective from portal epoch, **7 working days**, note `provisional A08 / BL-255`. Selected by `Asia/Kolkata` date at return anchor; due via `WorkingDaySla.dueAtEndOfWorkingDay`. Not hard-coded in Java.
+
+## V70 foundation objects (19A)
+
+| Object | Role |
+| --- | --- |
+| `workflow_sla_policy_version` row `snl_return_response` v1 | Idempotent seed; sole source of the 7-day limit |
+| `SnlReturnResponsePolicyRepository` | Exactly-one applicable version + due calculation |
+| `notification.subject_kind` / `subject_id` | Polymorphic subject; model rows keep `application_id = subject_id`; registration rows have `application_id` null |
+| `notification_command` + `notification_foundation_deliver` | Replay-safe fan-out; payload hash covers subject, kind and message suffix; advisory lock on `command_id` |
+| `app_disposable_registration_cleanup` | Maint-only cleanup for throwaway registration tests |
+| `NotificationCommandRepository` | Java entry to `notification_foundation_deliver` only |
+
+`NotificationRepository.newest()` joins model or registration for `reference` and returns `COALESCE(application_id, subject_id)` as `applicationId` so the existing JSON shape is unchanged. Model V39 triggers populate subject columns; journey wiring in 19B–19C will call the command boundary instead of ad hoc inserts.
 
 ## Pre-migration applications
 

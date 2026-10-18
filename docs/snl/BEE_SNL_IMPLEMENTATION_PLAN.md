@@ -779,6 +779,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP1 | Gate pending (90%) | Complete (100%) | ChatGPT accepted the PDF-backed provisional baseline; A01–A20 remain provisional | Begin WP2; retry secondary live-form comparison in WP3 (BL-252) |
 | 18 Oct 2026 | WP2 | In progress (5%) | In progress (35%) | Brief 18 WP2A: V69 schema, WorkingDaySla, db/unit tests | WP2B wiring, APIs, UI; BL-257 |
 | 18 Oct 2026 | WP2 | In progress (35%) | In progress (35%), WP2A accepted | Per-task policy-pinned clocks, atomic due-dated tasks, multi-cycle discrepancies and India-date policy boundary accepted; 160 backend, 287 database and 251 web tests passed | Begin WP2B journey wiring (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (35%) | In progress (45%) | Brief 19A: V70 `snl_return_response` policy, polymorphic notifications, `notification_foundation_deliver`, `SnlWp02bFoundationDatabaseTest` | Briefs 19B–19D (BL-257) |
 
 ### 6.2 Standard completion record
 

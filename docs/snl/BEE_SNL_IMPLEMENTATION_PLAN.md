@@ -257,7 +257,7 @@ At the end of each development session, update the package status, progress, com
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
 | Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation, V71 model return/resubmit wiring and V72 accepted-forward closure with repeat-cycle safety. Model commands commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response, disposition and evidence writes. The accepted 19C-0 design defines registration integration; registration remains unwired. |
-| Next action | Implement 19C-A database trusted boundary, followed by 19C-B service integration, 19C-C forward disposition/read preparation and 19D consolidated read/proof work (BL-257) |
+| Next action | Implement 19C-A database trusted boundary, 19C-B service integration, 19C-C forward disposition/read prep; in parallel or sequence, 19D-A read projection, 19D-B queue API, 19D-C My work/supervisor UI per [SNL_WP02D_WORK_QUEUE_DESIGN.md](SNL_WP02D_WORK_QUEUE_DESIGN.md) (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -284,7 +284,7 @@ At the end of each development session, update the package status, progress, com
 
 | Evidence | Result or link |
 |---|---|
-| Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md) |
+| Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md); [SNL_WP02D_WORK_QUEUE_DESIGN.md](SNL_WP02D_WORK_QUEUE_DESIGN.md) |
 | Migration range | Accepted: V69–V72 |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
@@ -292,8 +292,8 @@ At the end of each development session, update the package status, progress, com
 | UI tests | 251 web tests passed; live browser workflow remains pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design also accepted. |
-| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec` |
+| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design and Brief 19D-0 work-queue design accepted (ChatGPT review pending for 19D-0). |
+| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec`; Brief 19D-0 design on `cursor/snl-wp02d-work-queue-design` |
 
 #### WP2 acceptance
 

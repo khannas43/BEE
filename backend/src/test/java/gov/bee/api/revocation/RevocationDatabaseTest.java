@@ -97,7 +97,7 @@ class RevocationDatabaseTest {
         owner.execute(Files.readString(SEED));
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         service = new RevocationService(new RevocationRepository(db), new gov.bee.api.application.IdempotencyRepository(db), JSON);
-        assertEquals(72, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V72");
+        assertEquals(73, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V73");
     }
 
     @AfterAll

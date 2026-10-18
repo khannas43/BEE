@@ -293,7 +293,7 @@ At the end of each development session, update the package status, progress, com
 | Live check | Pending |
 | Full gate | Pending |
 | Review | WP2A, Brief 19A and Brief 19B accepted. Review removed a production magic failure input and retained the rollback proof as a test-schema-only trigger. |
-| Completion commit or PR | WP2A and Brief 19A merged to `main` at `582f0b5`; Brief 19B acceptance merge pending in this review turn |
+| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B merged to `main` at `a9cde66` |
 
 #### WP2 acceptance
 

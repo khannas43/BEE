@@ -43,15 +43,20 @@ export default function LoginPage() {
   const search = useSyncExternalStore(noSubscribe, () => window.location.search, () => "");
   const notice = noticeFor(new URLSearchParams(search));
   // The demonstration sign-in (username and password only) exists only when the deployment turns it on; otherwise today's page is unchanged.
-  const [demo, setDemo] = useState(false);
+  // Do not expose the normal Keycloak link until the deployment mode is known.
+  // On a remote demo that link points at the machine-local identity service, so
+  // a fast click during hydration would send the visitor to an unusable URL.
+  const [demo, setDemo] = useState<boolean | null>(null);
   useEffect(() => {
     let live = true;
     fetch("/api/runtime/demo/login", { credentials: "include", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((b: { enabled?: boolean } | null) => {
-        if (live && b?.enabled === true) setDemo(true);
+        if (live) setDemo(b?.enabled === true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (live) setDemo(false);
+      });
     return () => {
       live = false;
     };
@@ -76,13 +81,13 @@ export default function LoginPage() {
           </div>
         </Link>
         <div className="relative z-10">
-          <h1 className="font-display-lg text-display-lg font-bold leading-tight">{demo ? "Demonstration environment" : "Stakeholder & officer sign-in"}</h1>
+          <h1 className="font-display-lg text-display-lg font-bold leading-tight">{demo === true ? "Demonstration environment" : "Stakeholder & officer sign-in"}</h1>
           <p className="font-body-lg text-body-lg text-forest-light/85 mt-space-md max-w-md">
-            {demo ? "Local data only: nothing here is a BEE record. What you will see:" : "Local development build. What this sign-in does today:"}
+            {demo === true ? "Local data only: nothing here is a BEE record. What you will see:" : "Local development build. What this sign-in does today:"}
           </p>
           {/* Only controls implemented and checked now (WP02.1, WP02.3 local TOTP); add others when they are demonstrated. */}
           <ul className="mt-space-md space-y-space-xs" data-testid="implemented-controls">
-            {(demo
+            {(demo === true
               ? [
                   { icon: "app_registration", t: "Brand and agency registration, and model applications through every approval stage" },
                   { icon: "payments", t: "Payment simulation with idempotent callbacks, receipts and reconciliation" },
@@ -117,16 +122,22 @@ export default function LoginPage() {
 
           <h2 className="font-headline-md text-headline-md text-on-surface">Sign in</h2>
           <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 mb-space-lg">
-            {demo
+            {demo === true
               ? "Enter your username and password to continue."
-              : "You sign in with the BEE identity service (Keycloak). Your roles and organisation come from the BEE portal's own records."}
+              : demo === null
+                ? "Preparing the available sign-in method…"
+                : "You sign in with the BEE identity service (Keycloak). Your roles and organisation come from the BEE portal's own records."}
           </p>
           {notice && (
             <div role={notice.kind === "error" ? "alert" : "status"} className={`mb-space-md rounded-lg px-3 py-2 font-body-sm text-body-sm ${notice.kind === "error" ? "bg-error-container text-on-error-container" : "bg-forest-light text-forest-dark"}`}>
               {notice.text}
             </div>
           )}
-          {demo ? (
+          {demo === null ? (
+            <div role="status" className="rounded-lg bg-surface-ground border border-border-subtle px-3 py-3 font-body-sm text-body-sm text-on-surface-variant">
+              Preparing sign-in…
+            </div>
+          ) : demo ? (
             <DemoLoginForm />
           ) : (
             <>

@@ -3,7 +3,7 @@
 **Branch:** `cursor/snl-wp02c-registration-db-boundary`
 **Migration:** V73 (`V73__snl_wp02c_registration_return_wiring.sql`) — corrected in place by Brief 19C-A1
 **Design:** [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md)
-**Status:** Brief 19C-A1 implemented — review pending. Not accepted. No HTTP, OpenAPI, BFF or UI wiring.
+**Status:** Brief 19C-A2 corrections required; V73 is not accepted. No HTTP, OpenAPI, BFF or UI wiring.
 
 ## Schema
 

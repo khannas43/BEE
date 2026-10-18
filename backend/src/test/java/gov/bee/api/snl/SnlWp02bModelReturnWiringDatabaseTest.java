@@ -481,13 +481,27 @@ class SnlWp02bModelReturnWiringDatabaseTest {
     @Test
     void wiredReturnInjectedFailureAfterTaskRollsBackAllWrites() {
         UUID id = atIame("WP02B2-INJECT-" + TAG);
-        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
-            int version = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
-            UUID returnId = UUID.randomUUID();
-            var trans = returns.transitionToReturned(id, version, IAME_USER, "iame", "iame_scrutiny");
-            wiring.completeWiredReturn(id, returnId, trans.transitionEventId(), "iame_scrutiny", "__INJECT_FAIL_AFTER_TASK__", trans.returnedAt(), IAME_USER,
-                "iame", UUID.randomUUID().toString());
-        }));
+        String subject = id.toString();
+        owner.execute(
+            "CREATE FUNCTION wp02b_fail_after_task_for_test() RETURNS trigger LANGUAGE plpgsql AS $$ "
+                + "BEGIN IF NEW.event_kind = 'pause' AND EXISTS (SELECT 1 FROM workflow_sla_clock c JOIN workflow_task t ON t.id = c.task_id "
+                + "WHERE c.id = NEW.clock_id AND t.subject_id = '" + subject + "'::uuid) THEN "
+                + "RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'wp02b_test_failure_after_task'; END IF; RETURN NEW; END $$");
+        owner.execute(
+            "CREATE TRIGGER wp02b_fail_after_task_for_test BEFORE INSERT ON workflow_sla_clock_event "
+                + "FOR EACH ROW EXECUTE FUNCTION wp02b_fail_after_task_for_test()");
+        try {
+            assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
+                int version = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+                UUID returnId = UUID.randomUUID();
+                var trans = returns.transitionToReturned(id, version, IAME_USER, "iame", "iame_scrutiny");
+                wiring.completeWiredReturn(id, returnId, trans.transitionEventId(), "iame_scrutiny", REASON, trans.returnedAt(), IAME_USER,
+                    "iame", UUID.randomUUID().toString());
+            }));
+        } finally {
+            owner.execute("DROP TRIGGER IF EXISTS wp02b_fail_after_task_for_test ON workflow_sla_clock_event");
+            owner.execute("DROP FUNCTION IF EXISTS wp02b_fail_after_task_for_test()");
+        }
         assertEquals("iame_scrutiny", owner.queryForObject("SELECT state FROM model_application WHERE id = ?", String.class, id));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM workflow_task WHERE subject_id = ?", Integer.class, id));
     }

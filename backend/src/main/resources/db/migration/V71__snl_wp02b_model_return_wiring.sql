@@ -385,9 +385,6 @@ BEGIN
     SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_task_id;
     PERFORM workflow_foundation_append_clock_event(v_clock_id, 'start', 'bureau', p_returned_at, NULL);
     PERFORM workflow_foundation_append_clock_event(v_clock_id, 'pause', 'applicant', p_returned_at + interval '1 millisecond', NULL);
-    IF p_reason = '__INJECT_FAIL_AFTER_TASK__' THEN
-      RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'model_return_response_test_inject_failure';
-    END IF;
   ELSE
     SELECT status INTO v_status FROM workflow_discrepancy WHERE id = v_cycle.discrepancy_id;
     IF v_status = 'awaiting_review' THEN

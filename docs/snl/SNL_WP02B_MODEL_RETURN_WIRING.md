@@ -2,7 +2,7 @@
 
 **Branch:** `cursor/snl-wp02b-model-return-wiring`
 **Migration:** V71 (corrected in place for 19B-B)
-**Status:** review pending — do not mark 19B complete before ChatGPT acceptance
+**Status:** accepted on 18 Oct 2026 after ChatGPT review and full-gate verification
 
 **Transaction owner:** `@Transactional` on `StageReturnService` / `ResubmitApplicationService`. Production wiring calls only V71 **orchestrate** commands in the same transaction. Post-wiring failures call `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()` before mapped HTTP errors so legacy rows roll back. SQL `DataAccessException` paths that map to `assignee_unavailable` skip `idempotency.abandon` so PostgreSQL does not reject cleanup on an aborted transaction.
 
@@ -44,6 +44,8 @@ Unchanged: `commandId = UUID.nameUUIDFromBytes((idempotencyKey + "|" + purpose +
 ## Test seam
 
 `WorkflowReturnResponseWiring.testMidWiringFailureHook` (static volatile, test-only) runs before orchestrate calls to prove service-level rollback.
+
+The database rollback proof uses a trigger created and removed inside the test schema. V71 contains no magic business input or production failure switch.
 
 ## Deferrals
 

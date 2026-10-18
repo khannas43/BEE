@@ -2,7 +2,7 @@
 
 **Status:** Design and analysis only (19C-0). No migrations, Java, API, UI or tests implemented on this slice.
 **Branch:** `cursor/snl-wp02c-registration-design`
-**Base:** `main` @ `f732482` (Brief 19B acceptance merge)
+**Base:** `main` @ `f732482` (post-Brief-19B implementation-plan record)
 **Governing source:** *SnL Disha Advisory Manual* (`SnL_Disha_Advisory_Manual.pdf`, printed footer page numbers verified with `pdftotext` on 18 October 2026)
 **Depends on:** WP2A (V69), policy/notifications (V70), model return pattern (V71, V72 pending acceptance — design stays compatible with V72 corrections, not assuming `ccd2b6a` unchanged)
 **Related:** [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md), [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md), [SNL_WP01_STATE_MODELS.md](SNL_WP01_STATE_MODELS.md), [SNL_WP01_ROLE_MATRIX.md](SNL_WP01_ROLE_MATRIX.md), [SNL_WP01_FIELD_DICTIONARY.md](SNL_WP01_FIELD_DICTIONARY.md)
@@ -18,9 +18,9 @@ Portal states and commands are **provisional local rules** (WP04.2b), not assert
 | 1. Draft | `draft` | Applicant org (`manufacturer` / `agency`) | `POST/PATCH /api/registrations`, trade-licence PDF | §3 online application; signed/stamped uploads (§3, p. 22); Annexure 1 fields (pp. 50–53) — **mostly not captured** ([SNL_WP01_FIELD_DICTIONARY.md](SNL_WP01_FIELD_DICTIONARY.md)) |
 | 2. Submit | `draft` → `fee_due` | Applicant | `POST …/submit`; `registration_submission_event`, `registration_fee_snapshot` (V43) | §3.1.1 company/brand registration; fee per §4.1 (p. 30) |
 | 3. Fee confirmation | `fee_due` → `programme_review` | Finance (`finance` / `all`) | `POST …/fee-confirmation`; `RegistrationFeeService`; `registration_fee_confirmation` + transition event | §4 electronic payment (p. 30); **A16** auto-post target not built — manual confirm only |
-| 4. Programme review | `programme_review` | Programme | `POST …/transition` `recommend` → `director_approval` or `return` → `returned` | Table 2 scrutiny/approval steps (pp. 28–30); hold grounds §3.4 brand (pp. 24–25) |
+| 4. Programme review | `programme_review` | Programme | `POST …/transition` `recommend` → `director_approval` or `return` → `returned` | Table 2 scrutiny/approval steps (pp. 28–29); hold grounds §3.4 brand (pp. 24–25) |
 | 5. Director decision | `director_approval` | Director (`registration_approve`) | same route: `approve` → `approved` (+ `registration_approve()` writes brand/agency row), `return`, `reject` | **A03** maps to Director final approve; §3.4 reject/hold (pp. 24–25) |
-| 6. Return | `returned` | Programme or Director (note required) | `registration_transition_event` only — **no** `registration_application_return`, **no** WP2 task/clock/discrepancy, **no** V70 notification in production path | §3.4 hold + portal communication (pp. 24–25); Table 2 rows 4–5 (pp. 29–30) |
+| 6. Return | `returned` | Programme or Director (note required) | `registration_transition_event` only — **no** `registration_application_return`, **no** WP2 task/clock/discrepancy, **no** V70 notification in production path | §3.4 hold + portal communication (pp. 24–25); Table 2 rows 4–5 (p. 29) |
 | 7. Applicant fix | `returned` (editable) | Applicant | `PATCH`, document new version; `refuseAtSubmit` gates | Revised documents (Table 2 row 5, p. 29); document sequence §3 (p. 22) |
 | 8. Resubmit | `returned` → `programme_review` | Applicant | `transition` `resubmit` — **always** to `programme_review` (even if Director returned) | Applicant response after hold (§3.4, pp. 24–25); resubmit always re-enters Programme queue (local rule — **owner decision** if Director-return should skip Programme) |
 | 9. Approval outcome | `approved` | Director | `registration_approve()` atomic register write | §3.1.1 unique company registration number (p. 22) — **not stored** on approval today (**A20**) |
@@ -43,7 +43,7 @@ Portal states and commands are **provisional local rules** (WP04.2b), not assert
 | Portal notification on return/resubmit | §3.4 portal (and other modes) (pp. 24–25) | No production V70 path | `notification_foundation_deliver` in same transaction as return/resubmit orchestrate | §3.4; **A18** |
 | Officer notification on resubmit | Implicit resume of scrutiny | None | Officer notify (Programme assignee or return actor — see §4) | **A02**, **A03** |
 | Review task / clock pause | **A17**: working days; clock stops while awaiting applicant (§3.10, pp. 28–29) | None | Open task at `programme_review`/`director_approval` + `review`; clock **pause** on return, **resume** on resubmit | §3.10; **A17** |
-| Multi-cycle return | Re-scrutiny after revised docs (Table 2 row 6, p. 30) | Allowed informally via states | Same task + discrepancy; disposition `needs_more` on re-return; **V72-style** cycle/`cycle_return` binding when model V72 accepted | Table 2 row 6; V72 pattern |
+| Multi-cycle return | Re-scrutiny after revised docs (Table 2 row 6, p. 29) | Allowed informally via states | Same task + discrepancy; disposition `needs_more` on re-return; **V72-style** cycle/`cycle_return` binding when model V72 accepted | Table 2 row 6; V72 pattern |
 | Company registration fee | ₹5,000 §4.1 (p. 30) | REG fee rules + Finance confirm | Unchanged in 19C | §4.1 |
 | Document checklist | Annexure 1-A enclosures (pp. 52–53); §3.1.1 list (p. 22) | Single trade-licence PDF | Unchanged in 19C; future WP3 expands evidence | Annexure 1; **A05** |
 | Permittee number on approve | §3.1.1 (p. 22) | Brand/authorisation row only | Unchanged in 19C (**A20** / WP3) | §3.1.1 |
@@ -253,8 +253,8 @@ Verified with `pdftotext` from `/Users/sameerkhanna/Documents/Documents/BEE/SnL_
 | §3.8 Cancellation | 27–28 | WP9 deferral |
 | §3.9 Fresh application | 28 | WP9 deferral |
 | §3.10 Timelines narrative | 28 | 30-day complete app; **7-day** discrepancy communication |
-| Table 2 (brand registration) | 28–30 | Rows 3–6: approval, discrepancy comms, 60-day resubmit, revised doc scrutiny |
-| Table 3 (model registration) | 29–31 | Reference for model 19B; 15-day comms row 4 |
+| Table 2 (brand registration) | 28–29 | Rows 3–6: approval, discrepancy comms, 60-day resubmit, revised doc scrutiny |
+| Table 3 (model registration) | 29–30 | Reference for model 19B; 15-day comms row 4 |
 | §4 intro + §4.1 Company fee | 30–31 | ₹5,000; electronic payment |
 | §4.2–§4.3 | 30–31 | Category deposit; model fee — registration uses §4.1 only today |
 | §4.5 | 32 | Label fee / quarterly — out of 19C |
@@ -288,7 +288,7 @@ Verified with `pdftotext` from `/Users/sameerkhanna/Documents/Documents/BEE/SnL_
 
 Sized for independent Cursor hand-backs (Claude merges each slice).
 
-### 19C-A — Database trusted boundary (Claude lane)
+### 19C-A — Database trusted boundary (implementation lane)
 
 - Flyway migration **after V72 acceptance** (no number in 19C-0).
 - Tables + orchestrate functions + grants + immutability triggers.
@@ -297,7 +297,7 @@ Sized for independent Cursor hand-backs (Claude merges each slice).
 - **No** `RegistrationReviewService` behaviour change.
 - Gates: `mvn test -Dgroups=db` for new test class(es).
 
-### 19C-B — Service integration (Claude lane)
+### 19C-B — Service integration (implementation lane)
 
 - `RegistrationReturnResponseWiring` + hook **`RegistrationReviewService`** return/resubmit paths.
 - Rollback proofs (mid-orchestrate failure trigger in test schema only).
@@ -305,7 +305,7 @@ Sized for independent Cursor hand-backs (Claude merges each slice).
 - Preserve OpenAPI response bodies on transition/fee routes.
 - Gates: backend unit + db tests for registration review + new snl wp02c tests.
 
-### 19C-C — Forward disposition + lazy link + read prep (Claude lane)
+### 19C-C — Forward disposition + lazy link + read prep (implementation lane)
 
 - On `recommend` (and optionally `approve`): disposition **`accepted`**, clock/task completion rules aligned with model 19B-2 outcome.
 - Lazy first-task creation on fee confirm or first return (document chosen rule).
@@ -332,4 +332,4 @@ Sized for independent Cursor hand-backs (Claude merges each slice).
 - [x] Design doc only — no code/migrations
 - [x] PDF pages verified via `pdftotext`
 - [x] Compatible with V72 correction posture
-- [ ] Implementation slices 19C-A/B/C for follow-on briefs
+- [x] Implementation slices 19C-A/B/C for follow-on briefs

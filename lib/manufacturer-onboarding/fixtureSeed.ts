@@ -2,6 +2,11 @@
  * Initial fixture records for the optimized manufacturer onboarding demo.
  * Imported only by the fixture client — components must use ManufacturerOnboardingClient.
  */
+import {
+  PROVISIONAL_COMPANY_REGISTRATION_FEE_INR,
+  PROVISIONAL_COMPANY_REGISTRATION_FEE_LABEL,
+} from "./fees";
+import { observationWindowFromApproval } from "./observation";
 import type { ManufacturerApplication } from "./types";
 
 const baseDraft = {
@@ -43,12 +48,14 @@ const baseDraft = {
   agreementAccepted: true,
 };
 
-const paymentBase = {
-  feeLabel: "Manufacturer entity registration (demonstration fee)",
-  amountInr: "25000.00",
-  currency: "INR" as const,
-  gatewayMode: "simulated_demo" as const,
-};
+export function buildPaymentBase() {
+  return {
+    feeLabel: PROVISIONAL_COMPANY_REGISTRATION_FEE_LABEL,
+    amountInr: PROVISIONAL_COMPANY_REGISTRATION_FEE_INR,
+    currency: "INR" as const,
+    gatewayMode: "simulated_demo" as const,
+  };
+}
 
 function checksComplete(at: string) {
   return [
@@ -69,6 +76,25 @@ function checksComplete(at: string) {
   ];
 }
 
+function checksFailed(at: string) {
+  return [
+    {
+      id: "chk-docs",
+      label: "Annexure 1 document completeness",
+      outcome: "fail" as const,
+      completedAt: at,
+      detail: "Factory licence upload could not be matched to the declared facility (demonstration failure).",
+    },
+    {
+      id: "chk-elig",
+      label: "Eligibility rules (demonstration ruleset)",
+      outcome: "pass" as const,
+      completedAt: at,
+      detail: "Eligibility rules passed; document check failed.",
+    },
+  ];
+}
+
 export const FIXTURE_APPLICATION_IDS = {
   draft: "00000000-0000-4000-d000-000000000001",
   director: "00000000-0000-4000-d000-000000000002",
@@ -76,19 +102,22 @@ export const FIXTURE_APPLICATION_IDS = {
   hold: "00000000-0000-4000-d000-000000000004",
   resolved: "00000000-0000-4000-d000-000000000005",
   revoked: "00000000-0000-4000-d000-000000000006",
+  checksFailed: "00000000-0000-4000-d000-000000000007",
 } as const;
 
-/** Fixed instants for observation windows (not “today” in UI — derived from these). */
-export const FIXTURE_OBSERVATION = {
-  observationStartedAt: "2026-10-10T04:00:00.000Z",
-  observationEndsAt: "2026-10-25T04:00:00.000Z",
-};
-
 export function buildFixtureApplications(): ManufacturerApplication[] {
+  const paymentBase = buildPaymentBase();
   const submittedAt = "2026-10-08T09:00:00.000Z";
   const verifiedAt = "2026-10-08T09:01:12.000Z";
   const checksAt = "2026-10-08T09:02:30.000Z";
   const approvedAt = "2026-10-09T11:00:00.000Z";
+  const obs103 = observationWindowFromApproval(approvedAt);
+  const approvedHold = "2026-10-09T12:00:00.000Z";
+  const obs104 = observationWindowFromApproval(approvedHold);
+  const approvedResolved = "2026-09-19T11:00:00.000Z";
+  const obs105 = observationWindowFromApproval(approvedResolved);
+  const approvedRevoked = "2026-10-09T13:00:00.000Z";
+  const obs106 = observationWindowFromApproval(approvedRevoked);
 
   return [
     {
@@ -115,7 +144,7 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
       reference: "MFG-ONB-2026-0102",
       syntheticDemo: true,
       companyCode: "AARAV",
-      phase: "awaiting_director",
+      phase: "director_review",
       draft: baseDraft,
       payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8812", verifiedAt: verifiedAt },
       automatedChecks: checksComplete(checksAt),
@@ -123,6 +152,29 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
         { id: "t1", at: submittedAt, title: "Registration submitted", detail: "Company registration submitted by the applicant.", icon: "send" },
         { id: "t2", at: verifiedAt, title: "Payment recorded", detail: "Simulated gateway payment captured for demonstration.", icon: "payments" },
         { id: "t3", at: checksAt, title: "Automated checks completed", detail: "Document and eligibility checks completed automatically.", icon: "rule" },
+      ],
+      directorDecisionAt: null,
+      directorDecisionNote: null,
+      registrationNumber: null,
+      activatedAt: null,
+      observationStartedAt: null,
+      observationEndsAt: null,
+      anomalies: [],
+      applicantAccountId: "onboarding.applicant",
+    },
+    {
+      id: FIXTURE_APPLICATION_IDS.checksFailed,
+      reference: "MFG-ONB-2026-0107",
+      syntheticDemo: true,
+      companyCode: "AARAV",
+      phase: "automatic_checks_failed",
+      draft: baseDraft,
+      payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8817", verifiedAt: verifiedAt },
+      automatedChecks: checksFailed(checksAt),
+      timeline: [
+        { id: "t1", at: submittedAt, title: "Registration submitted", detail: "Submitted for automated processing.", icon: "send" },
+        { id: "t2", at: verifiedAt, title: "Payment recorded", detail: "Simulated gateway payment captured.", icon: "payments" },
+        { id: "t3", at: checksAt, title: "Automated checks failed", detail: "Applicant must correct documents and resubmit.", icon: "error" },
       ],
       directorDecisionAt: null,
       directorDecisionNote: null,
@@ -147,14 +199,14 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
         { id: "t2", at: verifiedAt, title: "Payment recorded", detail: "Simulated gateway payment captured.", icon: "payments" },
         { id: "t3", at: checksAt, title: "Automated checks completed", detail: "Rules check completed.", icon: "rule" },
         { id: "t4", at: approvedAt, title: "Director approval", detail: "Director approved activation.", icon: "how_to_reg" },
-        { id: "t5", at: FIXTURE_OBSERVATION.observationStartedAt, title: "Observation started", detail: "15-day post-approval observation window opened.", icon: "schedule" },
+        { id: "t5", at: obs103.observationStartedAt, title: "Observation started", detail: "15-day post-approval observation window opened.", icon: "schedule" },
       ],
       directorDecisionAt: approvedAt,
       directorDecisionNote: "Approved for demonstration activation.",
       registrationNumber: "BEE/MFG/2026/AARAV-103",
       activatedAt: approvedAt,
-      observationStartedAt: FIXTURE_OBSERVATION.observationStartedAt,
-      observationEndsAt: FIXTURE_OBSERVATION.observationEndsAt,
+      observationStartedAt: obs103.observationStartedAt,
+      observationEndsAt: obs103.observationEndsAt,
       anomalies: [],
       applicantAccountId: "onboarding.applicant",
     },
@@ -163,20 +215,20 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
       reference: "MFG-ONB-2026-0104",
       syntheticDemo: true,
       companyCode: "AARAV",
-      phase: "hold_anomaly",
+      phase: "on_hold",
       draft: baseDraft,
       payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8814", verifiedAt: verifiedAt },
       automatedChecks: checksComplete(checksAt),
       timeline: [
-        { id: "t1", at: approvedAt, title: "Director approval", detail: "Activated for observation.", icon: "how_to_reg" },
+        { id: "t1", at: approvedHold, title: "Director approval", detail: "Activated for observation.", icon: "how_to_reg" },
         { id: "t2", at: "2026-10-11T06:00:00.000Z", title: "Anomaly raised", detail: "Finance raised an information anomaly — immediate hold applied.", icon: "report" },
       ],
-      directorDecisionAt: approvedAt,
+      directorDecisionAt: approvedHold,
       directorDecisionNote: "Approved for demonstration.",
       registrationNumber: "BEE/MFG/2026/AARAV-104",
-      activatedAt: approvedAt,
-      observationStartedAt: FIXTURE_OBSERVATION.observationStartedAt,
-      observationEndsAt: FIXTURE_OBSERVATION.observationEndsAt,
+      activatedAt: approvedHold,
+      observationStartedAt: obs104.observationStartedAt,
+      observationEndsAt: obs104.observationEndsAt,
       anomalies: [
         {
           id: "an-1",
@@ -197,20 +249,20 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
       reference: "MFG-ONB-2026-0105",
       syntheticDemo: true,
       companyCode: "AARAV",
-      phase: "observation_completed",
+      phase: "active",
       draft: baseDraft,
       payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8815", verifiedAt: verifiedAt },
       automatedChecks: checksComplete(checksAt),
       timeline: [
-        { id: "t1", at: "2026-10-12T08:00:00.000Z", title: "Hold cleared", detail: "Director resolved anomaly — returned to active observation.", icon: "check_circle" },
-        { id: "t2", at: "2026-10-26T04:00:00.000Z", title: "Observation completed", detail: "No further anomaly during observation.", icon: "verified" },
+        { id: "t1", at: "2026-09-23T10:00:00.000Z", title: "Hold cleared", detail: "Director resolved anomaly after observation ended.", icon: "check_circle" },
+        { id: "t2", at: obs105.observationEndsAt, title: "Observation completed", detail: "No further anomaly during observation.", icon: "verified" },
       ],
-      directorDecisionAt: approvedAt,
+      directorDecisionAt: approvedResolved,
       directorDecisionNote: "Approved.",
       registrationNumber: "BEE/MFG/2026/AARAV-105",
-      activatedAt: approvedAt,
-      observationStartedAt: "2026-09-20T04:00:00.000Z",
-      observationEndsAt: "2026-10-05T04:00:00.000Z",
+      activatedAt: approvedResolved,
+      observationStartedAt: obs105.observationStartedAt,
+      observationEndsAt: obs105.observationEndsAt,
       anomalies: [
         {
           id: "an-1",
@@ -238,12 +290,12 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
       timeline: [
         { id: "t1", at: "2026-10-13T09:00:00.000Z", title: "Revoked by Director", detail: "Registration revoked after unresolved anomaly (demonstration).", icon: "block" },
       ],
-      directorDecisionAt: approvedAt,
+      directorDecisionAt: approvedRevoked,
       directorDecisionNote: "Initially approved.",
       registrationNumber: "BEE/MFG/2026/AARAV-106",
-      activatedAt: approvedAt,
-      observationStartedAt: FIXTURE_OBSERVATION.observationStartedAt,
-      observationEndsAt: FIXTURE_OBSERVATION.observationEndsAt,
+      activatedAt: approvedRevoked,
+      observationStartedAt: obs106.observationStartedAt,
+      observationEndsAt: obs106.observationEndsAt,
       anomalies: [
         {
           id: "an-1",

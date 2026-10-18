@@ -1,20 +1,4 @@
-import type { RoleKey } from "@/lib/roles";
 import type { ManufacturerOnboardingRole } from "./types";
-
-export function onboardingRoleFromPreview(role: RoleKey): ManufacturerOnboardingRole | null {
-  switch (role) {
-    case "manufacturer":
-      return "applicant";
-    case "director":
-      return "director";
-    case "finance":
-      return "finance";
-    case "programme":
-      return "programme";
-    default:
-      return null;
-  }
-}
 
 export type ManufacturerRouteKind =
   | "onboarding"
@@ -32,19 +16,34 @@ export function routeKindForPath(pathname: string): ManufacturerRouteKind | null
   return null;
 }
 
-export function canAccessManufacturerRoute(kind: ManufacturerRouteKind, role: ManufacturerOnboardingRole | null): boolean {
-  if (!role) return false;
+export function canAccessManufacturerRoute(
+  kind: ManufacturerRouteKind,
+  roles: readonly ManufacturerOnboardingRole[],
+): boolean {
+  if (roles.length === 0) return false;
   switch (kind) {
     case "onboarding":
+      return roles.includes("applicant");
     case "application":
-      return role === "applicant";
-    case "director":
-      return role === "director";
-    case "monitoring":
-      return role === "director" || role === "finance" || role === "programme";
     case "view360":
-      return role === "applicant" || role === "director" || role === "finance" || role === "programme";
+      return roles.some((r) => r === "applicant" || r === "director" || r === "finance" || r === "programme");
+    case "director":
+      return roles.includes("director");
+    case "monitoring":
+      return roles.includes("director") || roles.includes("finance") || roles.includes("programme");
     default:
       return false;
   }
+}
+
+export function canDirectorDecide(roles: readonly ManufacturerOnboardingRole[]): boolean {
+  return roles.includes("director");
+}
+
+export function canRaiseAnomaly(roles: readonly ManufacturerOnboardingRole[]): boolean {
+  return roles.includes("finance") || roles.includes("programme") || roles.includes("director");
+}
+
+export function canResolveOrRevoke(roles: readonly ManufacturerOnboardingRole[]): boolean {
+  return roles.includes("director");
 }

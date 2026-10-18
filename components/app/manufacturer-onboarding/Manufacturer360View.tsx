@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import type { ManufacturerApplication } from "@/lib/manufacturer-onboarding/types";
+import { formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
 import {
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
@@ -78,7 +79,9 @@ export function Manufacturer360View({ id }: { id: string }) {
         <section className="bg-surface-card rounded-xl p-space-md space-y-2" data-testid="360-payment">
           <h2 className="font-label-md font-semibold">Payment</h2>
           <p className="font-body-sm">{LABEL_AUTO_PAYMENT}</p>
-          <p className="font-body-sm">₹ {app.payment.amountInr} — {app.payment.receiptNumber ?? "Pending"}</p>
+          <p className="font-body-sm" data-testid="360-fee">
+            ₹ {formatFeeInr(app.payment.amountInr)} — {app.payment.receiptNumber ?? "Pending"}
+          </p>
         </section>
 
         <section className="bg-surface-card rounded-xl p-space-md space-y-2" data-testid="360-checks">

@@ -7,6 +7,7 @@ export const LABEL_AWAITING_DIRECTOR = "Awaiting Director decision";
 export const LABEL_ACTIVE_OBSERVATION = "Active — under 15-day observation";
 export const LABEL_HOLD = "On hold — anomaly under review";
 export const LABEL_OBSERVATION_DONE = "Active — observation completed";
+export const LABEL_REJECTED = "Registration rejected";
 export const LABEL_REVOKED = "Revoked by Director";
 
 export const OPERATIONAL_FLOW =
@@ -19,14 +20,20 @@ export function phaseLabel(phase: ManufacturerLifecyclePhase): string {
   switch (phase) {
     case "draft":
       return "Draft — not yet submitted";
-    case "awaiting_director":
+    case "submitted":
+      return "Submitted — processing";
+    case "automatic_checks_failed":
+      return "Automated rules check — action required";
+    case "director_review":
       return LABEL_AWAITING_DIRECTOR;
     case "active_observation":
       return LABEL_ACTIVE_OBSERVATION;
-    case "hold_anomaly":
-      return LABEL_HOLD;
-    case "observation_completed":
+    case "active":
       return LABEL_OBSERVATION_DONE;
+    case "on_hold":
+      return LABEL_HOLD;
+    case "rejected":
+      return LABEL_REJECTED;
     case "revoked":
       return LABEL_REVOKED;
     default:
@@ -37,14 +44,16 @@ export function phaseLabel(phase: ManufacturerLifecyclePhase): string {
 export function phaseTone(phase: ManufacturerLifecyclePhase): "neutral" | "warn" | "ok" | "danger" {
   switch (phase) {
     case "draft":
+    case "submitted":
       return "neutral";
-    case "awaiting_director":
+    case "automatic_checks_failed":
+    case "director_review":
+    case "on_hold":
       return "warn";
     case "active_observation":
-    case "observation_completed":
+    case "active":
       return "ok";
-    case "hold_anomaly":
-      return "warn";
+    case "rejected":
     case "revoked":
       return "danger";
     default:

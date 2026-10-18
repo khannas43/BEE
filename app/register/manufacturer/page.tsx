@@ -21,11 +21,11 @@ export default function RegisterManufacturerPage() {
           Create applicant login
         </h1>
         <p className="font-body-lg text-on-surface-variant">
-          Start the optimized manufacturer / company registration journey. For this urgent demonstration, use the seeded applicant identity below — arbitrary self-service identity provisioning is a demo follow-up, not part of this build.
+          Start the optimized manufacturer / company registration journey. This screen does not dynamically create arbitrary Keycloak users — Agent A will seed the demonstration applicant below. Production self-service account creation remains deferred.
         </p>
 
         <section className="rounded-xl border bg-surface-card p-space-md space-y-2" data-testid="demo-applicant-identity">
-          <h2 className="font-headline-sm text-headline-sm">Demonstration applicant identity</h2>
+          <h2 className="font-headline-sm text-headline-sm">Demonstration applicant identity (seeded)</h2>
           <dl className="grid sm:grid-cols-2 gap-2 font-body-md">
             <div>
               <dt className="text-on-surface-variant font-label-sm">Username</dt>
@@ -48,18 +48,18 @@ export default function RegisterManufacturerPage() {
 
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
-            href="/login"
+            href="/login?returnTo=/app/manufacturer/onboarding"
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-on-primary font-semibold py-3 px-space-md hover:bg-forest-dark"
-            data-testid="continue-to-sign-in"
+            data-testid="sign-in-demo-applicant"
           >
-            Continue to sign-in <Icon name="login" size={18} />
+            Sign in with demonstration applicant <Icon name="login" size={18} />
           </Link>
           <Link
-            href="/app/manufacturer/onboarding"
+            href="/login"
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant py-3 px-space-md font-semibold"
-            data-testid="preview-wizard-link"
+            data-testid="continue-to-sign-in"
           >
-            Preview wizard (after sign-in)
+            General sign-in
           </Link>
         </div>
       </main>

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
-import type { ManufacturerDraft } from "@/lib/manufacturer-onboarding/types";
+import { formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
+import type { ManufacturerApplication, ManufacturerDraft } from "@/lib/manufacturer-onboarding/types";
 import {
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
@@ -49,6 +50,7 @@ export function OnboardingWizard() {
   const client = useManufacturerOnboardingClient();
   const router = useRouter();
   const [appId, setAppId] = useState<string | null>(null);
+  const [appRecord, setAppRecord] = useState<ManufacturerApplication | null>(null);
   const [draft, setDraft] = useState<ManufacturerDraft | null>(null);
   const [step, setStep] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export function OnboardingWizard() {
       const id = await client.defaultDraftId();
       const app = await client.getApplication(id);
       setAppId(id);
+      setAppRecord(app);
       setDraft(app.draft);
     } catch {
       setLoadError("Could not load the onboarding draft.");
@@ -253,7 +256,9 @@ export function OnboardingWizard() {
 
             {step === 6 && (
               <div className="space-y-3">
-                <p className="font-body-md">Demonstration fee: <strong>₹ {draft.legalName ? "25,000.00" : "—"}</strong> INR</p>
+                <p className="font-body-md" data-testid="wizard-fee">
+                  Demonstration fee: <strong>₹ {appRecord ? formatFeeInr(appRecord.payment.amountInr) : "—"}</strong> INR
+                </p>
                 <SimulatedPaymentNote />
                 <p className="font-body-sm text-on-surface-variant">On submit, payment will be recorded as {LABEL_AUTO_PAYMENT.toLowerCase()} and {LABEL_AUTO_RULES.toLowerCase()} will run automatically.</p>
               </div>

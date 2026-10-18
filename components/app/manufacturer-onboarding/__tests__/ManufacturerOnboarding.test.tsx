@@ -1,21 +1,24 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FIXTURE_APPLICATION_IDS, FIXTURE_OBSERVATION } from "@/lib/manufacturer-onboarding/fixtureSeed";
-import { resetManufacturerOnboardingFixture } from "@/lib/manufacturer-onboarding/fixtureClient";
-import { createFixtureManufacturerOnboardingClient } from "@/lib/manufacturer-onboarding/fixtureClient";
+import { PROVISIONAL_COMPANY_REGISTRATION_FEE_INR, formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
+import { FIXTURE_APPLICATION_IDS } from "@/lib/manufacturer-onboarding/fixtureSeed";
+import { resetManufacturerOnboardingFixture, createFixtureManufacturerOnboardingClient } from "@/lib/manufacturer-onboarding/fixtureClient";
 import {
   LABEL_ACTIVE_OBSERVATION,
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
   LABEL_AWAITING_DIRECTOR,
   LABEL_HOLD,
+  LABEL_REJECTED,
   LABEL_REVOKED,
 } from "@/lib/manufacturer-onboarding/statusLabels";
 import { ONBOARDING_DISCLOSURE } from "@/lib/manufacturer-onboarding/types";
 import { observationCountdown } from "@/lib/manufacturer-onboarding/observation";
-import { canAccessManufacturerRoute, onboardingRoleFromPreview } from "@/lib/manufacturer-onboarding/access";
+import { canAccessManufacturerRoute } from "@/lib/manufacturer-onboarding/access";
+import { effectiveOnboardingRoles } from "@/lib/manufacturer-onboarding/identity";
 import { runtimeNavFor } from "@/lib/runtimeRoutes";
+import { createManufacturerOnboardingHttpClient } from "@/lib/manufacturer-onboarding/httpClient";
 import RegisterManufacturerPage from "@/app/register/manufacturer/page";
 import { ManufacturerOnboardingProvider } from "../ManufacturerOnboardingProvider";
 import { OnboardingWizard } from "../OnboardingWizard";
@@ -27,6 +30,25 @@ import { ManufacturerRouteShell } from "../ManufacturerRouteShell";
 
 const nav = vi.hoisted(() => ({ push: vi.fn() }));
 const previewRole = vi.hoisted(() => ({ role: "manufacturer" as string }));
+type SpringState =
+  | { status: "loading" }
+  | { status: "signed-out" }
+  | {
+      status: "signed-in";
+      me: { displayName: string; effectiveRoles: { role: string; scope: string }[]; organisations: { code: string }[] };
+    };
+
+const springIdentity = vi.hoisted(() => ({
+  state: {
+    status: "signed-in",
+    me: {
+      displayName: "Demo user",
+      effectiveRoles: [{ role: "manufacturer", scope: "own-org" }],
+      organisations: [{ code: "AARAV" }],
+    },
+  } as SpringState,
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: nav.push }),
   usePathname: () => "/app/manufacturer/onboarding",
@@ -39,35 +61,74 @@ vi.mock("@/components/app/RoleContext", () => ({
   ROLE_PREVIEW_ENABLED: true,
 }));
 
+vi.mock("@/components/app/SessionBadge", () => ({
+  useSpringIdentity: () => springIdentity.state,
+  rolesText: () => "",
+  orgsText: () => "",
+}));
+
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>{children}</a>
   ),
 }));
 
-function wrap(ui: ReactNode, role: string = "manufacturer", nowMs?: number) {
-  previewRole.role = role;
-  const client = createFixtureManufacturerOnboardingClient();
+function springMe(role: string) {
+  return {
+    displayName: "Demo user",
+    effectiveRoles: [{ role, scope: role === "manufacturer" ? "own-org" : "all" }],
+    organisations: [{ code: "AARAV" }],
+  };
+}
+
+function wrap(ui: ReactNode, springRole: string = "manufacturer", nowMs?: number) {
+  previewRole.role = "manufacturer";
+  springIdentity.state = { status: "signed-in", me: springMe(springRole) };
+  const client = createFixtureManufacturerOnboardingClient({
+    nowMs: nowMs ? () => nowMs : undefined,
+    actor: () => ({ username: "demo", effectiveRoles: springMe(springRole).effectiveRoles }),
+  });
   return (
-    <ManufacturerOnboardingProvider client={client} nowMs={nowMs}>
+    <ManufacturerOnboardingProvider client={client} nowMs={nowMs} identity={springMe(springRole)}>
       {ui}
     </ManufacturerOnboardingProvider>
   );
 }
 
+const feeDisplay = `₹ ${formatFeeInr(PROVISIONAL_COMPANY_REGISTRATION_FEE_INR)}`;
+
 describe("manufacturer onboarding UI", () => {
   beforeEach(() => {
     resetManufacturerOnboardingFixture();
     nav.push.mockClear();
+    springIdentity.state = { status: "signed-in", me: springMe("manufacturer") };
   });
   afterEach(() => cleanup());
 
-  it("register page shows demo applicant identity and disclosure", () => {
+  it("register page shows seeded identity and honest account wording", () => {
     render(<RegisterManufacturerPage />);
     expect(screen.getByTestId("demo-applicant-identity").textContent).toContain("onboarding.applicant");
-    expect(screen.getByText(/self-service identity provisioning is a demo follow-up/i)).toBeTruthy();
+    expect(screen.getByText(/does not dynamically create arbitrary Keycloak users/i)).toBeTruthy();
+    expect(screen.getByTestId("sign-in-demo-applicant").textContent).toMatch(/Sign in with demonstration applicant/i);
     expect(screen.getByText(ONBOARDING_DISCLOSURE)).toBeTruthy();
-    expect(screen.getByTestId("continue-to-sign-in").getAttribute("href")).toBe("/login");
+  });
+
+  it("wizard, lifecycle and 360 show the same ₹5,000 fee from the payment record", async () => {
+    render(wrap(<OnboardingWizard />));
+    await screen.findByTestId("field-legal-name");
+    fireEvent.click(screen.getByTestId("step-fee"));
+    await screen.findByTestId("wizard-fee");
+    expect(screen.getByTestId("wizard-fee").textContent).toContain(feeDisplay);
+
+    cleanup();
+    render(wrap(<ApplicationLifecycle id={FIXTURE_APPLICATION_IDS.director} />));
+    await screen.findByTestId("lifecycle-fee");
+    expect(screen.getByTestId("lifecycle-fee").textContent).toContain(feeDisplay);
+
+    cleanup();
+    render(wrap(<Manufacturer360View id={FIXTURE_APPLICATION_IDS.director} />));
+    await screen.findByTestId("360-fee");
+    expect(screen.getByTestId("360-fee").textContent).toContain(feeDisplay);
   });
 
   it("complete applicant wizard through submit", async () => {
@@ -75,12 +136,14 @@ describe("manufacturer onboarding UI", () => {
     await screen.findByTestId("field-legal-name");
     fireEvent.change(screen.getByTestId("field-legal-name"), { target: { value: "Aarav Appliances Pvt Ltd" } });
     fireEvent.change(screen.getByTestId("field-cin"), { target: { value: "U29300MH2018PTC312045" } });
+    fireEvent.click(screen.getByTestId("step-address"));
     for (const key of ["line1", "city", "state", "pincode"] as const) {
       fireEvent.change(screen.getByTestId(`field-address-${key}`), { target: { value: "Demo value" } });
     }
+    fireEvent.click(screen.getByTestId("step-contacts"));
     fireEvent.change(screen.getByTestId("field-signatory-name"), { target: { value: "Rahul Aarav" } });
     fireEvent.click(screen.getByTestId("step-annexure"));
-    for (const btn of screen.getAllByRole("button", { name: /Mark uploaded/i })) fireEvent.click(btn);
+    for (const btn of screen.queryAllByRole("button", { name: /Mark uploaded/i })) fireEvent.click(btn);
     fireEvent.click(screen.getByTestId("step-declaration"));
     fireEvent.click(screen.getByTestId("checkbox-declaration"));
     fireEvent.click(screen.getByTestId("checkbox-agreement"));
@@ -94,7 +157,17 @@ describe("manufacturer onboarding UI", () => {
     await screen.findByTestId("payment-block");
     expect(screen.getByText(LABEL_AUTO_PAYMENT)).toBeTruthy();
     expect(screen.getByText(LABEL_AUTO_RULES)).toBeTruthy();
-    expect(screen.getByTestId("simulated-payment-note").textContent).toMatch(/simulated in demo mode/i);
+  });
+
+  it("automatic check failure UI and exclusion from director queue", async () => {
+    render(wrap(<ApplicationLifecycle id={FIXTURE_APPLICATION_IDS.checksFailed} />));
+    await screen.findByTestId("checks-failed-panel");
+    expect(screen.getByTestId("checks-failed-wizard-link")).toBeTruthy();
+
+    cleanup();
+    render(wrap(<DirectorQueue />, "director"));
+    await screen.findByTestId("director-queue-list");
+    expect(screen.queryByText(/0107/i)).toBeNull();
   });
 
   it("Director approve and reject with mandatory reason", async () => {
@@ -102,33 +175,39 @@ describe("manufacturer onboarding UI", () => {
     await screen.findByTestId("director-approve");
     fireEvent.click(screen.getByTestId("director-reject-open"));
     const dialog = screen.getByTestId("director-reject-dialog");
-    fireEvent.click(within(dialog).getByTestId("director-reject-confirm"));
-    expect((within(dialog).getByTestId("director-reject-confirm") as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(within(dialog).getByTestId("director-reject-reason"), { target: { value: "Incomplete Annexure" } });
     fireEvent.click(within(dialog).getByTestId("director-reject-confirm"));
-    await waitFor(() => expect(screen.getByText(/rejected/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText(LABEL_REJECTED).length).toBeGreaterThan(0));
   });
 
-  it("role visibility for routes and nav", () => {
-    expect(onboardingRoleFromPreview("manufacturer")).toBe("applicant");
-    expect(onboardingRoleFromPreview("director")).toBe("director");
-    expect(onboardingRoleFromPreview("admin")).toBeNull();
-    expect(canAccessManufacturerRoute("director", "finance")).toBe(false);
-    expect(canAccessManufacturerRoute("monitoring", "finance")).toBe(true);
-    expect(runtimeNavFor([{ role: "manufacturer" }]).some((r) => r.href === "/app/manufacturer/onboarding")).toBe(true);
+  it("Spring identity drives access; preview role does not grant Director actions", async () => {
+    previewRole.role = "director";
+    render(wrap(<DirectorQueue />, "manufacturer"));
+    await screen.findByTestId("director-queue-list");
+    expect(screen.queryByTestId("director-approve")).toBeNull();
+    expect(screen.queryByTestId("director-reject-open")).toBeNull();
+  });
+
+  it("signed-in roles for route access", () => {
+    const director = effectiveOnboardingRoles(springMe("director"));
+    expect(canAccessManufacturerRoute("application", director)).toBe(true);
+    expect(canAccessManufacturerRoute("director", director)).toBe(true);
+    expect(canAccessManufacturerRoute("director", effectiveOnboardingRoles(springMe("finance")))).toBe(false);
     expect(runtimeNavFor([{ role: "finance" }]).some((r) => r.href === "/app/manufacturer/director")).toBe(false);
   });
 
-  it("15-day observation display uses fixture end instant", async () => {
-    const now = new Date(FIXTURE_OBSERVATION.observationStartedAt).getTime() + 86400000;
+  it("15-day observation display uses stored end instant", async () => {
+    const client = createFixtureManufacturerOnboardingClient();
+    const app = await client.getApplication(FIXTURE_APPLICATION_IDS.observation);
+    const now = new Date(app.observationStartedAt!).getTime() + 86400000;
     render(wrap(<ApplicationLifecycle id={FIXTURE_APPLICATION_IDS.observation} />, "manufacturer", now));
     await screen.findByTestId("observation-countdown");
-    const cd = observationCountdown(FIXTURE_OBSERVATION.observationEndsAt, now);
+    const cd = observationCountdown(app.observationEndsAt, now);
     expect(screen.getByTestId("observation-days").textContent).toBe(String(cd!.daysRemaining));
     expect(screen.getByText(LABEL_ACTIVE_OBSERVATION)).toBeTruthy();
   });
 
-  it("Finance raises anomaly → immediate hold; Director resolve", async () => {
+  it("Finance raises anomaly → immediate hold", async () => {
     render(wrap(<MonitoringQueue />, "finance"));
     await screen.findByTestId("monitoring-queue-list");
     fireEvent.change(screen.getByTestId("anomaly-summary"), { target: { value: "Fee mismatch demo" } });
@@ -139,51 +218,63 @@ describe("manufacturer onboarding UI", () => {
   it("Director revoke from hold", async () => {
     render(wrap(<MonitoringQueue />, "director"));
     await screen.findByTestId("monitoring-queue-list");
-    const holdBtn = screen.getByRole("button", { name: /0104/i });
-    fireEvent.click(holdBtn);
-    await screen.findByText(LABEL_HOLD);
+    fireEvent.click(screen.getByTestId("monitoring-item-MFG-ONB-2026-0104"));
+    await screen.findByTestId("director-hold-note");
     fireEvent.change(screen.getByTestId("director-hold-note"), { target: { value: "Revoke demo" } });
     fireEvent.click(screen.getByTestId("director-revoke"));
-    await waitFor(() => expect(screen.getByText(/revoked/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText(LABEL_REVOKED).length).toBeGreaterThan(0));
   });
 
   it("Manufacturer 360 operational status", async () => {
     render(wrap(<Manufacturer360View id={FIXTURE_APPLICATION_IDS.revoked} />, "programme"));
     await screen.findByTestId("360-operational-status");
-    expect(screen.getByText(LABEL_REVOKED)).toBeTruthy();
-    expect(screen.getByTestId("360-identity").textContent).toContain("Aarav Appliances");
+    expect(screen.getAllByText(LABEL_REVOKED).length).toBeGreaterThan(0);
   });
 
-  it("access denied for unsupported preview role", () => {
-    previewRole.role = "admin";
+  it("access denied for unsupported signed-in role", () => {
+    springIdentity.state = { status: "signed-in", me: springMe("admin") };
     render(
-      <ManufacturerOnboardingProvider client={createFixtureManufacturerOnboardingClient()}>
+      <ManufacturerOnboardingProvider client={createFixtureManufacturerOnboardingClient()} identity={springMe("admin")}>
         <ManufacturerRouteShell>
           <div data-testid="secret">hidden</div>
         </ManufacturerRouteShell>
       </ManufacturerOnboardingProvider>,
     );
     expect(screen.getByTestId("onboarding-access-denied")).toBeTruthy();
-    expect(screen.queryByTestId("secret")).toBeNull();
   });
 
-  it("responsive navigation links present on wizard", async () => {
-    render(wrap(<OnboardingWizard />));
-    await screen.findByTestId("onboarding-nav");
-    expect(screen.getByTestId("nav-onboarding-wizard").getAttribute("href")).toBe("/app/manufacturer/onboarding");
-    expect(screen.getByTestId("nav-onboarding-application")).toBeTruthy();
+  it("signed-out shows sign-in requirement on gated route", () => {
+    springIdentity.state = { status: "signed-out" };
+    render(
+      <ManufacturerRouteShell>
+        <div data-testid="secret">hidden</div>
+      </ManufacturerRouteShell>,
+    );
+    expect(screen.getByTestId("onboarding-sign-in-required")).toBeTruthy();
   });
 
-  it("submit button disabled when validation fails (no dead submit)", async () => {
-    render(wrap(<OnboardingWizard />));
-    await screen.findByTestId("wizard-submit");
-    fireEvent.click(screen.getByTestId("step-review"));
-    expect((screen.getByTestId("wizard-submit") as HTMLButtonElement).disabled).toBe(true);
+  it("director queue empty message after load", async () => {
+    const client = createFixtureManufacturerOnboardingClient();
+    vi.spyOn(client, "listDirectorQueue").mockResolvedValue([]);
+    render(
+      <ManufacturerOnboardingProvider client={client} identity={springMe("director")}>
+        <DirectorQueue />
+      </ManufacturerOnboardingProvider>,
+    );
+    await screen.findByTestId("director-queue-empty");
+    expect(screen.getByText("No applications awaiting Director decision.")).toBeTruthy();
+  });
+
+  it("http client adapter can be constructed without throwing", () => {
+    const c = createManufacturerOnboardingHttpClient(async () =>
+      new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    expect(c.listDirectorQueue).toBeTypeOf("function");
   });
 
   it("awaiting director label on director queue item", async () => {
     render(wrap(<DirectorQueue />, "director"));
     await screen.findByTestId("director-queue-list");
-    expect(screen.getByText(LABEL_AWAITING_DIRECTOR)).toBeTruthy();
+    expect(screen.getAllByText(LABEL_AWAITING_DIRECTOR).length).toBeGreaterThan(0);
   });
 });

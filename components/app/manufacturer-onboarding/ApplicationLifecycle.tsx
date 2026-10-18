@@ -8,6 +8,7 @@ import {
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
 } from "@/lib/manufacturer-onboarding/statusLabels";
+import { formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
 import { observationCountdown } from "@/lib/manufacturer-onboarding/observation";
 import { useManufacturerOnboardingClient, useManufacturerOnboardingClock } from "./ManufacturerOnboardingProvider";
 import {
@@ -77,6 +78,9 @@ export function ApplicationLifecycle({ id }: { id: string }) {
         <section className="bg-surface-card rounded-xl p-space-md space-y-2" data-testid="payment-block">
           <h3 className="font-label-md font-semibold flex items-center gap-1"><Icon name="payments" size={18} /> Payment</h3>
           <SimulatedPaymentNote />
+          <p className="font-body-sm" data-testid="lifecycle-fee">
+            Fee: ₹ {formatFeeInr(app.payment.amountInr)} INR — {app.payment.feeLabel}
+          </p>
           {app.payment.verifiedAt ? (
             <>
               <p className="font-body-sm"><strong>{LABEL_AUTO_PAYMENT}</strong></p>
@@ -120,7 +124,22 @@ export function ApplicationLifecycle({ id }: { id: string }) {
         </section>
       )}
 
-      {countdown && app.phase !== "revoked" && app.observationEndsAt && (
+      {app.phase === "automatic_checks_failed" && (
+        <section className="bg-error-container/30 border border-error/30 rounded-xl p-space-md space-y-2" data-testid="checks-failed-panel">
+          <h3 className="font-label-md font-semibold text-error">Automated checks failed</h3>
+          <ul className="font-body-sm list-disc pl-5">
+            {app.automatedChecks.filter((c) => c.outcome === "fail").map((c) => (
+              <li key={c.id}>{c.label}: {c.detail}</li>
+            ))}
+          </ul>
+          <p className="font-body-sm">Correct the application in the wizard and submit again.</p>
+          <Link href="/app/manufacturer/onboarding" className="text-primary font-semibold" data-testid="checks-failed-wizard-link">
+            Open company registration wizard
+          </Link>
+        </section>
+      )}
+
+      {countdown && app.phase === "active_observation" && app.observationEndsAt && (
         <section className="bg-surface-card rounded-xl p-space-md" data-testid="observation-countdown">
           <h3 className="font-label-md font-semibold">15-day observation</h3>
           {countdown.expired ? (
@@ -152,9 +171,11 @@ export function ApplicationLifecycle({ id }: { id: string }) {
         </section>
       )}
 
-      <p className="font-body-sm">
-        <Link href="/app/manufacturer/onboarding" className="text-primary font-semibold">Continue editing draft</Link> (draft phase only)
-      </p>
+      {(app.phase === "draft" || app.phase === "automatic_checks_failed") && (
+        <p className="font-body-sm">
+          <Link href="/app/manufacturer/onboarding" className="text-primary font-semibold">Continue in company registration wizard</Link>
+        </p>
+      )}
     </OnboardingChrome>
   );
 }

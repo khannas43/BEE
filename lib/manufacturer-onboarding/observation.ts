@@ -1,3 +1,21 @@
+/** Add whole calendar days in UTC (matches backend fixture semantics for demo). */
+export function addCalendarDays(iso: string, days: number): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString();
+}
+
+export function observationWindowFromApproval(approvalIso: string): {
+  observationStartedAt: string;
+  observationEndsAt: string;
+} {
+  return {
+    observationStartedAt: approvalIso,
+    observationEndsAt: addCalendarDays(approvalIso, 15),
+  };
+}
+
 /** Observation countdown from stored instants — pass `nowMs` in tests; components use live clock by default. */
 export function observationCountdown(
   observationEndsAt: string | null | undefined,
@@ -12,4 +30,14 @@ export function observationCountdown(
   const daysRemaining = Math.floor(totalHours / 24);
   const hoursRemaining = totalHours % 24;
   return { daysRemaining, hoursRemaining, expired: false };
+}
+
+/** After clearing a hold, resume observation or mark fully active. */
+export function phaseAfterHoldResolved(
+  observationEndsAt: string | null,
+  nowMs: number,
+): "active_observation" | "active" {
+  const cd = observationCountdown(observationEndsAt, nowMs);
+  if (cd?.expired) return "active";
+  return "active_observation";
 }

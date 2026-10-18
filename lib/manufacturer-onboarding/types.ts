@@ -6,17 +6,20 @@ export const ONBOARDING_DISCLOSURE =
 export const DEMO_APPLICANT_IDENTITY = {
   username: "onboarding.applicant",
   password: "demo123",
-  label: "Aarav onboarding applicant (synthetic demo identity)",
+  label: "Aarav onboarding applicant (synthetic demo identity — seeded by Agent A for the urgent demo)",
 } as const;
 
 export type ManufacturerOnboardingRole = "applicant" | "director" | "finance" | "programme";
 
 export type ManufacturerLifecyclePhase =
   | "draft"
-  | "awaiting_director"
+  | "submitted"
+  | "automatic_checks_failed"
+  | "director_review"
   | "active_observation"
-  | "hold_anomaly"
-  | "observation_completed"
+  | "active"
+  | "on_hold"
+  | "rejected"
   | "revoked";
 
 export type ManufacturerFacility = {
@@ -90,6 +93,7 @@ export type TimelineEvent = {
 export type AnomalyRecord = {
   id: string;
   raisedAt: string;
+  /** Derived server-side from the authenticated session (display only). */
   raisedByRole: Exclude<ManufacturerOnboardingRole, "applicant">;
   summary: string;
   holdAppliedAt: string | null;
@@ -102,7 +106,7 @@ export type AnomalyRecord = {
 export type ManufacturerApplication = {
   id: string;
   reference: string;
-  syntheticDemo: true;
+  syntheticDemo: boolean;
   companyCode: string;
   phase: ManufacturerLifecyclePhase;
   draft: ManufacturerDraft;
@@ -138,7 +142,6 @@ export type DirectorRejectInput = { id: string; reason: string };
 export type RaiseAnomalyInput = {
   applicationId: string;
   summary: string;
-  raisedByRole: Exclude<ManufacturerOnboardingRole, "applicant">;
 };
 
 export type DirectorResolveInput = { applicationId: string; note: string };

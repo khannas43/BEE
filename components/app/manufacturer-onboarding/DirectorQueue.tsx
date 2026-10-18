@@ -7,9 +7,9 @@ import type { ManufacturerApplication, ManufacturerApplicationSummary } from "@/
 import {
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
-  LABEL_AWAITING_DIRECTOR,
 } from "@/lib/manufacturer-onboarding/statusLabels";
-import { useManufacturerOnboardingClient } from "./ManufacturerOnboardingProvider";
+import { canDirectorDecide } from "@/lib/manufacturer-onboarding/access";
+import { useManufacturerOnboardingClient, useManufacturerOnboardingRoles } from "./ManufacturerOnboardingProvider";
 import {
   EmptyState,
   ErrorState,
@@ -24,6 +24,9 @@ import {
 
 export function DirectorQueue() {
   const client = useManufacturerOnboardingClient();
+  const roles = useManufacturerOnboardingRoles();
+  const mayDecide = canDirectorDecide(roles);
+  const [queueLoad, setQueueLoad] = useState<"loading" | "ready">("loading");
   const [queue, setQueue] = useState<ManufacturerApplicationSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ManufacturerApplication | null>(null);
@@ -35,12 +38,15 @@ export function DirectorQueue() {
 
   const loadQueue = useCallback(async () => {
     setError(null);
+    setQueueLoad("loading");
     try {
       const items = await client.listDirectorQueue();
       setQueue(items);
       if (items[0] && !selectedId) setSelectedId(items[0].id);
+      setQueueLoad("ready");
     } catch {
       setError("Could not load the Director queue.");
+      setQueueLoad("ready");
     }
   }, [client, selectedId]);
 
@@ -109,40 +115,42 @@ export function DirectorQueue() {
     <OnboardingChrome icon="how_to_reg" title="Director — manufacturer registration decisions">
       <NavLinks links={navLinks} />
 
-      {queue.length === 0 && !detail ? (
-        <LoadingState label="Loading queue…" />
-      ) : queue.length === 0 ? (
-        <EmptyState title="No applications awaiting Director decision.">
-          <Link href={`/app/manufacturer/application/${detail?.id ?? ""}`} className="text-primary font-semibold">View sample lifecycle</Link>
-        </EmptyState>
-      ) : (
+      {queueLoad === "loading" ? <LoadingState label="Loading queue…" /> : null}
+      {queueLoad === "ready" && queue.length === 0 && !detail ? (
+        <EmptyState title="No applications awaiting Director decision." testId="director-queue-empty" />
+      ) : null}
+      {(queue.length > 0 || detail) && (
         <div className="grid lg:grid-cols-3 gap-space-md">
-          <ul className="space-y-2" data-testid="director-queue-list">
-            {queue.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(item.id)}
-                  className={`w-full text-left rounded-xl border p-space-sm ${selectedId === item.id ? "border-primary bg-primary/5" : "border-outline-variant"}`}
-                  data-testid={`queue-item-${item.reference}`}
-                >
-                  <p className="font-label-md">{item.legalName}</p>
-                  <p className="font-label-sm text-on-surface-variant">{item.reference}</p>
-                  <PhaseStatus phase={item.phase} />
-                </button>
-              </li>
-            ))}
-          </ul>
+          {queue.length > 0 ? (
+            <ul className="space-y-2" data-testid="director-queue-list">
+              {queue.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(item.id)}
+                    className={`w-full text-left rounded-xl border p-space-sm ${selectedId === item.id ? "border-primary bg-primary/5" : "border-outline-variant"}`}
+                    data-testid={`queue-item-${item.reference}`}
+                  >
+                    <p className="font-label-md">{item.legalName}</p>
+                    <p className="font-label-sm text-on-surface-variant">{item.reference}</p>
+                    <PhaseStatus phase={item.phase} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="font-body-sm text-on-surface-variant lg:col-span-1">No applications awaiting Director decision.</p>
+          )}
 
           {detail && (
-            <div className="lg:col-span-2 space-y-space-md">
+            <div className={`space-y-space-md ${queue.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
               <div className="flex flex-wrap gap-2 items-center">
                 <SyntheticBadge />
                 <PhaseStatus phase={detail.phase} />
               </div>
               <section className="bg-surface-card rounded-xl p-space-md space-y-2">
                 <h2 className="font-headline-sm">{detail.draft.legalName}</h2>
-                <p className="font-body-sm">{LABEL_AWAITING_DIRECTOR}</p>
+                <PhaseStatus phase={detail.phase} />
                 <SimulatedPaymentNote />
                 <p className="font-body-sm"><strong>{LABEL_AUTO_PAYMENT}</strong> — receipt {detail.payment.receiptNumber}</p>
                 <p className="font-body-sm"><strong>{LABEL_AUTO_RULES}</strong></p>
@@ -153,7 +161,7 @@ export function DirectorQueue() {
                 </ul>
               </section>
 
-              {detail.phase === "awaiting_director" && (
+              {mayDecide && detail.phase === "director_review" && (
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"

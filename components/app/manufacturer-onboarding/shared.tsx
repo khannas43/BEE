@@ -95,9 +95,9 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
   );
 }
 
-export function EmptyState({ title, children }: { title: string; children?: React.ReactNode }) {
+export function EmptyState({ title, children, testId = "onboarding-empty" }: { title: string; children?: React.ReactNode; testId?: string }) {
   return (
-    <div className="p-space-lg text-center text-on-surface-variant" data-testid="onboarding-empty">
+    <div className="p-space-lg text-center text-on-surface-variant" data-testid={testId}>
       <Icon name="inbox" size={32} className="mx-auto mb-2 opacity-60" />
       <p className="font-body-md text-body-md text-on-surface">{title}</p>
       {children}

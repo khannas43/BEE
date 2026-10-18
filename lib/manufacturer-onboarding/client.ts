@@ -12,6 +12,7 @@ export type {
   DirectorRevokeInput,
 } from "./types";
 
+import type { FetchLike } from "@/lib/client/runtimeHttp";
 import type {
   DirectorDecisionInput,
   DirectorRejectInput,
@@ -23,9 +24,10 @@ import type {
   SaveDraftInput,
   SubmitApplicationInput,
 } from "./types";
-import { createFixtureManufacturerOnboardingClient } from "./fixtureClient";
+import { createFixtureManufacturerOnboardingClient, type FixtureClientDeps } from "./fixtureClient";
+import { createManufacturerOnboardingHttpClient } from "./httpClient";
 
-/** Adapter surface for Agent A’s future JSON contract — swap implementation here. */
+/** Adapter surface for Agent A’s JSON contract — swap implementation here. */
 export interface ManufacturerOnboardingClient {
   listForApplicant(): Promise<ManufacturerApplicationSummary[]>;
   listDirectorQueue(): Promise<ManufacturerApplicationSummary[]>;
@@ -41,12 +43,17 @@ export interface ManufacturerOnboardingClient {
   defaultDraftId(): Promise<string>;
 }
 
+export type ManufacturerOnboardingClientOptions = {
+  fetch?: FetchLike;
+  fixture?: FixtureClientDeps;
+  /** Integration tests may inject Agent A’s adapter without changing UI components. */
+  adapter?: ManufacturerOnboardingClient;
+};
+
 const USE_LIVE_API = process.env.NEXT_PUBLIC_MANUFACTURER_ONBOARDING_API === "1";
 
-export function createManufacturerOnboardingClient(): ManufacturerOnboardingClient {
-  if (USE_LIVE_API) {
-    // Placeholder: Agent A wires HTTP calls here without changing UI components.
-    throw new Error("manufacturer_onboarding_api_not_wired");
-  }
-  return createFixtureManufacturerOnboardingClient();
+export function createManufacturerOnboardingClient(options?: ManufacturerOnboardingClientOptions): ManufacturerOnboardingClient {
+  if (options?.adapter) return options.adapter;
+  if (USE_LIVE_API) return createManufacturerOnboardingHttpClient(options?.fetch);
+  return createFixtureManufacturerOnboardingClient(options?.fixture);
 }

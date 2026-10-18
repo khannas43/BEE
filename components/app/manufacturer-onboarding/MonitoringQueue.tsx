@@ -3,18 +3,20 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import type { ManufacturerApplication, ManufacturerApplicationSummary, ManufacturerOnboardingRole } from "@/lib/manufacturer-onboarding/types";
+import type { ManufacturerApplication, ManufacturerApplicationSummary } from "@/lib/manufacturer-onboarding/types";
+import { canRaiseAnomaly, canResolveOrRevoke } from "@/lib/manufacturer-onboarding/access";
 import {
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
   LABEL_HOLD,
 } from "@/lib/manufacturer-onboarding/statusLabels";
 import { observationCountdown } from "@/lib/manufacturer-onboarding/observation";
-import { useManufacturerOnboardingClient, useManufacturerOnboardingClock, useManufacturerOnboardingPreviewRole } from "./ManufacturerOnboardingProvider";
+import { useManufacturerOnboardingClient, useManufacturerOnboardingClock, useManufacturerOnboardingRoles } from "./ManufacturerOnboardingProvider";
 import {
   EmptyState,
   ErrorState,
   IstDate,
+  LoadingState,
   NavLinks,
   OnboardingChrome,
   PhaseStatus,
@@ -23,8 +25,9 @@ import {
 
 export function MonitoringQueue() {
   const client = useManufacturerOnboardingClient();
-  const previewRole = useManufacturerOnboardingPreviewRole();
+  const roles = useManufacturerOnboardingRoles();
   const clock = useManufacturerOnboardingClock();
+  const [queueLoad, setQueueLoad] = useState<"loading" | "ready">("loading");
   const [queue, setQueue] = useState<ManufacturerApplicationSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ManufacturerApplication | null>(null);
@@ -36,12 +39,15 @@ export function MonitoringQueue() {
 
   const loadQueue = useCallback(async () => {
     setError(null);
+    setQueueLoad("loading");
     try {
       const items = await client.listMonitoringQueue();
       setQueue(items);
       if (items[0] && !selectedId) setSelectedId(items[0].id);
+      setQueueLoad("ready");
     } catch {
       setError("Could not load the monitoring queue.");
+      setQueueLoad("ready");
     }
   }, [client, selectedId]);
 
@@ -56,18 +62,17 @@ export function MonitoringQueue() {
     }
   }, [client, selectedId]);
 
-  const isDirector = previewRole === "director";
-  const canRaise = previewRole === "finance" || previewRole === "programme" || previewRole === "director";
+  const isDirector = canResolveOrRevoke(roles);
+  const canRaise = canRaiseAnomaly(roles);
 
   async function raiseAnomaly() {
-    if (!selectedId || !anomalySummary.trim() || !previewRole || previewRole === "applicant") return;
+    if (!selectedId || !anomalySummary.trim() || !canRaise) return;
     setBusy(true);
     setStatusMsg(null);
     try {
       const updated = await client.raiseAnomaly({
         applicationId: selectedId,
         summary: anomalySummary.trim(),
-        raisedByRole: previewRole as Exclude<ManufacturerOnboardingRole, "applicant">,
       });
       setDetail(updated);
       setAnomalySummary("");
@@ -130,7 +135,9 @@ export function MonitoringQueue() {
         Finance and Programme may raise anomalies for Director review. They cannot approve or revoke registrations.
       </p>
 
-      {queue.length === 0 ? (
+      {queueLoad === "loading" ? (
+        <LoadingState label="Loading monitoring queue…" />
+      ) : queue.length === 0 ? (
         <EmptyState title="No manufacturers in observation or hold." />
       ) : (
         <div className="grid lg:grid-cols-3 gap-space-md">
@@ -141,6 +148,8 @@ export function MonitoringQueue() {
                   type="button"
                   onClick={() => setSelectedId(item.id)}
                   className={`w-full text-left rounded-xl border p-space-sm ${selectedId === item.id ? "border-primary bg-primary/5" : ""}`}
+                  data-testid={`monitoring-item-${item.reference}`}
+                  data-phase={item.phase}
                 >
                   <p className="font-label-md">{item.legalName}</p>
                   <PhaseStatus phase={item.phase} />
@@ -185,7 +194,7 @@ export function MonitoringQueue() {
                 </section>
               )}
 
-              {isDirector && detail.phase === "hold_anomaly" && (
+              {isDirector && detail.phase === "on_hold" && (
                 <section className="space-y-2" data-testid="director-hold-actions">
                   <h3 className="font-label-md font-semibold">Director — resolve or revoke</h3>
                   <textarea
@@ -205,7 +214,7 @@ export function MonitoringQueue() {
                 </section>
               )}
 
-              {!isDirector && detail.phase === "hold_anomaly" && (
+              {!isDirector && detail.phase === "on_hold" && (
                 <p className="font-body-sm text-on-surface-variant">On hold — awaiting Director resolve or revoke.</p>
               )}
 

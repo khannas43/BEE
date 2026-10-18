@@ -293,7 +293,7 @@ At the end of each development session, update the package status, progress, com
 | Live check | Pending |
 | Full gate | Pending |
 | Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design and corrected Brief 19D-0 work-queue design accepted. |
-| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec`; Brief 19D-0 design on `cursor/snl-wp02d-work-queue-design` |
+| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec`; corrected Brief 19D-0 design at `b62508b` |
 
 #### WP2 acceptance
 
@@ -787,6 +787,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2A implemented | In progress (60%), Brief 19B-2B corrections | Review found PUBLIC execute on the security-definer cycle-binding helper. The claimed service 409 tests exit at the HTTP replay check before any legacy/closure write, and several migration/constraint tests fail for masking reasons. V72 remains unmerged. | Complete Brief 19B-2B and repeat acceptance review (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2B implemented | In progress (60%), ChatGPT review pending | V72 corrected in place: revoked `bind_cycle_return` from PUBLIC/runtime, open-cycle bind guard, runtime execute audit, real post-legacy wiring-evidence 409 service proofs, staged V71→V72 backfill and constraint/cross-cycle/rejection proofs. Awaiting acceptance (BL-257). | Repeat acceptance review; then 19C registration wiring (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), ChatGPT review pending | In progress (65%), Brief 19B-2 and 19C-0 accepted | V72 privilege, post-legacy rollback, staged migration, constraint and concurrency proofs accepted and merged at `798667e`. The PDF-traced registration design was merged at `80d9aec`. | Implement 19C-A, 19C-B and 19C-C, then 19D (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (65%), Brief 19D-0 review pending | In progress (65%), Brief 19D-0 accepted | PDF trace verified. Review corrected calendar table names, recipient-scoped notification summaries, ambiguous assignment handling and the distinction between the provisional portal due date and the Manual's 60-day response window. Merged at `b62508b`. | Continue 19C-A in Agent B; start 19D-A read projection only when its implementation brief is issued |
 
 ### 6.2 Standard completion record
 

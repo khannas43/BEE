@@ -18,7 +18,7 @@ import { runtimeNavFor } from "@/lib/runtimeRoutes";
 import { MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "@/lib/manufacturer-onboarding/documentKinds";
 import { MANUFACTURER_ONBOARDING_USE_FIXTURE } from "@/lib/manufacturer-onboarding/client";
 import { createManufacturerOnboardingHttpClient, MANUFACTURER_ONBOARDING_BFF } from "@/lib/manufacturer-onboarding/httpClient";
-import RegisterManufacturerPage from "@/app/register/manufacturer/page";
+import RegisterManufacturerPage from "@/app/(public)/register/manufacturer/page";
 import { ManufacturerOnboardingProvider } from "../ManufacturerOnboardingProvider";
 import { OnboardingWizard } from "../OnboardingWizard";
 import { ApplicationLifecycle } from "../ApplicationLifecycle";
@@ -115,7 +115,7 @@ describe("manufacturer onboarding UI", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<RegisterManufacturerPage />);
     expect(screen.getByTestId("register-manufacturer-title").textContent).toBe("Create applicant account");
-    expect(screen.getByTestId("existing-applicant-sign-in").textContent).toMatch(/Already registered/i);
+    expect(screen.getByTestId("existing-applicant-sign-in").textContent).toBe("Sign in");
 
     fireEvent.change(screen.getByLabelText("Applicant full name"), { target: { value: "Aarav Applicant" } });
     fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "aarav@example.test" } });

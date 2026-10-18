@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState, type InputHTMLAttributes } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { Emblem } from "@/components/chrome/Emblem";
 
 export default function RegisterManufacturerPage() {
   const router = useRouter();
@@ -52,18 +51,8 @@ export default function RegisterManufacturerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-ground">
-      <header className="border-b bg-surface-card px-space-md py-space-sm flex items-center justify-between gap-3">
-        <Link href="/" className="flex items-center gap-2">
-          <Emblem size={36} />
-          <span className="font-headline-sm text-headline-sm">BEE S&amp;L Portal</span>
-        </Link>
-        <Link href="/login?returnTo=/app/manufacturer/onboarding" className="font-label-md text-primary hover:underline" data-testid="existing-applicant-sign-in">
-          Already registered? Sign in
-        </Link>
-      </header>
-
-      <main className="max-w-2xl mx-auto p-space-md lg:p-space-lg">
+    <section className="bg-surface-ground py-space-lg lg:py-space-xl">
+      <div className="max-w-2xl mx-auto px-space-md lg:px-space-lg">
         <div className="rounded-2xl bg-surface-card border border-border-subtle shadow-sm p-space-md sm:p-space-xl space-y-space-lg">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 text-primary px-3 py-1 font-label-sm mb-space-sm">
@@ -72,6 +61,12 @@ export default function RegisterManufacturerPage() {
             <h1 className="font-display-md text-display-md font-bold" data-testid="register-manufacturer-title">Create applicant account</h1>
             <p className="font-body-md text-on-surface-variant mt-2">
               Verify your email and mobile number, then continue to the manufacturer/company registration application.
+            </p>
+            <p className="font-body-sm text-on-surface-variant mt-2">
+              Already registered?{" "}
+              <Link href="/login?returnTo=/app/manufacturer/onboarding" className="font-label-md text-primary hover:underline" data-testid="existing-applicant-sign-in">
+                Sign in
+              </Link>
             </p>
           </div>
 
@@ -110,8 +105,8 @@ export default function RegisterManufacturerPage() {
               </button>
             </form>
         </div>
-      </main>
-    </div>
+      </div>
+    </section>
   );
 }
 

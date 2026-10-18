@@ -11,7 +11,6 @@ import {
   LABEL_HOLD,
   LABEL_REVOKED,
 } from "@/lib/manufacturer-onboarding/statusLabels";
-import { ONBOARDING_DISCLOSURE } from "@/lib/manufacturer-onboarding/types";
 import { observationCountdown } from "@/lib/manufacturer-onboarding/observation";
 import { canAccessManufacturerRoute } from "@/lib/manufacturer-onboarding/access";
 import { effectiveOnboardingRoles } from "@/lib/manufacturer-onboarding/identity";
@@ -103,14 +102,36 @@ describe("manufacturer onboarding UI", () => {
     nav.push.mockClear();
     springIdentity.state = { status: "signed-in", me: springMe("manufacturer") };
   });
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
-  it("register page shows seeded identity and honest account wording", () => {
+  it("guest registration verifies email and mobile OTP before opening the application", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
     render(<RegisterManufacturerPage />);
-    expect(screen.getByTestId("demo-applicant-identity").textContent).toContain("onboarding.applicant");
-    expect(screen.getByText(/does not dynamically create arbitrary Keycloak users/i)).toBeTruthy();
-    expect(screen.getByTestId("sign-in-demo-applicant").textContent).toMatch(/Sign in with demonstration applicant/i);
-    expect(screen.getByText(ONBOARDING_DISCLOSURE)).toBeTruthy();
+    expect(screen.getByTestId("register-manufacturer-title").textContent).toBe("Create applicant account");
+    expect(screen.getByTestId("existing-applicant-sign-in").textContent).toMatch(/Already registered/i);
+
+    fireEvent.change(screen.getByLabelText("Applicant full name"), { target: { value: "Aarav Applicant" } });
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "aarav@example.test" } });
+    fireEvent.change(screen.getByLabelText("Mobile number"), { target: { value: "9876543210" } });
+    fireEvent.change(screen.getByLabelText("Create password"), { target: { value: "Secure123" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "Secure123" } });
+    fireEvent.click(screen.getByTestId("send-registration-otp"));
+
+    expect(await screen.findByTestId("manufacturer-otp-form")).toBeTruthy();
+    expect(screen.getByText(/Demonstration OTP for both/i).textContent).toContain("123456");
+    fireEvent.change(screen.getByLabelText("Email OTP"), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText("Mobile OTP"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByTestId("verify-registration-otp"));
+
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/app/manufacturer/onboarding"));
+    expect(fetchMock).toHaveBeenCalledWith("/api/runtime/demo/login", expect.objectContaining({ method: "POST" }));
   });
 
   it("wizard, lifecycle and 360 show the same ₹5,000 fee from the payment record", async () => {

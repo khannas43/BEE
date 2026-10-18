@@ -295,6 +295,30 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)", "Return to the applicant", "Reject permanently", "See the earlier steps and notes"],
   },
   {
+    href: "/app/manufacturer/onboarding",
+    en: "Company registration (demo)",
+    hi: "कंपनी पंजीकरण (डेमो)",
+    icon: "factory",
+    navRoles: ["manufacturer"],
+    implemented: ["Optimized manufacturer/company registration wizard (demonstration fixture)", "Save and resume", "Simulated payment and automated checks on submit"],
+  },
+  {
+    href: "/app/manufacturer/director",
+    en: "Manufacturer registration decisions",
+    hi: "निर्माता पंजीकरण निर्णय",
+    icon: "how_to_reg",
+    navRoles: ["director"],
+    implemented: ["Director queue for company registration", "Approve or reject with mandatory reason", "View payment and automated-check evidence"],
+  },
+  {
+    href: "/app/manufacturer/monitoring",
+    en: "Manufacturer observation monitoring",
+    hi: "निर्माता अवलोकन निगरानी",
+    icon: "insights",
+    navRoles: ["director", "finance", "programme"],
+    implemented: ["15-day observation status", "Finance/Programme anomaly raise", "Director resolve or revoke on hold"],
+  },
+  {
     href: "/app/delegations",
     en: "Delegations",
     hi: "प्रत्यायोजन",
@@ -304,8 +328,15 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   },
 ];
 
+const MANUFACTURER_RUNTIME_PREFIXES = ["/app/manufacturer/application/", "/app/manufacturer/360/"] as const;
+
 export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {
-  return RUNTIME_ROUTES.find((r) => r.href === pathname);
+  const exact = RUNTIME_ROUTES.find((r) => r.href === pathname);
+  if (exact) return exact;
+  if (MANUFACTURER_RUNTIME_PREFIXES.some((p) => pathname.startsWith(p))) {
+    return RUNTIME_ROUTES.find((r) => r.href === "/app/manufacturer/onboarding");
+  }
+  return undefined;
 }
 
 /**
@@ -316,6 +347,7 @@ const MENU_ORDER: string[] = [
   "/app/demo/executive", "/app/demo/director", "/app/demo/auditor", "/app/demo/mis",
   "/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval", "/app/workflow/application-review", "/app/workflow/workflow-history", "/app/workflow/escalation-dashboard",
   "/app/registrations/requests", "/app/registrations/new", "/app/registrations/request", "/app/registrations/reviews", "/app/registrations/register",
+  "/app/manufacturer/onboarding", "/app/manufacturer/director", "/app/manufacturer/monitoring",
   "/app/model-label/new-model-application", "/app/model-label/model-dashboard", "/app/model-label/label-preview", "/app/model-label/notifications",
   "/app/model-label/iame-scrutiny", "/app/model-label/bee-scrutiny", "/app/model-label/rating-calculation",
   "/app/finance/finance-queue", "/app/registrations/fees", "/app/finance/receipt", "/app/demo/payments",

@@ -1,0 +1,263 @@
+/**
+ * Initial fixture records for the optimized manufacturer onboarding demo.
+ * Imported only by the fixture client — components must use ManufacturerOnboardingClient.
+ */
+import type { ManufacturerApplication } from "./types";
+
+const baseDraft = {
+  legalName: "Aarav Appliances Pvt Ltd",
+  cin: "U29300MH2018PTC312045",
+  gstin: "27AABCA1234F1Z5",
+  registeredAddress: {
+    line1: "Plot 14, MIDC Industrial Area",
+    line2: "Andheri East",
+    city: "Mumbai",
+    state: "Maharashtra",
+    pincode: "400093",
+  },
+  facilities: [
+    {
+      id: "fac-1",
+      name: "Andheri assembly unit",
+      addressLine: "Plot 14, MIDC",
+      city: "Mumbai",
+      state: "Maharashtra",
+      pincode: "400093",
+    },
+  ],
+  contacts: [
+    { name: "Priya Nair", email: "priya.nair@aarav-demo.invalid", phone: "+91 98200 11223", role: "Compliance lead" },
+  ],
+  authorisedSignatory: {
+    name: "Rahul Aarav",
+    email: "rahul.aarav@aarav-demo.invalid",
+    phone: "+91 98190 44556",
+    role: "Managing Director",
+  },
+  annexureDocuments: [
+    { id: "doc-inc", kind: "Certificate of incorporation", fileName: "aarav-incorporation.pdf", uploadedAt: "2026-10-01T06:30:00.000Z" },
+    { id: "doc-gst", kind: "GST registration", fileName: "aarav-gst.pdf", uploadedAt: "2026-10-01T06:35:00.000Z" },
+    { id: "doc-fac", kind: "Factory licence", fileName: "aarav-factory-licence.pdf", uploadedAt: "2026-10-01T06:40:00.000Z" },
+  ],
+  declarationAccepted: true,
+  agreementAccepted: true,
+};
+
+const paymentBase = {
+  feeLabel: "Manufacturer entity registration (demonstration fee)",
+  amountInr: "25000.00",
+  currency: "INR" as const,
+  gatewayMode: "simulated_demo" as const,
+};
+
+function checksComplete(at: string) {
+  return [
+    {
+      id: "chk-docs",
+      label: "Annexure 1 document completeness",
+      outcome: "pass" as const,
+      completedAt: at,
+      detail: "Required Annexure 1 uploads present for demonstration.",
+    },
+    {
+      id: "chk-elig",
+      label: "Eligibility rules (demonstration ruleset)",
+      outcome: "pass" as const,
+      completedAt: at,
+      detail: "Automated rules check completed against the demonstration policy pack.",
+    },
+  ];
+}
+
+export const FIXTURE_APPLICATION_IDS = {
+  draft: "00000000-0000-4000-d000-000000000001",
+  director: "00000000-0000-4000-d000-000000000002",
+  observation: "00000000-0000-4000-d000-000000000003",
+  hold: "00000000-0000-4000-d000-000000000004",
+  resolved: "00000000-0000-4000-d000-000000000005",
+  revoked: "00000000-0000-4000-d000-000000000006",
+} as const;
+
+/** Fixed instants for observation windows (not “today” in UI — derived from these). */
+export const FIXTURE_OBSERVATION = {
+  observationStartedAt: "2026-10-10T04:00:00.000Z",
+  observationEndsAt: "2026-10-25T04:00:00.000Z",
+};
+
+export function buildFixtureApplications(): ManufacturerApplication[] {
+  const submittedAt = "2026-10-08T09:00:00.000Z";
+  const verifiedAt = "2026-10-08T09:01:12.000Z";
+  const checksAt = "2026-10-08T09:02:30.000Z";
+  const approvedAt = "2026-10-09T11:00:00.000Z";
+
+  return [
+    {
+      id: FIXTURE_APPLICATION_IDS.draft,
+      reference: "MFG-ONB-2026-DRAFT",
+      syntheticDemo: true,
+      companyCode: "AARAV",
+      phase: "draft",
+      draft: { ...baseDraft, declarationAccepted: false, agreementAccepted: false },
+      payment: { ...paymentBase, receiptNumber: null, verifiedAt: null },
+      automatedChecks: [],
+      timeline: [{ id: "t1", at: "2026-10-07T08:00:00.000Z", title: "Draft started", detail: "Applicant saved the company registration wizard.", icon: "edit_note" }],
+      directorDecisionAt: null,
+      directorDecisionNote: null,
+      registrationNumber: null,
+      activatedAt: null,
+      observationStartedAt: null,
+      observationEndsAt: null,
+      anomalies: [],
+      applicantAccountId: "onboarding.applicant",
+    },
+    {
+      id: FIXTURE_APPLICATION_IDS.director,
+      reference: "MFG-ONB-2026-0102",
+      syntheticDemo: true,
+      companyCode: "AARAV",
+      phase: "awaiting_director",
+      draft: baseDraft,
+      payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8812", verifiedAt: verifiedAt },
+      automatedChecks: checksComplete(checksAt),
+      timeline: [
+        { id: "t1", at: submittedAt, title: "Registration submitted", detail: "Company registration submitted by the applicant.", icon: "send" },
+        { id: "t2", at: verifiedAt, title: "Payment recorded", detail: "Simulated gateway payment captured for demonstration.", icon: "payments" },
+        { id: "t3", at: checksAt, title: "Automated checks completed", detail: "Document and eligibility checks completed automatically.", icon: "rule" },
+      ],
+      directorDecisionAt: null,
+      directorDecisionNote: null,
+      registrationNumber: null,
+      activatedAt: null,
+      observationStartedAt: null,
+      observationEndsAt: null,
+      anomalies: [],
+      applicantAccountId: "onboarding.applicant",
+    },
+    {
+      id: FIXTURE_APPLICATION_IDS.observation,
+      reference: "MFG-ONB-2026-0103",
+      syntheticDemo: true,
+      companyCode: "AARAV",
+      phase: "active_observation",
+      draft: baseDraft,
+      payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8813", verifiedAt: verifiedAt },
+      automatedChecks: checksComplete(checksAt),
+      timeline: [
+        { id: "t1", at: submittedAt, title: "Registration submitted", detail: "Company registration submitted.", icon: "send" },
+        { id: "t2", at: verifiedAt, title: "Payment recorded", detail: "Simulated gateway payment captured.", icon: "payments" },
+        { id: "t3", at: checksAt, title: "Automated checks completed", detail: "Rules check completed.", icon: "rule" },
+        { id: "t4", at: approvedAt, title: "Director approval", detail: "Director approved activation.", icon: "how_to_reg" },
+        { id: "t5", at: FIXTURE_OBSERVATION.observationStartedAt, title: "Observation started", detail: "15-day post-approval observation window opened.", icon: "schedule" },
+      ],
+      directorDecisionAt: approvedAt,
+      directorDecisionNote: "Approved for demonstration activation.",
+      registrationNumber: "BEE/MFG/2026/AARAV-103",
+      activatedAt: approvedAt,
+      observationStartedAt: FIXTURE_OBSERVATION.observationStartedAt,
+      observationEndsAt: FIXTURE_OBSERVATION.observationEndsAt,
+      anomalies: [],
+      applicantAccountId: "onboarding.applicant",
+    },
+    {
+      id: FIXTURE_APPLICATION_IDS.hold,
+      reference: "MFG-ONB-2026-0104",
+      syntheticDemo: true,
+      companyCode: "AARAV",
+      phase: "hold_anomaly",
+      draft: baseDraft,
+      payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8814", verifiedAt: verifiedAt },
+      automatedChecks: checksComplete(checksAt),
+      timeline: [
+        { id: "t1", at: approvedAt, title: "Director approval", detail: "Activated for observation.", icon: "how_to_reg" },
+        { id: "t2", at: "2026-10-11T06:00:00.000Z", title: "Anomaly raised", detail: "Finance raised an information anomaly — immediate hold applied.", icon: "report" },
+      ],
+      directorDecisionAt: approvedAt,
+      directorDecisionNote: "Approved for demonstration.",
+      registrationNumber: "BEE/MFG/2026/AARAV-104",
+      activatedAt: approvedAt,
+      observationStartedAt: FIXTURE_OBSERVATION.observationStartedAt,
+      observationEndsAt: FIXTURE_OBSERVATION.observationEndsAt,
+      anomalies: [
+        {
+          id: "an-1",
+          raisedAt: "2026-10-11T06:00:00.000Z",
+          raisedByRole: "finance",
+          summary: "Receipt total differs from declared fee line in Annexure 1 (demonstration anomaly).",
+          holdAppliedAt: "2026-10-11T06:00:01.000Z",
+          resolvedAt: null,
+          resolutionNote: null,
+          revokedAt: null,
+          revokeReason: null,
+        },
+      ],
+      applicantAccountId: "onboarding.applicant",
+    },
+    {
+      id: FIXTURE_APPLICATION_IDS.resolved,
+      reference: "MFG-ONB-2026-0105",
+      syntheticDemo: true,
+      companyCode: "AARAV",
+      phase: "observation_completed",
+      draft: baseDraft,
+      payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8815", verifiedAt: verifiedAt },
+      automatedChecks: checksComplete(checksAt),
+      timeline: [
+        { id: "t1", at: "2026-10-12T08:00:00.000Z", title: "Hold cleared", detail: "Director resolved anomaly — returned to active observation.", icon: "check_circle" },
+        { id: "t2", at: "2026-10-26T04:00:00.000Z", title: "Observation completed", detail: "No further anomaly during observation.", icon: "verified" },
+      ],
+      directorDecisionAt: approvedAt,
+      directorDecisionNote: "Approved.",
+      registrationNumber: "BEE/MFG/2026/AARAV-105",
+      activatedAt: approvedAt,
+      observationStartedAt: "2026-09-20T04:00:00.000Z",
+      observationEndsAt: "2026-10-05T04:00:00.000Z",
+      anomalies: [
+        {
+          id: "an-1",
+          raisedAt: "2026-09-22T06:00:00.000Z",
+          raisedByRole: "programme",
+          summary: "Programme information query on facility address pincode (resolved).",
+          holdAppliedAt: "2026-09-22T06:00:01.000Z",
+          resolvedAt: "2026-09-23T10:00:00.000Z",
+          resolutionNote: "Clarification accepted — resume observation.",
+          revokedAt: null,
+          revokeReason: null,
+        },
+      ],
+      applicantAccountId: "onboarding.applicant",
+    },
+    {
+      id: FIXTURE_APPLICATION_IDS.revoked,
+      reference: "MFG-ONB-2026-0106",
+      syntheticDemo: true,
+      companyCode: "AARAV",
+      phase: "revoked",
+      draft: baseDraft,
+      payment: { ...paymentBase, receiptNumber: "DEMO-RCP-2026-8816", verifiedAt: verifiedAt },
+      automatedChecks: checksComplete(checksAt),
+      timeline: [
+        { id: "t1", at: "2026-10-13T09:00:00.000Z", title: "Revoked by Director", detail: "Registration revoked after unresolved anomaly (demonstration).", icon: "block" },
+      ],
+      directorDecisionAt: approvedAt,
+      directorDecisionNote: "Initially approved.",
+      registrationNumber: "BEE/MFG/2026/AARAV-106",
+      activatedAt: approvedAt,
+      observationStartedAt: FIXTURE_OBSERVATION.observationStartedAt,
+      observationEndsAt: FIXTURE_OBSERVATION.observationEndsAt,
+      anomalies: [
+        {
+          id: "an-1",
+          raisedAt: "2026-10-12T07:00:00.000Z",
+          raisedByRole: "director",
+          summary: "Director monitoring anomaly — documentation mismatch (demonstration).",
+          holdAppliedAt: "2026-10-12T07:00:01.000Z",
+          resolvedAt: null,
+          resolutionNote: null,
+          revokedAt: "2026-10-13T09:00:00.000Z",
+          revokeReason: "Material misrepresentation in Annexure 1 (demonstration revoke).",
+        },
+      ],
+      applicantAccountId: "onboarding.applicant",
+    },
+  ];
+}

@@ -252,12 +252,12 @@ At the end of each development session, update the package status, progress, com
 | Tracking field | Current value |
 |---|---|
 | Status | In progress |
-| Progress | 35% |
+| Progress | 45% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | V69 workflow tables; `WorkingDaySla`; internal `WorkflowFoundationRepository`; legacy registration/model flows unchanged |
-| Next action | WP2B: wire journeys, common APIs, notifications, supervisor queue, 60-day job (BL-253/256) |
+| Existing foundation | V69 workflow tables; `WorkingDaySla`; internal `WorkflowFoundationRepository`; accepted V70 return-response policy and replay-safe notification foundation; legacy registration/model flows unchanged |
+| Next action | Brief 19B: wire the model return/resubmit journey; then 19C–19D (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -779,6 +779,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP1 | Gate pending (90%) | Complete (100%) | ChatGPT accepted the PDF-backed provisional baseline; A01–A20 remain provisional | Begin WP2; retry secondary live-form comparison in WP3 (BL-252) |
 | 18 Oct 2026 | WP2 | In progress (5%) | In progress (35%) | Brief 18 WP2A: V69 schema, WorkingDaySla, db/unit tests | WP2B wiring, APIs, UI; BL-257 |
 | 18 Oct 2026 | WP2 | In progress (35%) | In progress (35%), WP2A accepted | Per-task policy-pinned clocks, atomic due-dated tasks, multi-cycle discrepancies and India-date policy boundary accepted; 160 backend, 287 database and 251 web tests passed | Begin WP2B journey wiring (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (35%) | In progress (45%), Brief 19A accepted | V70 `snl_return_response` policy, polymorphic notifications and replay-safe delivery accepted; conflicting policy seed and zero-recipient replay were closed; 160 back-end, 299 database and 251 web tests passed | Brief 19B model wiring, then 19C–19D (BL-257) |
 
 ### 6.2 Standard completion record
 

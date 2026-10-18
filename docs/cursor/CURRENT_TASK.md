@@ -2,9 +2,9 @@
 
 **Holder:** cursor, from 18 October 2026.
 
-- Brief: `BRIEF_18C_SNL_WP02A_CLOCK_IDENTITY.md`
-- Branch: `cursor/snl-wp02a-workflow-foundation`
-- Work package: `SNL-WP02A — clock identity and due-date closure`
-- Scope: give each task/stage its own policy-pinned SLA clock, make due-dated task creation usable and atomic, and stop V69 from changing unrelated security-definer functions.
-- Boundaries: no journey wiring, API/OpenAPI, UI, outbox, scheduler, demo data, Word or PDF changes.
-- Completion: commit corrections, run full default and DB-tagged suites plus required web/type checks, run `/bee-handback`, and return the complete report for final ChatGPT review. Leave the owner-controlled untracked Word file untouched.
+- Brief: `BRIEF_19A_SNL_WP02B_POLICY_NOTIFICATION_FOUNDATION.md`
+- Branch: `cursor/snl-wp02b-return-response-wiring`
+- Work package: `SNL-WP02B-1 — provisional policy and generic notification foundation`
+- Scope: V70 provisional A08 policy, India-calendar due-date selection, and replay-safe production in-portal notifications for model and registration subjects.
+- Boundaries: no journey-service wiring, discrepancy/task/clock commands, new HTTP route, UI, scheduler, demo data, Word or PDF changes.
+- Completion: commit implementation, run full default and DB-tagged suites plus web/type checks, stop local services, run `/bee-handback`, and return the complete report for ChatGPT review. Leave the owner-controlled untracked Word file untouched.

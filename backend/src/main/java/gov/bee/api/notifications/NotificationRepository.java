@@ -27,8 +27,11 @@ public class NotificationRepository {
 
     public List<Item> newest(UUID account) {
         return jdbc.query(
-            "SELECT n.id, n.kind, n.message, n.application_id, a.reference, n.created_at, n.read_at IS NOT NULL AS is_read "
-                + "FROM notification n JOIN model_application a ON a.id = n.application_id "
+            "SELECT n.id, n.kind, n.message, COALESCE(n.application_id, n.subject_id) AS application_id, "
+                + "COALESCE(ma.reference, ra.reference) AS reference, n.created_at, n.read_at IS NOT NULL AS is_read "
+                + "FROM notification n "
+                + "LEFT JOIN model_application ma ON n.subject_kind = 'model_application' AND ma.id = n.subject_id "
+                + "LEFT JOIN registration_application ra ON n.subject_kind = 'registration_application' AND ra.id = n.subject_id "
                 + "WHERE n.recipient_account_id = ? ORDER BY n.created_at DESC, n.id LIMIT " + PAGE,
             (rs, i) -> new Item(rs.getObject("id", UUID.class), rs.getString("kind"), rs.getString("message"), rs.getObject("application_id", UUID.class),
                 rs.getString("reference"), rs.getTimestamp("created_at").toInstant(), rs.getBoolean("is_read")),

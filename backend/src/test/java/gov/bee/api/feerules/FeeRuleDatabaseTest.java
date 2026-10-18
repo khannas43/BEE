@@ -75,7 +75,7 @@ class FeeRuleDatabaseTest {
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         repo = new FeeRuleRepository(db);
         masters = new MasterDataRepository(db);
-        assertEquals(71, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V71");
+        assertEquals(72, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V72");
     }
 
     @AfterAll

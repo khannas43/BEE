@@ -28,9 +28,9 @@ public class DirectorRecommendationRepository {
 
     public enum Outcome { RECOMMENDED, STALE }
 
-    public record Result(Outcome outcome, int versionAfter, String toState, Instant recommendedAt) {
+    public record Result(Outcome outcome, int versionAfter, UUID transitionEventId, String toState, Instant recommendedAt) {
         static Result of(Outcome outcome) {
-            return new Result(outcome, 0, null, null);
+            return new Result(outcome, 0, null, null, null);
         }
     }
 
@@ -83,6 +83,6 @@ public class DirectorRecommendationRepository {
             // A recommendation that is final ends in approved, so the certificate is issued in this same transaction.
             jdbc.queryForObject("SELECT issue_certificate(?, ?, ?)", String.class, applicationId, eventId, actorAccountId);
         }
-        return new Result(Outcome.RECOMMENDED, versionAfter, toState, at.toInstant());
+        return new Result(Outcome.RECOMMENDED, versionAfter, eventId, toState, at.toInstant());
     }
 }

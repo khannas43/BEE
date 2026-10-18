@@ -25,9 +25,9 @@ public class IameRecommendationRepository {
 
     public enum Outcome { RECOMMENDED, STALE, NO_ASSIGNEE }
 
-    public record Result(Outcome outcome, int versionAfter, Instant recommendedAt) {
+    public record Result(Outcome outcome, int versionAfter, UUID transitionEventId, Instant recommendedAt) {
         static Result of(Outcome outcome) {
-            return new Result(outcome, 0, null);
+            return new Result(outcome, 0, null, null);
         }
     }
 
@@ -90,6 +90,6 @@ public class IameRecommendationRepository {
         jdbc.update(
             "INSERT INTO assignment (user_id, subject_type, subject_id, stage, active) VALUES (?, 'model_application', ?, ?, true)",
             reviewer.get(), applicationId, TO_STATE);
-        return new Result(Outcome.RECOMMENDED, versionAfter, at.toInstant());
+        return new Result(Outcome.RECOMMENDED, versionAfter, eventId, at.toInstant());
     }
 }

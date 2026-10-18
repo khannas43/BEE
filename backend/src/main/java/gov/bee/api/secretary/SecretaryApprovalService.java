@@ -9,8 +9,14 @@ import gov.bee.api.identity.Caller;
 import gov.bee.api.policy.ApplicationFacts;
 import gov.bee.api.policy.SliceAction;
 import gov.bee.api.policy.SlicePolicy;
+import gov.bee.api.snl.WorkflowReturnResponseWiring;
 import gov.bee.api.web.ApiErrors;
+import gov.bee.api.workflow.WorkflowFoundationRepository;
+import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.security.MessageDigest;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -41,13 +47,15 @@ public class SecretaryApprovalService {
     private final SecretaryApprovalRepository repository;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
+    private final WorkflowReturnResponseWiring returnWiring;
 
     public SecretaryApprovalService(ModelApplicationRepository applications, SecretaryApprovalRepository repository,
-                                     IdempotencyRepository idempotency, ObjectMapper json) {
+                                     IdempotencyRepository idempotency, ObjectMapper json, WorkflowReturnResponseWiring returnWiring) {
         this.applications = applications;
         this.repository = repository;
         this.idempotency = idempotency;
         this.json = json;
+        this.returnWiring = returnWiring;
     }
 
     @Transactional
@@ -95,6 +103,23 @@ public class SecretaryApprovalService {
         if (done.outcome() != SecretaryApprovalRepository.Outcome.APPROVED) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
+        }
+        try {
+            returnWiring.afterAcceptedForward(appId, done.transitionEventId(), SecretaryApprovalRepository.ACTION, SecretaryApprovalRepository.FROM_STATE,
+                SecretaryApprovalRepository.TO_STATE, done.versionAfter(), caller.accountId(), "secretary", done.approvedAt(), idempotencyKey);
+        } catch (WorkflowIdempotencyConflictException ex) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+        } catch (DataAccessException ex) {
+            if (ex instanceof DataAccessResourceFailureException) {
+                throw ex;
+            }
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            if (WorkflowFoundationRepository.isSqlMessage(ex, "model_return_response_wiring_idempotency_conflict")) {
+                return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+            }
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            throw ex;
         }
         Map<String, Object> receipt = new LinkedHashMap<>();
         receipt.put("applicationId", appId.toString());

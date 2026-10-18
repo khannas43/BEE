@@ -349,6 +349,21 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
     }
 
     @Test
+    void runtimeDocumentUploadViaTrustedAppendWithoutDirectTableUpdate() {
+        UUID id = draftApp();
+        assertEquals("draft", docRepo.readStateForUpload(id).orElseThrow());
+        assertThrows(DataAccessException.class, () -> db.update(
+            "UPDATE manufacturer_onboarding_application SET legal_name = legal_name WHERE id = ?", id));
+        assertThrows(DataAccessException.class, () -> db.update(
+            "UPDATE manufacturer_onboarding_document SET document_kind = document_kind WHERE application_id = ?", id));
+        int version = docRepo.recordVersion(ONBOARD_ORG, id, "trade_licence", "c".repeat(64), 120, "licence.pdf", "Trade licence", null, null, ONBOARD_USER);
+        assertEquals(1, version);
+        assertEquals(1, owner.queryForObject(
+            "SELECT count(*) FROM manufacturer_onboarding_document_version v JOIN manufacturer_onboarding_document d ON d.id = v.document_id WHERE d.application_id = ?",
+            Integer.class, id));
+    }
+
+    @Test
     void repeatedAnomalyEpisodesSeparateIdempotencyKeys() {
         UUID id = draftApp();
         var sub = service.submit(onboardApplicant(), id, nextIdempotencyKey(),

@@ -162,7 +162,7 @@ public class ManufacturerOnboardingController {
         if (file == null || file.isEmpty()) {
             return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
-        Optional<String> state = documents.lockState(appId);
+        Optional<String> state = documents.readStateForUpload(appId);
         if (state.isEmpty() || !ManufacturerOnboardingPolicy.editable(state.get())) {
             return ApiErrors.response(HttpStatus.FORBIDDEN, "not_editable");
         }

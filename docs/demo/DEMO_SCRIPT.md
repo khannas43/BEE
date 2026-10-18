@@ -264,6 +264,21 @@ Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
 | An icon shows as raw text | Fonts did not load; reload (they are bundled). |
 | A step you cannot finish | Say "that one we will show offline" and move to the next use case. Each stands alone. |
 
+## UC10. Manufacturer / company onboarding (optional, ~8 min). WP3 demo slice
+
+**Say:** "This is the optimized company-registration path: eight Annexure PDFs, simulated auto-payment on submit, Director decision, fifteen calendar days of observation, and finance-raised anomalies — not the legacy brand registration in UC9."
+
+**Public URL:** same ngrok host as the rehearsal (`https://nicola-habited-barb.ngrok-free.dev`) or `http://127.0.0.1:3100` locally. Demo login must stay on (`BEE_DEMO_LOGIN=1`, password `demo123`).
+
+1. Sign in as **`onboarding.applicant`** → **Manufacturer onboarding** wizard (`/app/manufacturer/onboarding`). Fill legal entity, address, signatory; upload all eight PDFs on the Annexure step; accept declaration and agreement; **Submit**. Point at **director_review**, fee **₹5,000**, payment **paid**, and the simulated receipt on the lifecycle screen.
+2. Switch to **`bee.director`** → **Director queue** → **Approve**. Show permittee number and the **15-day** observation window on monitoring / lifecycle.
+3. Switch to **`bee.finance`** → **Monitoring** → **Raise anomaly** (immediate **on_hold**; finance cannot resolve).
+4. Switch back to **`bee.director`** → **Monitoring** → **Resolve** to return to **active observation**.
+
+Automated rehearsal (headless Chrome): `node scripts/demo/c1-manufacturer-onboarding-journey.cjs` — also runs disposable **reject** and **revoke** (approve → anomaly → hold → revoke) on synthetic ONBOARD data only.
+
+There is **no** browser control to manually close observation (production scheduler is BL-263).
+
 ## Cheat sheet (password for all: `demo123`)
 | Username | Persona | Use case |
 |---|---|---|
@@ -277,6 +292,7 @@ Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
 | `bee.helpdesk` | Ravi, Helpdesk | UC6 (helpdesk assist) |
 | `bee.reviewer` | Meera, Reviewer | UC6 (document extraction for an application assigned to her) |
 | `pixel.applicant` | Manufacturer, other organisation | shows data separation (UC2); UC9 agency variant |
+| `onboarding.applicant` | Aarav (synthetic ONBOARD org) | UC10 manufacturer/company onboarding wizard |
 | public | Imran, shopper | `/verify` in UC2, UC3 |
 
 The persona names are only for storytelling; the demo accounts carry no personal names.

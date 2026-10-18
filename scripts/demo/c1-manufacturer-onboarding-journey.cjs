@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable */
 /**
- * Brief C1: live manufacturer onboarding journey through the portal (demo sign-in, real BFF).
+ * Brief C1A: live manufacturer onboarding acceptance through the portal (demo sign-in, real BFF).
  *   node scripts/demo/c1-manufacturer-onboarding-journey.cjs
  */
 const fs = require("fs");
@@ -13,6 +13,7 @@ const DEMO_PASS = process.env.BEE_DEMO_PASSWORD || "demo123";
 const RUN_DIR = path.join(__dirname, "../../.local/run");
 const PDF = path.join(RUN_DIR, "mob-demo.pdf");
 const EVIDENCE = path.join(RUN_DIR, "c1-journey-evidence.json");
+const ONBOARD_ORG = "00000000-0000-4000-b000-000000000007";
 
 const DOC_KINDS = [
   "trade_licence",
@@ -31,13 +32,14 @@ const GSTIN = "22AAAAA0000A1Z5";
 
 let pass = 0;
 let fail = 0;
-const evidence = { at: new Date().toISOString(), web: WEB, steps: {} };
+const evidence = { at: new Date().toISOString(), web: WEB, steps: {}, applications: {} };
 
 function check(id, ok, detail) {
   const r = ok ? "PASS" : "FAIL";
   ok ? pass++ : fail++;
-  console.log(`${r.padEnd(4)} ${id.padEnd(48)} ${detail}`);
+  console.log(`${r.padEnd(4)} ${id.padEnd(52)} ${detail}`);
   evidence.steps[id] = { result: r, detail };
+  if (!ok) throw new Error(`${id}: ${detail}`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -89,10 +91,12 @@ async function demoSignIn(page, username) {
     method: 'POST', credentials: 'include', cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: ${JSON.stringify(username)}, password: ${JSON.stringify(DEMO_PASS)} }),
-  }).then(async (r) => ({ ok: r.ok, ...(await r.json()) }))`);
-  if (!body.ok) throw new Error(`demo login failed: ${JSON.stringify(body)}`);
+  }).then(async (r) => ({ status: r.status, ok: r.ok, ...(await r.json().catch(() => ({}))) }))`);
+  if (!body.ok) throw new Error(`demo login failed (${body.status}): ${JSON.stringify(body)}`);
   await page.goto(`${WEB}${body.returnTo || "/app"}`);
-  return page.waitFor(`!!document.querySelector('[data-testid=session-badge]')`, 60000);
+  const ok = await page.waitFor(`!!document.querySelector('[data-testid=session-badge]')`, 60000);
+  if (!ok) throw new Error("session badge missing after demo sign-in");
+  return true;
 }
 
 function psql(q) {
@@ -121,80 +125,286 @@ function psql(q) {
   ).trim();
 }
 
-async function seedDraftFields(page) {
-  const kinds = JSON.stringify(DOC_KINDS);
-  const raw = await page.eval(`(async () => {
-    const idem = () => crypto.randomUUID().replace(/-/g, '').slice(0, 24);
-    const pdf = new Uint8Array([37,80,68,70,45,49,46,52,10,37,255,255,255,255]);
-    const list = await fetch('/api/runtime/manufacturer-onboarding', { credentials: 'include' }).then((r) => r.json());
-    let item = (list.items || []).find((x) => x.state === 'draft' || x.state === 'automatic_checks_failed') || (list.items || [])[0];
-    if (!item) {
-      item = await fetch('/api/runtime/manufacturer-onboarding', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idem() },
-        body: JSON.stringify({ legalName: ${JSON.stringify(LEGAL)}, draft: {} }),
-      }).then((r) => r.json());
-    }
-    const d = await fetch('/api/runtime/manufacturer-onboarding/' + encodeURIComponent(item.id), { credentials: 'include' }).then((r) => r.json());
-    const draft = {
-      cin: ${JSON.stringify(CIN)},
-      gstin: ${JSON.stringify(GSTIN)},
-      declarationAccepted: true,
-      agreementAccepted: true,
-      registeredAddress: { line1: '1 Industrial Area', line2: '', city: 'Delhi', state: 'DL', pincode: '110001' },
-      authorisedSignatory: { name: 'A. Signatory', email: 'signatory@demo.invalid', phone: '9876543210', designation: 'Director' },
-      facilities: [{ name: 'Demo Plant 1', addressLine: 'Sector 5, Delhi', city: 'Delhi', state: 'DL', pincode: '110001' }],
-      contacts: [],
-    };
-    const patched = await fetch('/api/runtime/manufacturer-onboarding/' + encodeURIComponent(item.id), {
-      method: 'PATCH', credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idem() },
-      body: JSON.stringify({ version: d.version, legalName: ${JSON.stringify(LEGAL)}, draft }),
-    }).then((r) => r.json());
-    let version = patched.version;
-    for (const kind of ${kinds}) {
-      const fd = new FormData();
-      fd.append('file', new File([pdf], kind + '.pdf', { type: 'application/pdf' }));
-      fd.append('documentKind', kind);
-      fd.append('label', kind);
-      const up = await fetch('/api/runtime/manufacturer-onboarding/' + encodeURIComponent(item.id) + '/documents', {
-        method: 'POST', credentials: 'include', headers: { 'Idempotency-Key': idem() }, body: fd,
-      }).then((r) => r.json());
-      version = up.version ?? version;
-    }
-    return JSON.stringify({ id: item.id, version });
-  })()`);
-  return JSON.parse(raw);
+function cleanOnboardSynthetic() {
+  psql(
+    `UPDATE app.manufacturer_onboarding_application SET state = 'revoked' WHERE organisation_id = '${ONBOARD_ORG}' AND state NOT IN ('rejected', 'revoked')`,
+  );
+  psql(`UPDATE app.organisation SET permittee_lifecycle = 'none' WHERE id = '${ONBOARD_ORG}'`);
 }
 
-async function fillWizard(page) {
+async function waitTestId(page, testId, timeoutMs = 60000) {
+  return page.waitFor(
+    `((tid) => !!document.querySelector('[data-testid="' + tid + '"]'))(${JSON.stringify(testId)})`,
+    timeoutMs,
+  );
+}
+
+async function clickTestId(page, testId) {
+  await page.eval(`((tid) => {
+    const el = document.querySelector('[data-testid="' + tid + '"]');
+    if (!el) throw new Error('missing test id ' + tid);
+    el.click();
+    return true;
+  })(${JSON.stringify(testId)})`);
+}
+
+async function setReactField(page, testId, value, kind = "HTMLInputElement") {
+  await page.eval(`(() => {
+    const el = document.querySelector('[data-testid=${JSON.stringify(testId)}]');
+    if (!el) throw new Error('missing ' + ${JSON.stringify(testId)});
+    const s = Object.getOwnPropertyDescriptor(window.${kind}.prototype, 'value').set;
+    s.call(el, ${JSON.stringify(value)});
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`);
+}
+
+async function waitEnabled(page, testId, timeoutMs = 60000) {
+  const ok = await page.waitFor(
+    `(() => { const b = document.querySelector('[data-testid=${JSON.stringify(testId)}]'); return !!b && !b.disabled; })()`,
+    timeoutMs,
+  );
+  if (!ok) throw new Error(`button ${testId} did not become enabled`);
+}
+
+async function pollApplication(page, appId, predicate, label, timeoutMs = 90000) {
+  const url = `/api/runtime/manufacturer-onboarding/${encodeURIComponent(appId)}`;
+  const end = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < end) {
+    last = await fetchStrict(page, url, { method: "GET" });
+    if (predicate(last)) return last;
+    await sleep(500);
+  }
+  throw new Error(`${label}: timed out (last state=${last?.state ?? "?"})`);
+}
+
+async function fetchStrict(page, url, init = {}) {
+  const raw = await page.eval(`(async () => {
+    const init = ${JSON.stringify(init)};
+    const r = await fetch(${JSON.stringify(url)}, { credentials: 'include', cache: 'no-store', ...init });
+    const text = await r.text();
+    let body = null;
+    try { body = text ? JSON.parse(text) : null; } catch { body = { _raw: text }; }
+    return JSON.stringify({ status: r.status, ok: r.ok, body });
+  })()`);
+  const parsed = JSON.parse(raw);
+  if (!parsed.ok) {
+    throw new Error(`HTTP ${parsed.status} ${url}: ${JSON.stringify(parsed.body)}`);
+  }
+  return parsed.body;
+}
+
+async function clickStep(page, stepId) {
+  await page.eval(`document.querySelector('[data-testid="step-${stepId}"]').click(); true`);
+  await sleep(200);
+}
+
+async function resolveAppId(page) {
+  const list = await fetchStrict(page, "/api/runtime/manufacturer-onboarding", { method: "GET" });
+  const item =
+    (list.items || []).find((x) => x.state === "draft" || x.state === "automatic_checks_failed") || (list.items || [])[0];
+  if (!item?.id) throw new Error("no manufacturer onboarding application");
+  return item.id;
+}
+
+async function patchDraftViaBff(page, appId, draftBody) {
+  const detail = await fetchStrict(page, `/api/runtime/manufacturer-onboarding/${encodeURIComponent(appId)}`, { method: "GET" });
+  const { randomUUID } = require("crypto");
+  return fetchStrict(page, `/api/runtime/manufacturer-onboarding/${encodeURIComponent(appId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID().replace(/-/g, "").slice(0, 24) },
+    body: JSON.stringify({ version: detail.version, legalName: LEGAL, draft: draftBody }),
+  });
+}
+
+async function fillWizardCore(page, tag) {
   await page.goto(`${WEB}/app/manufacturer/onboarding`);
   await page.waitFor(`!!document.querySelector('[data-testid=field-legal-name]')`, 60000);
-  const seeded = await seedDraftFields(page);
-  await page.goto(`${WEB}/app/manufacturer/onboarding`);
-  await page.waitFor(`!!document.querySelector('[data-testid=onboarding-stepper]')`, 60000);
+
+  await setReactField(page, "field-legal-name", LEGAL);
+  await setReactField(page, "field-cin", CIN);
+  await setReactField(page, "field-gstin", GSTIN);
+
+  await clickStep(page, "address");
+  for (const key of ["line1", "line2", "city", "state", "pincode"]) {
+    const val = key === "line1" ? "1 Industrial Area" : key === "city" ? "Delhi" : key === "state" ? "DL" : key === "pincode" ? "110001" : "";
+    await setReactField(page, `field-address-${key}`, val);
+  }
+
+  await clickStep(page, "contacts");
+  await setReactField(page, "field-signatory-name", "A. Signatory");
+  await setReactField(page, "field-signatory-email", "signatory@demo.invalid");
+  await setReactField(page, "field-signatory-phone", "9876543210");
+  await setReactField(page, "field-signatory-role", "Director");
+
   await page.eval(`document.querySelector('[data-testid=wizard-save]').click(); true`);
   await page.waitFor(`(document.body.textContent || '').includes('Progress saved')`, 30000);
-  await page.eval(`document.querySelector('[data-testid=step-review]').click(); true`);
-  await page.waitFor(`!!document.querySelector('[data-testid=wizard-submit]')`);
+
+  const appId = await resolveAppId(page);
+  await patchDraftViaBff(page, appId, {
+    cin: CIN,
+    gstin: GSTIN,
+    registeredAddress: { line1: "1 Industrial Area", line2: "", city: "Delhi", state: "DL", pincode: "110001" },
+    facilities: [{ name: "Demo Plant 1", addressLine: "Sector 5, Delhi", city: "Delhi", state: "DL", pincode: "110001" }],
+    authorisedSignatory: { name: "A. Signatory", email: "signatory@demo.invalid", phone: "9876543210", designation: "Director" },
+    contacts: [],
+    declarationAccepted: false,
+    agreementAccepted: false,
+  });
+  await page.goto(`${WEB}/app/manufacturer/onboarding`);
+  await page.waitFor(`!!document.querySelector('[data-testid=onboarding-stepper]')`, 60000);
+
+  await clickStep(page, "annexure");
+  for (const kind of DOC_KINDS) {
+    await page.setFiles(`upload-${kind}`, PDF);
+    const uploaded = await page.waitFor(
+      `(() => { const el = document.querySelector('[data-testid="upload-status-${kind}"]'); return el && el.textContent.includes('Uploaded'); })()`,
+      120000,
+    );
+    if (!uploaded) throw new Error(`${tag}: upload UI did not confirm ${kind}`);
+  }
+
+  await page.goto(`${WEB}/app/manufacturer/onboarding`);
+  await page.waitFor(`!!document.querySelector('[data-testid=onboarding-stepper]')`, 60000);
+  await clickStep(page, "annexure");
+  for (const kind of DOC_KINDS) {
+    const ok = await page.eval(
+      `(() => { const el = document.querySelector('[data-testid="upload-status-${kind}"]'); return el && el.textContent.includes('Uploaded'); })()`,
+    );
+    if (!ok) throw new Error(`${tag}: ${kind} missing after reload`);
+  }
+
+  const detail = await fetchStrict(page, `/api/runtime/manufacturer-onboarding/${encodeURIComponent(appId)}`, { method: "GET" });
+  const kindsPresent = new Set((detail.documents || []).filter((d) => d.status === "uploaded").map((d) => d.documentKind));
+  for (const kind of DOC_KINDS) {
+    if (!kindsPresent.has(kind)) throw new Error(`${tag}: BFF detail missing uploaded ${kind}`);
+  }
+
+  await clickStep(page, "declaration");
+  await page.eval(`(() => { document.querySelector('[data-testid=checkbox-declaration]').click(); document.querySelector('[data-testid=checkbox-agreement]').click(); return true; })()`);
+
+  await clickStep(page, "review");
+  await waitEnabled(page, "wizard-submit", 120000);
   await page.eval(`document.querySelector('[data-testid=wizard-submit]').click(); true`);
-  const ok = await page.waitFor(`location.pathname.startsWith('/app/manufacturer/application/')`, 120000);
-  return { ok, appId: seeded.id };
+  const navigated = await page.waitFor(`location.pathname.startsWith('/app/manufacturer/application/')`, 120000);
+  if (!navigated) throw new Error(`${tag}: submit did not navigate to application lifecycle`);
+
+  const after = await fetchStrict(page, `/api/runtime/manufacturer-onboarding/${encodeURIComponent(appId)}`, { method: "GET" });
+  return { appId, detail: after };
+}
+
+async function setTextarea(page, testId, value) {
+  await setReactField(page, testId, value, "HTMLTextAreaElement");
+}
+
+async function openDirectorQueueItem(page, reference) {
+  await page.goto(`${WEB}/app/manufacturer/director`);
+  const itemId = `queue-item-${reference}`;
+  if (!(await waitTestId(page, itemId, 120000))) throw new Error(`director queue missing ${itemId}`);
+  await clickTestId(page, itemId);
+  await page.waitFor(
+    `!!document.querySelector('[data-testid=director-reject-open]') || !!document.querySelector('[data-testid=director-approve]')`,
+    60000,
+  );
+}
+
+async function directorRejectDisposable(page, appId, reference) {
+  await openDirectorQueueItem(page, reference);
+  await page.eval(`document.querySelector('[data-testid=director-reject-open]').click(); true`);
+  await page.waitFor(`!!document.querySelector('[data-testid=director-reject-reason]')`);
+  await setTextarea(page, "director-reject-reason", "Incomplete demo dossier (disposable C1A)");
+  await waitEnabled(page, "director-reject-confirm");
+  await page.eval(`document.querySelector('[data-testid=director-reject-confirm]').click(); true`);
+  await page.waitFor(`(document.body.textContent || '').toLowerCase().includes('rejected')`, 60000);
+  return pollApplication(page, appId, (d) => d.state === "rejected", "director reject");
+}
+
+async function directorApprove(page, appId, reference) {
+  await openDirectorQueueItem(page, reference);
+  await page.eval(`document.querySelector('[data-testid=director-approve]').click(); true`);
+  await page.waitFor(`(document.body.textContent || '').toLowerCase().includes('approved')`, 60000);
+  return pollApplication(page, appId, (d) => d.state === "active_observation", "director approve");
+}
+
+async function openMonitoringItem(page, reference) {
+  await page.goto(`${WEB}/app/manufacturer/monitoring`);
+  const itemId = `monitoring-item-${reference}`;
+  if (!(await waitTestId(page, itemId, 120000))) throw new Error(`monitoring queue missing ${itemId}`);
+  await clickTestId(page, itemId);
+  await page.waitFor(`!!document.querySelector('[data-testid=raise-anomaly-submit], [data-testid=director-resolve], [data-testid=director-revoke]')`, 60000);
+}
+
+async function financeRaiseAnomaly(page, appId, reference) {
+  await openMonitoringItem(page, reference);
+  await setTextarea(page, "anomaly-summary", "Synthetic ledger mismatch (C1A demo)");
+  await waitEnabled(page, "raise-anomaly-submit");
+  await page.eval(`document.querySelector('[data-testid=raise-anomaly-submit]').click(); true`);
+  await page.waitFor(`(document.body.textContent || '').toLowerCase().includes('hold')`, 60000);
+  return pollApplication(page, appId, (d) => d.state === "on_hold", "finance anomaly");
+}
+
+async function directorResolveHold(page, appId, reference) {
+  await openMonitoringItem(page, reference);
+  await setTextarea(page, "director-hold-note", "Cleared after review (C1A)");
+  await waitEnabled(page, "director-resolve");
+  await page.eval(`document.querySelector('[data-testid=director-resolve]').click(); true`);
+  await page.waitFor(`(document.body.textContent || '').toLowerCase().includes('active observation')`, 60000);
+  return pollApplication(page, appId, (d) => d.state === "active_observation", "director resolve");
+}
+
+async function directorRevokeAfterHold(page, appId, reference) {
+  await openMonitoringItem(page, reference);
+  await setTextarea(page, "director-hold-note", "Revoked for C1A disposable demo");
+  await waitEnabled(page, "director-revoke");
+  await page.eval(`document.querySelector('[data-testid=director-revoke]').click(); true`);
+  await page.waitFor(`(document.body.textContent || '').toLowerCase().includes('revoked')`, 60000);
+  return pollApplication(page, appId, (d) => d.state === "revoked", "director revoke");
+}
+
+function observationDays(appId) {
+  const obs = psql(
+    `SELECT started_on::text, ends_on::text FROM app.manufacturer_onboarding_observation WHERE application_id = '${appId}'`,
+  );
+  const [started, ends] = obs.split("|");
+  const daysApart =
+    started && ends ? Math.round((Date.parse(ends) - Date.parse(started)) / 86400000) : -1;
+  return { started, ends, daysApart };
+}
+
+async function verifyNgrokRoutes() {
+  const ngrokPath = path.join(RUN_DIR, "ngrok.url");
+  const base = fs.existsSync(ngrokPath) ? fs.readFileSync(ngrokPath, "utf8").trim() : "";
+  if (!base) {
+    check("c1.ngrok.url", false, "missing .local/run/ngrok.url");
+    return "";
+  }
+  const paths = [
+    "/",
+    "/login",
+    "/register/manufacturer",
+    "/app/manufacturer/onboarding",
+    "/app/manufacturer/director",
+    "/app/manufacturer/monitoring",
+    "/app/demo/manufacturer-360",
+    "/verify?reg=BEE/RAC/2026/10101",
+  ];
+  for (const p of paths) {
+    const r = await fetch(`${base}${p}`, { redirect: "manual", headers: { "ngrok-skip-browser-warning": "1" } });
+    const loc = r.headers.get("location") || "";
+    const badRedirect = /localhost|127\.0\.0\.1|:8180/.test(loc);
+    check(`c1.ngrok${p.split("?")[0]}`, r.status >= 200 && r.status < 400 && !badRedirect, `${r.status} loc=${loc || "—"}`);
+  }
+  return base;
 }
 
 async function main() {
   if (!fs.existsSync(CHROME)) {
-    check("c1.chrome", false, `Chrome not found (${CHROME})`);
+    console.log("FAIL c1.chrome", `Chrome not found (${CHROME})`);
     process.exit(1);
   }
-  try {
-    psql(
-      "UPDATE app.manufacturer_onboarding_application SET state = 'revoked' WHERE organisation_id = '00000000-0000-4000-b000-000000000007' AND state NOT IN ('rejected', 'revoked')",
-    );
-    psql("UPDATE app.organisation SET permittee_lifecycle = 'none' WHERE code = 'ONBOARD'");
-  } catch {
-    /* postgres optional for local-only run */
-  }
+  cleanOnboardSynthetic();
   fs.mkdirSync(RUN_DIR, { recursive: true });
   if (!fs.existsSync(PDF)) {
     fs.writeFileSync(PDF, Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"));
@@ -204,141 +414,118 @@ async function main() {
   try {
     const applicant = await openPage(chrome.cdp);
     check("c1.applicant.sign-in", await demoSignIn(applicant, "onboarding.applicant"), "demo sign-in");
-
-    // Disposable reject first (one live application per org).
-    const rejectRun = await fillWizard(applicant);
-    check("c1.applicant.wizard-submit-reject", rejectRun.ok, "submitted disposable app");
-    const rejectMeta = await applicant.eval(
-      `fetch('/api/runtime/manufacturer-onboarding/${rejectRun.appId}', { credentials: 'include' }).then(r => r.json())`,
-    );
+    const rejectRun = await fillWizardCore(applicant, "reject");
+    check("c1.applicant.submit-reject", rejectRun.detail.state === "director_review", rejectRun.detail.reference);
+    evidence.applications.reject = {
+      id: rejectRun.appId,
+      reference: rejectRun.detail.reference,
+      version: rejectRun.detail.version,
+    };
     await applicant.close();
     const dirReject = await openPage(chrome.cdp);
     check("c1.director.sign-in-reject", await demoSignIn(dirReject, "bee.director"), "director for reject");
-    await dirReject.goto(`${WEB}/app/manufacturer/director`);
-    await dirReject.waitFor(`!!document.querySelector('[data-testid=director-reject-open]')`, 60000);
-    await dirReject.eval(`document.querySelector('[data-testid=director-reject-open]').click(); true`);
-    await dirReject.waitFor(`!!document.querySelector('[data-testid=director-reject-reason]')`);
-    await dirReject.eval(`document.querySelector('[data-testid=director-reject-reason]').value = 'Incomplete demo dossier (disposable)'; true`);
-    await dirReject.eval(`document.querySelector('[data-testid=director-reject-confirm]').click(); true`);
-    await dirReject.waitFor(`(document.body.textContent || '').includes('rejected')`, 60000);
-    const rejected = await dirReject.eval(
-      `fetch('/api/runtime/manufacturer-onboarding/${rejectMeta.id}', { credentials: 'include' }).then(r => r.json())`,
-    );
-    check("c1.director.reject-disposable", rejected.state === "rejected", `${rejectMeta.reference} → rejected`);
-    evidence.rejectApplication = { reference: rejectMeta.reference, state: rejected.state };
+    const rejected = await directorRejectDisposable(dirReject, rejectRun.appId, rejectRun.detail.reference);
+    check("c1.director.reject-disposable", rejected.state === "rejected", rejected.reference);
+    evidence.applications.reject.state = rejected.state;
     await dirReject.close();
 
+    cleanOnboardSynthetic();
     const applicantRevoke = await openPage(chrome.cdp);
     await demoSignIn(applicantRevoke, "onboarding.applicant");
-    const revokeRun = await fillWizard(applicantRevoke);
-    check("c1.applicant.wizard-submit-revoke", revokeRun.ok, "submitted revoke disposable");
-    const revokeMeta = await applicantRevoke.eval(
-      `fetch('/api/runtime/manufacturer-onboarding/${revokeRun.appId}', { credentials: 'include' }).then(r => r.json())`,
-    );
+    const revokeRun = await fillWizardCore(applicantRevoke, "revoke");
+    check("c1.applicant.submit-revoke", revokeRun.detail.state === "director_review", revokeRun.detail.reference);
     await applicantRevoke.close();
     const dirRevoke = await openPage(chrome.cdp);
     await demoSignIn(dirRevoke, "bee.director");
-    await dirRevoke.goto(`${WEB}/app/manufacturer/director`);
-    await dirRevoke.waitFor(`!!document.querySelector('[data-testid=director-approve]')`, 60000);
-    await dirRevoke.eval(`document.querySelector('[data-testid=director-approve]').click(); true`);
-    await dirRevoke.waitFor(`(document.body.textContent || '').includes('approved')`, 60000);
-    await dirRevoke.goto(`${WEB}/app/manufacturer/monitoring`);
-    await dirRevoke.waitFor(`!!document.querySelector('[data-testid=director-revoke]')`, 60000);
-    await dirRevoke.eval(`document.querySelector('[data-testid=director-hold-note]').value = 'Revoked for C1 disposable demo'; true`);
-    await dirRevoke.eval(`document.querySelector('[data-testid=director-revoke]').click(); true`);
-    await dirRevoke.waitFor(`(document.body.textContent || '').includes('revoked')`, 60000);
-    const revoked = await dirRevoke.eval(
-      `fetch('/api/runtime/manufacturer-onboarding/${revokeMeta.id}', { credentials: 'include' }).then(r => r.json())`,
+    const approvedForRevoke = await directorApprove(dirRevoke, revokeRun.appId, revokeRun.detail.reference);
+    check(
+      "c1.director.approve-revoke-path",
+      approvedForRevoke.state === "active_observation",
+      `${approvedForRevoke.reference} state=${approvedForRevoke.state}`,
     );
-    check("c1.director.revoke-disposable", revoked.state === "revoked", `${revokeMeta.reference} → revoked`);
-    evidence.revokeApplication = { reference: revokeMeta.reference, state: revoked.state };
     await dirRevoke.close();
+    const finRevoke = await openPage(chrome.cdp);
+    await demoSignIn(finRevoke, "bee.finance");
+    const held = await financeRaiseAnomaly(finRevoke, revokeRun.appId, revokeRun.detail.reference);
+    check("c1.finance.anomaly-before-revoke", held.state === "on_hold", held.state);
+    await finRevoke.close();
+    const dirRevoke2 = await openPage(chrome.cdp);
+    await demoSignIn(dirRevoke2, "bee.director");
+    const revoked = await directorRevokeAfterHold(dirRevoke2, revokeRun.appId, revokeRun.detail.reference);
+    check("c1.director.revoke-disposable", revoked.state === "revoked", revoked.reference);
+    evidence.applications.revoke = {
+      id: revokeRun.appId,
+      reference: revokeRun.detail.reference,
+      state: revoked.state,
+    };
+    await dirRevoke2.close();
 
+    cleanOnboardSynthetic();
     const applicantMain = await openPage(chrome.cdp);
     await demoSignIn(applicantMain, "onboarding.applicant");
-    const mainRun = await fillWizard(applicantMain);
-    check("c1.applicant.wizard-submit-main", mainRun.ok, "submitted main app");
-    const appMeta = await applicantMain.eval(
-      `fetch('/api/runtime/manufacturer-onboarding/${mainRun.appId}', { credentials: 'include' }).then(r => r.json())`,
+    const mainRun = await fillWizardCore(applicantMain, "primary");
+    const appMeta = mainRun.detail;
+    const feeInr = appMeta.fee?.amountInr;
+    const paymentStatus = appMeta.payment?.status;
+    const receipt = appMeta.payment?.receiptNumber;
+    check(
+      "c1.applicant.director-review",
+      appMeta.state === "director_review" && paymentStatus === "paid" && feeInr === "5000.00" && !!receipt,
+      `${appMeta.reference} state=${appMeta.state} fee=${feeInr} payment=${paymentStatus} receipt=${receipt}`,
     );
-    evidence.primaryApplication = {
+    evidence.applications.primary = {
       id: appMeta.id,
       reference: appMeta.reference,
       version: appMeta.version,
-      phase: appMeta.state,
-      fee: appMeta.expectedFee?.amountInr,
-      paymentReceipt: appMeta.payment?.receiptNumber,
+      state: appMeta.state,
+      documentKinds: DOC_KINDS,
+      feeAmountInr: feeInr,
+      paymentStatus,
+      paymentReceipt: receipt,
+      automatedChecks: appMeta.automatedChecks || [],
     };
-    check(
-      "c1.applicant.director-review",
-      appMeta.state === "director_review" && appMeta.payment?.status === "verified",
-      `${appMeta.reference} state=${appMeta.state} payment=${appMeta.payment?.status}`,
-    );
     await applicantMain.close();
 
     const director = await openPage(chrome.cdp);
     check("c1.director.sign-in", await demoSignIn(director, "bee.director"), "director demo sign-in");
-    await director.goto(`${WEB}/app/manufacturer/director`);
-    await director.waitFor(`!!document.querySelector('[data-testid=director-approve]')`, 60000);
-    await director.eval(`document.querySelector('[data-testid=director-approve]').click(); true`);
-    await director.waitFor(`(document.body.textContent || '').includes('approved')`, 60000);
-    const afterApprove = await director.eval(`fetch('/api/runtime/manufacturer-onboarding/${appMeta.id}', { credentials: 'include' }).then(r => r.json())`);
-    const obs = psql(
-      `SELECT started_on::text, ends_on::text FROM app.manufacturer_onboarding_observation WHERE application_id = '${appMeta.id}'`,
-    );
-    const [started, ends] = obs.split("|");
-    const daysApart =
-      started && ends ? Math.round((Date.parse(ends) - Date.parse(started)) / (86400000)) : -1;
-    evidence.directorApproval = {
-      reference: afterApprove.reference,
-      phase: afterApprove.state,
-      permitteeNumber: afterApprove.permitteeNumber,
-      observationStarted: started,
-      observationEnds: ends,
-      calendarDaysBetween: daysApart,
-    };
+    const afterApprove = await directorApprove(director, appMeta.id, appMeta.reference);
+    const obs = observationDays(appMeta.id);
+    const permittee = afterApprove.permitteeNumber || afterApprove.permitteeActivation?.permitteeNumber;
     check(
       "c1.director.approve-observation",
-      afterApprove.state === "active_observation" && !!afterApprove.permitteeNumber && daysApart === 15,
-      `permittee=${afterApprove.permitteeNumber} obs ${started}→${ends} (${daysApart}d)`,
+      afterApprove.state === "active_observation" && !!permittee && obs.daysApart === 15,
+      `permittee=${permittee} obs ${obs.started}→${obs.ends} (${obs.daysApart}d)`,
     );
     check(
       "c1.no-observation-close-ui",
       !(await director.eval(`!!document.querySelector('[data-testid*=observation-close]')`)),
       "no browser observation-close control",
     );
+    evidence.applications.primary.directorDecision = afterApprove.directorDecision;
+    evidence.applications.primary.permitteeNumber = permittee;
+    evidence.applications.primary.observation = obs;
     await director.close();
 
     const finance = await openPage(chrome.cdp);
     check("c1.finance.sign-in", await demoSignIn(finance, "bee.finance"), "finance demo sign-in");
-    await finance.goto(`${WEB}/app/manufacturer/monitoring`);
-    await finance.waitFor(`!!document.querySelector('[data-testid=raise-anomaly-submit]')`, 60000);
-    await finance.eval(`document.querySelector('[data-testid=anomaly-summary]').value = 'Synthetic ledger mismatch (C1 demo)'; true`);
-    await finance.eval(`document.querySelector('[data-testid=raise-anomaly-submit]').click(); true`);
-    await finance.waitFor(`(document.body.textContent || '').includes('hold')`, 60000);
-    const onHold = await finance.eval(`fetch('/api/runtime/manufacturer-onboarding/${appMeta.id}', { credentials: 'include' }).then(r => r.json())`);
+    const onHold = await financeRaiseAnomaly(finance, appMeta.id, appMeta.reference);
     check("c1.finance.anomaly-hold", onHold.state === "on_hold", `state=${onHold.state}`);
     check(
       "c1.finance.cannot-resolve",
       !(await finance.eval(`!!document.querySelector('[data-testid=director-resolve]')`)),
       "finance sees no resolve button",
     );
+    evidence.applications.primary.anomaly = { actor: "bee.finance", holdState: onHold.state };
     await finance.close();
 
     const director2 = await openPage(chrome.cdp);
     await demoSignIn(director2, "bee.director");
-    await director2.goto(`${WEB}/app/manufacturer/monitoring`);
-    await director2.waitFor(`!!document.querySelector('[data-testid=director-resolve]')`, 60000);
-    await director2.eval(`document.querySelector('[data-testid=director-hold-note]').value = 'Cleared after review (C1)'; true`);
-    await director2.eval(`document.querySelector('[data-testid=director-resolve]').click(); true`);
-    await director2.waitFor(`(document.body.textContent || '').includes('active observation')`, 60000);
-    const resolved = await director2.eval(`fetch('/api/runtime/manufacturer-onboarding/${appMeta.id}', { credentials: 'include' }).then(r => r.json())`);
+    const resolved = await directorResolveHold(director2, appMeta.id, appMeta.reference);
     check("c1.director.resolve-hold", resolved.state === "active_observation", `state=${resolved.state}`);
-    evidence.anomaly = { actor: "bee.finance", result: "on_hold", directorResolve: resolved.state };
+    evidence.applications.primary.anomaly.directorResolveState = resolved.state;
     await director2.close();
 
-    const ngrokUrl = fs.existsSync(path.join(RUN_DIR, "ngrok.url")) ? fs.readFileSync(path.join(RUN_DIR, "ngrok.url"), "utf8").trim() : "";
-    evidence.ngrok = ngrokUrl || "(not recorded)";
+    evidence.ngrokUrl = await verifyNgrokRoutes();
     fs.writeFileSync(EVIDENCE, JSON.stringify(evidence, null, 2));
     check("c1.evidence-written", fs.existsSync(EVIDENCE), EVIDENCE);
   } finally {
@@ -349,6 +536,11 @@ async function main() {
 }
 
 main().catch((e) => {
-  check("c1.run", false, e.message);
+  console.log("FAIL c1.run", e.message);
+  try {
+    fs.mkdirSync(RUN_DIR, { recursive: true });
+    evidence.failure = e.message;
+    fs.writeFileSync(EVIDENCE, JSON.stringify(evidence, null, 2));
+  } catch {}
   process.exit(1);
 });

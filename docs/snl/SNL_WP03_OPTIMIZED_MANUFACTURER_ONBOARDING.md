@@ -1,6 +1,6 @@
 # SNL WP03 — optimized manufacturer onboarding (backend slice)
 
-**Status:** A3 backend accepted at **`b378900`** (Flyway **V69–V75** frozen). **B2** frontend integrated on `cursor/wp3-fast-manufacturer-onboarding-integration` (browser BFF adapter, multipart documents, versioned commands) — **ChatGPT review pending.** Coordinated live smoke not run; WP3 not complete. Provisional local rules, not BEE rules.
+**Status:** A3 backend accepted at **`b378900`** (Flyway **V69–V75** frozen). **B2** frontend integrated on demo branch `cursor/demo-wp3-onboarding-final`. **Brief C1A (18 Oct 2026):** live upload fixed (`readStateForUpload` — no `FOR UPDATE` on application reads; append stays in `manufacturer_onboarding_trusted_append_document`); **`scripts/demo/c1-manufacturer-onboarding-journey.cjs`** passed **25/25** on presentation stack + ngrok. Production identity/payment/scheduler gaps remain **BL-261–263**. Provisional local rules, not BEE rules.
 
 ## Scope
 
@@ -18,6 +18,7 @@ Auditable manufacturer entity onboarding: draft application (JSONB payload), nin
 | Anomaly cleared after deadline | If `observation_ends_on` has passed, **cleared** resolves to **`active`** (closes observation, activates permittee), not back to `active_observation`. Within the window, cleared returns to `active_observation`. |
 | `tradeLicenceUploaded` | **True only** when a **`trade_licence`** document version exists; other uploads do not satisfy the gate. |
 | Trusted writes | `bee_runtime` has **SELECT** on application/evidence reads and **EXECUTE** on documented commands only — no direct INSERT/UPDATE on application, events, or document tables. SECURITY DEFINER commands run as the migration owner; **`bee.mob_trusted` is not used**. |
+| Document upload pre-check | Spring reads application **state** with an ordinary **SELECT** (no row lock). **`manufacturer_onboarding_trusted_append_document`** locks the row, checks org ownership and editable state, and appends the version atomically. |
 | Command idempotency | Each orchestrator serializes on `command_id`, compares application, purpose and a **database-canonical** payload hash, replays stored results (even after later lifecycle moves), and raises **`idempotency_key_conflict`** on cross-application, cross-purpose or changed-payload reuse. Spring maps SQL `23505` / `idempotency_key_conflict` to HTTP **409**. |
 | Submit actor | Submit requires active **manufacturer** membership on the application organisation; forged role/org actors are refused before payment or evidence writes. |
 | Observation close (production) | **No browser or Spring API** for manual observation close. Automatic closure after day 15 when no anomaly remains is **BL-263** (production scheduler not implemented). |
@@ -75,7 +76,7 @@ Idempotency: each command accepts a client **`Idempotency-Key`**; replays are ke
 
 ## Proof
 
-`SnlWp03OptimizedManufacturerOnboardingDatabaseTest` — migration rank, trusted-boundary guards, create/patch/document commands, trade-licence gate, cross-org refusal, **seven-command** runtime EXECUTE inventory, idempotency replay/conflict proofs, maint observation close, happy path, model-submit guard.
+`SnlWp03OptimizedManufacturerOnboardingDatabaseTest` — migration rank, trusted-boundary guards, create/patch/document commands, trade-licence gate, cross-org refusal, **seven-command** runtime EXECUTE inventory, idempotency replay/conflict proofs, **`runtimeDocumentUploadViaTrustedAppendWithoutDirectTableUpdate`**, maint observation close, happy path, model-submit guard.
 
 ## Deferred
 

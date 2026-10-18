@@ -343,8 +343,8 @@ At the end of each development session, update the package status, progress, com
 
 | Tracking field | Current value |
 |---|---|
-| Status | In progress — V75 + UI merged on demo branch `cursor/demo-wp3-onboarding-final`; **C1 live journey not yet signed off** (18 Oct 2026) |
-| Progress | 55% (optimized onboarding slice on demo stack; production identity/payment/scheduler still BL-261–263) |
+| Status | **Optimized manufacturer onboarding accepted on demo stack** (Brief C1A, 18 Oct 2026); full entity/brand/category WP3 scope still open (BL-252, BL-254, BL-261–263) |
+| Progress | 70% (wizard + V75 trusted boundary + live C1 journey; category deposit and production hardening deferred) |
 | Target release | R2 |
 | Depends on | WP2 and WP5 payment foundation |
 | Manual references | Sections 3.1.1, 3.1.2, 3.4, 3.10, 4.1 and 4.2; Annexures 1 and 2 |
@@ -383,7 +383,8 @@ At the end of each development session, update the package status, progress, com
 | Evidence | Result or link |
 |---|---|
 | Demo integration merge | `ce3b46a` — WP3 UI (`aeafc7c`) + demo/ngrok rehearsal (`098b05c`); runtime grant fix in `ensure-runtime-role.sh` |
-| C1 live smoke | Partial — `demo:wp3-wp9-check` 21/21; full applicant→director UI journey pending (see `docs/cursor/CURRENT_TASK.md`) |
+| C1 live smoke | **Pass** — `scripts/demo/c1-manufacturer-onboarding-journey.cjs` **25/25**; evidence `.local/run/c1-journey-evidence.json`; ngrok `https://nicola-habited-barb.ngrok-free.dev` |
+| Backend tests | Default suite + `SpringContractTest` + `SnlWp03OptimizedManufacturerOnboardingDatabaseTest` pass (18 Oct 2026); full `-Dgroups=db` had 4 unrelated failures in one run (Registration/Messages/FeeRule/WP02b forward) — re-run on merge |
 | Data and policy design | Pending |
 | Migration range | Pending |
 | Contract version | Pending |

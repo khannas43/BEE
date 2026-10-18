@@ -1,37 +1,30 @@
 # Current Cursor task
 
-**Holder:** claude (post Brief C1 handback), 18 October 2026.
+**Holder:** claude (post Brief C1A handback), 18 October 2026.
 
-- Brief: **C1** — final WP3 integration, live browser journey, ngrok readiness
-- Branch: `cursor/demo-wp3-onboarding-final` @ `ce3b46a` + C1 fix commits (Cursor)
+- Brief: **C1A** — fix MOB document upload + complete live acceptance journey
+- Branch: `cursor/demo-wp3-onboarding-final` (commit after C1A correction)
 - Worktree: `/Users/sameerkhanna/Developer/BEE-demo-rehearsal`
 - Rollback: `cursor/demo-wp3-wp9-rehearsal` @ `098b05c`
-- Ngrok: `https://nicola-habited-barb.ngrok-free.dev` (unchanged)
-- Stack: left running with `BEE_DEMO_LOGIN=1`, `BEE_MFA_REQUIRED=false`, web 3100, API 8090
+- Ngrok: `https://nicola-habited-barb.ngrok-free.dev` (left running)
+- Stack: `BEE_DEMO_LOGIN=1`, `BEE_MFA_REQUIRED=false`, web **3100**, API **8090**
 
-## C1 outcome (Cursor)
+## C1A outcome (Cursor)
 
 **Done**
 
-- Merge `aeafc7c` into demo final → `ce3b46a` (normal merge; V69–V75 untouched).
-- Runtime prep: `local:up`, `local:reset` + `ensure-runtime-role`, `login-setup apply`, `demo:seed` ×2 (idempotent), `demo:ngrok`.
-- **Blocker fixed:** `scripts/local/ensure-runtime-role.sh` now re-applies V75 manufacturer-onboarding orchestrator `EXECUTE` grants after the blanket revoke (without this, `POST /api/manufacturer-onboarding` returned 503 `BadSqlGrammarException` / permission denied).
-- Ngrok routes verified (200): `/`, `/login`, `/register/manufacturer`, onboarding/director/monitoring, `/app/demo/manufacturer-360`, `/verify` — no redirects to localhost/8180.
-- `npm run demo:wp3-wp9-check`: **21/21 pass**, 0 skipped.
-- `npx tsc --noEmit`: pass.
-- `npm run web:test`: **264/264** pass.
-- `SnlWp03OptimizedManufacturerOnboardingDatabaseTest`: pass (isolated schema).
-- BL-264 recorded (idempotency retry / PayloadKeyGate deferred). BL-261–263 remain open.
+- Upload fix: `ManufacturerOnboardingDocumentRepository.readStateForUpload` (ordinary SELECT); trusted append unchanged; `runtimeDocumentUploadViaTrustedAppendWithoutDirectTableUpdate` proof test.
+- Journey: `scripts/demo/c1-manufacturer-onboarding-journey.cjs` — strict BFF fetch, eight PDFs, `paid` / `fee.amountInr` / receipt, reject + revoke (anomaly→hold→revoke) + primary approve→anomaly→resolve; React field setter for textareas; **25/25 pass**.
+- Evidence: `.local/run/c1-journey-evidence.json` (not committed).
+- Gates: default `mvn test`, `SpringContractTest`, `SnlWp03OptimizedManufacturerOnboardingDatabaseTest`, `npx tsc --noEmit`, `npm run web:test` (264), `web:test:ui` (239), `npm run build`, OpenAPI pin, `demo:wp3-wp9-check` (21/21), `git diff --check 098b05c..HEAD`.
 
-**Not done / deferred to Claude**
+**Not done / notes**
 
-- Full live browser journey (§5–7): `scripts/demo/c1-manufacturer-onboarding-journey.cjs` runs sign-in and seeds draft + document uploads via BFF; **wizard Submit did not reach lifecycle** in automation (director queue empty). Needs manual or script fix (client validation / reload after upload), then Director / Finance / anomaly paths.
-- Remaining §10 gates: full `mvn test`, full `db` suite, `SpringContractTest`, `web:test:ui`, `npm run build`, OpenAPI checksum, `git diff --check` from `098b05c`, optional `local:check`.
-- WP3 **not** marked complete in SNL plan until real applicant → submit → director → observation → anomaly journey passes in UI.
-- No push / no merge to `main`.
+- Full `mvn test -Dgroups=db -Dbee.test.excludedGroups=none`: **589 run, 4 failures + 2 errors** in unrelated classes (RegistrationDatabaseTest, MessagesDatabaseTest, FeeRuleDatabaseTest, SnlWp02bModelForward*); not caused by C1A diff — Claude to triage on merge.
+- BL-261–263 remain open; BL-264 unchanged (deferred).
+- WP3 **optimized onboarding slice** marked accepted in SNL plan; broad WP3 checklist (category, deposit, MCA adapters) still open.
 
 ## Evidence paths
 
-- Pre-integration snapshot: `.local/run/c1-prestore.txt`
-- Journey script (WIP): `scripts/demo/c1-manufacturer-onboarding-journey.cjs`
-- Expected evidence file when green: `.local/run/c1-journey-evidence.json`
+- Journey script: `scripts/demo/c1-manufacturer-onboarding-journey.cjs`
+- Live evidence: `.local/run/c1-journey-evidence.json`

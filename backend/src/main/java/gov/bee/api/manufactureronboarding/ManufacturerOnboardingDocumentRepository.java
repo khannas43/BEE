@@ -21,8 +21,9 @@ public class ManufacturerOnboardingDocumentRepository {
         this.jdbc = jdbc;
     }
 
-    public Optional<String> lockState(UUID applicationId) {
-        return jdbc.query("SELECT state FROM manufacturer_onboarding_application WHERE id = ? FOR NO KEY UPDATE", (rs, i) -> rs.getString(1), applicationId)
+    /** Pre-upload editable-state check only; locking and writes happen in manufacturer_onboarding_trusted_append_document. */
+    public Optional<String> readStateForUpload(UUID applicationId) {
+        return jdbc.query("SELECT state FROM manufacturer_onboarding_application WHERE id = ?", (rs, i) -> rs.getString(1), applicationId)
             .stream().findFirst();
     }
 

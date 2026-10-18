@@ -3506,14 +3506,14 @@ class SpringContractTest {
         fresh.get();
         account("manufacturer", "own-org");
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(ONBOARD));
-        when(manufacturerOnboardingDocumentRepo.lockState(MOB)).thenReturn(Optional.of("draft"));
+        when(manufacturerOnboardingDocumentRepo.readStateForUpload(MOB)).thenReturn(Optional.of("draft"));
         conforms(ONE + "/documents", multipart(base + "/documents").file(new MockMultipartFile("file", "licence.pdf", "application/pdf", MIN_PDF)).with(token("manufacturer")), 200, null);
-        when(manufacturerOnboardingDocumentRepo.lockState(MOB)).thenReturn(Optional.of("director_review"));
+        when(manufacturerOnboardingDocumentRepo.readStateForUpload(MOB)).thenReturn(Optional.of("director_review"));
         conforms(ONE + "/documents", multipart(base + "/documents").file(new MockMultipartFile("file", "licence.pdf", "application/pdf", MIN_PDF)).with(token("manufacturer")), 403, "not_editable");
         when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.empty());
         conforms(ONE + "/documents", multipart(base + "/documents").file(new MockMultipartFile("file", "licence.pdf", "application/pdf", MIN_PDF)).with(token("manufacturer")), 404, "not_found");
         when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(draft));
-        when(manufacturerOnboardingDocumentRepo.lockState(MOB)).thenReturn(Optional.of("draft"));
+        when(manufacturerOnboardingDocumentRepo.readStateForUpload(MOB)).thenReturn(Optional.of("draft"));
         conforms(ONE + "/documents", multipart(base + "/documents").with(token("manufacturer")), 422, "validation_failed");
         when(manufacturerOnboardingRepo.find(MOB)).thenThrow(new DataAccessResourceFailureException("down"));
         conforms(ONE + "/documents", multipart(base + "/documents").file(new MockMultipartFile("file", "licence.pdf", "application/pdf", MIN_PDF)).with(token("manufacturer")), 503, "service_unavailable");

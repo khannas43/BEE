@@ -1,10 +1,10 @@
 # Current Cursor task
 
-**Holder:** claude (ChatGPT review pending), from 18 October 2026.
+**Holder:** cursor, from 18 October 2026.
 
-- Brief: `BRIEF_19C_B1_SNL_WP02C_REGISTRATION_REPEAT_CYCLE_CORRECTIONS.md` — **19C-B1 implemented / ChatGPT review pending** (19C-B not accepted)
-- Worktree: `/Users/sameerkhanna/Developer/BEE-19c-b`
-- Branch: `cursor/snl-wp02c-registration-service-wiring`
-- Base: `main` @ `ae63275` (V73 + 19C-A accepted)
+- Brief: WP3 optimized manufacturer onboarding — **backend vertical slice** (V75, Spring, BFF contract, tests, docs)
+- Worktree: `/Users/sameerkhanna/Developer/BEE-wp3-fast-onboarding`
+- Branch: `cursor/wp3-fast-manufacturer-onboarding-backend`
+- Base: `33dae73` (V74 frozen)
 
-Cursor: do not start 19C-C until review accepts 19C-B1.
+Agent B (UI): `BEE-wp3-fast-onboarding-ui` / `cursor/wp3-fast-manufacturer-onboarding-ui`.

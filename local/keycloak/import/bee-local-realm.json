@@ -650,6 +650,28 @@
       "realmRoles": [
         "finance"
       ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000017",
+      "username": "onboarding.applicant",
+      "email": "onboarding.applicant@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "Onboard",
+      "lastName": "Applicant",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "manufacturer"
+      ]
     }
   ]
 }

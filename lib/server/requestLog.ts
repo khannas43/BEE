@@ -66,7 +66,10 @@ export type WebRoute =
   | "/api/runtime/messages"
   | "/api/runtime/messages/read-all"
   | "/api/runtime/messages/{id}/read"
-  | "/api/runtime/demo";
+  | "/api/runtime/demo"
+  | "/api/runtime/manufacturer-onboarding"
+  | "/api/runtime/manufacturer-onboarding/{id}"
+  | "/api/runtime/manufacturer-onboarding/{id}/submit";
 
 export type SpringRoute =
   | "/actuator/health"
@@ -120,7 +123,15 @@ export type SpringRoute =
   | "/api/messages"
   | "/api/messages/read-all"
   | "/api/messages/{id}/read"
-  | "/api/demo";
+  | "/api/demo"
+  | "/api/manufacturer-onboarding"
+  | "/api/manufacturer-onboarding/{id}"
+  | "/api/manufacturer-onboarding/{id}/submit"
+  | "/api/manufacturer-onboarding/{id}/director-decision"
+  | "/api/manufacturer-onboarding/{id}/anomalies"
+  | "/api/manufacturer-onboarding/{id}/anomaly-resolution"
+  | "/api/manufacturer-onboarding/{id}/observation/close"
+  | "/api/manufacturer-onboarding/{id}/documents";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
 

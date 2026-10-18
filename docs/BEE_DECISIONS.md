@@ -265,6 +265,9 @@ Each decision below gives what the system does today, the realistic options, a r
 | A18 | Portal notifications authoritative; email when provider approved; SMS for high-value events | §3.4 portal communication (pp. 24–25) | Provisional — owner confirmation pending |
 | A19 | Uploaded signed/stamped documents suffice until BEE confirms eSign/digital signature | §3, §3.1 (pp. 22–23) | Provisional — owner confirmation pending |
 | A20 | Configurable registration ID sequences; model IDs stay `BEE/<category>/<year>/<number>` until BEE supplies format | §3.1.1 permittee number (p. 22) | Provisional — owner confirmation pending |
+| A27 | Optimized manufacturer onboarding: director approval enters **15 calendar days** observation before permittee becomes **active** | Derived from Table 2 observation pattern; local slice | Provisional — owner confirmation pending |
+| A28 | Submit runs **simulated payment auto-settle** and automated document checks in one orchestrated step | Assumption A16; WP3 fast path | Provisional — owner confirmation pending |
+| A29 | `organisation.permittee_lifecycle` gates new model-application submit when **on_hold** or **revoked** | Least privilege for permittee status | Provisional — owner confirmation pending |
 
 **Policy conflicts recorded in WP01 (not decisions):** discrepancy day counts (A08); entity approval roles silent (A02–A03); portal `agency` registration kind not described as such in the manual.
 

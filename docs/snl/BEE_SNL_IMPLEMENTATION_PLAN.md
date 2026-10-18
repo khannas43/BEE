@@ -310,8 +310,8 @@ At the end of each development session, update the package status, progress, com
 
 | Tracking field | Current value |
 |---|---|
-| Status | Not started |
-| Progress | 0% |
+| Status | In progress (backend slice) |
+| Progress | 15% |
 | Target release | R2 |
 | Depends on | WP2 and WP5 payment foundation |
 | Manual references | Sections 3.1.1, 3.1.2, 3.4, 3.10, 4.1 and 4.2; Annexures 1 and 2 |

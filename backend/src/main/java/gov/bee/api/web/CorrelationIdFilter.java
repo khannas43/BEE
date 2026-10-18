@@ -104,6 +104,14 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             return "/api/registrations/{id}/documents/{documentId}/versions/{versionId}/content";
         }
         if (path.matches("/api/registrations/[^/]+")) return "/api/registrations/{id}";
+        if (path.equals("/api/manufacturer-onboarding")) return "/api/manufacturer-onboarding";
+        if (path.matches("/api/manufacturer-onboarding/[^/]+/submit")) return "/api/manufacturer-onboarding/{id}/submit";
+        if (path.matches("/api/manufacturer-onboarding/[^/]+/director-decision")) return "/api/manufacturer-onboarding/{id}/director-decision";
+        if (path.matches("/api/manufacturer-onboarding/[^/]+/anomalies")) return "/api/manufacturer-onboarding/{id}/anomalies";
+        if (path.matches("/api/manufacturer-onboarding/[^/]+/anomaly-resolution")) return "/api/manufacturer-onboarding/{id}/anomaly-resolution";
+        if (path.matches("/api/manufacturer-onboarding/[^/]+/observation/close")) return "/api/manufacturer-onboarding/{id}/observation/close";
+        if (path.matches("/api/manufacturer-onboarding/[^/]+/documents")) return "/api/manufacturer-onboarding/{id}/documents";
+        if (path.matches("/api/manufacturer-onboarding/[^/]+")) return "/api/manufacturer-onboarding/{id}";
         if (path.startsWith("/api/demo/")) return "/api/demo";
         if (path.equals("/api/notifications")) return "/api/notifications";
         if (path.equals("/api/notifications/read-all")) return "/api/notifications/read-all";

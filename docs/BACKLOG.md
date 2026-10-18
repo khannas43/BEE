@@ -300,3 +300,6 @@ Last updated: 3 October 2026 (local:check preflight, stale lock, memory sampling
 | BL-257 | **WP2B:** 19A–19B-2, 19C-0 and V73+19C-A accepted at `ae63275`; **19C-B1 implemented / ChatGPT review pending** (V74 latest-return read, repeat-cycle service proofs; 19C-B not accepted). Remaining: 19C-C, 19D-A–C; supervisor queue and 60-day job deferred (BL-135, BL-253) | Brief 19C-C | WP2 | open |
 | BL-254 | **Legal-entity master** and Annexure 1-A company/manufacturing-premises fields not on registration applications | SNL WP01 field dictionary | WP3 | open |
 | BL-255 | Manual **discrepancy deadline conflict** (7 vs 12 vs 15 working days, §3.10) needs BEE resolution; build uses provisional **A08** | SNL WP01 baseline | owner/BEE policy | open |
+| BL-261 | WP3 optimized onboarding: **production identity** verification (CIN/GSTIN, director KYC) not wired; local simulated checks only | V75 manufacturer onboarding | WP3 production hardening | open |
+| BL-262 | WP3 optimized onboarding: **real payment gateway** and Finance exception queue; submit uses simulated auto-settle only | V75; Assumption A16 | WP5 + WP3 | open |
+| BL-263 | WP3 optimized onboarding: **external permittee registry** sync and **observation-period scheduler** (auto-close at day 15) deferred | V75 orchestrators callable via API | WP3 ops / WP8 | open |

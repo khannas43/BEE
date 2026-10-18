@@ -1,6 +1,6 @@
 # SNL WP02B — return, applicant response and review-task wiring
 
-**Status:** Umbrella design recorded; implementation split into Briefs 19A–19D. ChatGPT acceptance pending.
+**Status:** Umbrella design recorded; Brief 19A accepted; Briefs 19B–19D remain.
 **Depends on:** WP2A merge `80b1da7`, `WorkflowFoundationRepository`, V69 command functions.
 **Migration sequence:** V70 starts the policy and generic notification foundation; later migrations wire model and registration journeys. V69 remains unchanged.
 
@@ -8,7 +8,7 @@
 
 | Slice | Scope | Status |
 | --- | --- | --- |
-| 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Done (Brief 19A) |
+| 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Accepted (`64accd5` plus acceptance corrections) |
 | 19B | Model return/resubmit/response wiring | Planned |
 | 19C | Registration return/resubmit/response wiring | Planned |
 | 19D | Common read projection, consolidated concurrency/rollback proof and plan evidence | Planned |
@@ -42,14 +42,16 @@ V70 seeds `workflow_sla_policy_version` key `snl_return_response` version 1, eff
 
 | Object | Role |
 | --- | --- |
-| `workflow_sla_policy_version` row `snl_return_response` v1 | Idempotent seed; sole source of the 7-day limit |
+| `workflow_sla_policy_version` row `snl_return_response` v1 | Idempotent seed; sole source of the 7-day limit; migration refuses a conflicting pre-existing v1 row |
 | `SnlReturnResponsePolicyRepository` | Exactly-one applicable version + due calculation |
 | `notification.subject_kind` / `subject_id` | Polymorphic subject; model rows keep `application_id = subject_id`; registration rows have `application_id` null |
-| `notification_command` + `notification_foundation_deliver` | Replay-safe fan-out; payload hash covers subject, kind and message suffix; advisory lock on `command_id` |
+| `notification_command` + `notification_foundation_deliver` | Replay-safe fan-out; payload hash covers subject, kind and message suffix; advisory lock on `command_id`; `delivered_at` makes a zero-recipient result final |
 | `app_disposable_registration_cleanup` | Maint-only cleanup for throwaway registration tests |
 | `NotificationCommandRepository` | Java entry to `notification_foundation_deliver` only |
 
 `NotificationRepository.newest()` joins model or registration for `reference` and returns `COALESCE(application_id, subject_id)` as `applicationId` so the existing JSON shape is unchanged. Model V39 triggers populate subject columns; journey wiring in 19B–19C will call the command boundary instead of ad hoc inserts.
+
+Acceptance re-ran the complete foundation gates: 160 default back-end tests, 299 database tests, 251 web tests and TypeScript checking all passed. The additional database proof fixes the zero-recipient edge case: later membership changes cannot turn a completed no-delivery command into a new delivery.
 
 ## Pre-migration applications
 

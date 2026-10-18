@@ -177,6 +177,27 @@ class SnlWp02bFoundationDatabaseTest {
     }
 
     @Test
+    void zeroRecipientReplayRemainsFinalAfterMembershipBecomesEligible() {
+        UUID regId = UUID.randomUUID();
+        owner.update(
+            "INSERT INTO registration_application (id, reference, kind, organisation_id, brand_name, state, version) VALUES (?, ?, 'brand', ?, ?, 'draft', 0)",
+            regId, "WP02B-ZERO-" + TAG, NOVA_ORG, "Zero " + TAG);
+        UUID commandId = UUID.randomUUID();
+        var command = new NotificationCommandRepository.DeliverCommand(
+            WorkflowFoundationRepository.SUBJECT_REGISTRATION, regId, "returned", "zero recipient replay");
+        owner.update("UPDATE organisation_membership SET active = false WHERE organisation_id = ? AND user_id = ?", NOVA_ORG, NOVA_USER);
+        try {
+            assertEquals(0, commandRepo.deliver(command, commandId, NOVA_USER).recipientCount());
+        } finally {
+            owner.update("UPDATE organisation_membership SET active = true WHERE organisation_id = ? AND user_id = ?", NOVA_ORG, NOVA_USER);
+        }
+
+        assertEquals(0, commandRepo.deliver(command, commandId, NOVA_USER).recipientCount());
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM notification WHERE subject_id = ?", Integer.class, regId));
+        assertNotNull(owner.queryForObject("SELECT delivered_at FROM notification_command WHERE command_id = ?", java.sql.Timestamp.class, commandId));
+    }
+
+    @Test
     void replayAndConcurrentIdenticalCommandsDeliverOncePerRecipient() throws Exception {
         UUID regId = UUID.randomUUID();
         owner.update(

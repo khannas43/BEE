@@ -1,10 +1,24 @@
 -- SNL WP02B-1 (Brief 19A): provisional snl_return_response policy and replay-safe polymorphic in-portal notifications.
 
-INSERT INTO workflow_sla_policy_version (policy_key, version, effective_from, effective_to, calendar_key, working_day_limit, pause_while_applicant, note)
-SELECT 'snl_return_response', 1, DATE '2026-01-01', NULL, 'india_bee_default', 7, true, 'provisional A08 / BL-255; not confirmed by BEE'
-WHERE NOT EXISTS (
-  SELECT 1 FROM workflow_sla_policy_version WHERE policy_key = 'snl_return_response' AND version = 1
-);
+DO $$
+DECLARE
+  expected_note constant text := 'provisional A08 / BL-255; not confirmed by BEE';
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM workflow_sla_policy_version
+     WHERE policy_key = 'snl_return_response' AND version = 1
+       AND (effective_from, effective_to, calendar_key, working_day_limit, pause_while_applicant, note)
+           IS DISTINCT FROM (DATE '2026-01-01', NULL::date, 'india_bee_default', 7, true, expected_note)
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'snl_return_response_policy_seed_conflict';
+  END IF;
+  INSERT INTO workflow_sla_policy_version
+    (policy_key, version, effective_from, effective_to, calendar_key, working_day_limit, pause_while_applicant, note)
+  SELECT 'snl_return_response', 1, DATE '2026-01-01', NULL, 'india_bee_default', 7, true, expected_note
+  WHERE NOT EXISTS (
+    SELECT 1 FROM workflow_sla_policy_version WHERE policy_key = 'snl_return_response' AND version = 1
+  );
+END $$;
 
 ALTER TABLE notification ADD COLUMN subject_kind text;
 ALTER TABLE notification ADD COLUMN subject_id uuid;
@@ -77,13 +91,14 @@ CREATE TABLE notification_command (
   message              text NOT NULL CHECK (char_length(message) BETWEEN 1 AND 700),
   actor_account_id     uuid NOT NULL REFERENCES user_account (id),
   recipient_count      integer NOT NULL CHECK (recipient_count >= 0),
+  delivered_at         timestamptz,
   created_at           timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE FUNCTION notification_command_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
-    IF OLD.recipient_count = 0 AND NEW.recipient_count >= 0
+    IF OLD.delivered_at IS NULL AND NEW.delivered_at IS NOT NULL AND NEW.delivered_at >= OLD.created_at
        AND (NEW.command_id, NEW.payload_hash, NEW.subject_kind, NEW.subject_id, NEW.kind, NEW.message, NEW.actor_account_id, NEW.created_at)
            IS NOT DISTINCT FROM (OLD.command_id, OLD.payload_hash, OLD.subject_kind, OLD.subject_id, OLD.kind, OLD.message, OLD.actor_account_id, OLD.created_at) THEN
       RETURN NEW;
@@ -183,7 +198,7 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'notification_command_create_race_retry';
   END IF;
-  IF v_row.recipient_count > 0 THEN
+  IF v_row.delivered_at IS NOT NULL THEN
     IF NOT notification_idempotency_payload_matches(v_row, p_payload_hash, p_subject_kind, p_subject_id, p_kind, v_full) THEN
       RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'notification_idempotency_conflict';
     END IF;
@@ -193,7 +208,7 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'notification_idempotency_conflict';
   END IF;
   v_count := notification_foundation_fan_out(p_subject_kind, p_subject_id, p_kind, v_full);
-  UPDATE notification_command SET recipient_count = v_count WHERE command_id = p_command_id;
+  UPDATE notification_command SET recipient_count = v_count, delivered_at = now() WHERE command_id = p_command_id;
   RETURN v_count;
 END $$;
 

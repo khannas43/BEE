@@ -18,8 +18,6 @@ public class NotificationCommandRepository {
     public record DeliverResult(int recipientCount) {
     }
 
-    static final String MODEL_RESUBMIT_SUFFIX = "was resubmitted by the applicant.";
-
     private final JdbcTemplate jdbc;
 
     public NotificationCommandRepository(JdbcTemplate jdbc) {
@@ -54,15 +52,16 @@ public class NotificationCommandRepository {
         return new DeliverResult(count == null ? 0 : count);
     }
 
-    public DeliverResult deliverModelResubmitOfficer(UUID commandId, UUID applicationId, UUID returnId, String resumedStage, UUID actorAccountId) {
+    public DeliverResult deliverModelResubmitOfficer(UUID commandId, UUID applicationId, UUID returnId, UUID resubmissionId, String resumedStage,
+                                                   UUID actorAccountId) {
         Integer count = jdbc.queryForObject(
             "SELECT model_return_response_officer_resubmit_notify(?, ?, ?, ?, ?, ?)",
             Integer.class,
             commandId,
             applicationId,
             returnId,
+            resubmissionId,
             resumedStage,
-            MODEL_RESUBMIT_SUFFIX,
             actorAccountId);
         return new DeliverResult(count == null ? 0 : count);
     }

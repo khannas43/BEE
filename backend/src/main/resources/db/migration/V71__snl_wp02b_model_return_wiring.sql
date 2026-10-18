@@ -11,6 +11,23 @@ CREATE TABLE model_return_response_cycle (
 );
 CREATE INDEX model_return_response_cycle_task ON model_return_response_cycle (task_id);
 
+CREATE FUNCTION model_return_response_cycle_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.review_stage IS DISTINCT FROM OLD.review_stage
+       OR NEW.task_id IS DISTINCT FROM OLD.task_id
+       OR NEW.discrepancy_id IS DISTINCT FROM OLD.discrepancy_id
+       OR NEW.application_id IS DISTINCT FROM OLD.application_id THEN
+      RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'model_return_response_cycle_identity_immutable';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER model_return_response_cycle_identity_immutable_row
+  BEFORE UPDATE ON model_return_response_cycle
+  FOR EACH ROW EXECUTE FUNCTION model_return_response_cycle_identity_guard();
+
 CREATE TABLE model_return_response_wiring_evidence (
   command_id       uuid PRIMARY KEY,
   application_id   uuid NOT NULL REFERENCES model_application (id),
@@ -93,8 +110,8 @@ CREATE FUNCTION model_return_response_officer_resubmit_notify(
   p_command_id uuid,
   p_application_id uuid,
   p_return_id uuid,
+  p_resubmission_id uuid,
   p_resumed_stage text,
-  p_message_suffix text,
   p_actor_account uuid
 ) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE
@@ -106,16 +123,29 @@ DECLARE
   v_full text;
   v_hash char(64);
 BEGIN
-  IF p_command_id IS NULL THEN
+  IF p_command_id IS NULL OR p_resubmission_id IS NULL THEN
     RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'notification_command_id_hash_required';
   END IF;
   PERFORM workflow_validate_subject(v_subject_kind, p_application_id);
-  IF p_message_suffix IS DISTINCT FROM v_suffix THEN
-    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_notify_suffix_invalid';
+  IF NOT EXISTS (
+    SELECT 1 FROM model_application_resubmission s
+     WHERE s.id = p_resubmission_id
+       AND s.application_id = p_application_id
+       AND s.return_id = p_return_id
+       AND s.resumed_state = p_resumed_stage
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_resubmission_mismatch';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM model_return_response_cycle c
+     JOIN model_application_return r ON r.application_id = c.application_id
+     WHERE c.application_id = p_application_id AND r.id = p_return_id
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_return_cycle_mismatch';
   END IF;
   v_recipient := model_return_response_resolve_officer(p_application_id, p_return_id, p_resumed_stage);
   v_hash := encode(
-    sha256(convert_to(v_subject_kind || '|' || p_application_id::text || '|' || v_kind || '|' || v_suffix || '|' || v_recipient::text, 'UTF8')),
+    sha256(convert_to(v_subject_kind || '|' || p_application_id::text || '|' || v_kind || '|' || p_return_id::text || '|' || p_resumed_stage || '|' || v_recipient::text, 'UTF8')),
     'hex');
   v_full := notification_foundation_subject_message(v_subject_kind, p_application_id, v_suffix);
   PERFORM pg_advisory_xact_lock(hashtextextended(p_command_id::text, 0));
@@ -178,10 +208,22 @@ END $$;
 
 CREATE FUNCTION model_return_response_update_last_resumed_stage(
   p_application_id uuid,
+  p_resubmission_id uuid,
   p_stage text
 ) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 BEGIN
   PERFORM workflow_validate_subject('model_application', p_application_id);
+  IF p_stage NOT IN (
+    'bee_scrutiny', 'iame_scrutiny', 'reviewer_scrutiny', 'rating', 'director_review', 'secretary_approval'
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_resumed_stage_invalid';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM model_application_resubmission s
+     WHERE s.id = p_resubmission_id AND s.application_id = p_application_id AND s.resumed_state = p_stage
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_resubmission_stage_mismatch';
+  END IF;
   UPDATE model_return_response_cycle SET last_resumed_stage = p_stage WHERE application_id = p_application_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_cycle_missing';
@@ -257,12 +299,13 @@ BEGIN
        AND nc.subject_kind = 'model_application'
        AND nc.subject_id = p_application_id
        AND nc.kind = 'returned'
+       AND position(p_reason in nc.message) > 0
   ) THEN
     RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_foundation_notify_undelivered';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM model_application_transition_event e
-     WHERE e.id = p_transition_event_id AND e.application_id = p_application_id
+     WHERE e.id = p_transition_event_id AND e.application_id = p_application_id AND e.from_state = p_from_state
   ) THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_transition_mismatch';
   END IF;
@@ -284,13 +327,171 @@ BEGIN
   RETURN v_id;
 END $$;
 
+CREATE FUNCTION model_return_response_orchestrate_wired_return(
+  p_return_id uuid,
+  p_application_id uuid,
+  p_transition_event_id uuid,
+  p_from_stage text,
+  p_reason text,
+  p_returned_by uuid,
+  p_returned_at timestamptz,
+  p_actor_role text,
+  p_notify_command_id uuid,
+  p_notify_payload_hash char(64),
+  p_notify_message_suffix text,
+  p_task_command_id uuid,
+  p_task_payload_hash char(64),
+  p_task_owner_role text,
+  p_task_owner_account uuid,
+  p_due_at timestamptz,
+  p_policy_version_id uuid,
+  p_wiring_command_id uuid,
+  p_wiring_payload_hash char(64),
+  p_actor_account uuid
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_prior model_return_response_wiring_evidence;
+  v_cycle model_return_response_cycle;
+  v_task_id uuid;
+  v_discrepancy_id uuid;
+  v_clock_id uuid;
+  v_status text;
+  v_seq integer;
+BEGIN
+  PERFORM workflow_validate_subject('model_application', p_application_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_wiring_command_id::text, 0));
+  SELECT * INTO v_prior FROM model_return_response_wiring_evidence WHERE command_id = p_wiring_command_id;
+  IF FOUND THEN
+    IF v_prior.payload_hash IS DISTINCT FROM p_wiring_payload_hash
+       OR v_prior.application_id IS DISTINCT FROM p_application_id
+       OR v_prior.purpose IS DISTINCT FROM 'model_return_wiring' THEN
+      RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'model_return_response_wiring_idempotency_conflict';
+    END IF;
+    RETURN p_return_id;
+  END IF;
+  PERFORM notification_foundation_deliver(
+    p_notify_command_id, p_notify_payload_hash, 'model_application', p_application_id, 'returned', p_notify_message_suffix, p_actor_account);
+  PERFORM model_return_response_insert_return(
+    p_return_id, p_application_id, p_transition_event_id, p_from_stage, p_reason, p_returned_by, p_notify_command_id);
+  SELECT * INTO v_cycle FROM model_return_response_cycle WHERE application_id = p_application_id;
+  IF NOT FOUND THEN
+    v_task_id := workflow_foundation_create_task(
+      'model_application', p_application_id, p_from_stage, 'review', p_task_owner_role, p_task_owner_account,
+      p_task_command_id, p_task_payload_hash, p_due_at, p_policy_version_id, p_returned_at, p_actor_account, p_actor_role);
+    INSERT INTO workflow_discrepancy (subject_kind, subject_id, line_code, summary, opened_by)
+    VALUES ('model_application', p_application_id, 'return_response', p_reason, p_returned_by)
+    RETURNING id INTO v_discrepancy_id;
+    PERFORM model_return_response_link_cycle(p_application_id, p_from_stage, v_task_id, v_discrepancy_id);
+    SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_task_id;
+    PERFORM workflow_foundation_append_clock_event(v_clock_id, 'start', 'bureau', p_returned_at, NULL);
+    PERFORM workflow_foundation_append_clock_event(v_clock_id, 'pause', 'applicant', p_returned_at + interval '1 millisecond', NULL);
+    IF p_reason = '__INJECT_FAIL_AFTER_TASK__' THEN
+      RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'model_return_response_test_inject_failure';
+    END IF;
+  ELSE
+    SELECT status INTO v_status FROM workflow_discrepancy WHERE id = v_cycle.discrepancy_id;
+    IF v_status = 'awaiting_review' THEN
+      SELECT r.response_seq INTO v_seq
+        FROM workflow_discrepancy_response r
+        LEFT JOIN workflow_discrepancy_disposition d ON d.discrepancy_id = r.discrepancy_id AND d.response_seq = r.response_seq
+       WHERE r.discrepancy_id = v_cycle.discrepancy_id AND d.id IS NULL
+       ORDER BY r.response_seq DESC LIMIT 1;
+      IF v_seq IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_unexpected_discrepancy_status';
+      END IF;
+      PERFORM workflow_foundation_discrepancy_dispose(v_cycle.discrepancy_id, v_seq, 'needs_more', p_reason, p_returned_by);
+    ELSIF v_status NOT IN ('needs_more', 'open') THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_unexpected_discrepancy_status';
+    END IF;
+    SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_cycle.task_id;
+    PERFORM workflow_foundation_append_clock_event(v_clock_id, 'pause', 'applicant', p_returned_at + interval '1 millisecond', NULL);
+  END IF;
+  PERFORM model_return_response_record_wiring_evidence(p_wiring_command_id, p_application_id, 'model_return_wiring', p_wiring_payload_hash);
+  RETURN p_return_id;
+END $$;
+
+CREATE FUNCTION model_return_response_orchestrate_resubmit(
+  p_application_id uuid,
+  p_return_id uuid,
+  p_resubmission_id uuid,
+  p_returned_from_stage text,
+  p_returned_at timestamptz,
+  p_return_reason text,
+  p_resumed_stage text,
+  p_response_body text,
+  p_resubmitted_at timestamptz,
+  p_responded_by uuid,
+  p_responded_role text,
+  p_wiring_command_id uuid,
+  p_wiring_payload_hash char(64),
+  p_notify_command_id uuid,
+  p_task_command_id uuid,
+  p_task_payload_hash char(64),
+  p_task_owner_role text,
+  p_task_owner_account uuid,
+  p_due_at timestamptz,
+  p_policy_version_id uuid,
+  p_actor_account uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_prior model_return_response_wiring_evidence;
+  v_cycle model_return_response_cycle;
+  v_task_id uuid;
+  v_discrepancy_id uuid;
+  v_clock_id uuid;
+  v_notify_hash char(64);
+  v_recipient uuid;
+BEGIN
+  PERFORM workflow_validate_subject('model_application', p_application_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_wiring_command_id::text, 0));
+  SELECT * INTO v_prior FROM model_return_response_wiring_evidence WHERE command_id = p_wiring_command_id;
+  IF FOUND THEN
+    IF v_prior.payload_hash IS DISTINCT FROM p_wiring_payload_hash
+       OR v_prior.application_id IS DISTINCT FROM p_application_id
+       OR v_prior.purpose IS DISTINCT FROM 'model_resubmit_wiring' THEN
+      RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'model_return_response_wiring_idempotency_conflict';
+    END IF;
+    RETURN;
+  END IF;
+  SELECT * INTO v_cycle FROM model_return_response_cycle WHERE application_id = p_application_id;
+  IF NOT FOUND THEN
+    v_task_id := workflow_foundation_create_task(
+      'model_application', p_application_id, p_returned_from_stage, 'review', p_task_owner_role, p_task_owner_account,
+      p_task_command_id, p_task_payload_hash, p_due_at, p_policy_version_id, p_returned_at, p_actor_account, p_responded_role);
+    INSERT INTO workflow_discrepancy (subject_kind, subject_id, line_code, summary, opened_by)
+    VALUES ('model_application', p_application_id, 'return_response', p_return_reason, p_task_owner_account)
+    RETURNING id INTO v_discrepancy_id;
+    PERFORM model_return_response_link_cycle(p_application_id, p_returned_from_stage, v_task_id, v_discrepancy_id);
+    SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_task_id;
+    PERFORM workflow_foundation_append_clock_event(v_clock_id, 'start', 'bureau', p_returned_at, NULL);
+    PERFORM workflow_foundation_append_clock_event(v_clock_id, 'pause', 'applicant', p_returned_at + interval '1 millisecond', NULL);
+    SELECT * INTO v_cycle FROM model_return_response_cycle WHERE application_id = p_application_id;
+  END IF;
+  PERFORM model_return_response_update_last_resumed_stage(p_application_id, p_resubmission_id, p_resumed_stage);
+  PERFORM model_return_response_append_response(v_cycle.discrepancy_id, p_response_body, p_responded_by);
+  SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_cycle.task_id;
+  PERFORM workflow_foundation_append_clock_event(v_clock_id, 'resume', 'applicant', p_resubmitted_at + interval '1 millisecond', NULL);
+  PERFORM model_return_response_officer_resubmit_notify(
+    p_notify_command_id, p_application_id, p_return_id, p_resubmission_id, p_resumed_stage, p_actor_account);
+  v_recipient := model_return_response_resolve_officer(p_application_id, p_return_id, p_resumed_stage);
+  v_notify_hash := encode(
+    sha256(convert_to('model_application|' || p_application_id::text || '|applicant_resubmitted|' || p_return_id::text || '|' || p_resumed_stage || '|' || v_recipient::text, 'UTF8')),
+    'hex');
+  PERFORM model_return_response_record_wiring_evidence(p_wiring_command_id, p_application_id, 'model_resubmit_wiring', p_wiring_payload_hash);
+  PERFORM model_return_response_record_wiring_evidence(p_notify_command_id, p_application_id, 'model_resubmit_notify', v_notify_hash);
+END $$;
+
 REVOKE ALL ON FUNCTION model_return_response_resolve_officer(uuid, uuid, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION model_return_response_officer_resubmit_notify(uuid, uuid, uuid, text, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_officer_resubmit_notify(uuid, uuid, uuid, uuid, text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION model_return_response_link_cycle(uuid, text, uuid, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION model_return_response_update_last_resumed_stage(uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_update_last_resumed_stage(uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION model_return_response_record_wiring_evidence(uuid, uuid, text, char(64)) FROM PUBLIC;
 REVOKE ALL ON FUNCTION model_return_response_append_response(uuid, text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION model_return_response_insert_return(uuid, uuid, uuid, text, text, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_orchestrate_wired_return(
+  uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid, char(64), uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_orchestrate_resubmit(
+  uuid, uuid, uuid, text, timestamptz, text, text, text, timestamptz, uuid, text, uuid, char(64), uuid, uuid, char(64), text, uuid, timestamptz, uuid, uuid) FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION workflow_block_subject_delete() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -402,9 +603,11 @@ DECLARE
 BEGIN
   EXECUTE format('ALTER FUNCTION %I.notify_on_return() SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_resolve_officer(uuid, uuid, text) SET search_path = %I, pg_temp', home_schema, home_schema);
-  EXECUTE format('ALTER FUNCTION %I.model_return_response_officer_resubmit_notify(uuid, uuid, uuid, text, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_officer_resubmit_notify(uuid, uuid, uuid, uuid, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_update_last_resumed_stage(uuid, uuid, text) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_orchestrate_wired_return(uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid, char(64), uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_orchestrate_resubmit(uuid, uuid, uuid, text, timestamptz, text, text, text, timestamptz, uuid, text, uuid, char(64), uuid, uuid, char(64), text, uuid, timestamptz, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_link_cycle(uuid, text, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
-  EXECUTE format('ALTER FUNCTION %I.model_return_response_update_last_resumed_stage(uuid, text) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_record_wiring_evidence(uuid, uuid, text, char(64)) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_append_response(uuid, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_insert_return(uuid, uuid, uuid, text, text, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
@@ -420,11 +623,7 @@ BEGIN
     EXECUTE format('GRANT SELECT ON %I.model_return_response_cycle TO bee_runtime', home_schema);
     EXECUTE format('GRANT SELECT ON %I.model_return_response_wiring_evidence TO bee_runtime', home_schema);
     EXECUTE format('REVOKE INSERT ON %I.model_application_return FROM bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_link_cycle(uuid, text, uuid, uuid) TO bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_update_last_resumed_stage(uuid, text) TO bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_record_wiring_evidence(uuid, uuid, text, char(64)) TO bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_officer_resubmit_notify(uuid, uuid, uuid, text, text, uuid) TO bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_append_response(uuid, text, uuid) TO bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_insert_return(uuid, uuid, uuid, text, text, uuid, uuid) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_orchestrate_wired_return(uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid, char(64), uuid) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_orchestrate_resubmit(uuid, uuid, uuid, text, timestamptz, text, text, text, timestamptz, uuid, text, uuid, char(64), uuid, uuid, char(64), text, uuid, timestamptz, uuid, uuid) TO bee_runtime', home_schema);
   END IF;
 END $$;

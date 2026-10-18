@@ -1525,9 +1525,7 @@ class SpringContractTest {
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
         when(returnRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of());
         when(returnRepo.transitionToReturned(any(), anyInt(), any(), any(), any())).thenReturn(transOk);
-        when(returnRepo.insertFoundationReturn(any(), any(), any(), any(), any(), any(), any())).thenReturn(done.returnId());
-        when(returnWiring.deliverApplicantReturnBeforeInsert(any(), any(), any(), any(), any())).thenReturn(UUID.randomUUID());
-        doNothing().when(returnWiring).afterReturn(any(), any(), any(), any(), any(), any(), any(), any());
+        doNothing().when(returnWiring).completeWiredReturn(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         // Each stage owner returns from its own stage, and the receipt names the stage it came from.
         record Owner(String role, String scope, String state, Set<String> assigned) {
@@ -2430,7 +2428,8 @@ class SpringContractTest {
         String path = "/api/model-applications/" + NOVA_APP + "/resubmit";
         String ok = "{\"version\":5,\"note\":\"Corrected the laboratory name.\"}";
         var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
-        var done = new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.RESUBMITTED, 6, Instant.parse("2026-10-04T10:00:00Z"));
+        var done = new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.RESUBMITTED, 6,
+            Instant.parse("2026-10-04T10:00:00Z"), UUID.randomUUID());
         var openIame = new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "iame_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1,
             "reason", Instant.parse("2026-10-04T09:00:00Z"));
 
@@ -2448,7 +2447,7 @@ class SpringContractTest {
         when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(openIame));
         when(resubmitRepo.ratingInputsChanged(any(), any())).thenReturn(false);
         when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(done);
-        doNothing().when(returnWiring).afterResubmit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        doNothing().when(returnWiring).afterResubmit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         // Back to the stage that returned it; and through rating again when a rating input changed after the rating existed.
         var back = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
@@ -2482,7 +2481,7 @@ class SpringContractTest {
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
         conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":5", "\"version\":4")), 409, "version_conflict");
         when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(
-            new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.STALE, 0, null));
+            new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.STALE, 0, null, null));
         conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
         when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(done);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));

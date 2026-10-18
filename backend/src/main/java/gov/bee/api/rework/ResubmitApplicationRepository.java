@@ -25,9 +25,9 @@ public class ResubmitApplicationRepository {
 
     public enum Outcome { RESUBMITTED, STALE }
 
-    public record Result(Outcome outcome, int versionAfter, Instant resubmittedAt) {
+    public record Result(Outcome outcome, int versionAfter, Instant resubmittedAt, UUID resubmissionId) {
         static Result of(Outcome outcome) {
-            return new Result(outcome, 0, null);
+            return new Result(outcome, 0, null, null);
         }
     }
 
@@ -85,10 +85,11 @@ public class ResubmitApplicationRepository {
             "INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING occurred_at",
             Timestamp.class, eventId, applicationId, ACTION, FROM_STATE, resumedState, actorAccountId, actorRole, versionAfter);
+        UUID resubmissionId = UUID.randomUUID();
         jdbc.update(
             "INSERT INTO model_application_resubmission (id, application_id, return_id, transition_event_id, resumed_state, rating_superseded, note, "
                 + "resubmitted_by_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            UUID.randomUUID(), applicationId, returnId, eventId, resumedState, ratingSuperseded, note, actorAccountId);
-        return new Result(Outcome.RESUBMITTED, versionAfter, at.toInstant());
+            resubmissionId, applicationId, returnId, eventId, resumedState, ratingSuperseded, note, actorAccountId);
+        return new Result(Outcome.RESUBMITTED, versionAfter, at.toInstant(), resubmissionId);
     }
 }

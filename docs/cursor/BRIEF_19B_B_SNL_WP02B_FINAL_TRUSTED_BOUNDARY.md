@@ -167,4 +167,3 @@ Keep BL-257 and the WP2 dashboard accurate.
 ## Handback
 
 Run `/bee-handback`. Resolve sections 1–7 separately. Report final V71 functions/grants, transaction boundary, all named tests and full pass counts, commit hash, and only the permitted 19B-2/19C–19D deferrals.
-

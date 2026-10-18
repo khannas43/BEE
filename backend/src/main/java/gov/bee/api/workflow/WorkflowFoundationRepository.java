@@ -124,7 +124,7 @@ public class WorkflowFoundationRepository {
         throw new IllegalStateException("workflow_command_create_exhausted");
     }
 
-    static boolean isSqlMessage(DataAccessException ex, String fragment) {
+    public static boolean isSqlMessage(DataAccessException ex, String fragment) {
         for (Throwable t = ex; t != null; t = t.getCause()) {
             if (t.getMessage() != null && t.getMessage().contains(fragment)) {
                 return true;

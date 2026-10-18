@@ -13,8 +13,11 @@ import gov.bee.api.identity.Caller;
 import gov.bee.api.identity.IdentityRepository;
 import gov.bee.api.snl.WorkflowReturnResponseWiring;
 import gov.bee.api.web.ApiErrors;
+import gov.bee.api.workflow.WorkflowFoundationRepository;
 import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.security.MessageDigest;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -124,12 +127,24 @@ public class ResubmitApplicationService {
                 idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
                 return error(HttpStatus.CONFLICT, "version_conflict");
             }
-            returnWiring.afterResubmit(appId, open.get().id(), open.get().returnedFromState(), open.get().returnedAt(), open.get().reason(), resumedState,
-                input.get().note().orElse(null), done.resubmittedAt(), caller.accountId(), actorRole(caller), idempotencyKey);
+            returnWiring.afterResubmit(appId, open.get().id(), done.resubmissionId(), open.get().returnedFromState(), open.get().returnedAt(), open.get().reason(),
+                resumedState, input.get().note().orElse(null), done.resubmittedAt(), caller.accountId(), actorRole(caller), idempotencyKey);
         } catch (WorkflowIdempotencyConflictException ex) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+        } catch (DataAccessException ex) {
+            if (ex instanceof DataAccessResourceFailureException) {
+                throw ex;
+            }
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            if (WorkflowFoundationRepository.isSqlMessage(ex, "model_return_officer_ambiguous")
+                || WorkflowFoundationRepository.isSqlMessage(ex, "notification_recipient_inactive")
+                || WorkflowFoundationRepository.isSqlMessage(ex, "model_return_response_resubmission_mismatch")) {
+                return error(HttpStatus.CONFLICT, "assignee_unavailable");
+            }
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            throw ex;
         } catch (IllegalStateException ex) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();

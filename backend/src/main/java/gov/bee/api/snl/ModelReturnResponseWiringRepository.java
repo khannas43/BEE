@@ -1,5 +1,6 @@
 package gov.bee.api.snl;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -9,6 +10,53 @@ import org.springframework.stereotype.Repository;
 public class ModelReturnResponseWiringRepository {
 
     public record CycleRow(UUID id, UUID applicationId, String reviewStage, UUID taskId, UUID discrepancyId, String lastResumedStage) {
+    }
+
+    public record OrchestrateWiredReturnCommand(
+        UUID returnId,
+        UUID applicationId,
+        UUID transitionEventId,
+        String fromStage,
+        String reason,
+        UUID returnedBy,
+        Instant returnedAt,
+        String actorRole,
+        UUID notifyCommandId,
+        String notifyPayloadHash,
+        String notifyMessageSuffix,
+        UUID taskCommandId,
+        String taskPayloadHash,
+        String taskOwnerRole,
+        UUID taskOwnerAccount,
+        Instant dueAt,
+        UUID policyVersionId,
+        UUID wiringCommandId,
+        String wiringPayloadHash,
+        UUID actorAccount) {
+    }
+
+    public record OrchestrateResubmitCommand(
+        UUID applicationId,
+        UUID returnId,
+        UUID resubmissionId,
+        String returnedFromStage,
+        Instant returnedAt,
+        String returnReason,
+        String resumedStage,
+        String responseBody,
+        Instant resubmittedAt,
+        UUID respondedBy,
+        String respondedRole,
+        UUID wiringCommandId,
+        String wiringPayloadHash,
+        UUID notifyCommandId,
+        UUID taskCommandId,
+        String taskPayloadHash,
+        String taskOwnerRole,
+        UUID taskOwnerAccount,
+        Instant dueAt,
+        UUID policyVersionId,
+        UUID actorAccount) {
     }
 
     private final JdbcTemplate jdbc;
@@ -30,15 +78,58 @@ public class ModelReturnResponseWiringRepository {
             applicationId).stream().findFirst();
     }
 
-    public void linkCycle(UUID applicationId, String reviewStage, UUID taskId, UUID discrepancyId) {
-        jdbc.queryForObject(
-            "SELECT model_return_response_link_cycle(?, ?, ?, ?)",
-            UUID.class, applicationId, reviewStage, taskId, discrepancyId);
+    public UUID orchestrateWiredReturn(OrchestrateWiredReturnCommand cmd) {
+        return jdbc.queryForObject(
+            "SELECT model_return_response_orchestrate_wired_return(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            UUID.class,
+            cmd.returnId(),
+            cmd.applicationId(),
+            cmd.transitionEventId(),
+            cmd.fromStage(),
+            cmd.reason(),
+            cmd.returnedBy(),
+            java.sql.Timestamp.from(cmd.returnedAt()),
+            cmd.actorRole(),
+            cmd.notifyCommandId(),
+            cmd.notifyPayloadHash(),
+            cmd.notifyMessageSuffix(),
+            cmd.taskCommandId(),
+            cmd.taskPayloadHash(),
+            cmd.taskOwnerRole(),
+            cmd.taskOwnerAccount(),
+            java.sql.Timestamp.from(cmd.dueAt()),
+            cmd.policyVersionId(),
+            cmd.wiringCommandId(),
+            cmd.wiringPayloadHash(),
+            cmd.actorAccount());
     }
 
-    public void updateLastResumedStage(UUID applicationId, String resumedStage) {
-        jdbc.query("SELECT model_return_response_update_last_resumed_stage(?, ?)", rs -> {
-        }, applicationId, resumedStage);
+    public void orchestrateResubmit(OrchestrateResubmitCommand cmd) {
+        jdbc.query(
+            "SELECT model_return_response_orchestrate_resubmit(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rs -> {
+            },
+            cmd.applicationId(),
+            cmd.returnId(),
+            cmd.resubmissionId(),
+            cmd.returnedFromStage(),
+            java.sql.Timestamp.from(cmd.returnedAt()),
+            cmd.returnReason(),
+            cmd.resumedStage(),
+            cmd.responseBody(),
+            java.sql.Timestamp.from(cmd.resubmittedAt()),
+            cmd.respondedBy(),
+            cmd.respondedRole(),
+            cmd.wiringCommandId(),
+            cmd.wiringPayloadHash(),
+            cmd.notifyCommandId(),
+            cmd.taskCommandId(),
+            cmd.taskPayloadHash(),
+            cmd.taskOwnerRole(),
+            cmd.taskOwnerAccount(),
+            java.sql.Timestamp.from(cmd.dueAt()),
+            cmd.policyVersionId(),
+            cmd.actorAccount());
     }
 
     public Optional<String> wiringEvidenceHash(UUID commandId) {
@@ -48,34 +139,9 @@ public class ModelReturnResponseWiringRepository {
             commandId).stream().findFirst();
     }
 
-    public void recordWiringEvidence(UUID commandId, UUID applicationId, String purpose, String payloadHash) {
-        jdbc.query("SELECT model_return_response_record_wiring_evidence(?, ?, ?, ?)", rs -> {
-        }, commandId, applicationId, purpose, payloadHash);
-    }
-
-    public int appendDiscrepancyResponse(UUID discrepancyId, String body, UUID respondedBy) {
-        Integer seq = jdbc.queryForObject(
-            "SELECT model_return_response_append_response(?, ?, ?)",
-            Integer.class, discrepancyId, body, respondedBy);
-        return seq == null ? 0 : seq;
-    }
-
     public int countDiscrepancyResponses(UUID discrepancyId) {
         Integer n = jdbc.queryForObject("SELECT count(*)::int FROM workflow_discrepancy_response WHERE discrepancy_id = ?", Integer.class, discrepancyId);
         return n == null ? 0 : n;
-    }
-
-    public Optional<Integer> latestUndisposedResponseSeq(UUID discrepancyId) {
-        return jdbc.query(
-            "SELECT r.response_seq FROM workflow_discrepancy_response r "
-                + "LEFT JOIN workflow_discrepancy_disposition d ON d.discrepancy_id = r.discrepancy_id AND d.response_seq = r.response_seq "
-                + "WHERE r.discrepancy_id = ? AND d.id IS NULL ORDER BY r.response_seq DESC LIMIT 1",
-            (rs, i) -> rs.getInt("response_seq"),
-            discrepancyId).stream().findFirst();
-    }
-
-    public String discrepancyStatus(UUID discrepancyId) {
-        return jdbc.queryForObject("SELECT status FROM workflow_discrepancy WHERE id = ?", String.class, discrepancyId);
     }
 
     public UUID returnedByAccount(UUID returnId) {

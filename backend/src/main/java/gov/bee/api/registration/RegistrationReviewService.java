@@ -6,8 +6,13 @@ import gov.bee.api.application.DraftRequestSupport;
 import gov.bee.api.application.IdempotencyRepository;
 import gov.bee.api.application.ModelDraftPolicy;
 import gov.bee.api.identity.Caller;
+import gov.bee.api.snl.RegistrationReturnResponseWiring;
 import gov.bee.api.web.ApiErrors;
+import gov.bee.api.workflow.WorkflowFoundationRepository;
+import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.security.MessageDigest;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -35,13 +40,15 @@ public class RegistrationReviewService {
 
     private final RegistrationRepository registrations;
     private final RegistrationService registrationService;
+    private final RegistrationReturnResponseWiring returnWiring;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
 
-    public RegistrationReviewService(RegistrationRepository registrations, RegistrationService registrationService, IdempotencyRepository idempotency,
-                                     ObjectMapper json) {
+    public RegistrationReviewService(RegistrationRepository registrations, RegistrationService registrationService, RegistrationReturnResponseWiring returnWiring,
+                                     IdempotencyRepository idempotency, ObjectMapper json) {
         this.registrations = registrations;
         this.registrationService = registrationService;
+        this.returnWiring = returnWiring;
         this.idempotency = idempotency;
         this.json = json;
     }
@@ -160,15 +167,39 @@ public class RegistrationReviewService {
             authorisationId = done.authorisationId();
             at = registrations.lastEventAt(id);
         } else {
+            String actorRole = applicant ? (RegistrationPolicy.BRAND.equals(row.kind()) ? "manufacturer" : "agency") : role.get();
+            UUID returnId = null;
+            UUID resubmissionId = null;
+            Optional<RegistrationRepository.LatestOpenCycleReturn> openReturn = Optional.empty();
+            if ("return".equals(in.action())) {
+                returnId = UUID.randomUUID();
+            } else if ("resubmit".equals(in.action())) {
+                openReturn = registrations.latestReturnForOpenCycle(id);
+                if (openReturn.isEmpty()) {
+                    return fail(caller, id, key, error(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error"));
+                }
+                resubmissionId = UUID.randomUUID();
+            }
             try {
-                var moved = registrations.transition(id, row.version(), row.state(), target(in.action(), row.state()), in.action(), caller.accountId(),
-                    applicant ? (RegistrationPolicy.BRAND.equals(row.kind()) ? "manufacturer" : "agency") : role.get(), in.note());
+                var moved = registrations.transition(id, row.version(), row.state(), target(in.action(), row.state()), in.action(), caller.accountId(), actorRole,
+                    in.note());
                 if (moved.isEmpty()) {
                     return fail(caller, id, key, error(HttpStatus.CONFLICT, "version_conflict"));
                 }
                 versionAfter = moved.get().versionAfter();
                 at = moved.get().at();
+                if ("return".equals(in.action())) {
+                    returnWiring.completeWiredReturn(id, returnId, moved.get().transitionEventId(), row.state(), in.note(), at, caller.accountId(), actorRole, key);
+                } else if ("resubmit".equals(in.action())) {
+                    var lr = openReturn.orElseThrow();
+                    returnWiring.completeResubmit(id, lr.returnId(), resubmissionId, moved.get().transitionEventId(), lr.returnedFromState(), lr.returnedAt(),
+                        lr.reason(), null, at, caller.accountId(), actorRole, key);
+                }
             } catch (DataIntegrityViolationException e) {
+                if (WorkflowFoundationRepository.isSqlMessage(e, "notification_recipient_inactive")) {
+                    TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                    return error(HttpStatus.CONFLICT, "assignee_unavailable");
+                }
                 String why = String.valueOf(e.getMostSpecificCause().getMessage());
                 if (!why.contains("cannot review") && !why.contains("cannot approve")) {
                     throw e;
@@ -180,6 +211,19 @@ public class RegistrationReviewService {
                     // not inside a transaction (a test double); nothing to roll back
                 }
                 return error(HttpStatus.FORBIDDEN, "segregation_refused");
+            } catch (WorkflowIdempotencyConflictException ex) {
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+            } catch (DataAccessException ex) {
+                if (ex instanceof DataAccessResourceFailureException) {
+                    throw ex;
+                }
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                if (WorkflowFoundationRepository.isSqlMessage(ex, "notification_recipient_inactive")) {
+                    return error(HttpStatus.CONFLICT, "assignee_unavailable");
+                }
+                idempotency.abandon(caller.accountId(), "POST", ROUTE, id, key);
+                throw ex;
             }
         }
         Map<String, Object> receipt = new LinkedHashMap<>();

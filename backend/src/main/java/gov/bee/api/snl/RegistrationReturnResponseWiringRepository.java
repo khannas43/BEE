@@ -1,5 +1,6 @@
 package gov.bee.api.snl;
 
+import gov.bee.api.notifications.NotificationCommandRepository;
 import gov.bee.api.workflow.WorkflowFoundationRepository;
 import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.time.Instant;
@@ -7,8 +8,14 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-/** Trusted database commands for registration return/resubmit wiring (Brief 19C-A). Not a Spring bean until 19C-B. */
+import org.springframework.stereotype.Repository;
+
+/** Trusted database commands for registration return/resubmit wiring (Brief 19C-A / 19C-B). */
+@Repository
 public class RegistrationReturnResponseWiringRepository {
+
+    public record ReturnTaskOwner(UUID accountId, String role) {
+    }
 
     public record CycleRow(
         UUID id,
@@ -170,5 +177,40 @@ public class RegistrationReturnResponseWiringRepository {
     public int countDiscrepancyResponses(UUID discrepancyId) {
         Integer n = jdbc.queryForObject("SELECT count(*)::int FROM workflow_discrepancy_response WHERE discrepancy_id = ?", Integer.class, discrepancyId);
         return n == null ? 0 : n;
+    }
+
+    public ReturnTaskOwner returnOfficerFromLatestReturnTransition(UUID applicationId) {
+        return jdbc.queryForObject(
+            "SELECT actor_account_id, actor_role FROM registration_transition_event "
+                + "WHERE application_id = ? AND action = 'return' AND to_state = 'returned' ORDER BY occurred_at DESC LIMIT 1",
+            (rs, i) -> new ReturnTaskOwner(rs.getObject("actor_account_id", UUID.class), rs.getString("actor_role")),
+            applicationId);
+    }
+
+    public String computeReturnHash(UUID applicationId, UUID transitionEventId, UUID returnId, String fromStage, String reason, UUID returnedBy,
+                                    Instant returnedAt, String actorRole, UUID notifyCommandId, String notifyPayloadHash, String notifyMessageSuffix,
+                                    UUID taskCommandId, String taskPayloadHash, String taskOwnerRole, UUID taskOwnerAccount, Instant dueAt, UUID policyVersionId,
+                                    UUID actorAccount) {
+        String canonical = "registration_return_wiring|" + applicationId + "|" + transitionEventId + "|" + returnId + "|" + fromStage + "|" + reason + "|"
+            + returnedBy + "|" + instantUs(returnedAt) + "|" + actorRole + "|" + notifyCommandId + "|" + notifyPayloadHash + "|" + notifyMessageSuffix + "|"
+            + taskCommandId + "|" + taskPayloadHash + "|" + taskOwnerRole + "|" + taskOwnerAccount + "|" + instantUs(dueAt) + "|" + policyVersionId + "|"
+            + actorAccount;
+        return NotificationCommandRepository.sha256(canonical);
+    }
+
+    public String computeResubmitHash(UUID applicationId, UUID returnId, UUID resubmissionId, UUID transitionEventId, String returnedFromStage, Instant returnedAt,
+                                      String returnReason, String resumedStage, String responseBody, Instant resubmittedAt, UUID respondedBy, String respondedRole,
+                                      UUID notifyCommandId, UUID taskCommandId, String taskPayloadHash, String taskOwnerRole, UUID taskOwnerAccount, Instant dueAt,
+                                      UUID policyVersionId, UUID actorAccount) {
+        String body = responseBody == null ? "" : responseBody;
+        String canonical = "registration_resubmit_wiring|" + applicationId + "|" + returnId + "|" + resubmissionId + "|" + transitionEventId + "|"
+            + returnedFromStage + "|" + instantUs(returnedAt) + "|" + returnReason + "|" + resumedStage + "|" + body + "|" + instantUs(resubmittedAt) + "|"
+            + respondedBy + "|" + respondedRole + "|" + notifyCommandId + "|" + taskCommandId + "|" + taskPayloadHash + "|" + taskOwnerRole + "|"
+            + taskOwnerAccount + "|" + instantUs(dueAt) + "|" + policyVersionId + "|" + actorAccount;
+        return NotificationCommandRepository.sha256(canonical);
+    }
+
+    static long instantUs(Instant at) {
+        return at.getEpochSecond() * 1_000_000L + at.getNano() / 1_000L;
     }
 }

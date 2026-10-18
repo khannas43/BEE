@@ -199,7 +199,27 @@ public class RegistrationRepository {
         return Optional.of(new Confirmed(after, at.toInstant()));
     }
 
-    public record Moved(int versionAfter, java.time.Instant at) {
+    public record Moved(int versionAfter, java.time.Instant at, UUID transitionEventId) {
+    }
+
+    public record LatestOpenCycleReturn(UUID returnId, String returnedFromState, java.time.Instant returnedAt, String reason) {
+    }
+
+    /** Latest return bound to the open cycle using tables {@code bee_runtime} may read (no direct read of {@code registration_application_return}). */
+    public Optional<LatestOpenCycleReturn> latestReturnForOpenCycle(UUID applicationId) {
+        return jdbc.query(
+            "WITH latest_return_te AS ("
+                + "SELECT from_state, note, occurred_at FROM registration_transition_event "
+                + "WHERE application_id = ? AND action = 'return' AND to_state = 'returned' ORDER BY occurred_at DESC LIMIT 1"
+                + ") SELECT cr.return_id, lr.from_state, lr.note, lr.occurred_at "
+                + "FROM registration_return_response_cycle c "
+                + "JOIN registration_return_response_cycle_return cr ON cr.cycle_id = c.id "
+                + "CROSS JOIN latest_return_te lr "
+                + "WHERE c.application_id = ? AND c.status = 'open' "
+                + "ORDER BY cr.return_id DESC LIMIT 1",
+            (rs, i) -> new LatestOpenCycleReturn(rs.getObject("return_id", UUID.class), rs.getString("from_state"),
+                rs.getTimestamp("occurred_at").toInstant(), rs.getString("note")),
+            applicationId, applicationId).stream().findFirst();
     }
 
     /** A review step (recommend, return, reject) or the applicant's resubmit, with its transition event; empty if the state or version has moved. */
@@ -211,10 +231,11 @@ public class RegistrationRepository {
             return Optional.empty();
         }
         int after = expectedVersion + 1;
+        UUID eventId = UUID.randomUUID();
         java.sql.Timestamp at = jdbc.queryForObject("INSERT INTO registration_transition_event (id, application_id, action, from_state, to_state, "
             + "actor_account_id, actor_role, version_after, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING occurred_at",
-            java.sql.Timestamp.class, UUID.randomUUID(), applicationId, action, from, to, actorAccountId, actorRole, after, note);
-        return Optional.of(new Moved(after, at.toInstant()));
+            java.sql.Timestamp.class, eventId, applicationId, action, from, to, actorAccountId, actorRole, after, note);
+        return Optional.of(new Moved(after, at.toInstant(), eventId));
     }
 
     public record Approved(String outcome, Integer versionAfter, UUID brandId, UUID authorisationId) {

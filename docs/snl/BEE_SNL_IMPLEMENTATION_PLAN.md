@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress — Brief 19C-A4 review pending | 65% | WP1 | R1 | V69–V72 and 19C-0 accepted; V73 registration boundary unaccepted pending 19C-A4 review |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19C-B review pending | 68% | WP1 | R1 | V73+19C-A accepted at `ae63275`; 19C-B service wiring implemented, review pending |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -252,12 +252,12 @@ At the end of each development session, update the package status, progress, com
 | Tracking field | Current value |
 |---|---|
 | Status | In progress |
-| Progress | 65% |
+| Progress | 68% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | Accepted V69–V72; model journey wired. V73 registration orchestrators persist return/resubmit bundles with database-calculated wiring hashes, transition-time role validity and 29 throwaway-schema proofs (Brief 19C-A2 implemented / review pending). HTTP registration journey remains unwired. |
-| Next action | ChatGPT review of Brief 19C-A2; then 19C-B service integration, 19C-C forward disposition/read prep and 19D queue work (BL-257) |
+| Existing foundation | Accepted V69–V72; model journey wired. V73+19C-A accepted at `ae63275`. Brief 19C-B hooks `RegistrationReviewService` return/resubmit through `RegistrationReturnResponseWiring` with service-level db proofs (review pending). |
+| Next action | ChatGPT review of Brief 19C-B; then 19C-C forward disposition/read prep and 19D-A/B/C queue work (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -285,14 +285,15 @@ At the end of each development session, update the package status, progress, com
 | Evidence | Result or link |
 |---|---|
 | Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_DB_BOUNDARY.md](SNL_WP02C_REGISTRATION_DB_BOUNDARY.md) |
-| Migration range | Accepted: V69–V72; V73 (19C-A4 implemented, unaccepted pending review) |
+| Migration range | Accepted: V69–V73 at `ae63275` (19C-A). Brief 19C-B service wiring — review pending. |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
-| Database tests | 482 passed after Brief 19B-2B; includes staged V71→V72 migration, privilege boundary, real post-legacy rollback, repeat-cycle, constraint and concurrency survivor proofs |
+| Database tests | V73 wiring suite (35) + 19C-B service proofs (`SnlWp02cRegistrationReturnServiceDatabaseTest`); full gate counts at handback |
 | UI tests | 251 web tests passed; live browser workflow remains pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design also accepted. |
+| Review | WP2A, Brief 19A, Brief 19B, Brief 19B-2, 19C-0, 19D-0 and V73+19C-A accepted at `ae63275`. Brief **19C-B** implemented — ChatGPT review pending. |
+| Brief 19C-B evidence | `RegistrationReturnResponseWiring`, `RegistrationReviewService` return/resubmit hook, `SnlWp02cRegistrationReturnServiceDatabaseTest` — review pending |
 | Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec` |
 
 #### WP2 acceptance
@@ -791,6 +792,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (68%), V73 registration DB boundary | In progress (65%), Brief 19C-A1 corrections required | Review found a production maint closure bypass, caller-trusted actor/owner/role/due metadata, replay that fails after later lifecycle changes, and incomplete rollback/concurrency/tamper/recipient proofs. V73 remains unaccepted. | Complete Brief 19C-A1 and repeat acceptance review before 19C-B/C (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (65%), Brief 19C-A1 review pending | In progress (65%), Brief 19C-A2 corrections required | A1 removed the maint closure bypass and added due/owner checks plus lifecycle-stable replay. Review found that replay still compares evidence to a caller-supplied hash rather than a database-calculated canonical payload; rollback/concurrency still assert partial row sets, exceptions are swallowed, and required actor/role/recipient/tamper proofs remain incomplete. | Complete Brief 19C-A2 and repeat acceptance review before 19C-B/C (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (65%), Brief 19C-A2 corrections required | In progress (68%), Brief 19C-A2 implemented / review pending | V73 corrected in place: `registration_return_response_wiring_*_hash`, transition-time role checks, old-hash tamper proofs, bundle rollback helpers and honest concurrency losers. Gates: 160 backend, 511 database, 251 web; `tsc`, build, `git diff --check` clean. 19C not accepted. | ChatGPT review of 19C-A2; then 19C-B/C (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (68%), Brief 19C-A4 accepted at `ae63275` | In progress (68%), Brief 19C-B implemented / review pending | `RegistrationReturnResponseWiring`, `RegistrationReviewService` return/resubmit hook, SQL canonical wiring hashes, `SnlWp02cRegistrationReturnServiceDatabaseTest`. Full gate at handback. | ChatGPT review 19C-B; then 19C-C → 19D-A/B/C (BL-257) |
 
 ### 6.2 Standard completion record
 

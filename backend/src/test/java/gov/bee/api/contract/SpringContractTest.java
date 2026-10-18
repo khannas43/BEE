@@ -162,6 +162,12 @@ class SpringContractTest {
     gov.bee.api.snl.WorkflowReturnResponseWiring returnWiring;
 
     @MockitoBean
+    gov.bee.api.snl.RegistrationReturnResponseWiring registrationReturnWiring;
+
+    @MockitoBean
+    gov.bee.api.snl.RegistrationReturnResponseWiringRepository registrationReturnWiringRepo;
+
+    @MockitoBean
     gov.bee.api.snl.ModelReturnResponseWiringRepository modelReturnWiringRepo;
 
     @MockitoBean
@@ -2873,17 +2879,19 @@ class SpringContractTest {
         var returned = new RegistrationRepository.Row(REG, "REG-2026-10001", "brand", NOVA, "NOVA", null, null, "Zephyr Cool", null, null, "returned", 3);
         var agencyReturned = new RegistrationRepository.Row(REG, "REG-2026-10002", "agency", NOVA, "NOVA", NOVA, NOVA_COOL, "Nova Cool",
             LocalDate.now().plusDays(10), null, "returned", 3);
-        var moved = new RegistrationRepository.Moved(3, Instant.parse("2026-10-14T10:00:00Z"));
+        var moved = new RegistrationRepository.Moved(3, Instant.parse("2026-10-14T10:00:00Z"), UUID.randomUUID());
 
         java.util.function.Function<RequestPostProcessor, MockHttpServletRequestBuilder> send =
             rp -> post(path).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(rec);
         java.util.function.Supplier<Boolean> fresh = () -> {
-            reset(identity, idempotency, registrationRepo);
+            reset(identity, idempotency, registrationRepo, registrationReturnWiring);
             when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
             when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
             when(registrationRepo.find(REG)).thenReturn(Optional.of(review));
             when(registrationRepo.submitter(REG)).thenReturn(Optional.of(UUID.randomUUID()));
             when(registrationRepo.transition(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(Optional.of(moved));
+            org.mockito.Mockito.doNothing().when(registrationReturnWiring).completeWiredReturn(any(), any(), any(), any(), any(), any(), any(), any(), any());
+            org.mockito.Mockito.doNothing().when(registrationReturnWiring).completeResubmit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
             return true;
         };
         java.util.function.Consumer<String> staffAs = role -> {
@@ -2962,6 +2970,8 @@ class SpringContractTest {
         when(registrationRepo.documentCount(REG)).thenReturn(0);
         conforms(T, asApplicant.get(), 422, "document_required");
         when(registrationRepo.documentCount(REG)).thenReturn(1);
+        when(registrationRepo.latestReturnForOpenCycle(REG)).thenReturn(Optional.of(
+            new RegistrationRepository.LatestOpenCycleReturn(UUID.randomUUID(), "programme_review", Instant.parse("2026-10-14T10:00:00Z"), "Fix documents.")));
         conforms(T, asApplicant.get(), 200, null);
         when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(true);
         conforms(T, asApplicant.get(), 409, "brand_name_taken");

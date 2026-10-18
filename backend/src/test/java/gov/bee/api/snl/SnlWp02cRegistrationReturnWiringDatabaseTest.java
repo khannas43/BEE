@@ -175,8 +175,9 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
     static UUID atDirectorReview(String brand) {
         UUID id = atProgrammeReview(brand);
         var programme = new Caller(PROGRAMME_USER, "prog", List.of(new RoleGrant("programme", "all")), Set.of());
+        var wiringForReview = new RegistrationReturnResponseWiring(wiringRepo, policyRepo);
         var review = new RegistrationReviewService(new RegistrationRepository(db), new RegistrationService(new RegistrationRepository(db), new MasterDataRepository(db),
-            new IdempotencyRepository(db), json), new IdempotencyRepository(db), json);
+            new IdempotencyRepository(db), json), wiringForReview, new IdempotencyRepository(db), json);
         review.transition(programme, id, UUID.randomUUID().toString(), parse("{\"action\":\"recommend\",\"version\":2,\"note\":\"ok\"}"));
         return id;
     }

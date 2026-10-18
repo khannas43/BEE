@@ -12,6 +12,9 @@ import gov.bee.api.application.IdempotencyRepository;
 import gov.bee.api.identity.Caller;
 import gov.bee.api.identity.IdentityRepository.RoleGrant;
 import gov.bee.api.masters.MasterDataRepository;
+import gov.bee.api.snl.RegistrationReturnResponseWiring;
+import gov.bee.api.snl.RegistrationReturnResponseWiringRepository;
+import gov.bee.api.workflow.SnlReturnResponsePolicyRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -29,8 +32,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 
 /**
  * Review and approval of a registration (WP04.2b-2), against throwaway PostgreSQL as the restricted runtime login: recommend, return,
@@ -68,6 +75,7 @@ class RegistrationReviewDatabaseTest {
     static JdbcTemplate admin;
     static JdbcTemplate owner;
     static JdbcTemplate db;
+    static DriverManagerDataSource runtime;
     static RegistrationService service;
     static RegistrationDocumentService documentService;
     static RegistrationFeeService feeService;
@@ -89,6 +97,14 @@ class RegistrationReviewDatabaseTest {
         return sourceAs(schema, env("BEE_FLYWAY_DB_USER", "bee_app"), env("BEE_FLYWAY_DB_PASSWORD", env("BEE_APP_DB_PASSWORD", "bee-local-app")));
     }
 
+    @SuppressWarnings("unchecked")
+    static <T> T transactional(T target) {
+        ProxyFactory factory = new ProxyFactory(target);
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(runtime), new AnnotationTransactionAttributeSource()));
+        return (T) factory.getProxy();
+    }
+
     @BeforeAll
     static void migrateAndSeed() throws Exception {
         admin = new JdbcTemplate(migrateSource(null));
@@ -100,16 +116,19 @@ class RegistrationReviewDatabaseTest {
             .locations("classpath:db/migration").load().migrate();
         owner = new JdbcTemplate(migrateSource(MAIN));
         owner.execute(Files.readString(SEED));
-        db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
+        runtime = sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime"));
+        db = new JdbcTemplate(runtime);
         var props = new gov.bee.api.document.DocumentProperties();
         props.setStorePath(java.nio.file.Files.createTempDirectory("bee-reg-docs").toString());
         var registrationRepo = new RegistrationRepository(db);
         var documentRepo = new RegistrationDocumentRepository(db);
-        var idem = new IdempotencyRepository(db);
+        var idem = transactional(new IdempotencyRepository(db));
         service = new RegistrationService(registrationRepo, new MasterDataRepository(db), idem, JSON);
         feeService = new RegistrationFeeService(registrationRepo, idem, new gov.bee.api.settings.BusinessSettingService(
             new gov.bee.api.settings.BusinessSettingRepository(db), idem, JSON), JSON);
-        review = new RegistrationReviewService(registrationRepo, service, idem, JSON);
+        var wiringRepo = new RegistrationReturnResponseWiringRepository(db);
+        var registrationWiring = new RegistrationReturnResponseWiring(wiringRepo, new SnlReturnResponsePolicyRepository(db));
+        review = transactional(new RegistrationReviewService(registrationRepo, service, registrationWiring, idem, JSON));
         documentService = new RegistrationDocumentService(registrationRepo, documentRepo, new RegistrationDocumentRecorder(documentRepo, idem),
             new gov.bee.api.document.LocalSha256FileStore(props), idem, JSON);
         assertEquals(73, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V73");

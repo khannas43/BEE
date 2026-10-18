@@ -3,7 +3,7 @@
 **Branch:** `cursor/snl-wp02c-registration-db-boundary`
 **Migration:** V73 (`V73__snl_wp02c_registration_return_wiring.sql`) — corrected in place through Brief 19C-A4
 **Design:** [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md)
-**Status:** Brief 19C-A4 implemented / **review pending**. No HTTP, OpenAPI, BFF or UI wiring. **V73 and 19C are not accepted.**
+**Status:** Brief 19C-A4 implemented / **review pending**; Brief **19C-B** wired `RegistrationReviewService` (review pending). OpenAPI/BFF/UI unchanged. **V73 and 19C are not accepted.**
 
 ## Schema
 
@@ -85,7 +85,7 @@ Orchestrators acquire the wiring advisory lock and read wiring evidence **before
 
 ## Java boundary
 
-`RegistrationReturnResponseWiringRepository` — internal; calls only the two orchestrators; maps idempotency SQL message to `WorkflowIdempotencyConflictException`. Not wired into `RegistrationReviewService` (19C-B).
+`RegistrationReturnResponseWiringRepository` + `RegistrationReturnResponseWiring` — call only the two orchestrators; map idempotency SQL message to `WorkflowIdempotencyConflictException`. **`RegistrationReviewService.transition`** invokes wiring for `return` and `resubmit` in the same transaction (Brief 19C-B).
 
 ## Proof map (`SnlWp02cRegistrationReturnWiringDatabaseTest`, 35 tests)
 
@@ -129,7 +129,10 @@ Orchestrators acquire the wiring advisory lock and read wiring evidence **before
 
 **Complete bundle snapshot (`CompleteBundleSnapshot`):** application `state` + `version`, `registration_transition_event` count, all registration return/resubmit/cycle families, full workflow task/event/clock/discrepancy/disposition/response counts, `notification_command` + `notification` delivery counts, and wiring evidence count. Rollback and rejection proofs assert **equality** to baseline (no partial residue).
 
-## Deferrals (19C-B / 19C-C)
+## Service proofs (`SnlWp02cRegistrationReturnServiceDatabaseTest`, Brief 19C-B)
 
-- **19C-B:** `RegistrationReturnResponseWiring`, hook `RegistrationReviewService.transition`, HTTP idempotency alignment.
+Programme/Director return success, resubmit success, HTTP idempotency replay, changed-payload wiring conflict, concurrent return, resubmit assignee failure, injected mid-wiring rollback with **no residue** (snapshot pattern from the wiring suite).
+
+## Deferrals (19C-C)
+
 - **19C-C:** Forward closure on recommend/approve, lazy programme task on fee confirm, read repository for 19D.

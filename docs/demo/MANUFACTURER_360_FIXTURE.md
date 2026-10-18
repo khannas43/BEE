@@ -1,7 +1,7 @@
 # Manufacturer 360 demo fixture
 
-**Route:** `/app/demo/manufacturer-360`  
-**Fixture module:** `lib/demo/manufacturer360Fixture.ts`  
+**Route:** `/app/demo/manufacturer-360`
+**Fixture module:** `lib/demo/manufacturer360Fixture.ts`
 **UI:** `components/app/demo/Manufacturer360Demo.tsx`
 
 All synthetic values on this page use the disclosure:

@@ -91,7 +91,7 @@ function LifecycleRail() {
               <span className="font-title-sm text-on-surface">{stage.title}</span>
               <Pill>{stage.status}</Pill>
             </div>
-            <dl className="grid sm:grid-cols-2 gap-x-space-md gap-y-1 font-body-sm">
+            <dl className="grid sm:grid-cols-2 gap-x-space-md gap-y-1 font-body-sm break-words">
               <div>
                 <dt className="text-on-surface-variant">Record</dt>
                 <dd>{stage.recordReference}</dd>
@@ -165,7 +165,7 @@ function DiscrepancyPanel() {
           <strong>SLA:</strong> {d.slaNote}
         </li>
         <li>
-          <strong>Approval continued:</strong> {d.continuation}
+          <strong>Registration continued:</strong> {d.continuation}
         </li>
       </ul>
     </section>
@@ -183,9 +183,10 @@ function FinanceQrPanel() {
           <dt className="text-on-surface-variant">Application fees paid</dt>
           <dd>{f.applicationFeesPaidInr}</dd>
         </div>
-        <div>
+        <div className="sm:col-span-2">
           <dt className="text-on-surface-variant">QR / label units paid</dt>
           <dd>{f.qrLabelUnitsPaidInr}</dd>
+          <dd className="text-on-surface-variant mt-1">{f.qrPrepaymentAssumption}</dd>
         </div>
         <div>
           <dt className="text-on-surface-variant">Serials issued / bound / unused</dt>
@@ -199,10 +200,10 @@ function FinanceQrPanel() {
             {f.productionDeclaredUnits} units ({f.varianceUnits} variance vs bound QR)
           </dd>
         </div>
-        <div>
-          <dt className="text-on-surface-variant">Annual amount due / paid</dt>
+        <div className="sm:col-span-2">
+          <dt className="text-on-surface-variant">Annual label-fee reconciliation balance (due / settled)</dt>
           <dd>
-            {f.annualDueInr} / {f.annualPaidInr}
+            {f.labelFeeReconciliationDue} / {f.labelFeeReconciliationSettled}
           </dd>
         </div>
       </dl>

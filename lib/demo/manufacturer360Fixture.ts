@@ -50,13 +50,14 @@ export type DiscrepancyCycle = {
 export type FinancialReconciliation = {
   applicationFeesPaidInr: string;
   qrLabelUnitsPaidInr: string;
+  qrPrepaymentAssumption: string;
   serialsIssued: number;
   serialsBound: number;
   serialsUnused: number;
   productionDeclaredUnits: number;
   varianceUnits: number;
-  annualDueInr: string;
-  annualPaidInr: string;
+  labelFeeReconciliationDue: string;
+  labelFeeReconciliationSettled: string;
 };
 
 export type Wp9PreviewCard = {
@@ -72,7 +73,7 @@ export type Wp9PreviewCard = {
 export const MANUFACTURER_360_HEADER: Manufacturer360Header = {
   manufacturerName: "Nova Cool Appliances Ltd.",
   organisationId: "ORG-NOVA-001 (permittee identifier — WP3)",
-  complianceStatus: "Compliant with open discrepancy (returned document cycle)",
+  complianceStatus: "Compliant with open registration discrepancy (returned document cycle)",
   activeBrands: 1,
   registeredCategories: 2,
   approvedModels: 3,
@@ -91,8 +92,8 @@ export const MANUFACTURER_360_STAGES: readonly LifecycleStage[] = [
     title: "Entity, brand and category registration",
     status: "Brand registered; category RAC enabled",
     recordReference: "REG-BR-2026-NOVA / CAT-RAC",
-    responsiblePersona: "Applicant (manufacturer), Programme scrutiny",
-    lastAction: "Director approved brand registration (segregation: recommender ≠ approver)",
+    responsiblePersona: "Applicant (manufacturer); Programme scrutiny; Director approval (segregation)",
+    lastAction: "Programme recommended; Director approved brand registration (recommender ≠ approver)",
     nextAction: "Maintain entity master and category enrolment (WP3)",
     screenHref: "/app/registrations/requests",
     screenLabel: "Registration requests",
@@ -102,8 +103,10 @@ export const MANUFACTURER_360_STAGES: readonly LifecycleStage[] = [
     title: "Model registration and approval",
     status: "Approved — NC-RAC-12D",
     recordReference: "MOD-2026-10101 / BEE/RAC/2026/10101",
-    responsiblePersona: "Applicant → Finance → Programme → IAME → Reviewer → Director → Secretary",
-    lastAction: "Secretary issued approval letter (certificate path)",
+    responsiblePersona:
+      "Applicant → payment (Finance confirm) → technical scrutiny (IAME/Reviewer in demo) → Programme Director recommendation → Secretary approval or rejection",
+    lastAction:
+      "Secretary approved model (demo maps Programme + Director review steps onto Programme Director until WP4 role split is live)",
     nextAction: "Renew or amend model record (WP4 / WP9)",
     screenHref: "/app/model-label/model-dashboard",
     screenLabel: "Model dashboard",
@@ -157,8 +160,8 @@ export const MANUFACTURER_360_STAGES: readonly LifecycleStage[] = [
     title: "Renewal, withdrawal and cancellation",
     status: "Renewal monitored; revocation path available",
     recordReference: "REN-2027-NC-RAC-12D (planned)",
-    responsiblePersona: "Applicant; Programme → Secretary (renewal A15); Director (withdrawal)",
-    lastAction: "Register revocation workflow exercised on register screen",
+    responsiblePersona: "Applicant; renewal scrutiny → Programme → Secretary (A15); withdrawal → Director (A15)",
+    lastAction: "Register revocation workflow exercised on register screen (distinct from withdrawal or auto-cancel)",
     nextAction: "Submit renewal before validity end (WP9)",
     screenHref: "/app/model-label/renewal-or-degradation",
     screenLabel: "Renewal or degradation",
@@ -171,36 +174,46 @@ export const MANUFACTURER_360_TIMELINE: readonly TimelineStep[] = [
   { label: "Category enabled", stateOrEvent: "category_enrolment.rac" },
   { label: "Model filed", stateOrEvent: "model_application.submitted" },
   { label: "Fee paid", stateOrEvent: "fee_due → programme_review" },
-  { label: "Discrepancy returned", stateOrEvent: "returned (document query)" },
-  { label: "Applicant responded", stateOrEvent: "resubmit → programme_review" },
-  { label: "Programme / Director / Secretary approval", stateOrEvent: "approved" },
-  { label: "Certificate issued", stateOrEvent: "certificate + ledger anchor" },
+  { label: "Registration discrepancy returned", stateOrEvent: "registration returned (trade licence query)" },
+  { label: "Applicant responded", stateOrEvent: "registration resubmit" },
+  {
+    label: "Registration activation",
+    stateOrEvent: "Programme recommend → Director approve → entity/brand/category active",
+  },
+  { label: "Model technical scrutiny", stateOrEvent: "IAME / Reviewer scrutiny (demo screens)" },
+  {
+    label: "Model decision",
+    stateOrEvent: "Programme Director recommend → Secretary approve (or reject — not auto-cancel)",
+  },
+  { label: "Certificate issued", stateOrEvent: "model approved — certificate + ledger anchor" },
   { label: "QR batch generated", stateOrEvent: "serials allocated" },
   { label: "Units produced", stateOrEvent: "production_declared" },
   { label: "Production reported", stateOrEvent: "quarterly_return filed" },
-  { label: "Fee reconciled", stateOrEvent: "label_fee vs production variance" },
+  { label: "Label-fee reconciled", stateOrEvent: "label_fee vs production variance (A12 — no separate annual charge unless BEE adds one)" },
   { label: "Renewal monitored", stateOrEvent: "renewal_due_soon" },
 ];
 
 export const MANUFACTURER_360_DISCREPANCY: DiscrepancyCycle = {
-  issue: "Trade licence PDF missing expiry date (Annexure 1-A enclosure)",
+  issue: "Trade licence PDF missing expiry date (Annexure 1-A enclosure) — WP3 registration path",
   returnAction: "Programme return with note — applicant must upload corrected trade licence",
   applicantResponse: "Applicant replaced document and resubmitted (neutral resubmit body)",
-  disposition: "Reviewer disposition accepted after resubmit; approval chain continued",
+  disposition: "Reviewer disposition accepted after resubmit; registration chain continued",
   slaNote: "Officer SLA clock paused while applicant responsible (return → resubmit)",
-  continuation: "Programme recommend → Director approve → Secretary certificate issue",
+  continuation: "Programme recommendation → Director approval → entity / brand / category registration activation",
 };
 
 export const MANUFACTURER_360_FINANCE: FinancialReconciliation = {
   applicationFeesPaidInr: "₹35,400 (3 × ₹11,800 incl. tax — aligns with demo payments)",
-  qrLabelUnitsPaidInr: "₹1,41,600 (label units — synthetic fixture)",
+  qrLabelUnitsPaidInr: "₹1,41,600 (QR/label unit prepayment — synthetic fixture)",
+  qrPrepaymentAssumption:
+    "Assumption A10: QR prepayment effective 1 April 2027. Before that date, accrued quarterly label-fee settlement applies (this prepayment example is post-effective-date preview only).",
   serialsIssued: 1240,
   serialsBound: 892,
   serialsUnused: 348,
   productionDeclaredUnits: 865,
   varianceUnits: 27,
-  annualDueInr: "₹24,000 (rating fee — WP5 planned)",
-  annualPaidInr: "₹24,000",
+  labelFeeReconciliationDue: "₹24,000 label-fee reconciliation balance (not a separate annual rating charge — A12)",
+  labelFeeReconciliationSettled: "₹24,000 settled in demo ledger",
 };
 
 export const MANUFACTURER_360_WP9_CARDS: readonly Wp9PreviewCard[] = [
@@ -208,7 +221,7 @@ export const MANUFACTURER_360_WP9_CARDS: readonly Wp9PreviewCard[] = [
     key: "renewal-due",
     title: "Renewal due",
     status: "Due in 90 days",
-    detail: "Model NC-RAC-12D validity window — Table 2 / §3.5 (WP9)",
+    detail: "Model NC-RAC-12D validity window — renewal scrutiny (WP9 / A15). Distinct from withdrawal, rejection, or auto-cancel.",
     href: "/app/model-label/renewal-or-degradation",
     linkLabel: "Open renewal screen",
     previewOnly: true,
@@ -217,7 +230,7 @@ export const MANUFACTURER_360_WP9_CARDS: readonly Wp9PreviewCard[] = [
     key: "renewal-submitted",
     title: "Renewal submitted",
     status: "Programme scrutiny (planned)",
-    detail: "Renewal scrutiny → Programme → Secretary (Assumption A15)",
+    detail: "Renewal scrutiny → Programme → Secretary (Assumption A15). Not a registration rejection or model stand-cancelled outcome.",
     href: null,
     linkLabel: null,
     previewOnly: true,
@@ -226,7 +239,7 @@ export const MANUFACTURER_360_WP9_CARDS: readonly Wp9PreviewCard[] = [
     key: "voluntary-withdrawal",
     title: "Voluntary withdrawal",
     status: "Not initiated",
-    detail: "§3.7 grounds; financial clearance + Director approval",
+    detail: "§3.7 voluntary withdrawal — financial clearance + Director approval. Distinct from register revocation or Table 2 auto-cancellation.",
     href: "/app/withdrawal/brand-withdrawal",
     linkLabel: "Open withdrawal screen",
     previewOnly: true,
@@ -235,16 +248,17 @@ export const MANUFACTURER_360_WP9_CARDS: readonly Wp9PreviewCard[] = [
     key: "cancellation-non-response",
     title: "Cancellation for non-response",
     status: "Not applicable (monitoring)",
-    detail: "Table 2 row 5 / §3.4 — 60-day job deferred (BL-253, BL-256)",
+    detail:
+      "Brand auto-cancellation after applicable 60-day non-response (Table 2 row 5) vs model “stand cancelled” (§3.2) vs registration/application rejection (§3.4) — policy normalization pending (BL-253, BL-256).",
     href: null,
     linkLabel: null,
     previewOnly: true,
   },
   {
     key: "revocation-active",
-    title: "Active revocation workflow",
+    title: "Register revocation (active workflow)",
     status: "Working — register two-person rule",
-    detail: "Programme proposes; Director decides — existing register revocation",
+    detail: "Programme proposes; Director decides — register revocation. Distinct from voluntary withdrawal and from auto-cancel / stand-cancelled outcomes.",
     href: "/app/registrations/register",
     linkLabel: "Open register & revocation",
     previewOnly: false,
@@ -253,8 +267,9 @@ export const MANUFACTURER_360_WP9_CARDS: readonly Wp9PreviewCard[] = [
 
 /** Extra working-screen links shown in the story panel (not duplicated on every stage). */
 export const MANUFACTURER_360_EXTRA_LINKS = [
-  { href: "/app/registrations/reviews", label: "Registration reviews (Programme/Director)" },
+  { href: "/app/registrations/reviews", label: "Registration reviews (Programme / Director)" },
   { href: "/app/model-label/label-preview", label: "Label preview" },
+  { href: "/app/demo/executive", label: "Executive dashboard" },
   { href: "/app/demo/mis", label: "MIS dashboard" },
   { href: "/verify", label: "Public verify (shopper)" },
 ] as const;

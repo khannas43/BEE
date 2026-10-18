@@ -1,9 +1,9 @@
-# SNL WP02C-A — registration return/resubmit trusted database boundary (Brief 19C-A / 19C-A1)
+# SNL WP02C — registration return/resubmit trusted database boundary (Brief 19C-A / 19C-A1 / 19C-A2)
 
 **Branch:** `cursor/snl-wp02c-registration-db-boundary`
-**Migration:** V73 (`V73__snl_wp02c_registration_return_wiring.sql`) — corrected in place by Brief 19C-A1
+**Migration:** V73 (`V73__snl_wp02c_registration_return_wiring.sql`) — corrected in place through Brief 19C-A2
 **Design:** [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md)
-**Status:** Brief 19C-A2 corrections required; V73 is not accepted. No HTTP, OpenAPI, BFF or UI wiring.
+**Status:** Brief 19C-A2 implemented / **review pending**. No HTTP, OpenAPI, BFF or UI wiring. 19C is not accepted.
 
 ## Schema
 
@@ -21,95 +21,107 @@ Return stages: `programme_review` or `director_approval` only. Resubmit resumed 
 
 | Function | Purpose |
 | --- | --- |
-| `registration_return_response_orchestrate_wired_return` | Atomic return bundle: validate transition, notify applicants (V70), insert return, open/re-use cycle, task/clock/discrepancy, pause clock, evidence |
-| `registration_return_response_orchestrate_resubmit` | Atomic resubmit bundle: validate transition, bind latest return on open cycle, append response, resume clock, officer notify, evidence |
+| `registration_return_response_orchestrate_wired_return` | Atomic return bundle |
+| `registration_return_response_orchestrate_resubmit` | Atomic resubmit bundle |
 
-All other `registration_return_response_*` and SLA helper functions are `SECURITY DEFINER` with `search_path` pinned; `REVOKE EXECUTE` from `PUBLIC`, `bee_runtime` and `bee_app`.
+All other `registration_return_response_*` helpers are `SECURITY DEFINER` with pinned `search_path`; `REVOKE EXECUTE` from `PUBLIC` and `bee_runtime`. **`bee_app`** owns migration objects; Spring connects as **`bee_runtime`**.
 
 **Maintenance EXECUTE (not registration closure):** `app_disposable_registration_cleanup` only. There is **no** production cycle-closure command; forward closure remains 19C-C.
 
-## Trusted derivation (19C-A1)
+## Canonical wiring payload (19C-A2)
 
-Orchestrators acquire the wiring advisory lock and read wiring evidence **before** requiring the live application to remain in `returned` / `programme_review`. Identical replay returns the **persisted** return/resubmission row for the transition, not a caller-selected id.
+Caller-supplied `p_wiring_payload_hash` remains on both orchestrators for Java compatibility. The database **always** recomputes the canonical hash and:
 
-Fresh-path checks (atomic rollback on any failure):
+- on **fresh** execution: rejects when `p_wiring_payload_hash` ≠ computed hash; persists **computed** hash in `registration_return_response_wiring_evidence`;
+- on **replay**: compares computed hash to stored evidence **before** returning the persisted outcome; requires matching `return_id` / `resubmission_id` and transition identity, not merely “some row for this transition id”.
+
+### Return hash (`registration_return_response_wiring_return_hash`)
+
+SHA-256 over UTF-8:
+
+`registration_return_wiring|{application_id}|{transition_event_id}|{return_id}|{from_stage}|{reason}|{returned_by}|{returned_at}|{actor_role}|{notify_command_id}|{task_command_id}|{task_owner_role}|{task_owner_account}|{due_at}|{policy_version_id}|{actor_account}`
+
+(`timestamptz` values use PostgreSQL `timestamptz` text form.)
+
+### Resubmit hash (`registration_return_response_wiring_resubmit_hash`)
+
+SHA-256 over UTF-8:
+
+`registration_resubmit_wiring|{application_id}|{return_id}|{resubmission_id}|{transition_event_id}|{returned_from_stage}|{returned_at}|{return_reason}|{resumed_stage}|{coalesce(response_body,'')}|{resubmitted_at}|{responded_by}|{responded_role}|{notify_command_id}|{task_command_id}|{task_owner_role}|{task_owner_account}|{due_at}|{policy_version_id}|{actor_account}`
+
+Notify/task payload hashes remain separate V70/foundation checks; wiring evidence stores only the wiring canonical hashes above (plus notify evidence rows for officer/applicant notify commands).
+
+## Trusted derivation (19C-A1 + A2)
+
+Orchestrators acquire the wiring advisory lock and read wiring evidence **before** requiring the live application to remain in `returned` / `programme_review` on replay.
 
 | Input | Rule |
 | --- | --- |
 | Transition | Must match persisted `registration_transition_event` (action, from/to, note, actor, role, `occurred_at`) |
 | Application state | `returned` (return) or `programme_review` (resubmit) on first completion only |
-| Stage ↔ role | `programme_review` → active `programme` role; `director_approval` → active `director` role |
+| Stage ↔ role | `programme_review` → `programme`; `director_approval` → `director` |
+| **Role validity time (A2)** | Return: `role_assignment` must cover **`returned_at`** (transition time). Resubmit officer notify: must cover **`resubmitted_at`**. |
 | Audit actor | Must equal persisted transition actor |
 | Task owner | Must equal returning officer account and stage role from the return row |
-| Policy | `p_policy_version_id` must equal applicable `snl_return_response` version for the anchor date |
-| Due time | `p_due_at` must equal `workflow_sla_due_at_end_of_working_days(policy, anchor)` (Asia/Kolkata calendar, closures, weekends) |
-| Return notify | Suffix and payload hash must match canonical reference + reason + exact formatted respond-by (**A18**: no officer in applicant copy) |
-| Resubmit return facts | Caller return stage/time/reason must match persisted `registration_application_return` for the open cycle |
-| Officer recipient | Active account with stage-appropriate role; Director return notifies Director (19C-0 provisional rule) |
+| Policy / due | Applicable `snl_return_response` version and `workflow_sla_due_at_end_of_working_days` |
+| Return notify | Canonical suffix + hash (**A18**: no officer in applicant copy) |
+| Resubmit return facts | Caller return stage/time/reason must match persisted return on open cycle |
+| Wiring replay | Computed wiring hash must match evidence; persisted return/resubmission id must match |
 
 ## Transaction and privilege boundary
 
-- Advisory lock on wiring `command_id`; payload hash mismatch → `registration_return_response_wiring_idempotency_conflict` (Java: `WorkflowIdempotencyConflictException`).
-- Notifications only through V70 `notification_foundation_deliver` (return) and `registration_return_response_officer_resubmit_notify` (resubmit officer).
-- Runtime: no direct INSERT on return/resubmission tables; SELECT on cycle/evidence/link tables; no UPDATE on workflow history tables.
+- Advisory lock on wiring `command_id`; wiring hash mismatch → `registration_return_response_wiring_idempotency_conflict` (Java: `WorkflowIdempotencyConflictException`).
+- Notifications only through V70 deliver (return) and `registration_return_response_officer_resubmit_notify` (resubmit officer).
+- Runtime: no direct INSERT/UPDATE/DELETE on return/resubmission/cycle/evidence tables; SELECT on cycle/evidence/link tables.
 
 ## Recipient resolution
 
 | Event | Recipients | Rule |
 | --- | --- | --- |
-| Return | All active accounts in filing organisation | From `registration_application.organisation_id`; V70 org fan-out; exact policy-derived respond-by in message |
-| Resubmit | Returning officer | From `registration_application_return.returned_by_account_id` with active stage role |
-
-SLA: `snl_return_response` policy — **not** hard-coded 7/12/15 in Java or SQL (A08 / BL-255).
-
-## Task / clock / discrepancy lifecycle
-
-- First return: create task (`registration_application`, `review`), discrepancy (`return_response`), start + pause clock at return anchor.
-- Resubmit: append one response, resume same clock.
-- Re-return (open cycle): dispose latest undisposed response as `needs_more`, bind new return, pause same clock.
-- **Not in 19C-A/A1:** recommend/approve forward closure (19C-C). Next-cycle proofs use **test-schema owner fixtures** (terminal task + cycle close), not a production maint command.
+| Return | All **active** accounts in filing organisation | `organisation_membership.active` + `user_account.status = 'active'`; exact policy-derived respond-by in message |
+| Resubmit | Returning officer | From return row; active account with stage role at **`resubmitted_at`** |
 
 ## Java boundary
 
 `RegistrationReturnResponseWiringRepository` — internal; calls only the two orchestrators; maps idempotency SQL message to `WorkflowIdempotencyConflictException`. Not wired into `RegistrationReviewService` (19C-B).
 
-## Proof map (`SnlWp02cRegistrationReturnWiringDatabaseTest`)
+## Proof map (`SnlWp02cRegistrationReturnWiringDatabaseTest`, 29 tests)
 
 | # | Test | Section |
 | --- | --- | --- |
 | 1 | `firstProgrammeReturnCreatesCompleteAtomicBundle` | Atomic first return |
 | 2 | `directorReturnUsesPersistedTransitionAndReturningDirectorRule` | Director officer notify |
-| 3 | `returnNotificationFansOutOnlyToActiveFilingOrganisationAccounts` | Return recipients |
-| 4 | `returnPersistsAndNotifiesExactCalendarDueDate` | Policy + calendar due in task/notify |
+| 3 | `returnNotificationUsesExactEligibleRecipientSetWithoutOfficerIdentity` | Recipient set + reason/due copy |
+| 4 | `returnPersistsAndNotifiesExactCalendarDueDate` | Policy + calendar due |
 | 5 | `identicalReturnReplayIsStableAndChangedPayloadConflicts` | Return idempotency |
-| 6 | `concurrentReturnCreatesOneCompleteOutcome` | Return concurrency |
-| 7 | `returnFailureRollsBackNotificationTaskClockDiscrepancyCycleAndEvidence` | Rollback (test trigger) |
-| 8 | `resubmitRequiresLatestReturnBoundToOpenCycle` | Return/cycle binding |
-| 9 | `resubmitAppendsResponseResumesClockAndNotifiesResolvedOfficer` | Resubmit bundle |
-| 10 | `identicalResubmitReplayIsStableAndChangedPayloadConflicts` | Resubmit idempotency |
-| 11 | `concurrentResubmitCreatesOneCompleteOutcome` | Resubmit concurrency |
-| 12 | `reReturnUsesSameCycleNeedsMoreAndPausesClockAgain` | Same-cycle re-return |
-| 13 | `returnAfterClosedCycleStartsNextCycle` | Next cycle (test fixture close) |
-| 14 | `runtimeCannotInsertRewriteOrDeleteRegistrationWorkflowHistory` | Runtime tamper |
-| 15 | `runtimeExecuteListContainsOnlyRegistrationHighLevelCommands` | Privilege audit |
-| 16 | `internalHelperCannotBindReturnToClosedOrDifferentApplicationCycle` | Bind guard |
-| 17 | `subjectDeleteBlockedWhileRegistrationWorkflowHistoryExists` | Delete guard |
-| 18 | `disposableRegistrationCleanupRemovesNewRowsInDependencyOrder` | Maint cleanup |
-| 19 | `productionMaintClosureFunctionIsAbsentFromMigratedSchema` | No production closure bypass |
-| 20 | `wrongDueTimeIsRejectedWithNoPartialBundle` | Trusted due derivation |
-| 21 | `wrongTaskOwnerIsRejectedAtomically` | Trusted task owner |
-| 22 | `identicalReturnReplayAfterResubmitIsStable` | Lifecycle-stable return replay |
-| 23 | `identicalResubmitReplayAfterReReturnIsStable` | Lifecycle-stable resubmit replay |
-| 24 | `returnFromApplicationACannotBindToApplicationBCycle` | Cross-application bind guard |
-| 25 | `runtimeCannotExecuteInternalRegistrationHelpers` | Internal helper EXECUTE revoked |
+| 6 | `returnReplayWithOldHashAndChangedMaterialInputConflicts` | **A2** old-hash tamper |
+| 7 | `returnActorRoleValidityUsesPersistedTransitionTime` | **A2** role window at return time |
+| 8 | `wrongActorRoleAndInactiveOfficerRollBackCompleteBundle` | **A2** actor/role rollback |
+| 9 | `concurrentReturnHasOneCompleteSurvivorAndAssertedLoser` | **A2** concurrency |
+| 10 | `returnFailureLeavesNoLegacyOrWorkflowResidue` | **A2** full-bundle rollback |
+| 11 | `resubmitRequiresLatestReturnBoundToOpenCycle` | Return/cycle binding |
+| 12 | `resubmitAppendsResponseResumesClockAndNotifiesResolvedOfficer` | Resubmit bundle |
+| 13 | `identicalResubmitReplayIsStableAndChangedPayloadConflicts` | Resubmit idempotency |
+| 14 | `resubmitReplayWithOldHashAndChangedMaterialInputConflicts` | **A2** resubmit tamper |
+| 15 | `concurrentResubmitHasOneCompleteSurvivorAndAssertedLoser` | **A2** resubmit concurrency |
+| 16 | `reReturnUsesSameCycleNeedsMoreAndPausesClockAgain` | Same-cycle re-return |
+| 17 | `returnAfterClosedCycleStartsNextCycle` | Next cycle (test fixture close) |
+| 18 | `runtimeCannotInsertUpdateOrDeleteAnyRegistrationWorkflowHistory` | Runtime tamper |
+| 19 | `runtimeAppAndPublicExecuteOnlyDocumentedRegistrationCommands` | PUBLIC + runtime execute audit |
+| 20 | `internalHelperCannotBindReturnToClosedOrDifferentApplicationCycle` | Bind guard |
+| 21 | `subjectDeleteBlockedWhileRegistrationWorkflowHistoryExists` | Delete guard |
+| 22 | `disposableRegistrationCleanupRemovesNewRowsInDependencyOrder` | Maint cleanup |
+| 23 | `productionMaintClosureFunctionIsAbsentFromMigratedSchema` | No production closure bypass |
+| 24 | `wrongDueTimeIsRejectedWithNoPartialBundle` | Trusted due derivation |
+| 25 | `wrongTaskOwnerIsRejectedAtomically` | Trusted task owner |
+| 26 | `identicalReturnReplayAfterResubmitIsStable` | Lifecycle-stable return replay |
+| 27 | `identicalResubmitReplayAfterReReturnIsStable` | Lifecycle-stable resubmit replay |
+| 28 | `returnFromApplicationACannotBindToApplicationBCycle` | Cross-application bind guard |
+| 29 | `runtimeCannotExecuteInternalRegistrationHelpers` | Internal helper EXECUTE revoked |
 
-## Manual / assumption references (still open)
-
-- §3, §3.4, §3.10, Table 2 (pp. 22–29), Annexure 1 (pp. 50–53) — traced in 19C-0 design.
-- **A02** Programme as registration scrutiniser; **A03** resubmit → `programme_review`; **A08** / **BL-255** 7/12/15-day policy conflict; **A17** pause while applicant; **A18** no officer in applicant copy; **A20** permittee number deferred.
+Bundle helpers (`WorkflowBundleCounts`, `assertNoReturnWorkflowResidue`) assert counts across returns, resubmissions, cycles, tasks/events, clocks/events, discrepancies, dispositions, responses, notifications and wiring evidence.
 
 ## Deferrals (19C-B / 19C-C)
 
 - **19C-B:** `RegistrationReturnResponseWiring`, hook `RegistrationReviewService.transition`, HTTP idempotency alignment.
 - **19C-C:** Forward closure on recommend/approve, lazy programme task on fee confirm, read repository for 19D.
-- No supervisor queue, 60-day job (BL-253), cancel/reject normalization (BL-256), demo seed changes beyond disposable cleanup.

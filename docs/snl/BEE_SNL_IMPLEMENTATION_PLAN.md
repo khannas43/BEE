@@ -256,8 +256,8 @@ At the end of each development session, update the package status, progress, com
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | Accepted V69–V72; model journey wired. Brief 19C-A1 removed the production maint closure and added due/owner validation plus lifecycle replay, but V73 still trusts a caller-supplied wiring hash and its complete rollback/concurrency/recipient/tamper proofs are incomplete. HTTP registration journey remains unwired. |
-| Next action | Complete Brief 19C-A2 and repeat acceptance review; only then implement 19C-B service integration, 19C-C forward disposition/read prep and 19D queue work (BL-257) |
+| Existing foundation | Accepted V69–V72; model journey wired. V73 registration orchestrators persist return/resubmit bundles with database-calculated wiring hashes, transition-time role validity and 29 throwaway-schema proofs (Brief 19C-A2 implemented / review pending). HTTP registration journey remains unwired. |
+| Next action | ChatGPT review of Brief 19C-A2; then 19C-B service integration, 19C-C forward disposition/read prep and 19D queue work (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -790,6 +790,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (65%), Brief 19C-A review pending | In progress (68%), V73 registration DB boundary | V73 trusted orchestrators, internal repository and 18 database proof groups on throwaway schema; HTTP journey unchanged. | Accept 19C-A; implement 19C-B and 19C-C, then 19D (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (68%), V73 registration DB boundary | In progress (65%), Brief 19C-A1 corrections required | Review found a production maint closure bypass, caller-trusted actor/owner/role/due metadata, replay that fails after later lifecycle changes, and incomplete rollback/concurrency/tamper/recipient proofs. V73 remains unaccepted. | Complete Brief 19C-A1 and repeat acceptance review before 19C-B/C (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (65%), Brief 19C-A1 review pending | In progress (65%), Brief 19C-A2 corrections required | A1 removed the maint closure bypass and added due/owner checks plus lifecycle-stable replay. Review found that replay still compares evidence to a caller-supplied hash rather than a database-calculated canonical payload; rollback/concurrency still assert partial row sets, exceptions are swallowed, and required actor/role/recipient/tamper proofs remain incomplete. | Complete Brief 19C-A2 and repeat acceptance review before 19C-B/C (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (65%), Brief 19C-A2 corrections required | In progress (68%), Brief 19C-A2 implemented / review pending | V73 corrected in place: `registration_return_response_wiring_*_hash`, transition-time role checks, old-hash tamper proofs, bundle rollback helpers and honest concurrency losers. Gates: 160 backend, 511 database, 251 web; `tsc`, build, `git diff --check` clean. 19C not accepted. | ChatGPT review of 19C-A2; then 19C-B/C (BL-257) |
 
 ### 6.2 Standard completion record
 

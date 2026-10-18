@@ -3279,9 +3279,9 @@ class SpringContractTest {
             when(manufacturerOnboardingRepo.list(any(), any())).thenReturn(List.of(draft));
             when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(draft));
             when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.of(draft));
-            when(manufacturerOnboardingRepo.documentCount(MOB)).thenReturn(1);
-            when(manufacturerOnboardingRepo.create(any(), any(), anyInt(), any())).thenReturn(draft);
-            when(manufacturerOnboardingRepo.patchDraft(eq(MOB), eq(ONBOARD), anyInt(), any(), any())).thenReturn(Optional.of(draft));
+            when(manufacturerOnboardingRepo.hasTradeLicenceDocument(MOB)).thenReturn(true);
+            when(manufacturerOnboardingRepo.create(any(), any(), any(), anyInt(), any())).thenReturn(draft);
+            when(manufacturerOnboardingRepo.patchDraft(any(), eq(MOB), eq(ONBOARD), anyInt(), any(), any())).thenReturn(Optional.of(draft));
             when(manufacturerOnboardingRepo.draftPayloadJson(any())).thenReturn(Optional.of("{}"));
             when(manufacturerOnboardingRepo.latestChecks(any())).thenReturn(List.of());
             when(manufacturerOnboardingRepo.lifecycle(any())).thenReturn(List.of());
@@ -3339,7 +3339,7 @@ class SpringContractTest {
         when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
         conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 409, "idempotency_key_conflict");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
-        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).create(any(), any(), anyInt(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).create(any(), any(), any(), anyInt(), any());
         conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345c").contentType("application/json").content(createBody), 503, "service_unavailable");
         fresh.get();
         account("manufacturer", "own-org");
@@ -3356,7 +3356,7 @@ class SpringContractTest {
         when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.empty());
         conforms(ONE, patch(base).with(token("manufacturer")).contentType("application/json").content(patchBody), 404, "not_found");
         when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.of(draft));
-        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).patchDraft(eq(MOB), eq(ONBOARD), anyInt(), any(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).patchDraft(any(), eq(MOB), eq(ONBOARD), anyInt(), any(), any());
         conforms(ONE, patch(base).with(token("manufacturer")).contentType("application/json").content(patchBody), 503, "service_unavailable");
         fresh.get();
         account("manufacturer", "own-org");

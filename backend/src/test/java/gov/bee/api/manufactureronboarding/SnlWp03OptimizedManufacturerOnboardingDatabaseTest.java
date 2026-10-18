@@ -31,6 +31,7 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
 
     static final UUID ONBOARD_ORG = UUID.fromString("00000000-0000-4000-b000-000000000007");
     static final UUID ONBOARD_USER = UUID.fromString("00000000-0000-4000-a000-000000000017");
+    static final UUID NOVA_USER = UUID.fromString("00000000-0000-4000-a000-000000000001");
     static final UUID DIRECTOR = UUID.fromString("00000000-0000-4000-a000-000000000007");
     static final UUID FINANCE = UUID.fromString("00000000-0000-4000-a000-000000000003");
     static final UUID NOVA_ORG = UUID.fromString("00000000-0000-4000-b000-000000000001");
@@ -138,7 +139,16 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         return repo.find(appId).orElseThrow().version();
     }
 
+    void resetOnboardOrg() {
+        owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
+        owner.update("""
+            UPDATE manufacturer_onboarding_application SET state = 'revoked'
+             WHERE organisation_id = ? AND state NOT IN ('rejected', 'revoked')
+            """, ONBOARD_ORG);
+    }
+
     UUID draftApp() {
+        resetOnboardOrg();
         var created = service.create(onboardApplicant(), UUID.randomUUID().toString(), json.createObjectNode().put("legalName", "Onboard Manufacturing Pvt Ltd"));
         return UUID.fromString((String) created.getBody().get("id"));
     }
@@ -259,5 +269,124 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
             json.createObjectNode().put("version", v).put("resolution", "revoked").put("note", "Permittee revoked"));
         assertEquals("revoked", revoked.getBody().get("state"));
         assertEquals("revoked", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
+    }
+
+    @Test
+    void mobTrustedGucCannotBypassRuntimeGuards() {
+        db.execute("SELECT set_config('bee.mob_trusted', 'create', true)");
+        assertThrows(DataAccessException.class, () -> db.update(
+            "INSERT INTO manufacturer_onboarding_application (id, reference, organisation_id, legal_name) VALUES (?, 'FORGED', ?, 'X')",
+            UUID.randomUUID(), ONBOARD_ORG));
+        db.execute("SELECT set_config('bee.mob_trusted', 'orchestrator', true)");
+        UUID id = draftApp();
+        assertThrows(DataAccessException.class, () -> db.update(
+            "UPDATE manufacturer_onboarding_application SET legal_name = 'Forged' WHERE id = ?", id));
+        assertThrows(DataAccessException.class, () -> db.update(
+            "INSERT INTO manufacturer_onboarding_event (id, application_id, event_kind, actor_account_id, actor_role) VALUES (?, ?, 'forged', ?, 'manufacturer')",
+            UUID.randomUUID(), id, ONBOARD_USER));
+    }
+
+    @Test
+    void crossOrganisationCreateRefused() {
+        assertThrows(DataAccessException.class, () -> db.queryForObject(
+            "SELECT manufacturer_onboarding_trusted_create(?, ?, ?, ?, '{}'::jsonb)",
+            UUID.class, NOVA_USER, ONBOARD_ORG, "Wrong org", LocalDate.now(IST).getYear()));
+    }
+
+    @Test
+    void runtimeDirectUpdateRefused() {
+        UUID id = draftApp();
+        assertThrows(DataAccessException.class, () -> db.update(
+            "UPDATE manufacturer_onboarding_application SET draft_payload = '{\"cin\":\"X\"}'::jsonb WHERE id = ?", id));
+    }
+
+    @Test
+    void crossOrganisationUpdateRefused() {
+        UUID id = draftApp();
+        assertThrows(DataAccessException.class, () -> db.queryForObject(
+            "SELECT manufacturer_onboarding_trusted_patch_draft(?, ?, ?, ?, ?, '{}'::jsonb)",
+            Integer.class, NOVA_USER, id, ONBOARD_ORG, 0, null));
+    }
+
+    @Test
+    void tradeLicenceUploadedRequiresTradeLicenceDocument() {
+        UUID id = draftApp();
+        addDoc(id, "pan_card");
+        var preview = service.submitPreview(onboardApplicant(), id);
+        assertEquals(false, preview.getBody().get("tradeLicenceUploaded"));
+        addDoc(id, "trade_licence");
+        preview = service.submitPreview(onboardApplicant(), id);
+        assertEquals(true, preview.getBody().get("tradeLicenceUploaded"));
+    }
+
+    @Test
+    void trustedAppendDocumentConcurrentVersions() {
+        UUID id = draftApp();
+        String sha = "a".repeat(64);
+        docRepo.recordVersion(ONBOARD_ORG, id, "trade_licence", sha, 100, "a.pdf", "trade", null, null, ONBOARD_USER);
+        docRepo.recordVersion(ONBOARD_ORG, id, "trade_licence", sha, 100, "b.pdf", "trade", null, null, ONBOARD_USER);
+        assertEquals(2, owner.queryForObject(
+            "SELECT max(version_number) FROM manufacturer_onboarding_document_version v JOIN manufacturer_onboarding_document d ON d.id = v.document_id WHERE d.application_id = ? AND d.document_kind = 'trade_licence'",
+            Integer.class, id));
+    }
+
+    @Test
+    void runtimeDirectDocumentInsertRefused() {
+        UUID id = draftApp();
+        assertThrows(DataAccessException.class, () -> db.update(
+            "INSERT INTO manufacturer_onboarding_document (id, application_id, document_kind) VALUES (?, ?, 'pan_card')",
+            UUID.randomUUID(), id));
+    }
+
+    @Test
+    void repeatedAnomalyEpisodesSeparateIdempotencyKeys() {
+        UUID id = draftApp();
+        var sub = service.submit(onboardApplicant(), id, UUID.randomUUID().toString(),
+            json.createObjectNode().put("version", readyToSubmit(id)));
+        int v = (int) sub.getBody().get("version");
+        service.directorDecision(director(), id, UUID.randomUUID().toString(),
+            json.createObjectNode().put("version", v).put("decision", "approve"));
+        v = repo.find(id).orElseThrow().version();
+        String key1 = UUID.randomUUID().toString();
+        service.raiseAnomaly(finance(), id, key1, json.createObjectNode().put("version", v).put("reason", "First episode"));
+        v = repo.find(id).orElseThrow().version();
+        service.resolveAnomaly(director(), id, UUID.randomUUID().toString(),
+            json.createObjectNode().put("version", v).put("resolution", "cleared").put("note", "Cleared first"));
+        v = repo.find(id).orElseThrow().version();
+        String key2 = UUID.randomUUID().toString();
+        var second = service.raiseAnomaly(finance(), id, key2, json.createObjectNode().put("version", v).put("reason", "Second episode"));
+        assertEquals("on_hold", second.getBody().get("state"));
+        assertEquals(2, owner.queryForObject("SELECT count(*) FROM manufacturer_onboarding_anomaly WHERE application_id = ?", Integer.class, id));
+        owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id);
+        owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
+    }
+
+    @Test
+    void runtimeExecuteInventoryPublished() {
+        var expected = java.util.Set.of(
+            "manufacturer_onboarding_trusted_create",
+            "manufacturer_onboarding_trusted_patch_draft",
+            "manufacturer_onboarding_trusted_append_document",
+            "manufacturer_onboarding_orchestrate_submit",
+            "manufacturer_onboarding_orchestrate_director_decision",
+            "manufacturer_onboarding_orchestrate_raise_anomaly",
+            "manufacturer_onboarding_orchestrate_resolve_anomaly",
+            "manufacturer_onboarding_orchestrate_observation_close");
+        var granted = new java.util.HashSet<>(owner.queryForList("""
+            SELECT p.proname FROM pg_proc p
+              JOIN pg_namespace n ON n.oid = p.pronamespace
+             WHERE n.nspname = current_schema()
+               AND p.proname IN (
+                 'manufacturer_onboarding_trusted_create',
+                 'manufacturer_onboarding_trusted_patch_draft',
+                 'manufacturer_onboarding_trusted_append_document',
+                 'manufacturer_onboarding_orchestrate_submit',
+                 'manufacturer_onboarding_orchestrate_director_decision',
+                 'manufacturer_onboarding_orchestrate_raise_anomaly',
+                 'manufacturer_onboarding_orchestrate_resolve_anomaly',
+                 'manufacturer_onboarding_orchestrate_observation_close')
+               AND has_function_privilege('bee_runtime', p.oid, 'EXECUTE')
+            """, String.class));
+        assertEquals(expected, granted);
     }
 }

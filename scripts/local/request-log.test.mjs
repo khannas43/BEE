@@ -804,6 +804,21 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
       assert.equal((await res.json()).error, "session_expired");
     });
   }
+  test("unit-evidence: manufacturer onboarding detail upstream passes BFF validator (not invalid_upstream_response)", async () => {
+    const { validateManufacturerOnboardingDetail, MANUFACTURER_ONBOARDING_DETAIL_FIXTURE } = await import(
+      "../../lib/server/contracts/manufacturer-onboarding.ts"
+    );
+    assert.notEqual(validateManufacturerOnboardingDetail(MANUFACTURER_ONBOARDING_DETAIL_FIXTURE), null);
+    assert.equal(
+      validateManufacturerOnboardingDetail({
+        ...MANUFACTURER_ONBOARDING_DETAIL_FIXTURE,
+        documents: [{ documentKind: "pan_card", latestVersion: 1, status: "uploaded", extra: true }],
+      }),
+      null,
+    );
+    assert.equal(validateManufacturerOnboardingDetail({ ...MANUFACTURER_ONBOARDING_DETAIL_FIXTURE, documents: [{ foo: "bar" }] }), null);
+  });
+
   test("unit-evidence: POST /api/runtime/manufacturer-onboarding/{id}/documents 401 session_expired | Keycloak refusing refresh on a manufacturer document upload", async () => {
     refreshRefusedStub();
     const cookie = nearExpiry();

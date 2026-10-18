@@ -34,6 +34,21 @@ public class ManufacturerOnboardingRepository {
     public record AnomalyRow(String raisedByRole, String reason, String resolution, Instant raisedAt, Instant resolvedAt) {
     }
 
+    public record PaymentSummary(UUID paymentId, String amountInr, String receiptNumber, String status, Instant settledAt) {
+    }
+
+    public record FeeSnapshotSummary(String amountInr, String feeRuleKey, int feeRuleVersion, String totalInr) {
+    }
+
+    public record DirectorDecisionSummary(String decision, String note, Instant decidedAt) {
+    }
+
+    public record PermitteeActivationSummary(String permitteeNumber, Instant activatedAt) {
+    }
+
+    public record ObservationSummary(LocalDate startedOn, LocalDate endsOn, Instant closedAt) {
+    }
+
     private static Row row(ResultSet rs, int i) throws SQLException {
         var obs = rs.getDate("observation_ends_on");
         return new Row(rs.getObject("id", UUID.class), rs.getString("reference"), rs.getObject("organisation_id", UUID.class),
@@ -76,20 +91,29 @@ public class ManufacturerOnboardingRepository {
             .stream().findFirst();
     }
 
-    public Row create(UUID organisationId, String legalName, int year, JsonNode draft) {
+    public Row create(UUID actorId, UUID organisationId, String legalName, int year, JsonNode draft) {
         String draftJson = draft == null ? "{}" : draft.toString();
         UUID id = jdbc.queryForObject(
-            "SELECT manufacturer_onboarding_trusted_create(?, ?, ?, ?::jsonb)", UUID.class, organisationId, legalName, year, draftJson);
+            "SELECT manufacturer_onboarding_trusted_create(?, ?, ?, ?, ?::jsonb)", UUID.class, actorId, organisationId, legalName, year, draftJson);
         return find(id).orElseThrow();
     }
 
-    public Optional<Row> patchDraft(UUID id, UUID organisationId, int expectedVersion, String legalName, JsonNode draft) {
+    public Optional<Row> patchDraft(UUID actorId, UUID id, UUID organisationId, int expectedVersion, String legalName, JsonNode draft) {
         String draftJson = draft == null ? null : draft.toString();
-        int n = jdbc.update("UPDATE manufacturer_onboarding_application SET "
-            + "legal_name = coalesce(?, legal_name), draft_payload = coalesce(?::jsonb, draft_payload), version = version + 1 "
-            + "WHERE id = ? AND organisation_id = ? AND state IN ('draft', 'automatic_checks_failed') AND version = ?",
-            legalName, draftJson, id, organisationId, expectedVersion);
-        return n == 1 ? findOwned(id, organisationId) : Optional.empty();
+        Integer next = jdbc.query("""
+            SELECT manufacturer_onboarding_trusted_patch_draft(?, ?, ?, ?, ?, ?::jsonb)
+            """, (rs, i) -> rs.getObject(1, Integer.class), actorId, id, organisationId, expectedVersion, legalName, draftJson)
+            .stream().findFirst().orElse(null);
+        return next == null ? Optional.empty() : findOwned(id, organisationId);
+    }
+
+    public boolean hasTradeLicenceDocument(UUID applicationId) {
+        Integer n = jdbc.queryForObject("""
+            SELECT count(*) FROM manufacturer_onboarding_document_version v
+              JOIN manufacturer_onboarding_document d ON d.id = v.document_id
+             WHERE d.application_id = ? AND d.document_kind = 'trade_licence'
+            """, Integer.class, applicationId);
+        return n != null && n > 0;
     }
 
     public Optional<String> draftPayloadJson(UUID id) {
@@ -97,10 +121,47 @@ public class ManufacturerOnboardingRepository {
             .stream().findFirst();
     }
 
-    public int documentCount(UUID applicationId) {
-        Integer n = jdbc.queryForObject("SELECT count(*) FROM manufacturer_onboarding_document_version v "
-            + "JOIN manufacturer_onboarding_document d ON d.id = v.document_id WHERE d.application_id = ?", Integer.class, applicationId);
-        return n == null ? 0 : n;
+    public Optional<PaymentSummary> paymentSummary(UUID applicationId) {
+        return jdbc.query("""
+            SELECT p.id, p.amount_inr::text, p.receipt_number, p.status, p.settled_at
+              FROM manufacturer_onboarding_payment_link l
+              JOIN payment p ON p.id = l.payment_id
+             WHERE l.application_id = ?
+            """, (rs, i) -> new PaymentSummary(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4),
+            rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant()), applicationId).stream().findFirst();
+    }
+
+    public Optional<FeeSnapshotSummary> feeSnapshot(UUID applicationId) {
+        return jdbc.query("""
+            SELECT amount_inr::text, fee_rule_key, fee_rule_version, total_inr::text
+              FROM manufacturer_onboarding_fee_snapshot WHERE application_id = ?
+            """, (rs, i) -> new FeeSnapshotSummary(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getString(4)), applicationId)
+            .stream().findFirst();
+    }
+
+    public Optional<DirectorDecisionSummary> directorDecision(UUID applicationId) {
+        return jdbc.query("""
+            SELECT decision, note, decided_at FROM manufacturer_onboarding_director_decision
+             WHERE application_id = ? ORDER BY decided_at DESC LIMIT 1
+            """, (rs, i) -> new DirectorDecisionSummary(rs.getString(1), rs.getString(2), rs.getTimestamp(3).toInstant()), applicationId)
+            .stream().findFirst();
+    }
+
+    public Optional<PermitteeActivationSummary> permitteeActivation(UUID applicationId) {
+        return jdbc.query("""
+            SELECT permittee_number, activated_at FROM manufacturer_onboarding_permittee_activation WHERE application_id = ?
+            """, (rs, i) -> new PermitteeActivationSummary(rs.getString(1), rs.getTimestamp(2).toInstant()), applicationId)
+            .stream().findFirst();
+    }
+
+    public Optional<ObservationSummary> observation(UUID applicationId) {
+        return jdbc.query("""
+            SELECT started_on, ends_on, closed_at FROM manufacturer_onboarding_observation WHERE application_id = ?
+            """, (rs, i) -> {
+            var closed = rs.getTimestamp(3);
+            return new ObservationSummary(rs.getDate(1).toLocalDate(), rs.getDate(2).toLocalDate(),
+                closed == null ? null : closed.toInstant());
+        }, applicationId).stream().findFirst();
     }
 
     public List<AutomatedCheck> latestChecks(UUID applicationId) {

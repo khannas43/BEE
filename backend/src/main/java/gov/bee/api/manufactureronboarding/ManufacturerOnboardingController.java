@@ -188,7 +188,7 @@ public class ManufacturerOnboardingController {
             byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes);
             java.time.LocalDate issue = issueOn == null || issueOn.isBlank() ? null : java.time.LocalDate.parse(issueOn);
             java.time.LocalDate expiry = expiresOn == null || expiresOn.isBlank() ? null : java.time.LocalDate.parse(expiresOn);
-            documents.recordVersion(appId, kind, HexFormat.of().formatHex(digest), bytes.length,
+            documents.recordVersion(org.get(), appId, kind, HexFormat.of().formatHex(digest), bytes.length,
                 file.getOriginalFilename() == null ? "document.pdf" : file.getOriginalFilename(),
                 label == null || label.isBlank() ? kind : label, issue, expiry, resolved.caller().accountId());
             return service.get(resolved.caller(), appId);

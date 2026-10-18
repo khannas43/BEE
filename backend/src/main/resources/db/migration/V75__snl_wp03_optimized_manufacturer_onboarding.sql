@@ -228,29 +228,17 @@ CREATE TRIGGER manufacturer_onboarding_command_evidence_immutable BEFORE UPDATE 
 
 CREATE FUNCTION manufacturer_onboarding_application_runtime_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF current_user <> 'bee_runtime' AND session_user <> 'bee_runtime' THEN
+  IF current_user <> 'bee_runtime' THEN
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
     RETURN NEW;
   END IF;
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_application_delete_refused';
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF current_setting('bee.mob_trusted', true) = 'create' THEN
-      RETURN NEW;
-    END IF;
     RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_application_insert_via_trusted';
   END IF;
-  IF current_setting('bee.mob_trusted', true) = 'orchestrator' THEN
-    RETURN NEW;
-  END IF;
-  IF OLD.state IN ('draft', 'automatic_checks_failed') AND NEW.state = OLD.state
-     AND NEW.reference IS NOT DISTINCT FROM OLD.reference
-     AND NEW.organisation_id IS NOT DISTINCT FROM OLD.organisation_id
-     AND NEW.permittee_number IS NOT DISTINCT FROM OLD.permittee_number
-     AND NEW.observation_ends_on IS NOT DISTINCT FROM OLD.observation_ends_on THEN
-    RETURN NEW;
-  END IF;
-  RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_application_state_via_orchestrator';
+  RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_application_update_via_trusted';
 END $$;
 
 CREATE TRIGGER manufacturer_onboarding_application_runtime_guard BEFORE INSERT OR UPDATE OR DELETE
@@ -258,12 +246,33 @@ CREATE TRIGGER manufacturer_onboarding_application_runtime_guard BEFORE INSERT O
 
 CREATE FUNCTION manufacturer_onboarding_event_runtime_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF (current_user = 'bee_runtime' OR session_user = 'bee_runtime')
-     AND coalesce(current_setting('bee.mob_trusted', true), '') <> 'orchestrator' THEN
+  IF current_user = 'bee_runtime' THEN
     RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_event_insert_via_orchestrator';
   END IF;
   RETURN NEW;
 END $$;
+
+CREATE FUNCTION manufacturer_onboarding_document_runtime_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF current_user = 'bee_runtime' THEN
+    RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_document_insert_via_trusted';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER manufacturer_onboarding_document_runtime_guard BEFORE INSERT ON manufacturer_onboarding_document
+  FOR EACH ROW EXECUTE FUNCTION manufacturer_onboarding_document_runtime_guard();
+
+CREATE FUNCTION manufacturer_onboarding_document_version_runtime_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF current_user = 'bee_runtime' THEN
+    RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_document_version_insert_via_trusted';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER manufacturer_onboarding_document_version_runtime_guard BEFORE INSERT ON manufacturer_onboarding_document_version
+  FOR EACH ROW EXECUTE FUNCTION manufacturer_onboarding_document_version_runtime_guard();
 
 CREATE TRIGGER manufacturer_onboarding_event_runtime_guard BEFORE INSERT ON manufacturer_onboarding_event
   FOR EACH ROW EXECUTE FUNCTION manufacturer_onboarding_event_runtime_guard();
@@ -299,16 +308,122 @@ BEGIN
   RETURN NEW;
 END $$;
 
-CREATE FUNCTION manufacturer_onboarding_trusted_create(
-  p_organisation uuid, p_legal_name text, p_year integer, p_draft jsonb DEFAULT '{}'::jsonb)
-RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
-DECLARE id uuid := gen_random_uuid(); ref text;
+CREATE FUNCTION manufacturer_onboarding_assert_applicant_writer(p_actor uuid, p_organisation uuid, p_application uuid DEFAULT NULL)
+RETURNS void LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
+DECLARE plc text;
 BEGIN
-  PERFORM set_config('bee.mob_trusted', 'create', true);
+  IF NOT EXISTS (SELECT 1 FROM user_account u WHERE u.id = p_actor AND u.status = 'active') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'no_active_account';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM role_assignment ra WHERE ra.user_id = p_actor AND ra.active AND ra.role = 'manufacturer' AND ra.scope = 'own-org') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'no_write_scope';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM organisation_membership m JOIN organisation o ON o.id = m.organisation_id
+                  WHERE m.user_id = p_actor AND m.organisation_id = p_organisation AND m.active AND o.status = 'active'
+                    AND now() >= m.valid_from AND now() < m.valid_to) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_found';
+  END IF;
+  IF p_application IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM manufacturer_onboarding_application a WHERE a.id = p_application AND a.organisation_id = p_organisation) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_found';
+  END IF;
+  SELECT permittee_lifecycle INTO plc FROM organisation WHERE id = p_organisation;
+  IF plc <> 'none' THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'organisation_not_eligible';
+  END IF;
+END $$;
+
+CREATE FUNCTION manufacturer_onboarding_merge_draft_payload(p_existing jsonb, p_patch jsonb) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE SET search_path FROM CURRENT AS $$
+DECLARE allowed text[] := ARRAY['cin', 'gstin', 'declarationAccepted', 'agreementAccepted', 'registeredAddress', 'authorisedSignatory', 'facilities', 'contacts', 'annexureNotes'];
+  k text;
+  out jsonb := coalesce(p_existing, '{}'::jsonb);
+BEGIN
+  IF p_patch IS NULL THEN RETURN out; END IF;
+  IF jsonb_typeof(p_patch) <> 'object' THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'validation_failed';
+  END IF;
+  FOR k IN SELECT jsonb_object_keys(p_patch) LOOP
+    IF NOT (k = ANY (allowed)) THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'validation_failed';
+    END IF;
+    out := out || jsonb_build_object(k, p_patch -> k);
+  END LOOP;
+  RETURN out;
+END $$;
+
+CREATE FUNCTION manufacturer_onboarding_trusted_create(
+  p_actor uuid, p_organisation uuid, p_legal_name text, p_year integer, p_draft jsonb DEFAULT '{}'::jsonb)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE id uuid := gen_random_uuid(); ref text; merged jsonb;
+BEGIN
+  PERFORM manufacturer_onboarding_assert_applicant_writer(p_actor, p_organisation);
+  IF char_length(btrim(p_legal_name)) < 1 OR char_length(btrim(p_legal_name)) > 200 THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'validation_failed';
+  END IF;
+  IF EXISTS (SELECT 1 FROM manufacturer_onboarding_application o WHERE o.organisation_id = p_organisation AND o.state NOT IN ('rejected', 'revoked')) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'validation_failed';
+  END IF;
+  merged := manufacturer_onboarding_merge_draft_payload('{}'::jsonb, coalesce(p_draft, '{}'::jsonb));
   ref := manufacturer_onboarding_next_reference(p_year);
   INSERT INTO manufacturer_onboarding_application (id, reference, organisation_id, legal_name, draft_payload)
-  VALUES (id, ref, p_organisation, btrim(p_legal_name), coalesce(p_draft, '{}'::jsonb));
+  VALUES (id, ref, p_organisation, btrim(p_legal_name), merged);
   RETURN id;
+END $$;
+
+CREATE FUNCTION manufacturer_onboarding_trusted_patch_draft(
+  p_actor uuid, p_application uuid, p_organisation uuid, p_version integer,
+  p_legal_name text, p_draft jsonb)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE a manufacturer_onboarding_application%ROWTYPE; merged jsonb; v_after integer;
+BEGIN
+  PERFORM manufacturer_onboarding_assert_applicant_writer(p_actor, p_organisation, p_application);
+  SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application FOR UPDATE;
+  IF NOT FOUND OR a.state NOT IN ('draft', 'automatic_checks_failed') OR a.version <> p_version THEN
+    RETURN NULL;
+  END IF;
+  merged := manufacturer_onboarding_merge_draft_payload(a.draft_payload, p_draft);
+  v_after := a.version + 1;
+  UPDATE manufacturer_onboarding_application
+     SET legal_name = coalesce(nullif(btrim(p_legal_name), ''), legal_name),
+         draft_payload = CASE WHEN p_draft IS NULL THEN draft_payload ELSE merged END,
+         version = v_after
+   WHERE id = p_application;
+  RETURN v_after;
+END $$;
+
+CREATE FUNCTION manufacturer_onboarding_trusted_append_document(
+  p_actor uuid, p_application uuid, p_organisation uuid, p_document_kind text,
+  p_content_sha256 char(64), p_size_bytes bigint, p_original_filename text, p_label text,
+  p_issue_on date, p_expires_on date)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE a manufacturer_onboarding_application%ROWTYPE; doc_id uuid; next_ver integer;
+  kinds text[] := ARRAY['trade_licence', 'certificate_of_incorporation', 'gst_certificate', 'pan_card', 'signatory_photo_id',
+    'facility_address_proof', 'signed_declaration', 'signed_agreement', 'annexure_supporting'];
+BEGIN
+  PERFORM manufacturer_onboarding_assert_applicant_writer(p_actor, p_organisation, p_application);
+  SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application FOR UPDATE;
+  IF NOT FOUND OR a.state NOT IN ('draft', 'automatic_checks_failed') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_editable';
+  END IF;
+  IF NOT (p_document_kind = ANY (kinds)) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'validation_failed';
+  END IF;
+  IF p_size_bytes IS NULL OR p_size_bytes <= 0 OR p_content_sha256 !~ '^[0-9a-f]{64}$' THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'validation_failed';
+  END IF;
+  IF p_expires_on IS NOT NULL AND p_issue_on IS NOT NULL AND p_expires_on <= p_issue_on THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'validation_failed';
+  END IF;
+  SELECT id INTO doc_id FROM manufacturer_onboarding_document WHERE application_id = p_application AND document_kind = p_document_kind FOR UPDATE;
+  IF NOT FOUND THEN
+    doc_id := gen_random_uuid();
+    INSERT INTO manufacturer_onboarding_document (id, application_id, document_kind) VALUES (doc_id, p_application, p_document_kind);
+  END IF;
+  SELECT coalesce(max(version_number), 0) + 1 INTO next_ver FROM manufacturer_onboarding_document_version WHERE document_id = doc_id;
+  INSERT INTO manufacturer_onboarding_document_version (id, document_id, version_number, content_sha256, size_bytes, media_type, original_filename, label, uploaded_by_account_id, issue_on, expires_on)
+  VALUES (gen_random_uuid(), doc_id, next_ver, p_content_sha256, p_size_bytes, 'application/pdf', p_original_filename, p_label, p_actor, p_issue_on, p_expires_on);
+  RETURN next_ver;
 END $$;
 
 CREATE FUNCTION manufacturer_onboarding_run_automated_checks(p_application uuid) RETURNS boolean
@@ -424,7 +539,6 @@ DECLARE
   notify_id uuid := gen_random_uuid();
   notify_hash char(64) := md5(p_command_id::text || 'mob-notify-submit') || md5('mob-notify-submit|' || p_command_id::text);
 BEGIN
-  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     SELECT l.payment_id INTO out_payment_id FROM manufacturer_onboarding_payment_link l WHERE l.application_id = p_application;
@@ -497,7 +611,6 @@ DECLARE
   obs_start date;
   obs_end date;
 BEGIN
-  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version, a.permittee_number INTO out_state, out_version, out_permittee_number FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     RETURN NEXT; RETURN;
@@ -554,7 +667,6 @@ RETURNS TABLE (out_state text, out_version integer)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE a manufacturer_onboarding_application%ROWTYPE; holds boolean; v_after integer;
 BEGIN
-  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     RETURN NEXT; RETURN;
@@ -590,7 +702,6 @@ RETURNS TABLE (out_state text, out_version integer)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE a manufacturer_onboarding_application%ROWTYPE; holds boolean; v_after integer; resume text; today date; ev uuid := gen_random_uuid();
 BEGIN
-  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     RETURN NEXT; RETURN;
@@ -646,7 +757,6 @@ RETURNS TABLE (out_state text, out_version integer, out_permittee_number text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE a manufacturer_onboarding_application%ROWTYPE; today date; v_after integer; ev uuid := gen_random_uuid();
 BEGIN
-  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version, a.permittee_number INTO out_state, out_version, out_permittee_number FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     RETURN NEXT; RETURN;
@@ -819,7 +929,11 @@ BEGIN
   END IF;
 END $$;
 
-REVOKE ALL ON FUNCTION manufacturer_onboarding_trusted_create(uuid, text, integer, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION manufacturer_onboarding_assert_applicant_writer(uuid, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION manufacturer_onboarding_merge_draft_payload(jsonb, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION manufacturer_onboarding_trusted_create(uuid, uuid, text, integer, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION manufacturer_onboarding_trusted_patch_draft(uuid, uuid, uuid, integer, text, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION manufacturer_onboarding_trusted_append_document(uuid, uuid, uuid, text, char(64), bigint, text, text, date, date) FROM PUBLIC;
 REVOKE ALL ON FUNCTION manufacturer_onboarding_run_automated_checks(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION manufacturer_onboarding_orchestrate_submit(uuid, uuid, text, integer, numeric, text, integer, text, text, text, uuid, char(64)) FROM PUBLIC;
 REVOKE ALL ON FUNCTION manufacturer_onboarding_next_reference(integer) FROM PUBLIC;
@@ -848,16 +962,19 @@ BEGIN
     EXECUTE format('GRANT SELECT, DELETE ON %I.payment_callback, %I.payment_event, %I.payment TO bee_local_maint', home_schema, home_schema, home_schema);
   END IF;
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_runtime') THEN
-    EXECUTE format('GRANT SELECT, UPDATE ON %I.manufacturer_onboarding_application TO bee_runtime', home_schema);
-    EXECUTE format('REVOKE INSERT, DELETE ON %I.manufacturer_onboarding_application FROM bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_trusted_create(uuid, text, integer, jsonb) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT SELECT ON %I.manufacturer_onboarding_application TO bee_runtime', home_schema);
+    EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %I.manufacturer_onboarding_application FROM bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_trusted_create(uuid, uuid, text, integer, jsonb) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_trusted_patch_draft(uuid, uuid, uuid, integer, text, jsonb) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_trusted_append_document(uuid, uuid, uuid, text, char(64), bigint, text, text, date, date) TO bee_runtime', home_schema);
     EXECUTE format('REVOKE SELECT, UPDATE ON %I.manufacturer_onboarding_allocator FROM bee_runtime', home_schema);
     EXECUTE format('REVOKE INSERT ON %I.manufacturer_onboarding_event FROM bee_runtime', home_schema);
     EXECUTE format('GRANT SELECT ON %I.manufacturer_onboarding_event TO bee_runtime', home_schema);
     EXECUTE format('GRANT SELECT ON %I.manufacturer_onboarding_anomaly, %I.manufacturer_onboarding_director_decision, %I.manufacturer_onboarding_observation, %I.manufacturer_onboarding_permittee_activation TO bee_runtime',
       home_schema, home_schema, home_schema, home_schema);
     EXECUTE format('GRANT SELECT ON %I.manufacturer_onboarding_payment_link TO bee_runtime', home_schema);
-    EXECUTE format('GRANT SELECT, INSERT ON %I.manufacturer_onboarding_document, %I.manufacturer_onboarding_document_version TO bee_runtime', home_schema, home_schema);
+    EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %I.manufacturer_onboarding_document, %I.manufacturer_onboarding_document_version FROM bee_runtime', home_schema, home_schema);
+    EXECUTE format('GRANT SELECT ON %I.manufacturer_onboarding_document, %I.manufacturer_onboarding_document_version TO bee_runtime', home_schema, home_schema);
     EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %I.manufacturer_onboarding_command_evidence FROM bee_runtime', home_schema);
     EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %I.manufacturer_onboarding_automated_check FROM bee_runtime', home_schema);
     EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %I.manufacturer_onboarding_director_decision FROM bee_runtime', home_schema);

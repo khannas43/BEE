@@ -115,7 +115,7 @@ public class ManufacturerOnboardingService {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
         JsonNode draft = body == null ? null : body.get("draft");
-        var row = repo.create(org.get(), legalName, LocalDate.now(IST).getYear(), draft);
+        var row = repo.create(caller.accountId(), org.get(), legalName, LocalDate.now(IST).getYear(), draft);
         Map<String, Object> view = detailView(row);
         idempotency.complete(caller.accountId(), "POST", ROUTE_CREATE, NIL, idempotencyKey, 201, json.valueToTree(view).toString(), row.version());
         return ResponseEntity.status(HttpStatus.CREATED).body(view);
@@ -140,7 +140,7 @@ public class ManufacturerOnboardingService {
         if (owned.isEmpty() || !ManufacturerOnboardingPolicy.editable(owned.get().state())) {
             return error(owned.isEmpty() ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN, owned.isEmpty() ? "not_found" : "not_editable");
         }
-        Optional<ManufacturerOnboardingRepository.Row> updated = repo.patchDraft(id, org.get(), version.get(), legalName, draft);
+        Optional<ManufacturerOnboardingRepository.Row> updated = repo.patchDraft(caller.accountId(), id, org.get(), version.get(), legalName, draft);
         if (updated.isEmpty()) {
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
@@ -167,7 +167,7 @@ public class ManufacturerOnboardingService {
         body.put("applicationId", id.toString());
         body.put("state", row.get().state());
         body.put("version", row.get().version());
-        body.put("tradeLicenceUploaded", repo.documentCount(id) > 0);
+        body.put("tradeLicenceUploaded", repo.hasTradeLicenceDocument(id));
         body.put("expectedFee", feeView(fee.get()));
         return ResponseEntity.ok(body);
     }
@@ -371,7 +371,7 @@ public class ManufacturerOnboardingService {
         m.put("legalName", r.legalName());
         m.put("state", r.state());
         m.put("version", r.version());
-        m.put("tradeLicenceUploaded", repo.documentCount(r.id()) > 0);
+        m.put("tradeLicenceUploaded", repo.hasTradeLicenceDocument(r.id()));
         if (r.permitteeNumber() != null) {
             m.put("permitteeNumber", r.permitteeNumber());
         }
@@ -414,13 +414,58 @@ public class ManufacturerOnboardingService {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("raisedByRole", a.raisedByRole());
             row.put("reason", a.reason());
-            row.put("resolution", a.resolution());
+            if (a.resolution() != null) {
+                row.put("resolution", a.resolution());
+            }
             row.put("raisedAt", a.raisedAt().toString());
             if (a.resolvedAt() != null) {
                 row.put("resolvedAt", a.resolvedAt().toString());
             }
             return row;
         }).toList());
+        repo.feeSnapshot(r.id()).ifPresent(f -> {
+            Map<String, Object> fee = new LinkedHashMap<>();
+            fee.put("amountInr", f.amountInr());
+            fee.put("totalInr", f.totalInr());
+            fee.put("feeRuleKey", f.feeRuleKey());
+            fee.put("feeRuleVersion", f.feeRuleVersion());
+            m.put("fee", fee);
+        });
+        repo.paymentSummary(r.id()).ifPresent(p -> {
+            Map<String, Object> pay = new LinkedHashMap<>();
+            pay.put("paymentId", p.paymentId().toString());
+            pay.put("amountInr", p.amountInr());
+            pay.put("receiptNumber", p.receiptNumber());
+            pay.put("status", p.status());
+            if (p.settledAt() != null) {
+                pay.put("settledAt", p.settledAt().toString());
+            }
+            m.put("payment", pay);
+        });
+        repo.directorDecision(r.id()).ifPresent(d -> {
+            Map<String, Object> dec = new LinkedHashMap<>();
+            dec.put("decision", d.decision());
+            if (d.note() != null) {
+                dec.put("note", d.note());
+            }
+            dec.put("decidedAt", d.decidedAt().toString());
+            m.put("directorDecision", dec);
+        });
+        repo.permitteeActivation(r.id()).ifPresent(a -> {
+            Map<String, Object> act = new LinkedHashMap<>();
+            act.put("permitteeNumber", a.permitteeNumber());
+            act.put("activatedAt", a.activatedAt().toString());
+            m.put("permitteeActivation", act);
+        });
+        repo.observation(r.id()).ifPresent(o -> {
+            Map<String, Object> obs = new LinkedHashMap<>();
+            obs.put("startedOn", o.startedOn().toString());
+            obs.put("endsOn", o.endsOn().toString());
+            if (o.closedAt() != null) {
+                obs.put("closedAt", o.closedAt().toString());
+            }
+            m.put("observation", obs);
+        });
         return m;
     }
 

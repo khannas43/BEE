@@ -26,23 +26,15 @@ public class ManufacturerOnboardingDocumentRepository {
             .stream().findFirst();
     }
 
-    public void recordVersion(UUID applicationId, String documentKind, String sha256, long sizeBytes, String filename, String label,
-                              LocalDate issueOn, LocalDate expiresOn, UUID uploader) {
+    public int recordVersion(UUID organisationId, UUID applicationId, String documentKind, String sha256, long sizeBytes, String filename, String label,
+                             LocalDate issueOn, LocalDate expiresOn, UUID uploader) {
         if (!DOCUMENT_KINDS.contains(documentKind)) {
             throw new IllegalArgumentException("document_kind_invalid");
         }
-        UUID docId = jdbc.query("SELECT id FROM manufacturer_onboarding_document WHERE application_id = ? AND document_kind = ?",
-            (rs, i) -> rs.getObject("id", UUID.class), applicationId, documentKind).stream().findFirst().orElseGet(() -> {
-                UUID id = UUID.randomUUID();
-                jdbc.update("INSERT INTO manufacturer_onboarding_document (id, application_id, document_kind) VALUES (?, ?, ?)", id, applicationId,
-                    documentKind);
-                return id;
-            });
-        Integer next = jdbc.queryForObject("SELECT coalesce(max(version_number), 0) + 1 FROM manufacturer_onboarding_document_version WHERE document_id = ?",
-            Integer.class, docId);
-        jdbc.update("INSERT INTO manufacturer_onboarding_document_version (id, document_id, version_number, content_sha256, size_bytes, media_type, "
-            + "original_filename, label, uploaded_by_account_id, issue_on, expires_on) VALUES (?, ?, ?, ?, ?, 'application/pdf', ?, ?, ?, ?, ?)",
-            UUID.randomUUID(), docId, next, sha256, sizeBytes, filename, label, uploader, issueOn, expiresOn);
+        Integer version = jdbc.queryForObject("""
+            SELECT manufacturer_onboarding_trusted_append_document(?, ?, ?, ?, ?::char(64), ?, ?, ?, ?, ?)
+            """, Integer.class, uploader, applicationId, organisationId, documentKind, sha256, sizeBytes, filename, label, issueOn, expiresOn);
+        return version == null ? 0 : version;
     }
 
     public List<ManufacturerOnboardingRepository.DocumentHead> list(UUID applicationId) {

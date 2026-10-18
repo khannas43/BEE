@@ -29,7 +29,13 @@ export const DEMO_LOGIN_ERRORS: Record<string, string> = {
 };
 
 /** Username and password only (the demonstration sign-in, BEE_DEMO_LOGIN). Success goes to the returned address. */
-export function DemoLoginForm({ onSignedIn = (to: string) => window.location.assign(to) }: { onSignedIn?: (returnTo: string) => void }) {
+export function DemoLoginForm({
+  onSignedIn = (to: string) => window.location.assign(to),
+  showAccounts = true,
+}: {
+  onSignedIn?: (returnTo: string) => void;
+  showAccounts?: boolean;
+}) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -123,7 +129,7 @@ export function DemoLoginForm({ onSignedIn = (to: string) => window.location.ass
         <Icon name={busy ? "progress_activity" : "login"} size={18} className={busy ? "animate-spin" : ""} /> {busy ? "Signing in…" : "Sign in"}
       </button>
 
-      <div className="mt-space-lg pt-space-md border-t border-border-subtle">
+      {showAccounts && <div className="mt-space-lg pt-space-md border-t border-border-subtle">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -157,7 +163,7 @@ export function DemoLoginForm({ onSignedIn = (to: string) => window.location.ass
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </form>
   );
 }

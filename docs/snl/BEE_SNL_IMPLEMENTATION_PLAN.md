@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress — Brief 19B-2A corrections | 60% | WP1 | R1 | V69–V71 accepted; V72 forward closure remains unaccepted pending trusted-boundary corrections |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19B-2B corrections | 60% | WP1 | R1 | V69–V71 accepted; V72 remains unaccepted pending final privilege and proof corrections |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -257,7 +257,7 @@ At the end of each development session, update the package status, progress, com
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
 | Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation and V71 model return/resubmit wiring. Model commands now commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response and evidence writes. Registration remains unwired. |
-| Next action | Complete Brief 19B-2A and accept V72; then 19C registration wiring and 19D read projection/consolidated proof (BL-257) |
+| Next action | Complete Brief 19B-2B and accept V72; then 19C registration wiring and 19D read projection/consolidated proof (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -784,6 +784,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (55%), Brief 19B-A in review | In progress (50%), Brief 19B-B corrections underway | Review found residual runtime bypasses in return/evidence/stage commands; Spring-service rollback, rating-supersession, concurrent-command and integrated due-date proofs remain required. V71 is unmerged and 19B is not accepted. | Complete all Brief 19B-B sections; accept 19B before starting 19B-2 or 19C (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (50%), Brief 19B-B corrections underway | In progress (60%), Brief 19B accepted | Trusted V71 orchestrate boundaries and all 14 proof groups accepted. Review removed a production magic failure input; its rollback proof now uses a test-schema trigger. Verified 160 backend, 355 database and 251 web tests, TypeScript and production build. | Merge acceptance correction; start 19B-2 stage-forward closure, then 19C–19D (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2 review pending | In progress (60%), Brief 19B-2A implemented | V72 corrected in place: cycle/return binding, enforced five-stage forward map with stored event time, structural UNIQUE/CHECK constraints, real service 409 rollback and concurrency/runtime proofs. Awaiting ChatGPT acceptance before 19C (BL-257). | Repeat acceptance review; then 19C registration wiring (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2A implemented | In progress (60%), Brief 19B-2B corrections | Review found PUBLIC execute on the security-definer cycle-binding helper. The claimed service 409 tests exit at the HTTP replay check before any legacy/closure write, and several migration/constraint tests fail for masking reasons. V72 remains unmerged. | Complete Brief 19B-2B and repeat acceptance review (BL-257) |
 
 ### 6.2 Standard completion record
 

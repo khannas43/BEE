@@ -239,7 +239,7 @@ Each decision below gives what the system does today, the realistic options, a r
 | B15 | (c) supervisor role only, may reassign; role not named | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 | C1 | (a) with (c): administrators with a second approver, no past dates | Owner's assumption | Owner, 4 Oct 2026 (not BEE) |
 
-## S&L implementation plan — provisional assumptions A01–A20 (18 October 2026)
+## S&L implementation plan — provisional assumptions A01–A29 (18 October 2026)
 
 **Status:** **Provisional — owner confirmation pending.** These items mirror [snl/BEE_SNL_IMPLEMENTATION_PLAN.md](snl/BEE_SNL_IMPLEMENTATION_PLAN.md) §3 and the WP01 traceability baseline. They are **not** final BEE policy decisions. Traceability: [snl/SNL_WP01_BASELINE.md](snl/SNL_WP01_BASELINE.md).
 
@@ -265,6 +265,15 @@ Each decision below gives what the system does today, the realistic options, a r
 | A18 | Portal notifications authoritative; email when provider approved; SMS for high-value events | §3.4 portal communication (pp. 24–25) | Provisional — owner confirmation pending |
 | A19 | Uploaded signed/stamped documents suffice until BEE confirms eSign/digital signature | §3, §3.1 (pp. 22–23) | Provisional — owner confirmation pending |
 | A20 | Configurable registration ID sequences; model IDs stay `BEE/<category>/<year>/<number>` until BEE supplies format | §3.1.1 permittee number (p. 22) | Provisional — owner confirmation pending |
+| A21 | The 13-page solution blueprint is a target experience/architecture proposal, not BEE policy | Blueprint pp. 1–13; subordinate to the manual and official rules | Provisional — owner confirmation pending |
+| A22 | AI/OCR is advisory; evidence/version/override recorded; consequential decisions remain human | Blueprint pp. 4–6, 9 | Provisional — owner confirmation pending |
+| A23 | Government/accreditation checks use provider-neutral adapters with evidence, expiry, retry and manual fallback | Blueprint p. 3; provider access unconfirmed | Provisional — owner confirmation pending |
+| A24 | Generated forms use versioned templates/snapshots; e-sign only after BEE approves the mechanism | Blueprint p. 12; extends A19 | Provisional — owner confirmation pending |
+| A25 | Portal DB is authoritative; any ledger is optional and stores only hashes/Merkle roots, no personal data/files | Blueprint p. 10; real-ledger decision open | Provisional — owner confirmation pending |
+| A26 | QR uses opaque unit IDs and versioned signatures; algorithm/key custody/rotation await security decision | Blueprint pp. 7–10; extends A11 | Provisional — owner confirmation pending |
+| A27 | QR batch records model, plant and production lot; one-batch-per-lot cardinality remains open | Blueprint p. 7; manual silent | Provisional — owner confirmation pending |
+| A28 | Scan intelligence, purchase registration and label photos require privacy/consent/retention rules; clone flags are advisory | Blueprint pp. 8–10 | Provisional — owner confirmation pending |
+| A29 | The blueprint's 90-day test-report limit is not adopted without an official rule | Blueprint p. 5; existing test-age decision remains unanswered | Provisional — owner confirmation pending |
 
 **Policy conflicts recorded in WP01 (not decisions):** discrepancy day counts (A08); entity approval roles silent (A02–A03); portal `agency` registration kind not described as such in the manual.
 

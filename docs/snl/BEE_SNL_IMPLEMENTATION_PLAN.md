@@ -6,6 +6,7 @@
 **Active work package:** WP2 Common workflow tasks and SLA
 **Primary source:** *SnL Disha Advisory Manual*
 **Secondary reference:** https://www.beestarlabel.com/Manufacturer/AgencyRegistration
+**Supplementary design reference:** 13-page S&L solution blueprint, mapped in [SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md](SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md)
 **Important:** The assumptions in this plan are implementation defaults selected because formal BEE decisions were not available. They are not BEE policy and must remain configurable.
 
 ## 1. Purpose
@@ -52,6 +53,7 @@ Progress is the approximate percentage of target-package checklist items complet
 5. Keep every fee, rule, document and decision versioned and auditable.
 6. Keep legal and operational rules configurable by effective date.
 7. Build every release as an end-to-end usable journey with automated and live tests.
+8. Build authoritative records and manual fallbacks before optional AI, external-registry, e-sign or integrity-anchor automation.
 
 ## 3. Provisional assumptions
 
@@ -77,6 +79,15 @@ Progress is the approximate percentage of target-package checklist items complet
 | A18 | Portal notifications are authoritative. Email is enabled when a provider is approved; SMS is limited to high-value events. | The manual requires portal communication. External channels need provider, template, consent and retry decisions. |
 | A19 | Uploaded signed and stamped documents satisfy the current requirement. Digital signature or eSign verification will be added when BEE confirms the accepted mechanism. | Sections 3 and 3.1 require signed and stamped documents. |
 | A20 | Registration identifiers use configurable sequences. Existing model identifiers remain `BEE/<category>/<year>/<number>` until BEE supplies the official format. | Preserves the existing portal without claiming an official numbering policy. |
+| A21 | The 13-page solution blueprint is a target experience and architecture proposal, not a source of BEE policy. | Prevents its example fees, dates, roles and technology choices from overriding the manual or official rules. |
+| A22 | AI/OCR may extract, compare, summarize, prioritize and draft, but every consequential decision remains with an authorized human and records evidence, version and override. | Blueprint pp. 4–6 and 9; human-officer final-call principle. |
+| A23 | Government-record and accreditation checks use provider-neutral adapters with evidence, expiry, retries and a visible manual-verification fallback. | Blueprint p. 3; provider access and legal authority are not yet confirmed. |
+| A24 | Generated forms use effective-dated templates and immutable snapshots; e-sign is enabled only after BEE confirms the accepted mechanism. | Blueprint p. 12; extends A19 without treating e-sign as approved. |
+| A25 | The portal database remains the system of record. Any blockchain or ledger is an optional provider-neutral integrity anchor containing hashes/Merkle roots only, never personal data or files. | Blueprint p. 10; real-ledger decision remains open and the current ledger is simulated. |
+| A26 | Production QR codes use opaque unit IDs and versioned digital signatures; algorithm, key custody and rotation require a security decision. | Blueprint pp. 7–10; extends A11. |
+| A27 | QR batches must record approved model, plant and production lot. Whether one lot permits exactly one batch remains an owner/BEE decision. | Blueprint p. 7 proposes one batch per lot; the manual does not define this cardinality. |
+| A28 | Scan intelligence, purchase registration and suspect-label photos are conditional on approved privacy, consent, retention and investigation rules. Clone detection is advisory, not automatic enforcement. | Blueprint pp. 8–10. |
+| A29 | The blueprint's proposed 90-day test-report limit is not adopted until an official rule is supplied; test-age limits remain effective-dated configuration. | Blueprint p. 5 conflicts with the current unanswered test-age decision. |
 
 ## 4. Target process
 
@@ -274,6 +285,7 @@ At the end of each development session, update the package status, progress, com
 - [ ] Build common applicant and officer workflow components.
 - [ ] Build My work and supervisor queue screens.
 - [ ] Show due dates, age, paused time and escalation status.
+- [ ] Add explainable risk sorting to the queue; keep AI summaries and query drafts behind the AI-governance gate.
 - [ ] Add the 60-day no-response cancellation job and proof.
 - [ ] Prove role, assignment, segregation, idempotency and concurrency rules.
 - [ ] Run unit, contract, database, UI and live workflow checks.
@@ -332,6 +344,9 @@ At the end of each development session, update the package status, progress, com
 - [ ] Build fee preview, payment initiation and readiness checks.
 - [ ] Connect submit, return, respond, recommend, approve and reject to WP2.
 - [ ] Build the step-based applicant onboarding wizard.
+- [ ] Add autosave, readiness/completeness scoring and plain-language issue guidance without presenting advisory checks as approval.
+- [ ] Add government-record verification adapters with retained evidence, expiry and manual fallback when access is approved.
+- [ ] Generate versioned company-registration, covering-letter and authorization outputs from the approved application snapshot; add e-sign only after approval.
 - [ ] Build the BEE scrutiny and decision workspace.
 - [ ] Generate the permittee record and registration document on approval.
 - [ ] Add active entity, brand and category records to the register.
@@ -386,6 +401,8 @@ At the end of each development session, update the package status, progress, com
 - [ ] Add model-family and child-model records.
 - [ ] Add laboratory and accreditation masters.
 - [ ] Add test-report age, standard and accreditation-scope validation.
+- [ ] Store structured declared and measured test values with deterministic tolerance results and source-page evidence.
+- [ ] Compute ratings only from approved effective-dated formulas; treat OCR extraction and anomaly scoring as officer-assistance features.
 - [ ] Add Annexure 3 fields and category-specific document requirements.
 - [ ] Prefill approved entity, brand, category and contact information.
 - [ ] Consolidate current officer stages into the target decision chain.
@@ -500,7 +517,9 @@ At the end of each development session, update the package status, progress, com
 #### WP6 checklist
 
 - [ ] Confirm and document the QR payload and serial format.
+- [ ] Define versioned digital signatures, BEE key custody, rotation, revocation and offline-verification behaviour.
 - [ ] Add formal QR requisition and fee-assessment records.
+- [ ] Link every batch to the approved model, manufacturing plant and production lot; resolve the one-batch-per-lot decision.
 - [ ] Promote batch, serial and serial-event tables and policies.
 - [ ] Define generated, issued, bound, voided and replaced states.
 - [ ] Add active-model and label-series eligibility checks.
@@ -510,6 +529,8 @@ At the end of each development session, update the package status, progress, com
 - [ ] Promote secure CSV and Excel downloads with audit events.
 - [ ] Add an optional authenticated bulk manufacturer API.
 - [ ] Extend public verification to serial status.
+- [ ] Return explicit genuine, warning/revoked and unknown/invalid outcomes without requiring the optional external anchor to be online.
+- [ ] Add privacy-gated scan telemetry, suspect-label reporting and optional purchase registration only after A28 decisions.
 - [ ] Prove duplicate, reuse, expiry, revocation and isolation controls.
 - [ ] Run the paid-batch-to-public-verification acceptance journey.
 - [ ] Create evidence note and backlog updates.
@@ -735,6 +756,9 @@ At the end of each development session, update the package status, progress, com
 - [ ] Integrate approved email and SMS providers.
 - [ ] Add production object storage, antivirus scanning and retention.
 - [ ] Add secrets management, TLS and certificate rotation.
+- [ ] Add QR signing-key lifecycle and cryptographic verification operations.
+- [ ] Add AI governance, model/prompt registry, evidence provenance, human override and data-residency controls before enabling production AI.
+- [ ] Add external-registry, e-sign and optional integrity-anchor adapters with monitored retry and manual-fallback runbooks.
 - [ ] Complete responsive and accessibility remediation.
 - [ ] Add application, infrastructure and business monitoring.
 - [ ] Add alerting, runbooks and support procedures.
@@ -788,6 +812,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2B implemented | In progress (60%), ChatGPT review pending | V72 corrected in place: revoked `bind_cycle_return` from PUBLIC/runtime, open-cycle bind guard, runtime execute audit, real post-legacy wiring-evidence 409 service proofs, staged V71→V72 backfill and constraint/cross-cycle/rejection proofs. Awaiting acceptance (BL-257). | Repeat acceptance review; then 19C registration wiring (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), ChatGPT review pending | In progress (65%), Brief 19B-2 and 19C-0 accepted | V72 privilege, post-legacy rollback, staged migration, constraint and concurrency proofs accepted and merged at `798667e`. The PDF-traced registration design was merged at `80d9aec`. | Implement 19C-A, 19C-B and 19C-C, then 19D (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (65%), Brief 19D-0 review pending | In progress (65%), Brief 19D-0 accepted | PDF trace verified. Review corrected calendar table names, recipient-scoped notification summaries, ambiguous assignment handling and the distinction between the provisional portal due date and the Manual's 60-day response window. Merged at `b62508b`. | Continue 19C-A in Agent B; start 19D-A read projection only when its implementation brief is issued |
+| 18 Oct 2026 | Strategy | Manual-backed WP plan | Blueprint-aligned strategy | Reviewed the 13-page solution blueprint. Core seven-screen journey aligns; A21–A29, BL-258–BL-260 and the WP3/WP4/WP6/WP10 checklists now govern external verification, AI evidence, generated forms, signed QR, optional anchoring and scan privacy. | Keep WP2 sequence; obtain owner/BEE/provider decisions before activating conditional integrations |
 
 ### 6.2 Standard completion record
 
@@ -825,8 +850,8 @@ The following demonstrated modules should be promoted into the formal API rather
 | MIS and executive dashboards | Reuse components and replace demo reads with formal reporting APIs |
 | Public verification | Reuse and extend for QR serial status |
 | Messages | Already promoted; connect approved delivery providers later |
-| Simulated ledger | Keep only for demonstrations until the real ledger decision is implemented |
-| AI demonstrations | Keep outside the core registration and compliance release |
+| Simulated ledger | Keep only for demonstrations; if approved, replace it with a provider-neutral integrity-anchor adapter while the portal database remains authoritative |
+| AI demonstrations | Keep outside the core transactional release; promote individual assisted use cases only after evidence, model/version, human-override, privacy and security gates pass |
 
 ## 8. Release schedule
 
@@ -842,6 +867,8 @@ The following demonstrated modules should be promoted into the formal API rather
 | R7 | WP10 production readiness | Not started | 3–5 weeks | Security, operations, migration and production gate passed |
 
 Estimated functional build: **16–20 weeks**. External approvals, integrations, migration and production assurance may extend the calendar.
+
+The blueprint does not change the WP2 critical path. Its core screen behaviour is absorbed into WP3, WP4, WP6 and WP8. Government lookups, production AI, e-sign, scan intelligence and external anchoring require separate discovery/provider decisions and must be estimated after those decisions; they are not silently included in the 16–20 week core estimate.
 
 ## 9. Team workflow
 
@@ -878,6 +905,8 @@ The implementation is complete when:
 12. Manufacturer 360 reconciles identity, registrations, models, QR, production, money and compliance.
 13. Every record is role-scoped, auditable, versioned and covered by the release gate.
 
+Optional blueprint capabilities are not core-completion blockers unless BEE explicitly places them in the contracted release. When enabled, they must satisfy [SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md](SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md) §6.
+
 ## 11. Manual traceability index
 
 | Manual section | Printed pages | Implemented by |
@@ -906,3 +935,7 @@ The implementation is complete when:
 | Annexure 2 Voluntary Agreement | 54–55 | WP3, WP9 |
 | Annexure 3 Model Registration Form | 56–57 | WP4 |
 | Annexure 4 Self Declaration | 58 | WP9 |
+
+## 12. Supplementary solution-blueprint traceability
+
+The seven-screen experience, AI proposals, secure-QR architecture, conceptual data model and generated-template proposals from the 13-page solution blueprint are mapped to the work packages in [SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md](SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md). That mapping is subordinate to the manual traceability index above.

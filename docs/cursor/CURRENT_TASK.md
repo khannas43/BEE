@@ -1,8 +1,8 @@
 # Current Cursor task
 
-**Holder:** claude (handed back after Brief 19C-B).
+**Holder:** claude (ChatGPT review pending), from 18 October 2026.
 
-- Brief: `BRIEF_19C_B` — **implemented / review pending**
+- Brief: `BRIEF_19C_B_SNL_WP02C_REGISTRATION_SERVICE_WIRING.md` — **implemented, not accepted**
+- Worktree: `/Users/sameerkhanna/Developer/BEE-19c-b`
 - Branch: `cursor/snl-wp02c-registration-service-wiring`
-- Base: `ae63275` (V73 + 19C-A accepted)
-- Next: ChatGPT acceptance review for 19C-B; do not start 19C-C until accepted.
+- Base: `main` @ `ae63275` (V73 + 19C-A accepted)

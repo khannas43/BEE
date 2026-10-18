@@ -1,63 +1,53 @@
-# Claude Code and Cursor in one repository: the hand-off
+# Cursor, ChatGPT review, and git worktrees
 
-**Status:** Working agreement, 3 October 2026; integration branch changed to `main` on 4 October 2026 (PR #1 merged). It replaces the earlier two-clone and worktree designs. The owner can change it.
+**Status:** Working agreement updated **18 October 2026** (owner-approved). Supersedes the Claude-default baton flow for day-to-day implementation while Claude Code is paused.
 
-## One project, one folder
+## Worktrees
 
-```
-/Users/sameerkhanna/Developer/BEE      the only copy of the project (the git repo itself)
-```
+Use **one git worktree per active task branch** (for example `/Users/sameerkhanna/Developer/BEE-19c-b`). Do not edit another agent's checkout. The primary clone at `/Users/sameerkhanna/Developer/BEE` may stay on `main` for merge/integration.
 
-Claude Code and Cursor both work in this one folder, on the same checkout, with the same `node_modules` and the same local runtime. There is no second clone, no worktree and no other path to confuse. Open this folder in Cursor, and start Claude Code from it (`cd /Users/sameerkhanna/Developer/BEE && claude`).
+## Roles
 
-The cost of one folder is that **only one agent works in it at a time**. The rest of this document is how that stays safe.
+| Role | Responsibility |
+| --- | --- |
+| **Cursor** | Full-stack implementation **when the active brief authorizes it**; gates; commit on `cursor/<task>`; `/bee-handback`. |
+| **ChatGPT** | Acceptance review from diff + handback; **does not hold the editing baton** or relay step-by-step coding commands. |
+| **Owner** | Sets task scope; authorizes merge/push after ChatGPT acceptance. |
+| **Claude Code** | Paused (weekly limit). May resume merge/review later if the owner re-enables it. |
 
 ## The baton
 
-A small file, `.baton` (git-ignored, in the repo root), says who holds the folder:
+`.baton` (git-ignored) in **each worktree**:
 
-```
-claude
-```
-or
-```
-cursor cursor/<task> <date>
-```
+- **Implementing:** `cursor cursor/<task> <date>`
+- **Review pending:** `claude` (after `/bee-handback`)
 
-- **Claude holds it by default.** While Claude holds it, Cursor does not edit anything.
-- Claude hands it over by committing everything, creating the task branch, writing `.baton` and `docs/cursor/CURRENT_TASK.md`, and telling the owner "run `/bee-run-task` in Cursor".
-- **While Cursor holds it, Claude edits nothing in the folder.** Claude may read, plan and talk, but any file Claude wrote would land in Cursor's branch.
-- Cursor hands it back with `/bee-handback`: everything committed on its branch, `.baton` set to `claude`, a report printed. Claude then reviews the diff and merges.
-- Every agent checks `.baton` first. If it names the other agent, stop and tell the owner. The file is a rule, not a lock: the owner is the final check and can always look.
+Check `.baton` in the worktree you are editing before making changes.
 
-## The hand-off, step by step
+## Hand-off
 
-1. **Claude prepares.** Picks a brief from `docs/cursor/` (or writes a new one), then writes `docs/cursor/CURRENT_TASK.md`: the brief to follow, the branch name `cursor/<task>`, anything to add or override, and the exact acceptance commands. Commits that, runs `git switch -c cursor/<task>`, writes `.baton` as `cursor cursor/<task> <date>`.
-2. **Cursor executes.** The owner runs `/bee-run-task` in Cursor's Agent chat. It reads `.cursor/rules/bee-portal.mdc`, `CURRENT_TASK.md` and the brief, checks `.baton` and the branch, does the work inside its lane, runs the gates, commits on the task branch, and runs `/bee-handback`.
-3. **Claude reviews and merges.** Runs `/code-review` on the range (one review per task; fixes for high and medium findings, the rest to the backlog), merges into `main` (`git switch main && git merge --no-ff cursor/<task>`), deletes the task branch, runs the full gate, sets `.baton` back to `claude`, and pushes only when the owner asks. After any review run, check `git branch --show-current` (BL-077).
+1. **Task setup:** Branch `cursor/<task>` in a dedicated worktree; `docs/cursor/CURRENT_TASK.md` + brief; `.baton` → cursor.
+2. **Cursor implements:** Run applicable gates; commit; update implementation plan/backlog as the brief requires.
+3. **Handback:** `/bee-handback`; `.baton` → `claude`; stop until review.
+4. **ChatGPT review:** Owner pastes handback + diff; accept or list findings; Cursor fixes on same branch if needed.
+5. **Merge/push:** Only after ChatGPT acceptance **and explicit owner authorization**.
 
-Cursor never pushes. Only Claude pushes, and only when the owner asks.
+Cursor does **not** merge to `main` or push by default.
 
-## Lanes (what Cursor may touch)
+## Migrations
 
-| Cursor | Claude |
-| --- | --- |
-| `components/**`, `lib/client/**`, `app/app/**`, the kit components, and the tooling files a brief names | `backend/**`, the OpenAPI artifact and its pin, `lib/server/**`, `app/api/**`, request-log files, Flyway migrations, contract and coverage scripts, live checks, reviews, merging |
+- On a **task branch**, an unaccepted migration may be corrected **in place**.
+- After acceptance into **`main`** or deployment, the migration is **immutable** — add **V74+** for schema fixes.
 
-Anything not listed is Claude's until a brief hands it over. If Cursor needs a file in Claude's lane it stops and reports. Contract changes (a new field, error code or route) come only from Claude. A migration is never edited once applied.
+## Lanes
 
-## The runtime
+- **Frontend-only briefs:** `components/**`, `lib/client/**`, `app/app/**`, kit, tooling the brief names.
+- **Full-stack briefs (must say so):** `backend/**`, new Flyway on the task branch, OpenAPI/BFF when required, tests and docs.
 
-PostgreSQL, Keycloak, Spring and Next.js use fixed ports and the Docker project `bee-local`. With one folder there is one runtime. Whoever holds the baton may start it (`npm run local:up`), and must stop it (`npm run local:down`) before handing back. Cursor runs `local:*` live checks only for a task whose brief asks for them; otherwise it lists them under "Not run" and Claude runs them at merge.
+## Runtime
 
-## iCloud
-
-The project lives in `~/Developer/BEE`, **outside** the Desktop and Documents folders that iCloud syncs (moved on 14 October 2026, BL-034/BL-094). In `~/Documents` iCloud evicted files, created "name 2" conflict copies and corrupted `node_modules` mid-build. Do not move the project back under `~/Documents` or `~/Desktop`, and do not put a second clone there. The `*.nosync` workaround (`npm run setup:nosync`) is no longer needed here; leave it unused. `npm run clean:dupes` (`scripts/local/clean-icloud-dupes.sh`) lists any "name 2" copies if one ever appears.
-
-## If you want parallel work later
-
-Two agents editing at once needs two checkouts. When that is worth the extra care, add a second clone and a branch per task; the earlier design is in git history (`docs/kit/PARALLEL_DEVELOPMENT.md` at commit 45e648d). Until then, one folder.
+PostgreSQL, Keycloak, Spring and Next.js use project `bee-local` and fixed ports. Start/stop (`npm run local:up` / `local:down`) in the worktree running live checks.
 
 ## Briefs
 
-See [../cursor/README.md](../cursor/README.md). Each is independent of the others and of Claude's current work, which makes them safe to hand over one at a time.
+See [../cursor/README.md](../cursor/README.md).

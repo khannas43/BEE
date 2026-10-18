@@ -145,6 +145,13 @@ export function PublicHeader() {
               <Icon name="stars" size={18} /> {t("cta.checkLabel")}
             </Link>
             <Link
+              href="/register/manufacturer"
+              className="bg-primary text-on-primary font-title-lg text-title-lg px-space-md py-1.5 rounded-lg hover:bg-primary-container transition-all inline-flex items-center gap-1.5"
+              data-testid="public-register"
+            >
+              <Icon name="app_registration" size={18} /> {t("cta.register")}
+            </Link>
+            <Link
               href="/login"
               className="bg-surface-container-lowest text-primary font-title-lg text-title-lg px-space-md py-1.5 rounded-lg hover:bg-forest-light transition-all"
             >
@@ -194,6 +201,9 @@ export function PublicHeader() {
                 </div>
               ))}
               <div className="flex items-center gap-space-sm pt-space-sm">
+                <Link href="/register/manufacturer" onClick={closeMobile} className="flex-1 text-center bg-primary-container text-on-primary font-title-lg text-title-lg px-space-md py-2 rounded-lg inline-flex items-center justify-center gap-1.5" data-testid="mobile-public-register">
+                  <Icon name="app_registration" size={18} /> {t("cta.register")}
+                </Link>
                 <Link href="/login" onClick={closeMobile} className="flex-1 text-center bg-surface-container-lowest text-primary font-title-lg text-title-lg px-space-md py-2 rounded-lg">
                   {t("cta.login")}
                 </Link>

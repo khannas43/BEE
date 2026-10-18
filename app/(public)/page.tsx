@@ -220,6 +220,9 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="mt-space-lg flex flex-wrap items-center gap-space-sm pt-space-md">
+                <Link href="/register/manufacturer" className="bg-primary text-on-primary font-label-lg text-label-lg px-space-md py-2.5 rounded-lg hover:bg-primary-container transition-all flex items-center gap-2 shadow-sm" data-testid="home-manufacturer-register">
+                  <Icon name="app_registration" size={18} /> Register
+                </Link>
                 <Link href="/login" className="bg-secondary text-on-secondary font-label-lg text-label-lg px-space-md py-2.5 rounded-lg hover:bg-on-secondary-fixed-variant transition-all flex items-center gap-2 shadow-sm">
                   <Icon name="login" size={18} /> Manufacturer S&L Login
                 </Link>

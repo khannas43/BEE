@@ -33,6 +33,7 @@ export const DICT: Record<string, Entry> = {
   "nav.notifications": { en: "Notifications", hi: "अधिसूचनाएँ" },
   "nav.contact": { en: "Contact Us", hi: "संपर्क करें" },
   "cta.checkLabel": { en: "Check Star Label", hi: "स्टार लेबल जाँचें" },
+  "cta.register": { en: "Register", hi: "पंजीकरण" },
   "cta.login": { en: "Login", hi: "लॉगिन" },
   "nav.menu": { en: "Menu", hi: "मेनू" },
 

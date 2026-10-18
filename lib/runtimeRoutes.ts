@@ -27,6 +27,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
+    href: "/app/demo/manufacturer-360",
+    en: "Manufacturer 360",
+    hi: "निर्माता 360",
+    icon: "hub",
+    navRoles: ["manufacturer", "agency", "programme", "director", "secretary", "finance", "auditor", "admin"],
+    implemented: ["Guided WP3–WP9 synthetic lifecycle; links to working demo and registration screens"],
+  },
+  {
     href: "/app/demo/payments",
     en: "Payments",
     hi: "भुगतान",
@@ -313,7 +321,7 @@ export function runtimeRouteFor(pathname: string): RuntimeRoute | undefined {
  * scrutiny and approval steps, money, the demonstration screens and finally administration. A route not listed goes last, in the order above.
  */
 const MENU_ORDER: string[] = [
-  "/app/demo/executive", "/app/demo/director", "/app/demo/auditor", "/app/demo/mis",
+  "/app/demo/executive", "/app/demo/manufacturer-360", "/app/demo/director", "/app/demo/auditor", "/app/demo/mis",
   "/app/workflow/personal-inbox", "/app/workflow/my-approvals", "/app/model-label/director-approval", "/app/workflow/application-review", "/app/workflow/workflow-history", "/app/workflow/escalation-dashboard",
   "/app/registrations/requests", "/app/registrations/new", "/app/registrations/request", "/app/registrations/reviews", "/app/registrations/register",
   "/app/model-label/new-model-application", "/app/model-label/model-dashboard", "/app/model-label/label-preview", "/app/model-label/notifications",

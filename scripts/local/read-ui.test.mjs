@@ -411,6 +411,24 @@ test("runtime routes: Spring identity menu for dashboard, draft form and finance
   assert.deepEqual([...runtimeRouteFor("/app/model-label/director-approval").implemented], ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)", "Return to the applicant", "Reject permanently", "See the earlier steps and notes"]);
 });
 
+test("Manufacturer 360 demo route appears in the demo menu for listed personas", async () => {
+  const { runtimeNavFor, runtimeRouteFor } = await import("../../lib/runtimeRoutes.ts");
+  const route = runtimeRouteFor("/app/demo/manufacturer-360");
+  assert.ok(route);
+  assert.equal(route.en, "Manufacturer 360");
+  assert.deepEqual(
+    [...route.navRoles],
+    ["manufacturer", "agency", "programme", "director", "secretary", "finance", "auditor", "admin"],
+  );
+  for (const role of ["manufacturer", "agency", "programme", "director", "secretary", "finance", "auditor", "admin"]) {
+    assert.equal(
+      runtimeNavFor([{ role, scope: role === "manufacturer" || role === "agency" ? "own-org" : "all" }]).some((r) => r.href === "/app/demo/manufacturer-360"),
+      true,
+      role,
+    );
+  }
+});
+
 test("draft idempotency gate reuses a key until cleared or the payload changes", async () => {
   const { DraftIdempotencyGate } = await import("../../lib/client/runtimeModelDrafts.ts");
   const gate = new DraftIdempotencyGate();

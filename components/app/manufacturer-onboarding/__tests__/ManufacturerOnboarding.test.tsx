@@ -107,7 +107,7 @@ describe("manufacturer onboarding UI", () => {
     vi.unstubAllGlobals();
   });
 
-  it("guest registration verifies email and mobile OTP before opening the application", async () => {
+  it("guest registration shows simulated OTP steps and opens the application", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -122,13 +122,9 @@ describe("manufacturer onboarding UI", () => {
     fireEvent.change(screen.getByLabelText("Mobile number"), { target: { value: "9876543210" } });
     fireEvent.change(screen.getByLabelText("Create password"), { target: { value: "Secure123" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "Secure123" } });
-    fireEvent.click(screen.getByTestId("send-registration-otp"));
-
-    expect(await screen.findByTestId("manufacturer-otp-form")).toBeTruthy();
-    expect(screen.getByText(/Demonstration OTP for both/i).textContent).toContain("123456");
-    fireEvent.change(screen.getByLabelText("Email OTP"), { target: { value: "123456" } });
-    fireEvent.change(screen.getByLabelText("Mobile OTP"), { target: { value: "123456" } });
-    fireEvent.click(screen.getByTestId("verify-registration-otp"));
+    expect(screen.getByTestId("demo-verification-process").textContent).toMatch(/Email and mobile OTP verification/i);
+    expect(screen.getAllByText("Simulated verification", { selector: "span" })).toHaveLength(2);
+    fireEvent.click(screen.getByTestId("create-demo-applicant"));
 
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/app/manufacturer/onboarding"));
     expect(fetchMock).toHaveBeenCalledWith("/api/runtime/demo/login", expect.objectContaining({ method: "POST" }));

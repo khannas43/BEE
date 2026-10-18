@@ -6,8 +6,6 @@ import { FormEvent, useMemo, useState, type InputHTMLAttributes } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Emblem } from "@/components/chrome/Emblem";
 
-const DEMO_OTP = "123456";
-
 export default function RegisterManufacturerPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
@@ -16,9 +14,6 @@ export default function RegisterManufacturerPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [emailOtp, setEmailOtp] = useState("");
-  const [mobileOtp, setMobileOtp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,22 +24,12 @@ export default function RegisterManufacturerPage() {
     && password === confirmPassword,
   [confirmPassword, email, fullName, mobile, password]);
 
-  function sendOtp(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    if (!detailsValid) {
-      setError("Enter a valid name, email, 10-digit Indian mobile number and matching password of at least 8 characters.");
-      return;
-    }
-    setOtpSent(true);
-  }
-
-  async function verifyAndContinue(event: FormEvent) {
+  async function createAccountAndContinue(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
     setError(null);
-    if (emailOtp !== DEMO_OTP || mobileOtp !== DEMO_OTP) {
-      setError("The email or mobile OTP is incorrect. Use 123456 for this demonstration.");
+    if (!detailsValid) {
+      setError("Enter a valid name, email, 10-digit Indian mobile number and matching password of at least 8 characters.");
       return;
     }
     setBusy(true);
@@ -92,8 +77,7 @@ export default function RegisterManufacturerPage() {
 
           {error && <div role="alert" className="rounded-lg bg-error-container text-on-error-container px-3 py-2 font-body-sm" data-testid="registration-error">{error}</div>}
 
-          {!otpSent ? (
-            <form onSubmit={sendOtp} className="space-y-space-md" data-testid="manufacturer-account-form">
+          <form onSubmit={createAccountAndContinue} noValidate className="space-y-space-md" data-testid="manufacturer-account-form">
               <Field id="manufacturer-full-name" label="Applicant full name" icon="person" value={fullName} onChange={setFullName} autoComplete="name" />
               <Field id="manufacturer-email" label="Email address" icon="mail" value={email} onChange={setEmail} type="email" autoComplete="email" />
               <Field id="manufacturer-mobile" label="Mobile number" icon="phone" value={mobile} onChange={(value) => setMobile(value.replace(/\D/g, "").slice(0, 10))} type="tel" autoComplete="tel" placeholder="10-digit Indian mobile number" />
@@ -103,29 +87,28 @@ export default function RegisterManufacturerPage() {
                 <PasswordField id="manufacturer-confirm-password" label="Confirm password" value={confirmPassword} onChange={setConfirmPassword} show={showPassword} toggle={() => setShowPassword((value) => !value)} />
               </div>
 
-              <button type="submit" className="w-full rounded-lg bg-primary text-on-primary py-3 px-space-md font-semibold inline-flex justify-center items-center gap-2 disabled:opacity-50" disabled={!detailsValid} data-testid="send-registration-otp">
-                Send email and mobile OTP <Icon name="arrow_forward" size={18} />
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={verifyAndContinue} className="space-y-space-md" data-testid="manufacturer-otp-form">
-              <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 font-body-sm">
-                OTPs sent to <strong>{email}</strong> and <strong>+91 {mobile}</strong>.
-                <span className="block mt-1 text-on-surface-variant">Demonstration OTP for both: <strong className="font-mono text-on-surface">123456</strong></span>
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-space-md" data-testid="demo-verification-process">
+                <p className="font-label-md text-on-surface">Identity verification process</p>
+                <p className="font-body-sm text-on-surface-variant mt-1">
+                  Email and mobile OTP verification are part of the standard registration process. For this demonstration, both checks are simulated automatically because no SMS or email gateway is connected.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-2 mt-3">
+                  <div className="rounded-lg bg-surface-card border border-border-subtle p-3 flex items-center gap-2">
+                    <Icon name="mark_email_read" size={20} className="text-primary" />
+                    <span className="font-body-sm"><strong>Email OTP</strong><br />Simulated verification</span>
+                  </div>
+                  <div className="rounded-lg bg-surface-card border border-border-subtle p-3 flex items-center gap-2">
+                    <Icon name="sms" size={20} className="text-primary" />
+                    <span className="font-body-sm"><strong>Mobile OTP</strong><br />Simulated verification</span>
+                  </div>
+                </div>
               </div>
-              <div className="grid sm:grid-cols-2 gap-space-md">
-                <Field id="manufacturer-email-otp" label="Email OTP" icon="mark_email_read" value={emailOtp} onChange={(value) => setEmailOtp(value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" />
-                <Field id="manufacturer-mobile-otp" label="Mobile OTP" icon="sms" value={mobileOtp} onChange={(value) => setMobileOtp(value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" />
-              </div>
-              <button type="submit" disabled={busy || emailOtp.length !== 6 || mobileOtp.length !== 6} className="w-full rounded-lg bg-primary text-on-primary py-3 px-space-md font-semibold inline-flex justify-center items-center gap-2 disabled:opacity-50" data-testid="verify-registration-otp">
+
+              <button type="submit" disabled={busy} className="w-full rounded-lg bg-primary text-on-primary py-3 px-space-md font-semibold inline-flex justify-center items-center gap-2 disabled:opacity-50" data-testid="create-demo-applicant">
                 <Icon name={busy ? "progress_activity" : "how_to_reg"} size={18} className={busy ? "animate-spin" : ""} />
-                {busy ? "Creating applicant account…" : "Verify and continue to application"}
-              </button>
-              <button type="button" onClick={() => { setOtpSent(false); setEmailOtp(""); setMobileOtp(""); }} className="w-full text-primary font-label-md hover:underline">
-                Change account details
+                {busy ? "Creating applicant account…" : "Create applicant account and continue"}
               </button>
             </form>
-          )}
         </div>
       </main>
     </div>

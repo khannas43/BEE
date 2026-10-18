@@ -209,7 +209,6 @@ const MOB_SUBMIT_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/submit";
 const MOB_DIRECTOR_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/director-decision";
 const MOB_ANOMALY_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/anomalies";
 const MOB_RESOLVE_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution";
-const MOB_OBS_CLOSE_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/observation/close";
 const MOB_DOCS_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/documents";
 const MOB_RESOLVER = ["mfa_required", "no_active_account", "no_effective_role"];
 const MOB_READ = [...MOB_RESOLVER, "no_read_scope"];
@@ -221,7 +220,7 @@ const MOB_COMMAND_UPSTREAM = {
     403: [...MOB_RESOLVER, "not_permitted", "segregation_refused", "organisation_not_eligible"],
     404: ["not_found"],
     409: ["version_conflict", "anomaly_open", "observation_not_ended", ...MOB_IDEM],
-    422: ["validation_failed", "idempotency_key_required", "clock_override_refused"],
+    422: ["validation_failed", "idempotency_key_required"],
     503: ["service_unavailable"],
   },
 };
@@ -872,7 +871,6 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(MOB_DIRECTOR_ROUTE, `${MOB_URL}/director-decision`, "POST", sessionJar, MOB_COMMAND_UPSTREAM);
     await exerciseStandInPairs(MOB_ANOMALY_ROUTE, `${MOB_URL}/anomalies`, "POST", sessionJar, MOB_COMMAND_UPSTREAM);
     await exerciseStandInPairs(MOB_RESOLVE_ROUTE, `${MOB_URL}/anomaly-resolution`, "POST", sessionJar, MOB_COMMAND_UPSTREAM);
-    await exerciseStandInPairs(MOB_OBS_CLOSE_ROUTE, `${MOB_URL}/observation/close`, "POST", sessionJar, MOB_COMMAND_UPSTREAM);
     await exerciseStandInPairs(MOB_DOCS_ROUTE, `${MOB_URL}/documents`, "GET", sessionJar, MOB_READ_UPSTREAM);
     await exerciseStandInPairs(MOB_DOCS_ROUTE, `${MOB_URL}/documents`, "POST", sessionJar, MOB_DOC_UPLOAD_UPSTREAM);
   } finally {

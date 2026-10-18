@@ -9,7 +9,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import gov.bee.api.workflow.WorkflowFoundationRepository;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -211,38 +214,42 @@ public class ManufacturerOnboardingRepository {
     public Optional<OrchestratorResult> orchestrateSubmit(UUID applicationId, UUID actor, String role, int version, BigDecimal amountInr,
                                                             String feeRuleKey, int feeRuleVersion, String verificationStatus, String sourceReference,
                                                             String note, UUID commandId, String payloadHash) {
-        return jdbc.query("SELECT out_state, out_version, out_payment_id FROM manufacturer_onboarding_orchestrate_submit("
+        return queryOrchestrator("SELECT out_state, out_version, out_payment_id FROM manufacturer_onboarding_orchestrate_submit("
             + "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::char(64))", (rs, i) -> new OrchestratorResult(rs.getString(1),
             rs.getObject(2, Integer.class), rs.getObject(3, UUID.class), null),
             applicationId, actor, role, version, amountInr, feeRuleKey, feeRuleVersion, verificationStatus, sourceReference, note, commandId,
-            payloadHash).stream().findFirst();
+            payloadHash);
     }
 
     public Optional<OrchestratorResult> orchestrateDirectorDecision(UUID applicationId, UUID actor, int version, String decision, String note,
                                                                     UUID commandId, String payloadHash) {
-        return jdbc.query("SELECT out_state, out_version, out_permittee_number FROM manufacturer_onboarding_orchestrate_director_decision("
+        return queryOrchestrator("SELECT out_state, out_version, out_permittee_number FROM manufacturer_onboarding_orchestrate_director_decision("
             + "?, ?, ?, ?, ?, ?, ?::char(64))", (rs, i) -> new OrchestratorResult(rs.getString(1), rs.getObject(2, Integer.class), null, rs.getString(3)),
-            applicationId, actor, version, decision, note, commandId, payloadHash).stream().findFirst();
+            applicationId, actor, version, decision, note, commandId, payloadHash);
     }
 
     public Optional<OrchestratorResult> orchestrateRaiseAnomaly(UUID applicationId, UUID actor, String actorRole, int version, String reason,
                                                                 UUID commandId, String payloadHash) {
-        return jdbc.query("SELECT out_state, out_version FROM manufacturer_onboarding_orchestrate_raise_anomaly("
+        return queryOrchestrator("SELECT out_state, out_version FROM manufacturer_onboarding_orchestrate_raise_anomaly("
             + "?, ?, ?, ?, ?, ?, ?::char(64))", (rs, i) -> new OrchestratorResult(rs.getString(1), rs.getObject(2, Integer.class), null, null),
-            applicationId, actor, actorRole, version, reason, commandId, payloadHash).stream().findFirst();
+            applicationId, actor, actorRole, version, reason, commandId, payloadHash);
     }
 
     public Optional<OrchestratorResult> orchestrateResolveAnomaly(UUID applicationId, UUID actor, int version, String resolution, String note,
                                                                   UUID commandId, String payloadHash) {
-        return jdbc.query("SELECT out_state, out_version FROM manufacturer_onboarding_orchestrate_resolve_anomaly("
+        return queryOrchestrator("SELECT out_state, out_version FROM manufacturer_onboarding_orchestrate_resolve_anomaly("
             + "?, ?, ?, ?, ?, ?, ?::char(64))", (rs, i) -> new OrchestratorResult(rs.getString(1), rs.getObject(2, Integer.class), null, null),
-            applicationId, actor, version, resolution, note, commandId, payloadHash).stream().findFirst();
+            applicationId, actor, version, resolution, note, commandId, payloadHash);
     }
 
-    public Optional<OrchestratorResult> orchestrateObservationClose(UUID applicationId, UUID actor, String role, int version, UUID commandId,
-                                                                    String payloadHash) {
-        return jdbc.query("SELECT out_state, out_version, out_permittee_number FROM manufacturer_onboarding_orchestrate_observation_close("
-            + "?, ?, ?, ?, ?, ?::char(64))", (rs, i) -> new OrchestratorResult(rs.getString(1), rs.getObject(2, Integer.class), null, rs.getString(3)),
-            applicationId, actor, role, version, commandId, payloadHash).stream().findFirst();
+    private Optional<OrchestratorResult> queryOrchestrator(String sql, RowMapper<OrchestratorResult> mapper, Object... args) {
+        try {
+            return jdbc.query(sql, mapper, args).stream().findFirst();
+        } catch (DataAccessException ex) {
+            if (WorkflowFoundationRepository.isSqlMessage(ex, "idempotency_key_conflict")) {
+                return Optional.of(new OrchestratorResult("idempotency_key_conflict", null, null, null));
+            }
+            throw ex;
+        }
     }
 }

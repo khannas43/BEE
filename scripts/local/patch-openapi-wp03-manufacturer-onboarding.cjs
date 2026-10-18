@@ -6,7 +6,7 @@ const path = require("path");
 const OPENAPI = path.join(__dirname, "../../docs/wp03/bee-local-api.openapi.json");
 const doc = JSON.parse(fs.readFileSync(OPENAPI, "utf8"));
 
-doc.info.version = "0.37.0";
+doc.info.version = "0.37.1";
 
 const errResp = (codes) => ({
   description: "Error.",
@@ -272,11 +272,8 @@ doc.paths["/api/manufacturer-onboarding/{id}/submit"] = {
   },
 };
 
-for (const suffix of ["director-decision", "anomalies", "anomaly-resolution", "observation/close"]) {
-  const cmd422 =
-    suffix === "observation/close"
-      ? ["validation_failed", "idempotency_key_required", "clock_override_refused"]
-      : ["validation_failed", "idempotency_key_required"];
+for (const suffix of ["director-decision", "anomalies", "anomaly-resolution"]) {
+  const cmd422 = ["validation_failed", "idempotency_key_required"];
   doc.paths[`/api/manufacturer-onboarding/{id}/${suffix}`] = {
     ...internalBase,
     post: {
@@ -383,7 +380,7 @@ doc.paths["/api/manufacturer-onboarding"].post.responses = {
 };
 doc.paths["/api/runtime/manufacturer-onboarding"].post.responses = doc.paths["/api/manufacturer-onboarding"].post.responses;
 
-for (const suffix of ["director-decision", "anomalies", "anomaly-resolution", "observation/close", "documents"]) {
+for (const suffix of ["director-decision", "anomalies", "anomaly-resolution", "documents"]) {
   const spring = doc.paths[`/api/manufacturer-onboarding/{id}/${suffix}`];
   doc.paths[`/api/runtime/manufacturer-onboarding/{id}/${suffix}`] = {
     ...spring,
@@ -400,6 +397,9 @@ for (const suffix of ["director-decision", "anomalies", "anomaly-resolution", "o
     }
   }
 }
+
+delete doc.paths["/api/manufacturer-onboarding/{id}/observation/close"];
+delete doc.paths["/api/runtime/manufacturer-onboarding/{id}/observation/close"];
 
 fs.writeFileSync(OPENAPI, `${JSON.stringify(doc, null, 2)}\n`);
 console.log("Patched", OPENAPI, "to", doc.info.version);

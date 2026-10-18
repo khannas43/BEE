@@ -18,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.HexFormat;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,7 +33,6 @@ public class ManufacturerOnboardingService {
     static final String ROUTE_DIRECTOR = "/api/manufacturer-onboarding/{id}/director-decision";
     static final String ROUTE_ANOMALY = "/api/manufacturer-onboarding/{id}/anomalies";
     static final String ROUTE_RESOLVE = "/api/manufacturer-onboarding/{id}/anomaly-resolution";
-    static final String ROUTE_OBS_CLOSE = "/api/manufacturer-onboarding/{id}/observation/close";
     private static final UUID NIL = IdempotencyRepository.CREATE_TARGET;
     private static final String FEE_KEY = "REG:manufacturer_onboarding";
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
@@ -202,10 +200,12 @@ public class ManufacturerOnboardingService {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
         UUID commandId = commandId(idempotencyKey, "submit", id);
-        String payloadHash = payloadHash(hash);
         MasterVersion fv = fee.get().version();
+        String verification = fv.verification().name().toLowerCase();
+        String commandHash = ManufacturerOnboardingCommandHash.submit(id, caller.accountId(), version.get(), fee.get().amountInr(), fv.ruleKey(),
+            fv.version(), verification, fv.sourceReference(), fv.note());
         var result = repo.orchestrateSubmit(id, caller.accountId(), actorRole(caller), version.get(), fee.get().amountInr(), fv.ruleKey(), fv.version(),
-            fv.verification().name().toLowerCase(), fv.sourceReference(), fv.note(), commandId, payloadHash);
+            verification, fv.sourceReference(), fv.note(), commandId, commandHash);
         if (result.isEmpty() || result.get().outState() == null) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, id, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
@@ -215,7 +215,7 @@ public class ManufacturerOnboardingService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> directorDecision(Caller caller, UUID id, String idempotencyKey, JsonNode body) {
-        return orchestratorAction(caller, id, idempotencyKey, body, ROUTE_DIRECTOR, "director_decision", (commandId, payloadHash, version, node) -> {
+        return orchestratorAction(caller, id, idempotencyKey, body, ROUTE_DIRECTOR, "director_decision", (commandId, version, node) -> {
             String decision = text(node, "decision");
             String note = text(node, "note");
             if (decision == null) {
@@ -224,7 +224,8 @@ public class ManufacturerOnboardingService {
             if (!ManufacturerOnboardingPolicy.canDirectorAct(caller)) {
                 return Optional.of(error(HttpStatus.FORBIDDEN, "not_permitted"));
             }
-            return repo.orchestrateDirectorDecision(id, caller.accountId(), version, decision, note, commandId, payloadHash)
+            String commandHash = ManufacturerOnboardingCommandHash.directorDecision(id, caller.accountId(), version, decision, note);
+            return repo.orchestrateDirectorDecision(id, caller.accountId(), version, decision, note, commandId, commandHash)
                 .map(r -> finishOrchestrator(caller, id, "POST", ROUTE_DIRECTOR, idempotencyKey, r))
                 .or(() -> Optional.of(error(HttpStatus.CONFLICT, "version_conflict")));
         });
@@ -232,7 +233,7 @@ public class ManufacturerOnboardingService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> raiseAnomaly(Caller caller, UUID id, String idempotencyKey, JsonNode body) {
-        return orchestratorAction(caller, id, idempotencyKey, body, ROUTE_ANOMALY, "raise_anomaly", (commandId, payloadHash, version, node) -> {
+        return orchestratorAction(caller, id, idempotencyKey, body, ROUTE_ANOMALY, "raise_anomaly", (commandId, version, node) -> {
             String reason = text(node, "reason");
             if (reason == null) {
                 return Optional.of(error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed"));
@@ -241,7 +242,8 @@ public class ManufacturerOnboardingService {
             if (role == null) {
                 return Optional.of(error(HttpStatus.FORBIDDEN, "not_permitted"));
             }
-            return repo.orchestrateRaiseAnomaly(id, caller.accountId(), role, version, reason, commandId, payloadHash)
+            String commandHash = ManufacturerOnboardingCommandHash.raiseAnomaly(id, caller.accountId(), role, version, reason);
+            return repo.orchestrateRaiseAnomaly(id, caller.accountId(), role, version, reason, commandId, commandHash)
                 .map(r -> finishOrchestrator(caller, id, "POST", ROUTE_ANOMALY, idempotencyKey, r))
                 .or(() -> Optional.of(error(HttpStatus.CONFLICT, "version_conflict")));
         });
@@ -249,7 +251,7 @@ public class ManufacturerOnboardingService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> resolveAnomaly(Caller caller, UUID id, String idempotencyKey, JsonNode body) {
-        return orchestratorAction(caller, id, idempotencyKey, body, ROUTE_RESOLVE, "resolve_anomaly", (commandId, payloadHash, version, node) -> {
+        return orchestratorAction(caller, id, idempotencyKey, body, ROUTE_RESOLVE, "resolve_anomaly", (commandId, version, node) -> {
             String resolution = text(node, "resolution");
             String note = text(node, "note");
             if (resolution == null) {
@@ -258,26 +260,15 @@ public class ManufacturerOnboardingService {
             if (!ManufacturerOnboardingPolicy.canDirectorAct(caller)) {
                 return Optional.of(error(HttpStatus.FORBIDDEN, "not_permitted"));
             }
-            return repo.orchestrateResolveAnomaly(id, caller.accountId(), version, resolution, note, commandId, payloadHash)
+            String commandHash = ManufacturerOnboardingCommandHash.resolveAnomaly(id, caller.accountId(), version, resolution, note);
+            return repo.orchestrateResolveAnomaly(id, caller.accountId(), version, resolution, note, commandId, commandHash)
                 .map(r -> finishOrchestrator(caller, id, "POST", ROUTE_RESOLVE, idempotencyKey, r))
                 .or(() -> Optional.of(error(HttpStatus.CONFLICT, "version_conflict")));
         });
     }
 
-    @Transactional
-    public ResponseEntity<Map<String, Object>> closeObservation(Caller caller, UUID id, String idempotencyKey, JsonNode body) {
-        return orchestratorAction(caller, id, idempotencyKey, body, ROUTE_OBS_CLOSE, "observation_close", (commandId, payloadHash, version, node) -> {
-            if (node != null && node.has("asOf")) {
-                return Optional.of(error(HttpStatus.UNPROCESSABLE_ENTITY, "clock_override_refused"));
-            }
-            return repo.orchestrateObservationClose(id, caller.accountId(), actorRole(caller), version, commandId, payloadHash)
-                .map(r -> finishOrchestrator(caller, id, "POST", ROUTE_OBS_CLOSE, idempotencyKey, r))
-                .or(() -> Optional.of(error(HttpStatus.CONFLICT, "version_conflict")));
-        });
-    }
-
     private interface OrchestratorStep {
-        Optional<ResponseEntity<Map<String, Object>>> run(UUID commandId, String payloadHash, int version, JsonNode body);
+        Optional<ResponseEntity<Map<String, Object>>> run(UUID commandId, int version, JsonNode body);
     }
 
     private ResponseEntity<Map<String, Object>> orchestratorAction(Caller caller, UUID id, String idempotencyKey, JsonNode body, String route,
@@ -295,7 +286,7 @@ public class ManufacturerOnboardingService {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
         UUID commandId = commandId(idempotencyKey, purpose, id);
-        Optional<ResponseEntity<Map<String, Object>>> out = step.run(commandId, payloadHash(hash), version.get(), body);
+        Optional<ResponseEntity<Map<String, Object>>> out = step.run(commandId, version.get(), body);
         if (out.isEmpty()) {
             idempotency.abandon(caller.accountId(), "POST", route, id, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
@@ -318,7 +309,7 @@ public class ManufacturerOnboardingService {
             case "not_found" -> HttpStatus.NOT_FOUND;
             case "not_submittable", "not_permitted", "segregation_refused", "organisation_not_eligible" -> HttpStatus.FORBIDDEN;
             case "validation_failed" -> HttpStatus.UNPROCESSABLE_ENTITY;
-            case "observation_not_ended", "anomaly_open" -> HttpStatus.CONFLICT;
+            case "observation_not_ended", "anomaly_open", "idempotency_key_conflict" -> HttpStatus.CONFLICT;
             default -> HttpStatus.OK;
         };
         if (!status.is2xxSuccessful()) {
@@ -500,10 +491,6 @@ public class ManufacturerOnboardingService {
 
     private static UUID commandId(String idempotencyKey, String purpose, UUID applicationId) {
         return UUID.nameUUIDFromBytes((idempotencyKey + "|" + purpose + "|" + applicationId).getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String payloadHash(byte[] bodyHash) {
-        return HexFormat.of().formatHex(bodyHash);
     }
 
     private static String text(JsonNode body, String field) {

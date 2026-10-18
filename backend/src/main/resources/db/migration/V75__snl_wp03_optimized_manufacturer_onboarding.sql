@@ -164,6 +164,10 @@ CREATE TABLE manufacturer_onboarding_command_evidence (
   purpose        text NOT NULL CHECK (purpose IN (
     'submit', 'director_decision', 'raise_anomaly', 'resolve_anomaly', 'revoke', 'observation_close')),
   payload_hash   char(64) NOT NULL CHECK (payload_hash ~ '^[0-9a-f]{64}$'),
+  result_state   text,
+  result_version integer,
+  result_payment_id uuid,
+  result_permittee_number text,
   completed_at   timestamptz NOT NULL DEFAULT now()
 );
 
@@ -426,6 +430,81 @@ BEGIN
   RETURN next_ver;
 END $$;
 
+CREATE FUNCTION manufacturer_onboarding_canonical_hash(p_parts text[]) RETURNS char(64)
+LANGUAGE sql IMMUTABLE SET search_path FROM CURRENT AS $$
+  SELECT md5(array_to_string($1, '|')) || md5('mob-canonical|' || array_to_string($1, '|'));
+$$;
+
+CREATE FUNCTION manufacturer_onboarding_idempotency_replay(
+  p_command_id uuid, p_application uuid, p_purpose text, p_canonical char(64), p_supplied_hash char(64))
+RETURNS manufacturer_onboarding_command_evidence LANGUAGE plpgsql SET search_path FROM CURRENT AS $$
+DECLARE ev manufacturer_onboarding_command_evidence%ROWTYPE;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_command_id::text, 0));
+  IF p_supplied_hash IS NOT NULL AND p_supplied_hash <> p_canonical THEN
+    RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'idempotency_key_conflict';
+  END IF;
+  SELECT * INTO ev FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+  IF ev.application_id <> p_application OR ev.purpose <> p_purpose OR ev.payload_hash <> p_canonical THEN
+    RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'idempotency_key_conflict';
+  END IF;
+  RETURN ev;
+END $$;
+
+CREATE FUNCTION manufacturer_onboarding_assert_submit_actor(p_actor uuid, p_application uuid, p_role text)
+RETURNS uuid LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
+DECLARE org uuid;
+BEGIN
+  IF p_role IS DISTINCT FROM 'manufacturer' THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_permitted';
+  END IF;
+  SELECT organisation_id INTO org FROM manufacturer_onboarding_application WHERE id = p_application;
+  IF org IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_found';
+  END IF;
+  PERFORM manufacturer_onboarding_assert_applicant_writer(p_actor, org, p_application);
+  RETURN org;
+END $$;
+
+CREATE FUNCTION manufacturer_onboarding_assert_director_actor(p_actor uuid, p_application uuid)
+RETURNS void LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
+DECLARE org uuid;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM user_account u WHERE u.id = p_actor AND u.status = 'active') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'no_active_account';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM role_assignment ra JOIN capability_grant g ON g.role = ra.role AND g.capability = 'manufacturer_onboarding_director'
+                  WHERE ra.user_id = p_actor AND ra.active) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_permitted';
+  END IF;
+  SELECT organisation_id INTO org FROM manufacturer_onboarding_application WHERE id = p_application;
+  IF org IS NULL THEN RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_found'; END IF;
+  IF EXISTS (SELECT 1 FROM manufacturer_onboarding_event e WHERE e.application_id = p_application AND e.actor_account_id = p_actor AND e.event_kind = 'submit') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'segregation_refused';
+  END IF;
+  IF EXISTS (SELECT 1 FROM organisation_membership m WHERE m.active AND m.user_id = p_actor AND m.organisation_id = org) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'segregation_refused';
+  END IF;
+END $$;
+
+CREATE FUNCTION manufacturer_onboarding_assert_anomaly_actor(p_actor uuid, p_actor_role text)
+RETURNS void LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM user_account u WHERE u.id = p_actor AND u.status = 'active') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'no_active_account';
+  END IF;
+  IF p_actor_role NOT IN ('finance', 'programme', 'director') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_permitted';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM role_assignment ra JOIN capability_grant g ON g.role = ra.role AND g.capability = 'manufacturer_onboarding_anomaly'
+                  WHERE ra.user_id = p_actor AND ra.active AND ra.role = p_actor_role) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'not_permitted';
+  END IF;
+END $$;
+
 CREATE FUNCTION manufacturer_onboarding_run_automated_checks(p_application uuid) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE
@@ -538,12 +617,20 @@ DECLARE
   to_state text;
   notify_id uuid := gen_random_uuid();
   notify_hash char(64) := md5(p_command_id::text || 'mob-notify-submit') || md5('mob-notify-submit|' || p_command_id::text);
+  canonical char(64);
+  prior manufacturer_onboarding_command_evidence;
+  from_state text;
 BEGIN
-  IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
-    SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
-    SELECT l.payment_id INTO out_payment_id FROM manufacturer_onboarding_payment_link l WHERE l.application_id = p_application;
-    RETURN NEXT; RETURN;
+  canonical := manufacturer_onboarding_canonical_hash(ARRAY[
+    'submit', p_application::text, p_actor::text, 'manufacturer', p_version::text,
+    p_amount_inr::text, p_fee_rule_key, p_fee_rule_version::text, coalesce(p_verification_status, ''),
+    coalesce(p_source_reference, ''), coalesce(p_note, '')]);
+  prior := manufacturer_onboarding_idempotency_replay(p_command_id, p_application, 'submit', canonical, p_payload_hash);
+  IF prior IS NOT NULL THEN
+    RETURN QUERY SELECT prior.result_state, prior.result_version, prior.result_payment_id;
+    RETURN;
   END IF;
+  PERFORM manufacturer_onboarding_assert_submit_actor(p_actor, p_application, p_role);
   SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application FOR UPDATE;
   IF NOT FOUND OR a.state NOT IN ('draft', 'automatic_checks_failed') OR a.version <> p_version THEN
     RETURN QUERY SELECT 'not_submittable'::text, NULL::integer, NULL::uuid; RETURN;
@@ -552,6 +639,7 @@ BEGIN
   IF plc IN ('on_hold', 'revoked', 'active', 'pending') THEN
     RETURN QUERY SELECT 'organisation_not_eligible'::text, NULL::integer, NULL::uuid; RETURN;
   END IF;
+  from_state := a.state;
   checks_ok := manufacturer_onboarding_run_automated_checks(p_application);
   IF p_amount_inr IS DISTINCT FROM 5000.00 THEN
     INSERT INTO manufacturer_onboarding_automated_check (application_id, check_code, outcome, detail)
@@ -562,9 +650,9 @@ BEGIN
     v_after := a.version + 1;
     UPDATE manufacturer_onboarding_application SET state = 'automatic_checks_failed', version = v_after WHERE id = p_application;
     INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
-    VALUES (p_application, 'submit_checks_failed', 'draft', 'automatic_checks_failed', p_actor, p_role, 'Automated checks failed');
-    INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
-    VALUES (p_command_id, p_application, 'submit', p_payload_hash);
+    VALUES (p_application, 'submit_checks_failed', from_state, 'automatic_checks_failed', p_actor, 'manufacturer', 'Automated checks failed');
+    INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash, result_state, result_version, result_payment_id)
+    VALUES (p_command_id, p_application, 'submit', canonical, 'automatic_checks_failed', v_after, NULL);
     RETURN QUERY SELECT 'automatic_checks_failed'::text, v_after, NULL::uuid; RETURN;
   END IF;
   receipt := manufacturer_onboarding_sim_receipt_number();
@@ -572,8 +660,8 @@ BEGIN
   VALUES (pay_id, p_application, a.organisation_id, p_amount_inr, 'paid', gw, p_actor, receipt, now());
   INSERT INTO payment_callback (payment_id, gateway_ref, outcome, payload_sha256) VALUES (pay_id, gw, 'paid', sha);
   INSERT INTO payment_event (payment_id, event, actor_account_id, actor_role, detail)
-  VALUES (pay_id, 'started', p_actor, p_role, 'Onboarding fee at simulated gateway'),
-         (pay_id, 'paid', p_actor, p_role, 'Simulated auto-settle on submit');
+  VALUES (pay_id, 'started', p_actor, 'manufacturer', 'Onboarding fee at simulated gateway'),
+         (pay_id, 'paid', p_actor, 'manufacturer', 'Simulated auto-settle on submit');
   INSERT INTO manufacturer_onboarding_payment_link (application_id, payment_id) VALUES (p_application, pay_id);
   INSERT INTO manufacturer_onboarding_automated_check (application_id, check_code, outcome, detail)
   VALUES (p_application, 'payment_receipt', 'pass', receipt);
@@ -582,17 +670,17 @@ BEGIN
   v_after := a.version + 1;
   UPDATE manufacturer_onboarding_application SET state = 'submitted', version = v_after WHERE id = p_application;
   INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
-  VALUES (p_application, 'submit', 'draft', 'submitted', p_actor, p_role, 'Submitted with simulated payment');
+  VALUES (p_application, 'submit', from_state, 'submitted', p_actor, 'manufacturer', 'Submitted with simulated payment');
   v_after := v_after + 1;
   to_state := 'director_review';
   UPDATE manufacturer_onboarding_application SET state = to_state, version = v_after WHERE id = p_application;
   UPDATE organisation SET permittee_lifecycle = 'pending' WHERE id = a.organisation_id AND permittee_lifecycle = 'none';
   INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
-  VALUES (p_application, 'checks_passed', 'submitted', to_state, p_actor, p_role, 'Automated checks passed');
+  VALUES (p_application, 'checks_passed', 'submitted', to_state, p_actor, 'manufacturer', 'Automated checks passed');
   PERFORM notification_foundation_deliver(notify_id, notify_hash, 'manufacturer_onboarding_application', p_application,
     'manufacturer_onboarding_director_review', 'Automated checks passed; director review required.', p_actor);
-  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
-  VALUES (p_command_id, p_application, 'submit', p_payload_hash);
+  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash, result_state, result_version, result_payment_id)
+  VALUES (p_command_id, p_application, 'submit', canonical, to_state, v_after, pay_id);
   RETURN QUERY SELECT to_state, v_after, pay_id;
 END $$;
 
@@ -603,33 +691,29 @@ RETURNS TABLE (out_state text, out_version integer, out_permittee_number text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE
   a manufacturer_onboarding_application%ROWTYPE;
-  holds boolean;
   v_after integer;
   pt text;
   ev uuid := gen_random_uuid();
   approved_at timestamptz := clock_timestamp();
   obs_start date;
   obs_end date;
+  canonical char(64);
+  prior manufacturer_onboarding_command_evidence;
 BEGIN
-  IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
-    SELECT a.state, a.version, a.permittee_number INTO out_state, out_version, out_permittee_number FROM manufacturer_onboarding_application a WHERE a.id = p_application;
-    RETURN NEXT; RETURN;
+  canonical := manufacturer_onboarding_canonical_hash(ARRAY[
+    'director_decision', p_application::text, p_actor::text, p_version::text, p_decision, coalesce(nullif(btrim(p_note), ''), '')]);
+  prior := manufacturer_onboarding_idempotency_replay(p_command_id, p_application, 'director_decision', canonical, p_payload_hash);
+  IF prior IS NOT NULL THEN
+    RETURN QUERY SELECT prior.result_state, prior.result_version, prior.result_permittee_number;
+    RETURN;
   END IF;
   IF p_decision NOT IN ('approve', 'reject') THEN
     RETURN QUERY SELECT 'validation_failed'::text, NULL::integer, NULL::text; RETURN;
   END IF;
+  PERFORM manufacturer_onboarding_assert_director_actor(p_actor, p_application);
   SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application FOR UPDATE;
   IF NOT FOUND OR a.state <> 'director_review' OR a.version <> p_version THEN
     RETURN QUERY SELECT 'not_found'::text, NULL::integer, NULL::text; RETURN;
-  END IF;
-  SELECT EXISTS (SELECT 1 FROM role_assignment ra JOIN capability_grant g ON g.role = ra.role AND g.capability = 'manufacturer_onboarding_director'
-                  WHERE ra.user_id = p_actor AND ra.active) INTO holds;
-  IF NOT holds THEN RETURN QUERY SELECT 'not_permitted'::text, NULL::integer, NULL::text; RETURN; END IF;
-  IF EXISTS (SELECT 1 FROM manufacturer_onboarding_event e WHERE e.application_id = p_application AND e.actor_account_id = p_actor AND e.event_kind = 'submit') THEN
-    RETURN QUERY SELECT 'segregation_refused'::text, NULL::integer, NULL::text; RETURN;
-  END IF;
-  IF EXISTS (SELECT 1 FROM organisation_membership m WHERE m.active AND m.user_id = p_actor AND m.organisation_id = a.organisation_id) THEN
-    RETURN QUERY SELECT 'segregation_refused'::text, NULL::integer, NULL::text; RETURN;
   END IF;
   v_after := a.version + 1;
   IF p_decision = 'reject' THEN
@@ -638,8 +722,8 @@ BEGIN
     VALUES (p_application, 'reject', nullif(btrim(p_note), ''), p_actor, ev);
     INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
     VALUES (p_application, 'director_reject', 'director_review', 'rejected', p_actor, 'director', p_note);
-    INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
-    VALUES (p_command_id, p_application, 'director_decision', p_payload_hash);
+    INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash, result_state, result_version, result_permittee_number)
+    VALUES (p_command_id, p_application, 'director_decision', canonical, 'rejected', v_after, NULL);
     RETURN QUERY SELECT 'rejected'::text, v_after, NULL::text; RETURN;
   END IF;
   obs_start := (approved_at AT TIME ZONE 'Asia/Kolkata')::date;
@@ -655,8 +739,8 @@ BEGIN
   PERFORM notification_foundation_deliver(gen_random_uuid(), md5(p_command_id::text || 'mob-notify-info') || md5('mob-notify-info|' || p_command_id::text),
     'manufacturer_onboarding_application', p_application, 'manufacturer_onboarding_information',
     'Director approved; permittee in observation.', p_actor);
-  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
-  VALUES (p_command_id, p_application, 'director_decision', p_payload_hash);
+  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash, result_state, result_version, result_permittee_number)
+  VALUES (p_command_id, p_application, 'director_decision', canonical, 'active_observation', v_after, pt);
   RETURN QUERY SELECT 'active_observation'::text, v_after, pt;
 END $$;
 
@@ -665,20 +749,20 @@ CREATE FUNCTION manufacturer_onboarding_orchestrate_raise_anomaly(
   p_command_id uuid, p_payload_hash char(64))
 RETURNS TABLE (out_state text, out_version integer)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
-DECLARE a manufacturer_onboarding_application%ROWTYPE; holds boolean; v_after integer;
+DECLARE a manufacturer_onboarding_application%ROWTYPE; v_after integer;
+  canonical char(64); prior manufacturer_onboarding_command_evidence;
 BEGIN
-  IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
-    SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
-    RETURN NEXT; RETURN;
+  canonical := manufacturer_onboarding_canonical_hash(ARRAY[
+    'raise_anomaly', p_application::text, p_actor::text, p_actor_role, p_version::text, btrim(p_reason)]);
+  prior := manufacturer_onboarding_idempotency_replay(p_command_id, p_application, 'raise_anomaly', canonical, p_payload_hash);
+  IF prior IS NOT NULL THEN
+    RETURN QUERY SELECT prior.result_state, prior.result_version;
+    RETURN;
   END IF;
+  PERFORM manufacturer_onboarding_assert_anomaly_actor(p_actor, p_actor_role);
   SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application FOR UPDATE;
   IF NOT FOUND OR a.state NOT IN ('active_observation', 'active') OR a.version <> p_version THEN
     RETURN QUERY SELECT 'not_found'::text, NULL::integer; RETURN;
-  END IF;
-  SELECT EXISTS (SELECT 1 FROM role_assignment ra JOIN capability_grant g ON g.role = ra.role AND g.capability = 'manufacturer_onboarding_anomaly'
-                  WHERE ra.user_id = p_actor AND ra.active AND ra.role = p_actor_role) INTO holds;
-  IF NOT holds OR p_actor_role NOT IN ('finance', 'programme', 'director') THEN
-    RETURN QUERY SELECT 'not_permitted'::text, NULL::integer; RETURN;
   END IF;
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_anomaly WHERE application_id = p_application AND resolved_at IS NULL) THEN
     RETURN QUERY SELECT 'anomaly_open'::text, NULL::integer; RETURN;
@@ -690,8 +774,8 @@ BEGIN
   VALUES (p_application, p_actor_role, btrim(p_reason), p_actor);
   INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
   VALUES (p_application, 'anomaly_raised', a.state, 'on_hold', p_actor, p_actor_role, p_reason);
-  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
-  VALUES (p_command_id, p_application, 'raise_anomaly', p_payload_hash);
+  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash, result_state, result_version)
+  VALUES (p_command_id, p_application, 'raise_anomaly', canonical, 'on_hold', v_after);
   RETURN QUERY SELECT 'on_hold'::text, v_after;
 END $$;
 
@@ -700,20 +784,23 @@ CREATE FUNCTION manufacturer_onboarding_orchestrate_resolve_anomaly(
   p_command_id uuid, p_payload_hash char(64))
 RETURNS TABLE (out_state text, out_version integer)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
-DECLARE a manufacturer_onboarding_application%ROWTYPE; holds boolean; v_after integer; resume text; today date; ev uuid := gen_random_uuid();
+DECLARE a manufacturer_onboarding_application%ROWTYPE; v_after integer; resume text; today date; ev uuid := gen_random_uuid();
+  purpose text; canonical char(64); prior manufacturer_onboarding_command_evidence;
 BEGIN
-  IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
-    SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
-    RETURN NEXT; RETURN;
-  END IF;
   IF p_resolution NOT IN ('cleared', 'revoked') THEN RETURN QUERY SELECT 'validation_failed'::text, NULL::integer; RETURN; END IF;
+  purpose := CASE WHEN p_resolution = 'revoked' THEN 'revoke' ELSE 'resolve_anomaly' END;
+  canonical := manufacturer_onboarding_canonical_hash(ARRAY[
+    purpose, p_application::text, p_actor::text, p_version::text, p_resolution, coalesce(nullif(btrim(p_note), ''), '')]);
+  prior := manufacturer_onboarding_idempotency_replay(p_command_id, p_application, purpose, canonical, p_payload_hash);
+  IF prior IS NOT NULL THEN
+    RETURN QUERY SELECT prior.result_state, prior.result_version;
+    RETURN;
+  END IF;
+  PERFORM manufacturer_onboarding_assert_director_actor(p_actor, p_application);
   SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application FOR UPDATE;
   IF NOT FOUND OR a.state <> 'on_hold' OR a.version <> p_version THEN
     RETURN QUERY SELECT 'not_found'::text, NULL::integer; RETURN;
   END IF;
-  SELECT EXISTS (SELECT 1 FROM role_assignment ra JOIN capability_grant g ON g.role = ra.role AND g.capability = 'manufacturer_onboarding_director'
-                  WHERE ra.user_id = p_actor AND ra.active) INTO holds;
-  IF NOT holds THEN RETURN QUERY SELECT 'not_permitted'::text, NULL::integer; RETURN; END IF;
   v_after := a.version + 1;
   IF p_resolution = 'revoked' THEN
     UPDATE manufacturer_onboarding_application SET state = 'revoked', version = v_after WHERE id = p_application;
@@ -722,8 +809,8 @@ BEGIN
      WHERE application_id = p_application AND resolved_at IS NULL;
     INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
     VALUES (p_application, 'director_revoke', 'on_hold', 'revoked', p_actor, 'director', p_note);
-    INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
-    VALUES (p_command_id, p_application, 'revoke', p_payload_hash);
+    INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash, result_state, result_version)
+    VALUES (p_command_id, p_application, 'revoke', canonical, 'revoked', v_after);
     RETURN QUERY SELECT 'revoked'::text, v_after; RETURN;
   END IF;
   today := (now() AT TIME ZONE 'Asia/Kolkata')::date;
@@ -745,8 +832,8 @@ BEGIN
    WHERE application_id = p_application AND resolved_at IS NULL;
   INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
   VALUES (p_application, 'anomaly_cleared', 'on_hold', resume, p_actor, 'director', p_note);
-  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
-  VALUES (p_command_id, p_application, 'resolve_anomaly', p_payload_hash);
+  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash, result_state, result_version)
+  VALUES (p_command_id, p_application, 'resolve_anomaly', canonical, resume, v_after);
   RETURN QUERY SELECT resume, v_after;
 END $$;
 
@@ -756,10 +843,14 @@ CREATE FUNCTION manufacturer_onboarding_orchestrate_observation_close(
 RETURNS TABLE (out_state text, out_version integer, out_permittee_number text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE a manufacturer_onboarding_application%ROWTYPE; today date; v_after integer; ev uuid := gen_random_uuid();
+  canonical char(64); prior manufacturer_onboarding_command_evidence;
 BEGIN
-  IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
-    SELECT a.state, a.version, a.permittee_number INTO out_state, out_version, out_permittee_number FROM manufacturer_onboarding_application a WHERE a.id = p_application;
-    RETURN NEXT; RETURN;
+  canonical := manufacturer_onboarding_canonical_hash(ARRAY[
+    'observation_close', p_application::text, p_actor::text, coalesce(p_role, ''), p_version::text]);
+  prior := manufacturer_onboarding_idempotency_replay(p_command_id, p_application, 'observation_close', canonical, p_payload_hash);
+  IF prior IS NOT NULL THEN
+    RETURN QUERY SELECT prior.result_state, prior.result_version, prior.result_permittee_number;
+    RETURN;
   END IF;
   today := (now() AT TIME ZONE 'Asia/Kolkata')::date;
   SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application FOR UPDATE;
@@ -780,24 +871,30 @@ BEGIN
   UPDATE organisation SET permittee_lifecycle = 'active' WHERE id = a.organisation_id;
   INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
   VALUES (p_application, 'observation_close', 'active_observation', 'active', p_actor, p_role, '15-day observation complete');
-  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
-  VALUES (p_command_id, p_application, 'observation_close', p_payload_hash);
+  INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash, result_state, result_version, result_permittee_number)
+  VALUES (p_command_id, p_application, 'observation_close', canonical, 'active', v_after, a.permittee_number);
   RETURN QUERY SELECT 'active'::text, v_after, a.permittee_number;
 END $$;
 
 CREATE FUNCTION manufacturer_onboarding_maint_observation_close_as_of(
   p_application uuid, p_as_of date)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
-DECLARE a manufacturer_onboarding_application%ROWTYPE; cmd uuid := gen_random_uuid(); hash char(64) := md5(random()::text) || md5('mob-maint-close|' || random()::text);
+DECLARE a manufacturer_onboarding_application%ROWTYPE;
+  cmd uuid := gen_random_uuid();
+  dir uuid;
+  canonical char(64);
 BEGIN
   IF current_user <> 'bee_local_maint' AND session_user <> 'bee_local_maint' THEN
     RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'maint_only';
   END IF;
+  SELECT id INTO dir FROM user_account WHERE username = 'bee.director' LIMIT 1;
   SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application;
   IF NOT FOUND OR a.state <> 'active_observation' THEN RETURN 'not_found'; END IF;
   IF p_as_of < a.observation_ends_on THEN RETURN 'observation_not_ended'; END IF;
+  canonical := manufacturer_onboarding_canonical_hash(ARRAY[
+    'observation_close', p_application::text, dir::text, 'director', a.version::text]);
   PERFORM manufacturer_onboarding_orchestrate_observation_close(
-    p_application, (SELECT id FROM user_account WHERE username = 'bee.director' LIMIT 1), 'director', a.version, cmd, hash);
+    p_application, dir, 'director', a.version, cmd, canonical);
   RETURN 'active';
 END $$;
 
@@ -815,7 +912,8 @@ BEGIN
       AND NOT EXISTS (SELECT 1 FROM manufacturer_onboarding_anomaly an WHERE an.application_id = a.id AND an.resolved_at IS NULL)
     FOR UPDATE LOOP
     cmd := gen_random_uuid();
-    hash := md5(r.id::text || cmd::text) || md5('mob-batch-close|' || r.id::text || cmd::text);
+    hash := manufacturer_onboarding_canonical_hash(ARRAY[
+      'observation_close', r.id::text, dir::text, 'director', r.version::text]);
     PERFORM manufacturer_onboarding_orchestrate_observation_close(r.id, dir, 'director', r.version, cmd, hash);
     n := n + 1;
   END LOOP;
@@ -989,9 +1087,10 @@ BEGIN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_orchestrate_director_decision(uuid, uuid, integer, text, text, uuid, char(64)) TO bee_runtime', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_orchestrate_raise_anomaly(uuid, uuid, text, integer, text, uuid, char(64)) TO bee_runtime', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_orchestrate_resolve_anomaly(uuid, uuid, integer, text, text, uuid, char(64)) TO bee_runtime', home_schema);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_orchestrate_observation_close(uuid, uuid, text, integer, uuid, char(64)) TO bee_runtime', home_schema);
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.manufacturer_onboarding_orchestrate_observation_close(uuid, uuid, text, integer, uuid, char(64)) FROM bee_runtime', home_schema);
   END IF;
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_local_maint') THEN
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_orchestrate_observation_close(uuid, uuid, text, integer, uuid, char(64)) TO bee_local_maint', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_maint_observation_close_as_of(uuid, date) TO bee_local_maint', home_schema);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_maint_close_expired_observations(date) TO bee_local_maint', home_schema);
   END IF;

@@ -320,7 +320,7 @@ const COMMAND_ERRORS: UpstreamErrors = {
   403: [...RESOLVER_DENIALS, "not_permitted", "segregation_refused", "organisation_not_eligible"],
   404: ["not_found"],
   409: ["version_conflict", "anomaly_open", "observation_not_ended", ...IDEMPOTENCY],
-  422: ["validation_failed", "idempotency_key_required", "clock_override_refused"],
+  422: ["validation_failed", "idempotency_key_required"],
   503: ["service_unavailable"],
 };
 
@@ -356,11 +356,6 @@ export const SPRING_MANUFACTURER_ONBOARDING_RAISE_ANOMALY = {
   successStatuses: [200] as const,
 };
 export const SPRING_MANUFACTURER_ONBOARDING_RESOLVE_ANOMALY = {
-  errors: COMMAND_ERRORS,
-  validate: validateManufacturerOnboardingDetail,
-  successStatuses: [200] as const,
-};
-export const SPRING_MANUFACTURER_ONBOARDING_OBSERVATION_CLOSE = {
   errors: COMMAND_ERRORS,
   validate: validateManufacturerOnboardingDetail,
   successStatuses: [200] as const,

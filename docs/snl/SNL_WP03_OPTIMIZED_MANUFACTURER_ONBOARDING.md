@@ -1,6 +1,6 @@
 # SNL WP03 — optimized manufacturer onboarding (backend slice)
 
-**Status:** Implemented on branch `cursor/wp3-fast-manufacturer-onboarding-backend` (Flyway **V75** only). Provisional local rules, not BEE rules.
+**Status:** A3 implemented on branch `cursor/wp3-fast-manufacturer-onboarding-backend` (Flyway **V75** only). **ChatGPT review pending.** Provisional local rules, not BEE rules.
 
 ## Scope
 
@@ -13,13 +13,15 @@ Auditable manufacturer entity onboarding: draft application (JSONB payload), nin
 | Company registration fee | **₹5,000.00** from master fee rule `REG:manufacturer_onboarding` (version 1); submit orchestrator snapshots the rule — clients do not supply the amount. |
 | Officer roles | Finance/Programme/Director actions use **role grants on the authenticated account** (`p_actor_role` / capability checks in SQL). Request bodies carry decisions and notes only, not role. |
 | `rejected` vs `revoked` | **Reject** at `director_review` → terminal `rejected` (no permittee). **Revoke** via anomaly resolution `revoked` while on hold after activation path → terminal `revoked` + `organisation.permittee_lifecycle = revoked`. |
-| Automated checks | Failed checks land in **`automatic_checks_failed`** (distinct from director reject). |
+| Automated checks | Failed checks land in **`automatic_checks_failed`** (distinct from director reject). Resubmit records **`from_state`** from the persisted current state (not always `draft`). |
 | Observation window | On **approve**, `started_on` and `observation_ends_on` are **15 calendar days from Director approval** (`decided_at` in IST), not from an arbitrary client clock. |
 | Anomaly cleared after deadline | If `observation_ends_on` has passed, **cleared** resolves to **`active`** (closes observation, activates permittee), not back to `active_observation`. Within the window, cleared returns to `active_observation`. |
 | `tradeLicenceUploaded` | **True only** when a **`trade_licence`** document version exists; other uploads do not satisfy the gate. |
 | Trusted writes | `bee_runtime` has **SELECT** on application/evidence reads and **EXECUTE** on documented commands only — no direct INSERT/UPDATE on application, events, or document tables. SECURITY DEFINER commands run as the migration owner; **`bee.mob_trusted` is not used**. |
-| Observation close (production API) | Applicant/authenticated close when calendar day ≥ `observation_ends_on` and no open anomaly. **`asOf` is refused** on the production route. |
-| Observation close (demo/maint) | **`manufacturer_onboarding_maint_observation_close_as_of`** and batch close are **`bee_local_maint` EXECUTE only** for rehearsal and data repair — not the browser contract. |
+| Command idempotency | Each orchestrator serializes on `command_id`, compares application, purpose and a **database-canonical** payload hash, replays stored results (even after later lifecycle moves), and raises **`idempotency_key_conflict`** on cross-application, cross-purpose or changed-payload reuse. Spring maps SQL `23505` / `idempotency_key_conflict` to HTTP **409**. |
+| Submit actor | Submit requires active **manufacturer** membership on the application organisation; forged role/org actors are refused before payment or evidence writes. |
+| Observation close (production) | **No browser or Spring API** for manual observation close. Automatic closure after day 15 when no anomaly remains is **BL-263** (production scheduler not implemented). |
+| Observation close (demo/maint) | **`manufacturer_onboarding_maint_observation_close_as_of`** and batch close are **`bee_local_maint` EXECUTE only** (internal `orchestrate_observation_close`; **`bee_runtime` has no EXECUTE**). |
 
 ## Draft payload (JSONB)
 
@@ -42,7 +44,6 @@ Permitted keys on create/patch (merged in SQL): `cin`, `gstin`, `declarationAcce
 | POST | `/api/manufacturer-onboarding/{id}/director-decision` |
 | POST | `/api/manufacturer-onboarding/{id}/anomalies` |
 | POST | `/api/manufacturer-onboarding/{id}/anomaly-resolution` |
-| POST | `/api/manufacturer-onboarding/{id}/observation/close` |
 | GET | `/api/manufacturer-onboarding/{id}/documents` |
 | POST | `/api/manufacturer-onboarding/{id}/documents` |
 
@@ -56,10 +57,9 @@ Permitted keys on create/patch (merged in SQL): `cin`, `gstin`, `declarationAcce
 | POST | `/api/runtime/manufacturer-onboarding/{id}/director-decision` |
 | POST | `/api/runtime/manufacturer-onboarding/{id}/anomalies` |
 | POST | `/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution` |
-| POST | `/api/runtime/manufacturer-onboarding/{id}/observation/close` |
 | GET/POST | `/api/runtime/manufacturer-onboarding/{id}/documents` |
 
-Detail responses include `draft`, `documents`, `fee`, `payment`, `automatedChecks`, `lifecycle`, `directorDecision`, `permitteeActivation`, `observation`, and `anomalies` where applicable.
+Detail responses include `draft`, `documents`, `fee`, `payment`, `automatedChecks`, `lifecycle`, `directorDecision`, `permitteeActivation`, `observation`, and `anomalies` where applicable. Observation completion is **read-only** in the UI until BL-263.
 
 ## Runtime EXECUTE inventory (`bee_runtime`)
 
@@ -70,13 +70,12 @@ Detail responses include `draft`, `documents`, `fee`, `payment`, `automatedCheck
 5. `manufacturer_onboarding_orchestrate_director_decision`
 6. `manufacturer_onboarding_orchestrate_raise_anomaly`
 7. `manufacturer_onboarding_orchestrate_resolve_anomaly`
-8. `manufacturer_onboarding_orchestrate_observation_close`
 
-Idempotency: each command accepts a client **`Idempotency-Key`**; replays are keyed by derived `command_id` + payload hash. **Separate anomaly episodes** require **separate keys** after the prior episode is resolved — there is no one-key-per-application assumption.
+Idempotency: each command accepts a client **`Idempotency-Key`**; replays are keyed by derived `command_id` + canonical payload hash. **Separate anomaly episodes** require **separate keys** after the prior episode is resolved — there is no one-key-per-application assumption.
 
 ## Proof
 
-`SnlWp03OptimizedManufacturerOnboardingDatabaseTest` — migration rank, trusted-boundary guards, create/patch/document commands, trade-licence gate, cross-org refusal, runtime EXECUTE inventory, repeated anomaly idempotency, happy path, model-submit guard.
+`SnlWp03OptimizedManufacturerOnboardingDatabaseTest` — migration rank, trusted-boundary guards, create/patch/document commands, trade-licence gate, cross-org refusal, **seven-command** runtime EXECUTE inventory, idempotency replay/conflict proofs, maint observation close, happy path, model-submit guard.
 
 ## Deferred
 

@@ -73,7 +73,6 @@ export type WebRoute =
   | "/api/runtime/manufacturer-onboarding/{id}/director-decision"
   | "/api/runtime/manufacturer-onboarding/{id}/anomalies"
   | "/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution"
-  | "/api/runtime/manufacturer-onboarding/{id}/observation/close"
   | "/api/runtime/manufacturer-onboarding/{id}/documents";
 
 export type SpringRoute =
@@ -135,7 +134,6 @@ export type SpringRoute =
   | "/api/manufacturer-onboarding/{id}/director-decision"
   | "/api/manufacturer-onboarding/{id}/anomalies"
   | "/api/manufacturer-onboarding/{id}/anomaly-resolution"
-  | "/api/manufacturer-onboarding/{id}/observation/close"
   | "/api/manufacturer-onboarding/{id}/documents";
 
 export type IdentityOperation = "discovery" | "jwks" | "token.code" | "token.refresh" | "logout";
@@ -200,7 +198,6 @@ export function springRoute(path: string): SpringRoute {
   if (/^\/api\/manufacturer-onboarding\/[^/]+\/director-decision$/.test(p)) return "/api/manufacturer-onboarding/{id}/director-decision";
   if (/^\/api\/manufacturer-onboarding\/[^/]+\/anomalies$/.test(p)) return "/api/manufacturer-onboarding/{id}/anomalies";
   if (/^\/api\/manufacturer-onboarding\/[^/]+\/anomaly-resolution$/.test(p)) return "/api/manufacturer-onboarding/{id}/anomaly-resolution";
-  if (/^\/api\/manufacturer-onboarding\/[^/]+\/observation\/close$/.test(p)) return "/api/manufacturer-onboarding/{id}/observation/close";
   if (/^\/api\/manufacturer-onboarding\/[^/]+\/documents$/.test(p)) return "/api/manufacturer-onboarding/{id}/documents";
   if (/^\/api\/manufacturer-onboarding\/[^/]+$/.test(p)) return "/api/manufacturer-onboarding/{id}";
   return "/api/model-applications/{id}";

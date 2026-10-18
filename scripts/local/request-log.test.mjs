@@ -81,7 +81,6 @@ before(async () => {
     mobDirector: await import("../../app/api/runtime/manufacturer-onboarding/[id]/director-decision/route.ts"),
     mobAnomalies: await import("../../app/api/runtime/manufacturer-onboarding/[id]/anomalies/route.ts"),
     mobAnomalyResolution: await import("../../app/api/runtime/manufacturer-onboarding/[id]/anomaly-resolution/route.ts"),
-    mobObservationClose: await import("../../app/api/runtime/manufacturer-onboarding/[id]/observation/close/route.ts"),
     mobDocuments: await import("../../app/api/runtime/manufacturer-onboarding/[id]/documents/route.ts"),
   };
 });
@@ -791,7 +790,6 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
     ["POST", "/api/runtime/manufacturer-onboarding/{id}/director-decision", "mobDirector", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/director-decision`, json, "{}"],
     ["POST", "/api/runtime/manufacturer-onboarding/{id}/anomalies", "mobAnomalies", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/anomalies`, json, "{}"],
     ["POST", "/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution", "mobAnomalyResolution", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/anomaly-resolution`, json, "{}"],
-    ["POST", "/api/runtime/manufacturer-onboarding/{id}/observation/close", "mobObservationClose", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/observation/close`, json, "{}"],
     ["GET", "/api/runtime/manufacturer-onboarding/{id}/documents", "mobDocuments", "GET", `/api/runtime/manufacturer-onboarding/${MOB_ID}/documents`, {}, null],
   ];
   for (const [method, route, handler, verb, url, headers, body] of mobOps) {

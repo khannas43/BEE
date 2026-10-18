@@ -22,7 +22,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
 | WP2 | Common workflow tasks and SLA | In progress — Brief 19C-B review pending | 68% | WP1 | R1 | V73+19C-A accepted at `ae63275`; 19C-B service wiring implemented, review pending |
-| WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
+| WP3 | Entity brand and category registration | In progress — **A3 implemented / ChatGPT review pending** (optimized manufacturer onboarding V75 backend slice) | 15% | WP2, WP5 foundation | R2 | [SNL_WP03_OPTIMIZED_MANUFACTURER_ONBOARDING.md](SNL_WP03_OPTIMIZED_MANUFACTURER_ONBOARDING.md); not WP3 accepted |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
 | WP6 | QR requisition and serial register | Not started | 0% | WP4, WP5 | R4 | Pending |

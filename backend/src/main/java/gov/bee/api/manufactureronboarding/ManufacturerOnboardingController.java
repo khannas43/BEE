@@ -134,19 +134,6 @@ public class ManufacturerOnboardingController {
             : service.resolveAnomaly(resolved.caller(), uuid(id), key, body);
     }
 
-    @PostMapping("/api/manufacturer-onboarding/{id}/observation/close")
-    public ResponseEntity<Map<String, Object>> closeObservation(@AuthenticationPrincipal Jwt jwt, @PathVariable("id") String id,
-                                                                 @RequestHeader(value = "Idempotency-Key", required = false) String key,
-                                                                 @RequestBody(required = false) String raw) {
-        var resolved = callers.resolve(jwt);
-        if (resolved.caller() == null) {
-            return denied(resolved.denial());
-        }
-        JsonNode body = parse(raw);
-        return body == null ? ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed")
-            : service.closeObservation(resolved.caller(), uuid(id), key, body);
-    }
-
     @GetMapping("/api/manufacturer-onboarding/{id}/documents")
     public ResponseEntity<Map<String, Object>> listDocuments(@AuthenticationPrincipal Jwt jwt, @PathVariable("id") String id) {
         var resolved = callers.resolve(jwt);

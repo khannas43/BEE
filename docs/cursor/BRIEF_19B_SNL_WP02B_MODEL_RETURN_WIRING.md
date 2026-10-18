@@ -137,4 +137,3 @@ Use unique disposable subjects. Update cleanup in the correct dependency order a
 ## Handback
 
 Run `/bee-handback`. Report the V71 objects, transaction and rollback design, exact model hooks, assignee rule, notification compatibility, replay/concurrency behaviour, named tests and counts, files, commit hash, deferrals and unchanged Word file.
-

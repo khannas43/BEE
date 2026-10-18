@@ -13,9 +13,11 @@ import java.util.UUID;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Transactional persistence for SNL WP2A foundation tables (internal; not wired to HTTP yet). */
+/** Transactional persistence for SNL WP2A foundation tables. */
+@Repository
 public class WorkflowFoundationRepository {
 
     public static final String SUBJECT_REGISTRATION = "registration_application";
@@ -96,10 +98,8 @@ public class WorkflowFoundationRepository {
 
     public TaskRow createTaskIdempotent(TaskCommand command, UUID commandId, UUID actorAccount, String actorRole) {
         String hash = commandId == null ? null : payloadHash(command);
-        return tx.execute(status -> {
-            UUID taskId = invokeCreateTask(command, commandId, hash, actorAccount, actorRole);
-            return findTask(taskId).orElseThrow();
-        });
+        UUID taskId = invokeCreateTask(command, commandId, hash, actorAccount, actorRole);
+        return findTask(taskId).orElseThrow();
     }
 
     UUID invokeCreateTask(TaskCommand command, UUID commandId, String hash, UUID actorAccount, String actorRole) {

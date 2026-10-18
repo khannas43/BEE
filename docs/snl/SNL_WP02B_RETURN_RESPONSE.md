@@ -1,6 +1,6 @@
 # SNL WP02B — return, applicant response and review-task wiring
 
-**Status:** Umbrella design recorded; Brief 19A accepted; Briefs 19B–19D remain.
+**Status:** Umbrella design recorded; Brief 19A accepted; Brief 19B model wiring accepted on branch; Briefs 19C–19D remain.
 **Depends on:** WP2A merge `80b1da7`, `WorkflowFoundationRepository`, V69 command functions.
 **Migration sequence:** V70 starts the policy and generic notification foundation; later migrations wire model and registration journeys. V69 remains unchanged.
 
@@ -9,7 +9,7 @@
 | Slice | Scope | Status |
 | --- | --- | --- |
 | 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Accepted (`64accd5` plus acceptance corrections) |
-| 19B | Model return/resubmit/response wiring | Planned |
+| 19B | Model return/resubmit/response wiring | Accepted (V71 + `WorkflowReturnResponseWiring`; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
 | 19C | Registration return/resubmit/response wiring | Planned |
 | 19D | Common read projection, consolidated concurrency/rollback proof and plan evidence | Planned |
 
@@ -20,8 +20,8 @@
 | Registration | `POST …/registrations/{id}/transition` `return` | `RegistrationReviewService` | `programme_review` / `director_approval` → `returned` | `programme_review` or `director_approval` / `review` (open) | start + pause (applicant) | open `return_response` line | applicant org (V70) |
 | Registration | same route `resubmit` | `RegistrationReviewService` | `returned` → `programme_review` | same task (replay owner) | resume | response N | assigned officer (V70) |
 | Registration | `recommend` / `approve` after resubmit | `RegistrationReviewService` | forward states | task stays open | running | disposition `accepted` | — |
-| Model | `POST …/model-applications/{id}/return` | `StageReturnService` → `StageReturnRepository` | `{stage}` → `returned` | `{fromState}` / `review` | start + pause | open `return_response` | applicant (V39 trigger + due text from wiring) |
-| Model | `POST …/model-applications/{id}/resubmit` | `ResubmitApplicationService` | `returned` → `{resumed}` | same stage task | resume | response N | officer assignee (V70) |
+| Model | `POST …/model-applications/{id}/return` | `StageReturnService` → `StageReturnRepository` + `WorkflowReturnResponseWiring` | `{stage}` → `returned` | `{fromState}` / `review` | start + pause | open `return_response` | applicant once via V70 command (`bee.model_return_wired` skips V39) |
+| Model | `POST …/model-applications/{id}/resubmit` | `ResubmitApplicationService` + wiring | `returned` → `{resumed}` | same stage task | resume | response N | officer via `notification_foundation_deliver_recipient` (V71) |
 | Model | next forward at stage | existing forward services | varies | task open | running | `accepted` or `needs_more` on re-return | — |
 
 Officer **re-return** after resubmit: disposition `needs_more` on the undisposed response, then pause clock again (same discrepancy, next cycle).

@@ -32,7 +32,8 @@ public class ResubmitApplicationRepository {
     }
 
     /** The latest return that no resubmission has answered yet, with the rating-input fingerprint taken at the return. */
-    public record OpenReturn(UUID id, String returnedFromState, BigDecimal declaredIseer, String laboratoryCode, LocalDate testedOn, int reportVersions) {
+    public record OpenReturn(UUID id, String returnedFromState, BigDecimal declaredIseer, String laboratoryCode, LocalDate testedOn, int reportVersions,
+                             String reason, Instant returnedAt) {
     }
 
     private final JdbcTemplate jdbc;
@@ -43,11 +44,12 @@ public class ResubmitApplicationRepository {
 
     public Optional<OpenReturn> openReturn(UUID applicationId) {
         return jdbc.query(
-            "SELECT r.id, r.returned_from_state, r.fp_declared_iseer, r.fp_laboratory_code, r.fp_tested_on, r.fp_report_versions "
+            "SELECT r.id, r.returned_from_state, r.fp_declared_iseer, r.fp_laboratory_code, r.fp_tested_on, r.fp_report_versions, r.reason, r.returned_at "
                 + "FROM model_application_return r LEFT JOIN model_application_resubmission s ON s.return_id = r.id "
                 + "WHERE r.application_id = ? AND s.id IS NULL ORDER BY r.returned_at DESC LIMIT 1",
             (rs, i) -> new OpenReturn(rs.getObject("id", UUID.class), rs.getString("returned_from_state"), rs.getBigDecimal("fp_declared_iseer"),
-                rs.getString("fp_laboratory_code"), rs.getObject("fp_tested_on", LocalDate.class), rs.getInt("fp_report_versions")),
+                rs.getString("fp_laboratory_code"), rs.getObject("fp_tested_on", LocalDate.class), rs.getInt("fp_report_versions"), rs.getString("reason"),
+                rs.getTimestamp("returned_at").toInstant()),
             applicationId).stream().findFirst();
     }
 

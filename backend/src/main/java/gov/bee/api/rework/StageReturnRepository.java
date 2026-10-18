@@ -27,9 +27,9 @@ public class StageReturnRepository {
 
     public enum Outcome { RETURNED, STALE }
 
-    public record Result(Outcome outcome, int versionAfter, Instant returnedAt) {
+    public record Result(Outcome outcome, int versionAfter, Instant returnedAt, UUID returnId) {
         static Result of(Outcome outcome) {
-            return new Result(outcome, 0, null);
+            return new Result(outcome, 0, null, null);
         }
     }
 
@@ -52,6 +52,11 @@ public class StageReturnRepository {
         return new HashSet<>(rows);
     }
 
+    /** Suppresses the V39 return trigger so wired applicant notification runs exactly once (Brief 19B). */
+    public void prepareWiredApplicantNotification() {
+        jdbc.execute("SELECT set_config('bee.model_return_wired', 'true', true)");
+    }
+
     @Transactional
     public Result doReturn(UUID applicationId, int expectedVersion, UUID actorAccountId, String actorRole, String fromState, String reason) {
         int updated = jdbc.update(
@@ -66,13 +71,14 @@ public class StageReturnRepository {
             "INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING occurred_at",
             Timestamp.class, eventId, applicationId, ACTION, fromState, TO_STATE, actorAccountId, actorRole, versionAfter);
-        jdbc.update(
+        UUID returnId = UUID.randomUUID();
+        jdbc.queryForObject(
             "INSERT INTO model_application_return (id, application_id, transition_event_id, returned_from_state, reason, fp_declared_iseer, "
                 + "fp_laboratory_code, fp_tested_on, fp_report_versions, returned_by_account_id) "
                 + "SELECT ?, a.id, ?, ?, ?, a.declared_iseer, a.laboratory_code, a.tested_on, "
                 + "(SELECT count(*) FROM model_application_document_version v JOIN model_application_document d ON d.id = v.document_id WHERE d.application_id = a.id), ? "
-                + "FROM model_application a WHERE a.id = ?",
-            UUID.randomUUID(), eventId, fromState, reason, actorAccountId, applicationId);
-        return new Result(Outcome.RETURNED, versionAfter, at.toInstant());
+                + "FROM model_application a WHERE a.id = ? RETURNING id",
+            UUID.class, returnId, eventId, fromState, reason, actorAccountId, applicationId);
+        return new Result(Outcome.RETURNED, versionAfter, at.toInstant(), returnId);
     }
 }

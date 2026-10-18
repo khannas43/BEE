@@ -158,6 +158,21 @@ class SpringContractTest {
     gov.bee.api.rework.StageReturnRepository returnRepo;
 
     @MockitoBean
+    gov.bee.api.snl.WorkflowReturnResponseWiring returnWiring;
+
+    @MockitoBean
+    gov.bee.api.snl.ModelReturnResponseWiringRepository modelReturnWiringRepo;
+
+    @MockitoBean
+    gov.bee.api.notifications.NotificationCommandRepository notificationCommandRepo;
+
+    @MockitoBean
+    gov.bee.api.workflow.WorkflowFoundationRepository workflowFoundationRepo;
+
+    @MockitoBean
+    gov.bee.api.workflow.SnlReturnResponsePolicyRepository snlReturnPolicyRepo;
+
+    @MockitoBean
     gov.bee.api.rework.ResubmitApplicationRepository resubmitRepo;
 
     @MockitoBean
@@ -1501,7 +1516,8 @@ class SpringContractTest {
         String path = "/api/model-applications/" + NOVA_APP + "/return";
         String ok = "{\"version\":3,\"reason\":\"The laboratory name on the report does not match.\"}";
         var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("iame"))));
-        var done = new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.RETURNED, 4, Instant.parse("2026-10-04T10:00:00Z"));
+        var done = new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.RETURNED, 4, Instant.parse("2026-10-04T10:00:00Z"),
+            UUID.randomUUID());
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
         when(returnRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of());
@@ -1528,7 +1544,7 @@ class SpringContractTest {
         // Version, idempotency and replay.
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
         when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(
-            new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.STALE, 0, null));
+            new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.STALE, 0, null, null));
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
         when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
@@ -2410,7 +2426,8 @@ class SpringContractTest {
         String ok = "{\"version\":5,\"note\":\"Corrected the laboratory name.\"}";
         var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("manufacturer"))));
         var done = new gov.bee.api.rework.ResubmitApplicationRepository.Result(gov.bee.api.rework.ResubmitApplicationRepository.Outcome.RESUBMITTED, 6, Instant.parse("2026-10-04T10:00:00Z"));
-        var openIame = new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "iame_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1);
+        var openIame = new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "iame_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1,
+            "reason", Instant.parse("2026-10-04T09:00:00Z"));
 
         account("manufacturer", "own-org");
         when(applications.findOwned(NOVA_APP, NOVA)).thenReturn(Optional.of(returnedRow(5)));
@@ -2431,13 +2448,15 @@ class SpringContractTest {
         var back = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(back.getContentAsString().contains("\"toState\":\"iame_scrutiny\"") && back.getContentAsString().contains("\"ratingSuperseded\":false"), back.getContentAsString());
         conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":5}"), 200, null);
-        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "director_review", new BigDecimal("4.50"), "LAB", TESTED_ON, 1)));
+        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "director_review",
+            new BigDecimal("4.50"), "LAB", TESTED_ON, 1, "reason", Instant.parse("2026-10-04T09:00:00Z"))));
         var unchanged = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(unchanged.getContentAsString().contains("\"toState\":\"director_review\"") && unchanged.getContentAsString().contains("\"ratingSuperseded\":false"), unchanged.getContentAsString());
         when(resubmitRepo.ratingInputsChanged(any(), any())).thenReturn(true);
         var superseded = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(superseded.getContentAsString().contains("\"toState\":\"rating\"") && superseded.getContentAsString().contains("\"ratingSuperseded\":true"), superseded.getContentAsString());
-        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "bee_scrutiny", new BigDecimal("4.50"), "LAB", TESTED_ON, 1)));
+        when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(new gov.bee.api.rework.ResubmitApplicationRepository.OpenReturn(UUID.randomUUID(), "bee_scrutiny",
+            new BigDecimal("4.50"), "LAB", TESTED_ON, 1, "reason", Instant.parse("2026-10-04T09:00:00Z"))));
         var early = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);
         assertTrue(early.getContentAsString().contains("\"toState\":\"bee_scrutiny\"") && early.getContentAsString().contains("\"ratingSuperseded\":false"), "before the rating exists nothing is superseded: " + early.getContentAsString());
         when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(openIame));

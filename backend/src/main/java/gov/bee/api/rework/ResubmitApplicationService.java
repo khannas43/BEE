@@ -11,7 +11,9 @@ import gov.bee.api.brand.BrandAuthRepository;
 import gov.bee.api.brand.BrandAuthService;
 import gov.bee.api.identity.Caller;
 import gov.bee.api.identity.IdentityRepository;
+import gov.bee.api.snl.WorkflowReturnResponseWiring;
 import gov.bee.api.web.ApiErrors;
+import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -44,18 +46,20 @@ public class ResubmitApplicationService {
     private final BrandAuthService brandService;
     private final ModelApplicationEvidence evidence;
     private final ResubmitApplicationRepository repository;
+    private final WorkflowReturnResponseWiring returnWiring;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
 
     public ResubmitApplicationService(IdentityRepository identity, ModelApplicationRepository applications, BrandAuthRepository brands,
                                       BrandAuthService brandService, ModelApplicationEvidence evidence, ResubmitApplicationRepository repository,
-                                      IdempotencyRepository idempotency, ObjectMapper json) {
+                                      WorkflowReturnResponseWiring returnWiring, IdempotencyRepository idempotency, ObjectMapper json) {
         this.identity = identity;
         this.applications = applications;
         this.brands = brands;
         this.brandService = brandService;
         this.evidence = evidence;
         this.repository = repository;
+        this.returnWiring = returnWiring;
         this.idempotency = idempotency;
         this.json = json;
     }
@@ -111,11 +115,25 @@ public class ResubmitApplicationService {
         if (!idempotency.begin(caller.accountId(), "POST", ROUTE, appId, idempotencyKey, DraftRequestSupport.bodyHash(body))) {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
-        var done = repository.resubmit(appId, row.version(), caller.accountId(), actorRole(caller), open.get().id(), resumedState, superseded,
-            input.get().note().orElse(null));
-        if (done.outcome() != ResubmitApplicationRepository.Outcome.RESUBMITTED) {
+        ResubmitApplicationRepository.Result done;
+        try {
+            done = repository.resubmit(appId, row.version(), caller.accountId(), actorRole(caller), open.get().id(), resumedState, superseded,
+                input.get().note().orElse(null));
+            if (done.outcome() != ResubmitApplicationRepository.Outcome.RESUBMITTED) {
+                idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+                return error(HttpStatus.CONFLICT, "version_conflict");
+            }
+            returnWiring.afterResubmit(appId, open.get().id(), open.get().returnedFromState(), open.get().returnedAt(), open.get().reason(), resumedState,
+                input.get().note().orElse(null), done.resubmittedAt(), caller.accountId(), actorRole(caller), idempotencyKey);
+        } catch (WorkflowIdempotencyConflictException ex) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
-            return error(HttpStatus.CONFLICT, "version_conflict");
+            return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+        } catch (IllegalStateException ex) {
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            if ("model_return_officer_ambiguous".equals(ex.getMessage())) {
+                return error(HttpStatus.CONFLICT, "assignee_unavailable");
+            }
+            throw ex;
         }
         // The accreditation and standard versions that the edited application resolved replace those kept at the first submission.
         gates.resolved().ifPresent(res -> repository.recordEvidenceSnapshot(appId, row.organisationId(), res.accreditationRuleKey(), res.accreditationVersion(),

@@ -1,10 +1,10 @@
 # SNL WP03 — optimized manufacturer onboarding (backend slice)
 
-**Status:** A3 backend accepted at **`b378900`** (Flyway **V69–V75** frozen; **V76** adds WP3 definer `search_path` hardening only). **B2** frontend on demo branch `cursor/demo-wp3-onboarding-final`. **Brief C1A (18 Oct 2026):** live upload + **25/25** C1 journey. **Brief C1B (18 Oct 2026):** full database-tagged suite **590/590** (0 failures, 0 errors); presentation `app` schema at Flyway **76**; C1 journey **25/25** and **`npm run demo:wp3-wp9-check` 21/21** re-verified after API restart. Production identity/payment/scheduler gaps remain **BL-261–263**. Provisional local rules, not BEE rules.
+**Status:** **Brief C2 accepted on the coordinated demo stack (18 Oct 2026).** Owner-directed automatic activation is implemented on `cursor/wp3-auto-activation` with **V77**; successful payment and automated checks issue the permittee number, activate the organisation and start the 15-day observation immediately. Director pre-approval is removed from the UI; Director/Programme/Finance receive information and may use the observation workflow only during that window. Production identity/payment and external-registry gaps remain **BL-261–263**. Provisional local rules, not BEE rules.
 
 ## Scope
 
-Auditable manufacturer entity onboarding: draft application (JSONB payload), nine Annexure document kinds, fee snapshot, simulated auto-payment on submit, automated checks, director approve/reject, 15 calendar-day observation, permittee activation, finance/programme/**director** anomalies, director resolve/revoke, immutable events and command evidence.
+Auditable manufacturer entity onboarding: draft application (JSONB payload), nine Annexure document kinds, fee snapshot, simulated auto-payment on submit, automated checks, immediate permittee activation, 15-calendar-day observation, Finance/Programme/Director anomaly flags, immediate hold, Director clear/revoke, scheduled clean-window completion, immutable events and command evidence.
 
 ## Backend authority (not UI copy)
 
@@ -12,17 +12,16 @@ Auditable manufacturer entity onboarding: draft application (JSONB payload), nin
 | --- | --- |
 | Company registration fee | **₹5,000.00** from master fee rule `REG:manufacturer_onboarding` (version 1); submit orchestrator snapshots the rule — clients do not supply the amount. |
 | Officer roles | Finance/Programme/Director actions use **role grants on the authenticated account** (`p_actor_role` / capability checks in SQL). Request bodies carry decisions and notes only, not role. |
-| `rejected` vs `revoked` | **Reject** at `director_review` → terminal `rejected` (no permittee). **Revoke** via anomaly resolution `revoked` while on hold after activation path → terminal `revoked` + `organisation.permittee_lifecycle = revoked`. |
+| Cancellation authority | There is no pre-activation Director decision. After automatic activation, an anomaly applies an immediate hold; the Director may clear it or **revoke** with a recorded reason. |
 | Automated checks | Failed checks land in **`automatic_checks_failed`** (distinct from director reject). Resubmit records **`from_state`** from the persisted current state (not always `draft`). |
-| Observation window | On **approve**, `started_on` and `observation_ends_on` are **15 calendar days from Director approval** (`decided_at` in IST), not from an arbitrary client clock. |
+| Observation window | On successful submit, `started_on` and `observation_ends_on` are **15 calendar days from the persisted automatic-activation instant in IST**, not from a client clock. |
 | Anomaly cleared after deadline | If `observation_ends_on` has passed, **cleared** resolves to **`active`** (closes observation, activates permittee), not back to `active_observation`. Within the window, cleared returns to `active_observation`. |
 | `tradeLicenceUploaded` | **True only** when a **`trade_licence`** document version exists; other uploads do not satisfy the gate. |
 | Trusted writes | `bee_runtime` has **SELECT** on application/evidence reads and **EXECUTE** on documented commands only — no direct INSERT/UPDATE on application, events, or document tables. SECURITY DEFINER commands run as the migration owner; **`bee.mob_trusted` is not used**. |
 | Document upload pre-check | Spring reads application **state** with an ordinary **SELECT** (no row lock). **`manufacturer_onboarding_trusted_append_document`** locks the row, checks org ownership and editable state, and appends the version atomically. |
 | Command idempotency | Each orchestrator serializes on `command_id`, compares application, purpose and a **database-canonical** payload hash, replays stored results (even after later lifecycle moves), and raises **`idempotency_key_conflict`** on cross-application, cross-purpose or changed-payload reuse. Spring maps SQL `23505` / `idempotency_key_conflict` to HTTP **409**. |
 | Submit actor | Submit requires active **manufacturer** membership on the application organisation; forged role/org actors are refused before payment or evidence writes. |
-| Observation close (production) | **No browser or Spring API** for manual observation close. Automatic closure after day 15 when no anomaly remains is **BL-263** (production scheduler not implemented). |
-| Observation close (demo/maint) | **`manufacturer_onboarding_maint_observation_close_as_of`** and batch close are **`bee_local_maint` EXECUTE only** (internal `orchestrate_observation_close`; **`bee_runtime` has no EXECUTE**). |
+| Observation close | **No browser or Spring API** for manual observation close. A Spring scheduler invokes the constrained database command after day 15; only clean `active_observation` rows without an open anomaly become `active`. Maint-only proof helpers remain available for controlled testing. |
 
 ## Draft payload (JSONB)
 
@@ -60,7 +59,7 @@ Permitted keys on create/patch (merged in SQL): `cin`, `gstin`, `declarationAcce
 | POST | `/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution` |
 | GET/POST | `/api/runtime/manufacturer-onboarding/{id}/documents` |
 
-Detail responses include `draft`, `documents`, `fee`, `payment`, `automatedChecks`, `lifecycle`, `directorDecision`, `permitteeActivation`, `observation`, and `anomalies` where applicable. Observation completion is **read-only** in the UI until BL-263.
+Detail responses include `draft`, `documents`, `fee`, `payment`, `automatedChecks`, `lifecycle`, `permitteeActivation`, `observation`, and `anomalies` where applicable. The legacy Director-decision route remains contract-compatible for old records but no new submission enters `director_review`, and the UI exposes no approval action.
 
 ## Runtime EXECUTE inventory (`bee_runtime`)
 
@@ -71,15 +70,18 @@ Detail responses include `draft`, `documents`, `fee`, `payment`, `automatedCheck
 5. `manufacturer_onboarding_orchestrate_director_decision`
 6. `manufacturer_onboarding_orchestrate_raise_anomaly`
 7. `manufacturer_onboarding_orchestrate_resolve_anomaly`
+8. `manufacturer_onboarding_system_close_expired_observations` (scheduler only; no browser route)
 
 Idempotency: each command accepts a client **`Idempotency-Key`**; replays are keyed by derived `command_id` + canonical payload hash. **Separate anomaly episodes** require **separate keys** after the prior episode is resolved — there is no one-key-per-application assumption.
 
 ## Proof
 
-`SnlWp03OptimizedManufacturerOnboardingDatabaseTest` — Flyway rank **76** and **V76** installed; **`wp03V76SecurityDefinerFunctionsPinSearchPathWithCatalogAndTempLast`** (`<schema>, pg_catalog, pg_temp` with **`pg_temp` last** on all eleven WP3 definer commands); trusted-boundary guards; create/patch/document commands; trade-licence gate; cross-org refusal; **seven-command** runtime EXECUTE inventory; idempotency replay/conflict proofs; **`runtimeDocumentUploadViaTrustedAppendWithoutDirectTableUpdate`**; maint observation close; happy path; model-submit guard. **`MessagesDatabaseTest.everySecurityDefinerFunctionPinsItsSearchPathWithTempLast`** passes with V76 (project-wide definer inventory).
+`SnlWp03OptimizedManufacturerOnboardingDatabaseTest` — **28/28**; Flyway rank **77**; pinned definer search paths; trusted-boundary guards; automatic activation with permittee/observation; create/patch/document commands; trade-licence gate; cross-org refusal; runtime command inventory; idempotency replay/conflict proofs; anomaly hold/clear/revoke; anomaly refusal after day 15; scheduler close after day 15; model-submit guard.
+
+Coordinated live proof: `scripts/demo/c1-manufacturer-onboarding-journey.cjs` **23/23**, including automatic activation, permittee creation, observation dates, absence of Director approval controls, anomaly hold, Director clear/revoke and eight ngrok routes. Full gates: backend **161/161**, database **591/591**, web **264/264**, UI **239/239**, production build pass.
 
 ## Deferred
 
 - **BL-261** — Production identity/KYC (CIN/GSTIN, director KYC); local simulated checks only.
 - **BL-262** — Real payment gateway + Finance exception queue.
-- **BL-263** — External permittee registry sync and **production observation scheduler** (auto-close at day 15). Maint/batch close exists for demo only; **the production scheduler is not implemented**.
+- **BL-263** — External permittee registry sync remains deferred. The in-portal day-15 scheduler is implemented in V77/Spring; external registry synchronization remains open.

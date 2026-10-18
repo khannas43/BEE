@@ -103,7 +103,6 @@ async function commandApp(
   return result.value;
 }
 
-const DIRECTOR_QUEUE_PHASES = new Set(["director_review"]);
 const MONITORING_QUEUE_PHASES = new Set(["active_observation", "active", "on_hold"]);
 
 const DEFAULT_CREATE_LEGAL_NAME = "Aarav Appliances Pvt Ltd";
@@ -111,7 +110,7 @@ const DEFAULT_CREATE_LEGAL_NAME = "Aarav Appliances Pvt Ltd";
 export function createManufacturerOnboardingHttpClient(fetchImpl: FetchLike = fetch): ManufacturerOnboardingClient {
   return {
     listForApplicant: async () => fetchList(fetchImpl),
-    listDirectorQueue: async () => (await fetchList(fetchImpl)).filter((x) => DIRECTOR_QUEUE_PHASES.has(x.phase)),
+    listDirectorQueue: async () => [],
     listMonitoringQueue: async () => (await fetchList(fetchImpl)).filter((x) => MONITORING_QUEUE_PHASES.has(x.phase)),
     getApplication: async (id) => parseApplication(await fetchImpl(MANUFACTURER_ONBOARDING_BFF.detail(id), runtimeReadInit())),
     saveDraft: async (input: SaveDraftInput) => {

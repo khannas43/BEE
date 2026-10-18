@@ -42,7 +42,7 @@ describe("manufacturer onboarding HTTP adapter", () => {
     expect(app.observationEndsAt).toBeTruthy();
   });
 
-  it("uses canonical BFF list and filters director queue", async () => {
+  it("has no pre-approval Director queue after automatic activation", async () => {
     const calls: string[] = [];
     const items = [
       { ...DETAIL_FIXTURE, id: "a", state: "director_review" },
@@ -54,9 +54,10 @@ describe("manufacturer onboarding HTTP adapter", () => {
       return jsonResponse({ items, count: items.length, authority: "spring-database" });
     });
     const director = await client.listDirectorQueue();
-    expect(calls).toEqual([MANUFACTURER_ONBOARDING_BFF.list]);
-    expect(director.map((x) => x.id)).toEqual(["a"]);
+    expect(calls).toEqual([]);
+    expect(director).toEqual([]);
     const monitoring = await client.listMonitoringQueue();
+    expect(calls).toEqual([MANUFACTURER_ONBOARDING_BFF.list]);
     expect(monitoring).toEqual([]);
   });
 

@@ -95,11 +95,11 @@ export function Manufacturer360View({ id }: { id: string }) {
         </section>
 
         <section className="bg-surface-card rounded-xl p-space-md space-y-2" data-testid="360-director">
-          <h2 className="font-label-md font-semibold">Director approval</h2>
-          {app.directorDecisionAt ? (
-            <p className="font-body-sm">Approved <IstDate iso={app.directorDecisionAt} /> — {app.directorDecisionNote}</p>
+          <h2 className="font-label-md font-semibold">Automatic activation &amp; Director oversight</h2>
+          {app.activatedAt ? (
+            <p className="font-body-sm">Automatically activated <IstDate iso={app.activatedAt} />. Director approval was not required.</p>
           ) : (
-            <p className="font-body-sm text-on-surface-variant">Not yet approved.</p>
+            <p className="font-body-sm text-on-surface-variant">Not yet activated.</p>
           )}
         </section>
 

@@ -6,11 +6,10 @@ import { observationWindowFromApproval, phaseAfterHoldResolved } from "../observ
 describe("manufacturer onboarding observation", () => {
   beforeEach(() => resetManufacturerOnboardingFixture());
 
-  it("approval sets observation end to approval + 15 calendar days", async () => {
-    const approval = "2026-11-01T10:00:00.000Z";
-    const client = createFixtureManufacturerOnboardingClient({ nowIso: () => approval, nowMs: () => new Date(approval).getTime() });
-    const updated = await client.directorApprove({ id: FIXTURE_APPLICATION_IDS.director, version: 1 });
-    const window = observationWindowFromApproval(approval);
+  it("automatic activation sets observation end to activation + 15 calendar days", async () => {
+    const client = createFixtureManufacturerOnboardingClient();
+    const updated = await client.getApplication(FIXTURE_APPLICATION_IDS.director);
+    const window = observationWindowFromApproval(updated.activatedAt!);
     expect(updated.observationStartedAt).toBe(window.observationStartedAt);
     expect(updated.observationEndsAt).toBe(window.observationEndsAt);
   });

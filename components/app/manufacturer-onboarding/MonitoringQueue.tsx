@@ -124,7 +124,7 @@ export function MonitoringQueue() {
 
   const navLinks = [
     { href: "/app/manufacturer/monitoring", label: "Monitoring", testId: "nav-monitoring" },
-    { href: "/app/manufacturer/director", label: "Director queue", testId: "nav-director-queue" },
+    { href: "/app/manufacturer/director", label: "Director oversight", testId: "nav-director-queue" },
   ];
 
   const countdown = detail ? observationCountdown(detail.observationEndsAt, clock ?? undefined) : null;
@@ -133,7 +133,7 @@ export function MonitoringQueue() {
     <OnboardingChrome icon="insights" title="Post-approval monitoring (information & anomalies)">
       <NavLinks links={navLinks} />
       <p className="font-body-sm text-on-surface-variant">
-        Finance and Programme may raise anomalies for Director review. They cannot approve or revoke registrations.
+        Activation is automatic after successful payment and checks. Finance and Programme may flag anomalies; an anomaly applies an immediate hold, and only the Director may clear or revoke it.
       </p>
 
       {queueLoad === "loading" ? (

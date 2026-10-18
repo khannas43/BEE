@@ -168,7 +168,8 @@ REVOKE UPDATE, DELETE, TRUNCATE ON app.ai_model, app.ai_run, app.ai_disposition,
 SQL
 fi
 
-# WP3 optimized manufacturer onboarding (V75): orchestrators only; observation close stays maint-only.
+# WP3 optimized manufacturer onboarding (V75–V77): applicant commands plus the
+# internal automatic observation closer. Browser observation close stays absent.
 if psql_super -d bee_app -c "SELECT to_regclass('app.manufacturer_onboarding_application') IS NOT NULL" | grep -q t; then
   psql_super -d bee_app <<SQL
 GRANT SELECT ON app.manufacturer_onboarding_application TO ${BEE_RUNTIME_DB_USER};
@@ -196,5 +197,10 @@ REVOKE INSERT, UPDATE, DELETE ON app.manufacturer_onboarding_command_evidence, a
   app.manufacturer_onboarding_payment_link FROM ${BEE_RUNTIME_DB_USER};
 GRANT SELECT ON app.manufacturer_onboarding_command_evidence, app.manufacturer_onboarding_automated_check,
   app.manufacturer_onboarding_fee_snapshot TO ${BEE_RUNTIME_DB_USER};
+SQL
+fi
+if psql_super -d bee_app -c "SELECT to_regprocedure('app.manufacturer_onboarding_system_close_expired_observations()') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT EXECUTE ON FUNCTION app.manufacturer_onboarding_system_close_expired_observations() TO ${BEE_RUNTIME_DB_USER};
 SQL
 fi

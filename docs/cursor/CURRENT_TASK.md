@@ -1,50 +1,48 @@
 # Current Cursor task
 
-**Holder:** claude (post Brief C1B handback), 18 October 2026.
+**Holder:** claude compatibility baton (ChatGPT review complete), 18 October 2026.
 
-- Brief: **C1B** — close full database gate after WP3 live acceptance
-- Branch: `cursor/demo-wp3-onboarding-final` (commit after C1B correction)
-- Worktree: `/Users/sameerkhanna/Developer/BEE-demo-rehearsal`
-- Rollback: `cursor/demo-wp3-wp9-rehearsal` @ `098b05c`
-- Ngrok: `https://nicola-habited-barb.ngrok-free.dev` (left running)
-- Stack: `BEE_DEMO_LOGIN=1`, `BEE_MFA_REQUIRED=false`, web **3100**, API **8090**, Flyway **76** on `app`
+- Brief: **C2 — WP3 automatic manufacturer activation and 15-day observation**
+- Branch: `cursor/wp3-auto-activation`
+- Worktree: `/Users/sameerkhanna/Developer/BEE-wp3-auto-activation`
+- Base: `cursor/demo-wp3-onboarding-final` @ `9b3a3bd`
+- Public demo: `https://nicola-habited-barb.ngrok-free.dev`
 
-## C1B outcome (Cursor)
+## Owner-approved behaviour
 
-**Done**
+1. Applicant submits the manufacturer application.
+2. Payment and automated document/eligibility checks run automatically.
+3. A successful result activates the manufacturer immediately; there is no Director pre-approval.
+4. Director, Programme and Finance receive information and can raise an anomaly only during the 15-day observation window.
+5. An anomaly places the registration on immediate hold. Director may clear it or revoke the registration.
+6. If no unresolved anomaly remains at the deadline, the scheduled job closes observation and the manufacturer remains active.
 
-- **V76** `V76__snl_wp03_security_definer_search_path.sql` — pins eleven WP3 SECURITY DEFINER functions to `<schema>, pg_catalog, pg_temp` (`pg_temp` last); no grant changes.
-- Migration-rank assertions **75 → 76** (“V1 through V76”) in full-schema database tests; V71/V72 historical proofs unchanged.
-- **Seed backward compatibility:** `local/generate-fixtures.cjs` + regenerated `local/seed/seed.sql` — base organisation upsert without `permittee_lifecycle`; conditional dynamic UPDATE when column exists (`v71ReturnsBackfillIntoMigratedCycle` green).
-- **Expectations:** `RegistrationDatabaseTest` (3 REG rules incl. `manufacturer_onboarding`); `FeeRuleDatabaseTest` (`manufacturer_onboarding` fee type, Finance `manufacturer_onboarding_anomaly` capability, wording fixes).
-- **WP3 proofs:** V76 installed, search_path order test, seven runtime EXECUTE commands, observation-close revoke, upload trusted-boundary test.
-- **Database gate:** `mvn test -Dgroups=db -Dbee.test.excludedGroups=none` — **590 run, 0 failures, 0 errors**.
-- **Presentation:** API jar rebuilt/restarted; `ensure-runtime-role.sh`; Flyway **76** confirmed; C1 **25/25**; `demo:wp3-wp9-check` **21/21**; ngrok eight routes green.
+## Implementation
 
-**Gates (18 Oct 2026)**
+- V77 changes submit to automatic activation, starts the observation window, allocates the permittee number and notifies the three official roles.
+- V77 limits the expedited anomaly command to `active_observation` and adds the trusted scheduled close command.
+- Spring scheduling calls the trusted close command daily in Asia/Kolkata.
+- Director UI is an information/oversight view; manual Approve/Reject controls are removed.
+- Demo fixture, journey script, WP3 design, implementation plan and backlog are aligned.
+
+## Gates
 
 | Gate | Result |
 | --- | --- |
-| Default `mvn test` | **161/161** with `BEE_MFA_REQUIRED=true` (required because presentation sets `BEE_MFA_REQUIRED=false`) |
-| Full db suite | **590/590** |
-| `SpringContractTest` | **38/38** (with `BEE_MFA_REQUIRED=true`) |
-| `npx tsc --noEmit` | pass |
-| ESLint (changed JS) | pass (`generate-fixtures.cjs`; Java test files ignored by eslint config) |
-| `npm run web:test` | **264/264** |
-| `npm run web:test:ui` | **239/239** |
-| `npm run build` | pass |
-| OpenAPI pin | pass (`contract-artifact.test.mjs`) |
-| `npm run demo:seed` ×2 | pass (idempotent) |
-| `npm run demo:wp3-wp9-check` | **21/21** |
-| `git diff --check 098b05c..HEAD` | clean (after commit) |
+| Default backend suite | **161/161** |
+| Full database suite | **591/591** |
+| WP3 database proofs | **28/28** |
+| TypeScript | pass |
+| ESLint (changed frontend/demo files) | pass |
+| Web tests | **264/264** |
+| UI tests | **239/239** |
+| Production build | pass |
+| Coordinated live onboarding journey | **23/23** |
+| WP3–WP9 reliability check | **21/21** |
+| Public ngrok route | **HTTP 200** |
 
-**Still open**
+## Handback
 
-- BL-261–264 unchanged.
-- Broad WP3 checklist items (category deposit, MCA adapters, etc.) remain open in the implementation plan.
-
-## Evidence paths
-
-- Journey script: `scripts/demo/c1-manufacturer-onboarding-journey.cjs`
-- Live evidence: `.local/run/c1-journey-evidence.json`
-- Migration: `backend/src/main/resources/db/migration/V76__snl_wp03_security_definer_search_path.sql`
+- V77 is installed on the coordinated `app` schema and the public demo is running from this worktree.
+- Live evidence: `.local/run/c1-journey-evidence.json` (gitignored).
+- Guest self-service account creation and email/mobile OTP remain a separate follow-up; C2 changes the already-authenticated onboarding flow.

@@ -414,36 +414,22 @@ async function main() {
   try {
     const applicant = await openPage(chrome.cdp);
     check("c1.applicant.sign-in", await demoSignIn(applicant, "onboarding.applicant"), "demo sign-in");
-    const rejectRun = await fillWizardCore(applicant, "reject");
-    check("c1.applicant.submit-reject", rejectRun.detail.state === "director_review", rejectRun.detail.reference);
-    evidence.applications.reject = {
-      id: rejectRun.appId,
-      reference: rejectRun.detail.reference,
-      version: rejectRun.detail.version,
+    const activationRun = await fillWizardCore(applicant, "automatic-activation");
+    check("c1.applicant.automatic-activation", activationRun.detail.state === "active_observation", activationRun.detail.reference);
+    evidence.applications.automaticActivation = {
+      id: activationRun.appId,
+      reference: activationRun.detail.reference,
+      version: activationRun.detail.version,
+      state: activationRun.detail.state,
     };
     await applicant.close();
-    const dirReject = await openPage(chrome.cdp);
-    check("c1.director.sign-in-reject", await demoSignIn(dirReject, "bee.director"), "director for reject");
-    const rejected = await directorRejectDisposable(dirReject, rejectRun.appId, rejectRun.detail.reference);
-    check("c1.director.reject-disposable", rejected.state === "rejected", rejected.reference);
-    evidence.applications.reject.state = rejected.state;
-    await dirReject.close();
 
     cleanOnboardSynthetic();
     const applicantRevoke = await openPage(chrome.cdp);
     await demoSignIn(applicantRevoke, "onboarding.applicant");
     const revokeRun = await fillWizardCore(applicantRevoke, "revoke");
-    check("c1.applicant.submit-revoke", revokeRun.detail.state === "director_review", revokeRun.detail.reference);
+    check("c1.applicant.submit-revoke", revokeRun.detail.state === "active_observation", revokeRun.detail.reference);
     await applicantRevoke.close();
-    const dirRevoke = await openPage(chrome.cdp);
-    await demoSignIn(dirRevoke, "bee.director");
-    const approvedForRevoke = await directorApprove(dirRevoke, revokeRun.appId, revokeRun.detail.reference);
-    check(
-      "c1.director.approve-revoke-path",
-      approvedForRevoke.state === "active_observation",
-      `${approvedForRevoke.reference} state=${approvedForRevoke.state}`,
-    );
-    await dirRevoke.close();
     const finRevoke = await openPage(chrome.cdp);
     await demoSignIn(finRevoke, "bee.finance");
     const held = await financeRaiseAnomaly(finRevoke, revokeRun.appId, revokeRun.detail.reference);
@@ -469,8 +455,8 @@ async function main() {
     const paymentStatus = appMeta.payment?.status;
     const receipt = appMeta.payment?.receiptNumber;
     check(
-      "c1.applicant.director-review",
-      appMeta.state === "director_review" && paymentStatus === "paid" && feeInr === "5000.00" && !!receipt,
+      "c1.applicant.automatic-activation",
+      appMeta.state === "active_observation" && paymentStatus === "paid" && feeInr === "5000.00" && !!receipt,
       `${appMeta.reference} state=${appMeta.state} fee=${feeInr} payment=${paymentStatus} receipt=${receipt}`,
     );
     evidence.applications.primary = {
@@ -488,12 +474,18 @@ async function main() {
 
     const director = await openPage(chrome.cdp);
     check("c1.director.sign-in", await demoSignIn(director, "bee.director"), "director demo sign-in");
-    const afterApprove = await directorApprove(director, appMeta.id, appMeta.reference);
-    const obs = observationDays(appMeta.id);
-    const permittee = afterApprove.permitteeNumber || afterApprove.permitteeActivation?.permitteeNumber;
+    await director.goto(`${WEB}/app/manufacturer/director`);
     check(
-      "c1.director.approve-observation",
-      afterApprove.state === "active_observation" && !!permittee && obs.daysApart === 15,
+      "c1.director.no-preapproval",
+      await waitTestId(director, "director-automatic-activation-note", 60000),
+      "automatic activation information shown",
+    );
+    const afterActivate = await fetchStrict(director, `/api/runtime/manufacturer-onboarding/${encodeURIComponent(appMeta.id)}`, { method: "GET" });
+    const obs = observationDays(appMeta.id);
+    const permittee = afterActivate.permitteeNumber || afterActivate.permitteeActivation?.permitteeNumber;
+    check(
+      "c1.system.activate-observation",
+      afterActivate.state === "active_observation" && !!permittee && obs.daysApart === 15,
       `permittee=${permittee} obs ${obs.started}→${obs.ends} (${obs.daysApart}d)`,
     );
     check(
@@ -501,7 +493,6 @@ async function main() {
       !(await director.eval(`!!document.querySelector('[data-testid*=observation-close]')`)),
       "no browser observation-close control",
     );
-    evidence.applications.primary.directorDecision = afterApprove.directorDecision;
     evidence.applications.primary.permitteeNumber = permittee;
     evidence.applications.primary.observation = obs;
     await director.close();

@@ -85,7 +85,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
       return apps().filter((a) => a.companyCode === "AARAV").map(summary);
     },
     async listDirectorQueue(): Promise<ManufacturerApplicationSummary[]> {
-      return apps().filter((a) => a.phase === "director_review").map(summary);
+      return [];
     },
     async listMonitoringQueue(): Promise<ManufacturerApplicationSummary[]> {
       return apps().filter((a) => ["active_observation", "on_hold", "active"].includes(a.phase)).map(summary);
@@ -153,7 +153,12 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
           { id: "t-fail", at: now, title: "Automated checks failed", detail: "Correct the application and submit again.", icon: "error" },
         );
       } else {
-        a.phase = "director_review";
+        const window = observationWindowFromApproval(now);
+        a.phase = "active_observation";
+        a.registrationNumber = `BEE/MFG/2026/AARAV-${a.reference.slice(-3)}`;
+        a.activatedAt = now;
+        a.observationStartedAt = window.observationStartedAt;
+        a.observationEndsAt = window.observationEndsAt;
         a.automatedChecks = [
           {
             id: "chk-docs",
@@ -174,6 +179,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
           { id: "t-sub", at: now, title: "Registration submitted", detail: "Submitted for automated processing.", icon: "send" },
           { id: "t-pay", at: now, title: "Payment recorded", detail: "Simulated gateway payment captured.", icon: "payments" },
           { id: "t-chk", at: now, title: "Automated checks completed", detail: "Checks completed automatically.", icon: "rule" },
+          { id: "t-auto", at: now, title: "Automatic activation", detail: "Manufacturer activated for the 15-day observation window.", icon: "bolt" },
         );
       }
       return structuredClone(a);

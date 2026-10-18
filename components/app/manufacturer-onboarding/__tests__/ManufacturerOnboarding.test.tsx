@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PROVISIONAL_COMPANY_REGISTRATION_FEE_INR, formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
@@ -8,9 +8,7 @@ import {
   LABEL_ACTIVE_OBSERVATION,
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
-  LABEL_AWAITING_DIRECTOR,
   LABEL_HOLD,
-  LABEL_REJECTED,
   LABEL_REVOKED,
 } from "@/lib/manufacturer-onboarding/statusLabels";
 import { ONBOARDING_DISCLOSURE } from "@/lib/manufacturer-onboarding/types";
@@ -166,31 +164,23 @@ describe("manufacturer onboarding UI", () => {
     expect(screen.getByText(LABEL_AUTO_RULES)).toBeTruthy();
   });
 
-  it("automatic check failure UI and exclusion from director queue", async () => {
+  it("automatic check failure stays with the applicant and does not activate", async () => {
     render(wrap(<ApplicationLifecycle id={FIXTURE_APPLICATION_IDS.checksFailed} />));
     await screen.findByTestId("checks-failed-panel");
     expect(screen.getByTestId("checks-failed-wizard-link")).toBeTruthy();
-
-    cleanup();
-    render(wrap(<DirectorQueue />, "director"));
-    await screen.findByTestId("director-queue-list");
-    expect(screen.queryByText(/0107/i)).toBeNull();
   });
 
-  it("Director approve and reject with mandatory reason", async () => {
+  it("Director screen explains automatic activation and links to monitoring", async () => {
     render(wrap(<DirectorQueue />, "director"));
-    await screen.findByTestId("director-approve");
-    fireEvent.click(screen.getByTestId("director-reject-open"));
-    const dialog = screen.getByTestId("director-reject-dialog");
-    fireEvent.change(within(dialog).getByTestId("director-reject-reason"), { target: { value: "Incomplete Annexure" } });
-    fireEvent.click(within(dialog).getByTestId("director-reject-confirm"));
-    await waitFor(() => expect(screen.getAllByText(LABEL_REJECTED).length).toBeGreaterThan(0));
+    expect(await screen.findByTestId("director-automatic-activation-note")).toBeTruthy();
+    expect(screen.getByTestId("director-open-monitoring").getAttribute("href")).toBe("/app/manufacturer/monitoring");
+    expect(screen.queryByTestId("director-approve")).toBeNull();
   });
 
-  it("Spring identity drives access; preview role does not grant Director actions", async () => {
+  it("Director oversight screen has no pre-approval actions", async () => {
     previewRole.role = "director";
     render(wrap(<DirectorQueue />, "manufacturer"));
-    await screen.findByTestId("director-queue-list");
+    await screen.findByTestId("director-automatic-activation-note");
     expect(screen.queryByTestId("director-approve")).toBeNull();
     expect(screen.queryByTestId("director-reject-open")).toBeNull();
   });
@@ -262,16 +252,12 @@ describe("manufacturer onboarding UI", () => {
     expect(screen.getByTestId("onboarding-sign-in-required")).toBeTruthy();
   });
 
-  it("director queue empty message after load", async () => {
+  it("successful submit automatically activates under observation", async () => {
     const client = createFixtureManufacturerOnboardingClient();
-    vi.spyOn(client, "listDirectorQueue").mockResolvedValue([]);
-    render(
-      <ManufacturerOnboardingProvider client={client} identity={springMe("director")}>
-        <DirectorQueue />
-      </ManufacturerOnboardingProvider>,
-    );
-    await screen.findByTestId("director-queue-empty");
-    expect(screen.getByText("No applications awaiting Director decision.")).toBeTruthy();
+    const app = await client.getApplication(FIXTURE_APPLICATION_IDS.director);
+    expect(app.phase).toBe("active_observation");
+    expect(app.registrationNumber).toBeTruthy();
+    expect(app.observationEndsAt).toBeTruthy();
   });
 
   it("default client path is HTTP; fixture requires explicit flag", () => {
@@ -283,9 +269,9 @@ describe("manufacturer onboarding UI", () => {
     expect(MANUFACTURER_ONBOARDING_BFF.list).toBe("/api/runtime/manufacturer-onboarding");
   });
 
-  it("awaiting director label on director queue item", async () => {
+  it("does not display an awaiting-Director approval state", async () => {
     render(wrap(<DirectorQueue />, "director"));
-    await screen.findByTestId("director-queue-list");
-    expect(screen.getAllByText(LABEL_AWAITING_DIRECTOR).length).toBeGreaterThan(0);
+    await screen.findByTestId("director-automatic-activation-note");
+    expect(screen.queryByText(/Awaiting Director decision/i)).toBeNull();
   });
 });

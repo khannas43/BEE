@@ -242,6 +242,13 @@ public class ManufacturerOnboardingRepository {
             applicationId, actor, version, resolution, note, commandId, payloadHash);
     }
 
+    /** Close observation windows whose 15-calendar-day deadline has passed. */
+    public int closeExpiredObservations() {
+        Integer closed = jdbc.queryForObject(
+            "SELECT manufacturer_onboarding_system_close_expired_observations()", Integer.class);
+        return closed == null ? 0 : closed;
+    }
+
     private Optional<OrchestratorResult> queryOrchestrator(String sql, RowMapper<OrchestratorResult> mapper, Object... args) {
         try {
             return jdbc.query(sql, mapper, args).stream().findFirst();

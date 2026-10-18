@@ -10,7 +10,6 @@ import type { ManufacturerApplication, ManufacturerDraft } from "@/lib/manufactu
 import {
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
-  LABEL_AWAITING_DIRECTOR,
 } from "@/lib/manufacturer-onboarding/statusLabels";
 import { useManufacturerOnboardingClient } from "./ManufacturerOnboardingProvider";
 import {
@@ -296,7 +295,7 @@ export function OnboardingWizard() {
 
             {step === 7 && (
               <div className="space-y-3">
-                <p className="font-body-md">Review your entries, then submit. After submit the application moves to {LABEL_AWAITING_DIRECTOR}.</p>
+                <p className="font-body-md">Review your entries, then submit. If payment and automated checks pass, the manufacturer is activated immediately under a 15-day observation window.</p>
                 <dl className="grid sm:grid-cols-2 gap-2 font-body-sm">
                   <div><dt className="text-on-surface-variant">Entity</dt><dd>{draft.legalName}</dd></div>
                   <div><dt className="text-on-surface-variant">CIN</dt><dd>{draft.cin}</dd></div>

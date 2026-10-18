@@ -167,3 +167,34 @@ if psql_super -d bee_app -c "SELECT to_regclass('app.ai_run') IS NOT NULL" | gre
 REVOKE UPDATE, DELETE, TRUNCATE ON app.ai_model, app.ai_run, app.ai_disposition, app.ai_audit_event FROM ${BEE_RUNTIME_DB_USER};
 SQL
 fi
+
+# WP3 optimized manufacturer onboarding (V75): orchestrators only; observation close stays maint-only.
+if psql_super -d bee_app -c "SELECT to_regclass('app.manufacturer_onboarding_application') IS NOT NULL" | grep -q t; then
+  psql_super -d bee_app <<SQL
+GRANT SELECT ON app.manufacturer_onboarding_application TO ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT, UPDATE, DELETE ON app.manufacturer_onboarding_application FROM ${BEE_RUNTIME_DB_USER};
+GRANT EXECUTE ON FUNCTION app.manufacturer_onboarding_trusted_create(uuid, uuid, text, integer, jsonb),
+  app.manufacturer_onboarding_trusted_patch_draft(uuid, uuid, uuid, integer, text, jsonb),
+  app.manufacturer_onboarding_trusted_append_document(uuid, uuid, uuid, text, char, bigint, text, text, date, date),
+  app.manufacturer_onboarding_orchestrate_submit(uuid, uuid, text, integer, numeric, text, integer, text, text, text, uuid, char),
+  app.manufacturer_onboarding_orchestrate_director_decision(uuid, uuid, integer, text, text, uuid, char),
+  app.manufacturer_onboarding_orchestrate_raise_anomaly(uuid, uuid, text, integer, text, uuid, char),
+  app.manufacturer_onboarding_orchestrate_resolve_anomaly(uuid, uuid, integer, text, text, uuid, char)
+  TO ${BEE_RUNTIME_DB_USER};
+REVOKE EXECUTE ON FUNCTION app.manufacturer_onboarding_orchestrate_observation_close(uuid, uuid, text, integer, uuid, char) FROM ${BEE_RUNTIME_DB_USER};
+REVOKE SELECT, UPDATE ON app.manufacturer_onboarding_allocator FROM ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT ON app.manufacturer_onboarding_event FROM ${BEE_RUNTIME_DB_USER};
+GRANT SELECT ON app.manufacturer_onboarding_event TO ${BEE_RUNTIME_DB_USER};
+GRANT SELECT ON app.manufacturer_onboarding_anomaly, app.manufacturer_onboarding_director_decision,
+  app.manufacturer_onboarding_observation, app.manufacturer_onboarding_permittee_activation TO ${BEE_RUNTIME_DB_USER};
+GRANT SELECT ON app.manufacturer_onboarding_payment_link TO ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT, UPDATE, DELETE ON app.manufacturer_onboarding_document, app.manufacturer_onboarding_document_version FROM ${BEE_RUNTIME_DB_USER};
+GRANT SELECT ON app.manufacturer_onboarding_document, app.manufacturer_onboarding_document_version TO ${BEE_RUNTIME_DB_USER};
+REVOKE INSERT, UPDATE, DELETE ON app.manufacturer_onboarding_command_evidence, app.manufacturer_onboarding_automated_check,
+  app.manufacturer_onboarding_director_decision, app.manufacturer_onboarding_permittee_activation,
+  app.manufacturer_onboarding_observation, app.manufacturer_onboarding_anomaly, app.manufacturer_onboarding_fee_snapshot,
+  app.manufacturer_onboarding_payment_link FROM ${BEE_RUNTIME_DB_USER};
+GRANT SELECT ON app.manufacturer_onboarding_command_evidence, app.manufacturer_onboarding_automated_check,
+  app.manufacturer_onboarding_fee_snapshot TO ${BEE_RUNTIME_DB_USER};
+SQL
+fi

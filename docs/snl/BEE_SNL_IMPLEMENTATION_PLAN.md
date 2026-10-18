@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress | 35% | WP1 | R1 | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); V69; journey wiring deferred |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19B-B corrections | 50% | WP1 | R1 | V69–V70 accepted; V71 model wiring candidate remains unaccepted pending trusted-boundary and proof closure |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -252,12 +252,12 @@ At the end of each development session, update the package status, progress, com
 | Tracking field | Current value |
 |---|---|
 | Status | In progress |
-| Progress | 55% |
+| Progress | 50% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | V69 workflow tables; `WorkingDaySla`; internal `WorkflowFoundationRepository`; V70 policy/notification foundation; V71 model return/resubmit wiring (`WorkflowReturnResponseWiring`); registration journey still unwired |
-| Next action | Brief 19C registration wiring; then 19D read projection and consolidated proof (BL-257) |
+| Existing foundation | Accepted V69 workflow/SLA foundation and V70 policy/notification foundation. V71 model return/resubmit wiring is an unmerged candidate on `cursor/snl-wp02b-model-return-wiring`; final trusted-boundary corrections and proof are in progress. Registration remains unwired. |
+| Next action | Complete and accept Brief 19B-B; then 19B-2 stage-forward closure, 19C registration wiring and 19D read projection/consolidated proof (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -284,16 +284,16 @@ At the end of each development session, update the package status, progress, com
 
 | Evidence | Result or link |
 |---|---|
-| Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md) |
-| Migration range | V69 (`V69__workflow_foundation.sql`) |
+| Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md) |
+| Migration range | Accepted: V69–V70. Candidate under review: V71 model return/resubmit wiring |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
-| Database tests | `WorkflowFoundationDatabaseTest` (@Tag db) |
+| Database tests | Accepted WP2A/WP2B foundation suites through V70; V71 candidate reported 313 passing database tests on Brief 19B-A, but required rating, service-concurrency and complete trusted-boundary proofs remain open |
 | UI tests | Pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | WP2A accepted by ChatGPT on 18 Oct 2026 after Briefs 18A–18C and India-date boundary correction |
-| Completion commit or PR | Task branch commits (18 + 18A + 18B + 18C), merged to `main` after final acceptance |
+| Review | WP2A and Brief 19A accepted. Brief 19B/19B-A not accepted; Brief 19B-B final corrections are in progress |
+| Completion commit or PR | WP2A and Brief 19A merged to `main` at `582f0b5`. V71 remains only on the Cursor task branch |
 
 #### WP2 acceptance
 
@@ -780,7 +780,8 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (5%) | In progress (35%) | Brief 18 WP2A: V69 schema, WorkingDaySla, db/unit tests | WP2B wiring, APIs, UI; BL-257 |
 | 18 Oct 2026 | WP2 | In progress (35%) | In progress (35%), WP2A accepted | Per-task policy-pinned clocks, atomic due-dated tasks, multi-cycle discrepancies and India-date policy boundary accepted; 160 backend, 287 database and 251 web tests passed | Begin WP2B journey wiring (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (35%) | In progress (45%), Brief 19A accepted | V70 `snl_return_response` policy, polymorphic notifications and replay-safe delivery accepted; conflicting policy seed and zero-recipient replay were closed; 160 back-end, 299 database and 251 web tests passed | Brief 19B model wiring, then 19C–19D (BL-257) |
-| 18 Oct 2026 | WP2 | In progress (45%) | In progress (55%), Brief 19B-A in review | V71 trusted commands (no runtime cycle/evidence mutation, foundation return insert, DB-resolved officer notify), rollback-only on wiring failures | ChatGPT 19B-A acceptance; then 19C (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (45%) | In progress (55%), Brief 19B-A in review | V71 candidate added return/resubmit wiring, trusted commands and rollback handling; reported gates passed, but acceptance proof remained incomplete | ChatGPT review before any merge |
+| 18 Oct 2026 | WP2 | In progress (55%), Brief 19B-A in review | In progress (50%), Brief 19B-B corrections underway | Review found residual runtime bypasses in return/evidence/stage commands; Spring-service rollback, rating-supersession, concurrent-command and integrated due-date proofs remain required. V71 is unmerged and 19B is not accepted. | Complete all Brief 19B-B sections; accept 19B before starting 19B-2 or 19C (BL-257) |
 
 ### 6.2 Standard completion record
 

@@ -22,7 +22,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress — Brief 19C registration wiring | 65% | WP1 | R1 | V69–V72 and the 19C-0 registration design accepted; registration implementation and 19D remain |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19C-A2 corrections | 65% | WP1 | R1 | V69–V72, 19C-0 and 19D-0 accepted; V73 registration boundary remains unaccepted pending 19C-A2 |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -43,6 +43,25 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | Complete | Acceptance journey, evidence note, review and required gate are complete. |
 
 Progress is the approximate percentage of target-package checklist items completed. Existing demonstration features do not count as completion until they are promoted, integrated and accepted under the package.
+
+### 1.3 Blueprint coverage control
+
+The supplementary solution blueprint is decomposed into **BP-001–BP-121** in [SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md](SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md). These IDs trace experience and architecture proposals; they do not override the manual, an official BEE rule or an approved decision.
+
+Every implementation brief must list its applicable BP IDs and give each one an outcome: **implemented**, **superseded by an authoritative rule**, **deferred with a backlog or decision reference**, or **rejected with rationale**. Conditional external integrations, AI, e-sign, scan intelligence and integrity anchoring are not release blockers until their governing decisions and providers are approved. Overlap between work packages is intentional where one blueprint requirement crosses domain, user-interface and production-readiness concerns.
+
+| Work package | Blueprint requirement scope |
+|---|---|
+| WP1 | BP-114–BP-121 (source and template governance; detailed delivery remains with the consuming package) |
+| WP2 | BP-002, BP-005, BP-007, BP-010–BP-011, BP-039–BP-046, BP-093, BP-096, BP-107 |
+| WP3 | BP-001, BP-004, BP-008, BP-013–BP-029, BP-083–BP-086, BP-101, BP-105–BP-106, BP-111–BP-112, BP-114–BP-116, BP-121 |
+| WP4 | BP-004–BP-005, BP-012, BP-030–BP-038, BP-041–BP-046, BP-066–BP-068, BP-087–BP-091, BP-102, BP-106, BP-108–BP-110, BP-114, BP-117–BP-119 |
+| WP5 | BP-004, BP-013, BP-030, BP-049, BP-051, BP-105–BP-106 |
+| WP6 | BP-003–BP-004, BP-012, BP-047–BP-064, BP-070–BP-082, BP-097–BP-104, BP-110, BP-113, BP-120 |
+| WP7 | BP-038, BP-052, BP-060, BP-067, BP-070, BP-092, BP-099 |
+| WP8 | BP-007–BP-013, BP-041–BP-042 |
+| WP9 | BP-010, BP-046, BP-059, BP-061, BP-078, BP-091–BP-092, BP-104, BP-112, BP-114 |
+| WP10 | BP-003, BP-017, BP-023–BP-029, BP-037–BP-038, BP-041–BP-046, BP-053–BP-064, BP-065–BP-082, BP-094–BP-100, BP-105–BP-120 |
 
 ## 2. Delivery principles
 
@@ -212,6 +231,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R0 |
 | Depends on | None |
 | Manual references | Sections 1.3.5, 3.1–3.10, 4.1–4.5, 5 and 5.1; Annexures 1–4 |
+| Blueprint references | BP-114–BP-121 (governance baseline only; delivery assigned to the consuming work packages) |
 | Current evidence | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md), [SNL_WP01_ROLE_MATRIX.md](SNL_WP01_ROLE_MATRIX.md), [SNL_WP01_STATE_MODELS.md](SNL_WP01_STATE_MODELS.md), [SNL_WP01_FIELD_DICTIONARY.md](SNL_WP01_FIELD_DICTIONARY.md); A01–A20 in [docs/BEE_DECISIONS.md](../BEE_DECISIONS.md) |
 | Next action | Start WP2 workflow/SLA design; retry live company registration form during WP3 (BL-252) |
 
@@ -267,8 +287,9 @@ At the end of each development session, update the package status, progress, com
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation, V71 model return/resubmit wiring and V72 accepted-forward closure with repeat-cycle safety. Model commands commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response, disposition and evidence writes. The accepted 19C-0 design defines registration integration; registration remains unwired. |
-| Next action | Implement 19C-A database trusted boundary, 19C-B service integration, 19C-C forward disposition/read prep; in parallel or sequence, 19D-A read projection, 19D-B queue API, 19D-C My work/supervisor UI per [SNL_WP02D_WORK_QUEUE_DESIGN.md](SNL_WP02D_WORK_QUEUE_DESIGN.md) (BL-257) |
+| Blueprint references | BP-002, BP-005, BP-007, BP-010–BP-011, BP-039–BP-046, BP-093, BP-096, BP-107 |
+| Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation, V71 model return/resubmit wiring and V72 accepted-forward closure with repeat-cycle safety. Model commands commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response, disposition and evidence writes. The accepted 19C-0 and 19D-0 designs define registration integration and the work queue. Agent B's V73 registration database boundary is a candidate only: 19C-A1 review identified a caller-hash replay weakness and incomplete proof depth, so it remains unaccepted while 19C-A2 is implemented. |
+| Next action | Complete and review 19C-A2; accept V73 only after corrected replay, trusted-boundary and proof checks pass. Then implement 19C-B service integration and 19C-C forward disposition/read preparation, followed by 19D-A read projection, 19D-B queue API and 19D-C My work/supervisor UI (BL-257). |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -297,14 +318,14 @@ At the end of each development session, update the package status, progress, com
 | Evidence | Result or link |
 |---|---|
 | Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md); [SNL_WP02D_WORK_QUEUE_DESIGN.md](SNL_WP02D_WORK_QUEUE_DESIGN.md) |
-| Migration range | Accepted: V69–V72 |
+| Migration range | Accepted: V69–V72. Candidate: V73, unaccepted pending Brief 19C-A2. |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
 | Database tests | 482 passed after Brief 19B-2B; includes staged V71→V72 migration, privilege boundary, real post-legacy rollback, repeat-cycle, constraint and concurrency survivor proofs |
 | UI tests | 251 web tests passed; live browser workflow remains pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design and corrected Brief 19D-0 work-queue design accepted. |
+| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design and corrected Brief 19D-0 work-queue design accepted. V73 and 19C-A/A1 are not accepted; Brief 19C-A2 corrections are in progress. |
 | Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec`; corrected Brief 19D-0 design at `b62508b` |
 
 #### WP2 acceptance
@@ -326,6 +347,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R2 |
 | Depends on | WP2 and WP5 payment foundation |
 | Manual references | Sections 3.1.1, 3.1.2, 3.4, 3.10, 4.1 and 4.2; Annexures 1 and 2 |
+| Blueprint references | BP-001, BP-004, BP-008, BP-013–BP-029, BP-083–BP-086, BP-101, BP-105–BP-106, BP-111–BP-112, BP-114–BP-116, BP-121 |
 | Existing foundation | Brand and agency requests, manual fee confirmation, Programme/Director review, return, reject, register and revocation are already demonstrated |
 | Next action | Design the legal-entity and appliance-category data model |
 
@@ -390,6 +412,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R3 |
 | Depends on | WP2, WP3 and WP5 payment foundation |
 | Manual references | Sections 3.1.3–3.4, Table 3, Section 4.3 and Annexure 3 |
+| Blueprint references | BP-004–BP-005, BP-012, BP-030–BP-038, BP-041–BP-046, BP-066–BP-068, BP-087–BP-091, BP-102, BP-106, BP-108–BP-110, BP-114, BP-117–BP-119 |
 | Existing foundation | The current model flow supports draft, documents, fee, multiple scrutiny stages, return/resubmit, rejection, approval, certificate and label preview |
 | Next action | Map Annexure 3 fields and category-specific technical schemas to the existing model domain |
 
@@ -453,6 +476,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R2–R5 cross-cutting |
 | Depends on | WP1 fee and authority assumptions |
 | Manual references | Sections 4.1–4.5, printed pages 30–32 |
+| Blueprint references | BP-004, BP-013, BP-030, BP-049, BP-051, BP-105–BP-106 |
 | Existing foundation | Fee rules, manual confirmation, correction, reversal, simulated payment callbacks, receipts and reconciliation demonstrations exist |
 | Next action | Define the provider-neutral payment and financial-ledger model |
 
@@ -509,6 +533,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R4 |
 | Depends on | WP4 and WP5 |
 | Manual references | Section 1.3.5, Section 4.5 and Sections 5–5.1, pages 15, 32 and 33–35 |
+| Blueprint references | BP-003–BP-004, BP-012, BP-047–BP-064, BP-070–BP-082, BP-097–BP-104, BP-110, BP-113, BP-120 |
 | Existing foundation | Demo QR batches, unique serials, binding, voiding, downloads and public verification exist |
 | Next action | Promote the QR domain into the formal contract and connect it to prepaid fees |
 
@@ -570,6 +595,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R5 |
 | Depends on | WP5 and WP6 |
 | Manual references | Section 1.3.5, Sections 3.5–3.6 and Section 4.5, pages 15–16, 25–26 and 32 |
+| Blueprint references | BP-038, BP-052, BP-060, BP-067, BP-070, BP-092, BP-099 |
 | Existing foundation | Demo quarterly returns, bulk validation, evidence, review and QR comparison exist; label-fee and annual reconciliation do not |
 | Next action | Design the production, assessment, adjustment and annual reconciliation ledgers |
 
@@ -629,6 +655,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R6 |
 | Depends on | WP3, WP4, WP6 and WP7 |
 | Manual references | Derived view consolidating Sections 1.3.5, 3.1–3.9, 4.1–4.5 and Annexures 1 and 3 |
+| Blueprint references | BP-007–BP-013, BP-041–BP-042 |
 | Existing foundation | Executive, Director, Auditor and MIS dashboards already provide manufacturer filters and drill-down patterns |
 | Next action | Define the 360 read model and reconciliation rules after the source domains stabilize |
 
@@ -685,6 +712,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R6 |
 | Depends on | WP3, WP4, WP5 and WP7 |
 | Manual references | Sections 3.5–3.9 and Annexure 4, pages 25–28 and 58 |
+| Blueprint references | BP-010, BP-046, BP-059, BP-061, BP-078, BP-091–BP-092, BP-104, BP-112, BP-114 |
 | Existing foundation | Certificate/register revocation and two-person decisions provide reusable patterns; renewal and applicant withdrawal are not built |
 | Next action | Define renewal, withdrawal and cancellation states and authority matrix |
 
@@ -743,6 +771,7 @@ At the end of each development session, update the package status, progress, com
 | Target release | R7 |
 | Depends on | WP2–WP9 and approved production architecture |
 | Manual references | Cross-cutting implementation controls supporting the complete manual lifecycle |
+| Blueprint references | BP-003, BP-017, BP-023–BP-029, BP-037–BP-038, BP-041–BP-046, BP-053–BP-064, BP-065–BP-082, BP-094–BP-100, BP-105–BP-120 |
 | Existing foundation | Local Docker runtime, Keycloak, PostgreSQL, Spring, Next.js, automated gate and demo integrations |
 | Next action | Create the production architecture and non-functional requirement baseline |
 
@@ -812,6 +841,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2B implemented | In progress (60%), ChatGPT review pending | V72 corrected in place: revoked `bind_cycle_return` from PUBLIC/runtime, open-cycle bind guard, runtime execute audit, real post-legacy wiring-evidence 409 service proofs, staged V71→V72 backfill and constraint/cross-cycle/rejection proofs. Awaiting acceptance (BL-257). | Repeat acceptance review; then 19C registration wiring (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), ChatGPT review pending | In progress (65%), Brief 19B-2 and 19C-0 accepted | V72 privilege, post-legacy rollback, staged migration, constraint and concurrency proofs accepted and merged at `798667e`. The PDF-traced registration design was merged at `80d9aec`. | Implement 19C-A, 19C-B and 19C-C, then 19D (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (65%), Brief 19D-0 review pending | In progress (65%), Brief 19D-0 accepted | PDF trace verified. Review corrected calendar table names, recipient-scoped notification summaries, ambiguous assignment handling and the distinction between the provisional portal due date and the Manual's 60-day response window. Merged at `b62508b`. | Continue 19C-A in Agent B; start 19D-A read projection only when its implementation brief is issued |
+| 18 Oct 2026 | WP2 | In progress (65%), Brief 19C-A1 review pending | In progress (65%), Brief 19C-A2 corrections underway | V73 remains a candidate. Review identified a caller-supplied command-hash replay weakness and proof gaps; 19C-A/A1 are not accepted. | Complete 19C-A2, repeat acceptance review, then proceed to 19C-B/C and 19D-A/B/C (BL-257) |
 | 18 Oct 2026 | Strategy | Manual-backed WP plan | Blueprint-aligned strategy | Reviewed the 13-page solution blueprint. Core seven-screen journey aligns; A21–A29, BL-258–BL-260 and the WP3/WP4/WP6/WP10 checklists now govern external verification, AI evidence, generated forms, signed QR, optional anchoring and scan privacy. | Keep WP2 sequence; obtain owner/BEE/provider decisions before activating conditional integrations |
 
 ### 6.2 Standard completion record
@@ -827,6 +857,7 @@ Branch:
 Commit:
 Pull request:
 Manual sections covered:
+Blueprint requirements and outcomes:
 Assumptions applied or changed:
 Migrations:
 Contract version:

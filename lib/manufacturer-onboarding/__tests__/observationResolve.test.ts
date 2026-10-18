@@ -9,7 +9,7 @@ describe("manufacturer onboarding observation", () => {
   it("approval sets observation end to approval + 15 calendar days", async () => {
     const approval = "2026-11-01T10:00:00.000Z";
     const client = createFixtureManufacturerOnboardingClient({ nowIso: () => approval, nowMs: () => new Date(approval).getTime() });
-    const updated = await client.directorApprove({ id: FIXTURE_APPLICATION_IDS.director });
+    const updated = await client.directorApprove({ id: FIXTURE_APPLICATION_IDS.director, version: 1 });
     const window = observationWindowFromApproval(approval);
     expect(updated.observationStartedAt).toBe(window.observationStartedAt);
     expect(updated.observationEndsAt).toBe(window.observationEndsAt);
@@ -24,7 +24,7 @@ describe("manufacturer onboarding observation", () => {
       nowMs: () => beforeEnd,
       actor: () => ({ username: "bee.director", effectiveRoles: [{ role: "director" }] }),
     });
-    const updated = await client.directorResolve({ applicationId: holdId, note: "Cleared before deadline." });
+    const updated = await client.directorResolve({ applicationId: holdId, version: 1, note: "Cleared before deadline." });
     expect(updated.phase).toBe("active_observation");
     expect(phaseAfterHoldResolved(ends, beforeEnd)).toBe("active_observation");
   });
@@ -38,7 +38,7 @@ describe("manufacturer onboarding observation", () => {
       nowMs: () => afterEnd,
       actor: () => ({ username: "bee.director", effectiveRoles: [{ role: "director" }] }),
     });
-    const updated = await client.directorResolve({ applicationId: holdId, note: "Cleared after observation ended." });
+    const updated = await client.directorResolve({ applicationId: holdId, version: 1, note: "Cleared after observation ended." });
     expect(updated.phase).toBe("active");
     expect(phaseAfterHoldResolved(ends, afterEnd)).toBe("active");
   });

@@ -11,7 +11,9 @@ import type {
   RaiseAnomalyInput,
   SaveDraftInput,
   SubmitApplicationInput,
+  UploadDocumentInput,
 } from "./types";
+import { DOCUMENT_KIND_LABELS, type ManufacturerOnboardingDocumentKind } from "./documentKinds";
 import { observationWindowFromApproval, phaseAfterHoldResolved } from "./observation";
 
 export type FixtureClientDeps = {
@@ -36,11 +38,16 @@ function summary(a: ManufacturerApplication): ManufacturerApplicationSummary {
     id: a.id,
     reference: a.reference,
     phase: a.phase,
+    version: a.version,
     draft: a.draft,
     registrationNumber: a.registrationNumber,
     syntheticDemo: a.syntheticDemo,
     legalName: a.draft.legalName,
   };
+}
+
+function bumpVersion(a: ManufacturerApplication): void {
+  a.version += 1;
 }
 
 function find(id: string): ManufacturerApplication {
@@ -86,10 +93,25 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     async getApplication(id: string): Promise<ManufacturerApplication> {
       return structuredClone(find(id));
     },
+    async uploadDocument(input: UploadDocumentInput): Promise<ManufacturerApplication> {
+      const a = find(input.applicationId);
+      if (a.phase !== "draft" && a.phase !== "automatic_checks_failed") throw new Error("not_editable");
+      const label = DOCUMENT_KIND_LABELS[input.documentKind as ManufacturerOnboardingDocumentKind] ?? input.label;
+      const doc = a.draft.annexureDocuments.find((d) => d.id === input.documentKind);
+      const now = nowIso(deps);
+      if (doc) {
+        doc.uploadedAt = now;
+        doc.fileName = input.file.name;
+        doc.kind = label;
+      }
+      bumpVersion(a);
+      return structuredClone(a);
+    },
     async saveDraft(input: SaveDraftInput): Promise<ManufacturerApplication> {
       const a = find(input.id);
       if (a.phase !== "draft" && a.phase !== "automatic_checks_failed") throw new Error("not_editable");
       a.draft = structuredClone(input.draft);
+      bumpVersion(a);
       if (a.phase === "automatic_checks_failed") a.phase = "draft";
       a.timeline.push({
         id: `t-save-${nowMs(deps)}`,
@@ -102,6 +124,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     },
     async submit(input: SubmitApplicationInput): Promise<ManufacturerApplication> {
       const a = find(input.id);
+      bumpVersion(a);
       if (a.phase !== "draft" && a.phase !== "automatic_checks_failed") throw new Error("already_submitted");
       const { draft } = a;
       if (!draft.declarationAccepted || !draft.agreementAccepted) throw new Error("declaration_required");
@@ -157,6 +180,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     },
     async directorApprove(input: DirectorDecisionInput): Promise<ManufacturerApplication> {
       const a = find(input.id);
+      bumpVersion(a);
       if (a.phase !== "director_review") throw new Error("not_awaiting_director");
       const now = nowIso(deps);
       const window = observationWindowFromApproval(now);
@@ -172,6 +196,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     },
     async directorReject(input: DirectorRejectInput): Promise<ManufacturerApplication> {
       const a = find(input.id);
+      bumpVersion(a);
       if (a.phase !== "director_review") throw new Error("not_awaiting_director");
       if (!input.reason.trim()) throw new Error("reason_required");
       a.phase = "rejected";
@@ -182,6 +207,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     },
     async raiseAnomaly(input: RaiseAnomalyInput): Promise<ManufacturerApplication> {
       const a = find(input.applicationId);
+      bumpVersion(a);
       if (a.phase !== "active_observation") throw new Error("not_under_observation");
       const now = nowIso(deps);
       a.phase = "on_hold";
@@ -201,6 +227,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     },
     async directorResolve(input: DirectorResolveInput): Promise<ManufacturerApplication> {
       const a = find(input.applicationId);
+      bumpVersion(a);
       if (a.phase !== "on_hold") throw new Error("not_on_hold");
       const now = nowIso(deps);
       a.phase = phaseAfterHoldResolved(a.observationEndsAt, nowMs(deps));
@@ -214,6 +241,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     },
     async directorRevoke(input: DirectorRevokeInput): Promise<ManufacturerApplication> {
       const a = find(input.applicationId);
+      bumpVersion(a);
       if (a.phase !== "on_hold") throw new Error("not_on_hold");
       if (!input.reason.trim()) throw new Error("reason_required");
       const now = nowIso(deps);

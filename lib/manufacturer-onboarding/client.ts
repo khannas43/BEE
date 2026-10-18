@@ -10,6 +10,7 @@ export type {
   RaiseAnomalyInput,
   DirectorResolveInput,
   DirectorRevokeInput,
+  UploadDocumentInput,
 } from "./types";
 
 import type { FetchLike } from "@/lib/client/runtimeHttp";
@@ -23,6 +24,7 @@ import type {
   RaiseAnomalyInput,
   SaveDraftInput,
   SubmitApplicationInput,
+  UploadDocumentInput,
 } from "./types";
 import { createFixtureManufacturerOnboardingClient, type FixtureClientDeps } from "./fixtureClient";
 import { createManufacturerOnboardingHttpClient } from "./httpClient";
@@ -34,6 +36,7 @@ export interface ManufacturerOnboardingClient {
   listMonitoringQueue(): Promise<ManufacturerApplicationSummary[]>;
   getApplication(id: string): Promise<ManufacturerApplication>;
   saveDraft(input: SaveDraftInput): Promise<ManufacturerApplication>;
+  uploadDocument(input: UploadDocumentInput): Promise<ManufacturerApplication>;
   submit(input: SubmitApplicationInput): Promise<ManufacturerApplication>;
   directorApprove(input: DirectorDecisionInput): Promise<ManufacturerApplication>;
   directorReject(input: DirectorRejectInput): Promise<ManufacturerApplication>;
@@ -50,10 +53,11 @@ export type ManufacturerOnboardingClientOptions = {
   adapter?: ManufacturerOnboardingClient;
 };
 
-const USE_LIVE_API = process.env.NEXT_PUBLIC_MANUFACTURER_ONBOARDING_API === "1";
+/** Explicit fixture adapter for isolated UI tests and demos — default is the real BFF HTTP client. */
+export const MANUFACTURER_ONBOARDING_USE_FIXTURE = process.env.NEXT_PUBLIC_MANUFACTURER_ONBOARDING_FIXTURE === "1";
 
 export function createManufacturerOnboardingClient(options?: ManufacturerOnboardingClientOptions): ManufacturerOnboardingClient {
   if (options?.adapter) return options.adapter;
-  if (USE_LIVE_API) return createManufacturerOnboardingHttpClient(options?.fetch);
-  return createFixtureManufacturerOnboardingClient(options?.fixture);
+  if (MANUFACTURER_ONBOARDING_USE_FIXTURE) return createFixtureManufacturerOnboardingClient(options?.fixture);
+  return createManufacturerOnboardingHttpClient(options?.fetch);
 }

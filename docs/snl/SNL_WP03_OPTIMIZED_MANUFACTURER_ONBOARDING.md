@@ -1,6 +1,6 @@
 # SNL WP03 — optimized manufacturer onboarding (backend slice)
 
-**Status:** A3 implemented on branch `cursor/wp3-fast-manufacturer-onboarding-backend` (Flyway **V75** only). **ChatGPT review pending.** Provisional local rules, not BEE rules.
+**Status:** A3 backend accepted at **`b378900`** (Flyway **V69–V75** frozen). **B2** frontend integrated on `cursor/wp3-fast-manufacturer-onboarding-integration` (browser BFF adapter, multipart documents, versioned commands) — **ChatGPT review pending.** Coordinated live smoke not run; WP3 not complete. Provisional local rules, not BEE rules.
 
 ## Scope
 

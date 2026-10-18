@@ -106,6 +106,8 @@ export type AnomalyRecord = {
 export type ManufacturerApplication = {
   id: string;
   reference: string;
+  /** Optimistic-lock version from Spring — required on every PATCH and command. */
+  version: number;
   syntheticDemo: boolean;
   companyCode: string;
   phase: ManufacturerLifecyclePhase;
@@ -125,25 +127,38 @@ export type ManufacturerApplication = {
 
 export type ManufacturerApplicationSummary = Pick<
   ManufacturerApplication,
-  "id" | "reference" | "phase" | "draft" | "registrationNumber" | "syntheticDemo"
+  "id" | "reference" | "phase" | "version" | "draft" | "registrationNumber" | "syntheticDemo"
 > & { legalName: string };
 
-export type SaveDraftInput = {
+export type CommandIdempotency = { idempotencyKey?: string };
+
+export type SaveDraftInput = CommandIdempotency & {
   id: string;
+  version: number;
   draft: ManufacturerDraft;
 };
 
-export type SubmitApplicationInput = { id: string };
-
-export type DirectorDecisionInput = { id: string; note?: string };
-
-export type DirectorRejectInput = { id: string; reason: string };
-
-export type RaiseAnomalyInput = {
+export type UploadDocumentInput = CommandIdempotency & {
   applicationId: string;
+  documentKind: string;
+  label: string;
+  file: File;
+  issueOn?: string;
+  expiresOn?: string;
+};
+
+export type SubmitApplicationInput = CommandIdempotency & { id: string; version: number };
+
+export type DirectorDecisionInput = CommandIdempotency & { id: string; version: number; note?: string };
+
+export type DirectorRejectInput = CommandIdempotency & { id: string; version: number; reason: string };
+
+export type RaiseAnomalyInput = CommandIdempotency & {
+  applicationId: string;
+  version: number;
   summary: string;
 };
 
-export type DirectorResolveInput = { applicationId: string; note: string };
+export type DirectorResolveInput = CommandIdempotency & { applicationId: string; version: number; note: string };
 
-export type DirectorRevokeInput = { applicationId: string; reason: string };
+export type DirectorRevokeInput = CommandIdempotency & { applicationId: string; version: number; reason: string };

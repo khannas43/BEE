@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import {
   createManufacturerOnboardingClient,
+  MANUFACTURER_ONBOARDING_USE_FIXTURE,
   type ManufacturerOnboardingClient,
   type ManufacturerOnboardingClientOptions,
 } from "@/lib/manufacturer-onboarding/client";
@@ -39,10 +40,12 @@ export function ManufacturerOnboardingProvider({
         : undefined,
     [identity],
   );
-  const c = useMemo(
-    () => client ?? createManufacturerOnboardingClient({ ...clientOptions, fixture: clientOptions?.fixture ?? fixture }),
-    [client, clientOptions, fixture],
-  );
+  const c = useMemo(() => {
+    if (client) return client;
+    const opts: ManufacturerOnboardingClientOptions = { ...clientOptions };
+    if (MANUFACTURER_ONBOARDING_USE_FIXTURE && !opts.fixture && fixture) opts.fixture = fixture;
+    return createManufacturerOnboardingClient(opts);
+  }, [client, clientOptions, fixture]);
   const roles = useMemo(() => (identity ? effectiveOnboardingRoles(identity) : []), [identity]);
   return (
     <ClientContext.Provider value={c}>

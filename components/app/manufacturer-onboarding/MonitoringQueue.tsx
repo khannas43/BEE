@@ -66,12 +66,13 @@ export function MonitoringQueue() {
   const canRaise = canRaiseAnomaly(roles);
 
   async function raiseAnomaly() {
-    if (!selectedId || !anomalySummary.trim() || !canRaise) return;
+    if (!selectedId || !anomalySummary.trim() || !canRaise || !detail) return;
     setBusy(true);
     setStatusMsg(null);
     try {
       const updated = await client.raiseAnomaly({
         applicationId: selectedId,
+        version: detail.version,
         summary: anomalySummary.trim(),
       });
       setDetail(updated);
@@ -86,11 +87,11 @@ export function MonitoringQueue() {
   }
 
   async function resolveHold() {
-    if (!selectedId || !directorNote.trim() || !isDirector) return;
+    if (!selectedId || !directorNote.trim() || !isDirector || !detail) return;
     setBusy(true);
     setStatusMsg(null);
     try {
-      const updated = await client.directorResolve({ applicationId: selectedId, note: directorNote.trim() });
+      const updated = await client.directorResolve({ applicationId: selectedId, version: detail.version, note: directorNote.trim() });
       setDetail(updated);
       setDirectorNote("");
       setStatusMsg("Hold resolved — returned to active observation.");
@@ -103,11 +104,11 @@ export function MonitoringQueue() {
   }
 
   async function revokeRegistration() {
-    if (!selectedId || !directorNote.trim() || !isDirector) return;
+    if (!selectedId || !directorNote.trim() || !isDirector || !detail) return;
     setBusy(true);
     setStatusMsg(null);
     try {
-      const updated = await client.directorRevoke({ applicationId: selectedId, reason: directorNote.trim() });
+      const updated = await client.directorRevoke({ applicationId: selectedId, version: detail.version, reason: directorNote.trim() });
       setDetail(updated);
       setDirectorNote("");
       setStatusMsg("Registration revoked by Director.");

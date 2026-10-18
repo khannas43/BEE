@@ -71,11 +71,11 @@ export function DirectorQueue() {
   }, [selectedId, loadDetail]);
 
   async function approve() {
-    if (!selectedId) return;
+    if (!selectedId || !detail) return;
     setBusy(true);
     setActionNote(null);
     try {
-      const updated = await client.directorApprove({ id: selectedId, note: "Approved in demonstration." });
+      const updated = await client.directorApprove({ id: selectedId, version: detail.version, note: "Approved in demonstration." });
       setDetail(updated);
       setActionNote("Application approved — manufacturer activated under observation.");
       await loadQueue();
@@ -87,11 +87,11 @@ export function DirectorQueue() {
   }
 
   async function reject() {
-    if (!selectedId || !rejectReason.trim()) return;
+    if (!selectedId || !rejectReason.trim() || !detail) return;
     setBusy(true);
     setActionNote(null);
     try {
-      const updated = await client.directorReject({ id: selectedId, reason: rejectReason.trim() });
+      const updated = await client.directorReject({ id: selectedId, version: detail.version, reason: rejectReason.trim() });
       setDetail(updated);
       setRejectOpen(false);
       setRejectReason("");

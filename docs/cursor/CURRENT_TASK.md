@@ -1,11 +1,11 @@
 # Current Cursor task
 
-**Holder:** claude (handback after A3), from 18 October 2026.
+**Holder:** cursor (Brief B2 handback pending ChatGPT review).
 
-- Brief: WP3 optimized manufacturer onboarding — **Brief A3** (idempotency, submit actor, remove browser observation close)
-- Worktree: `/Users/sameerkhanna/Developer/BEE-wp3-fast-onboarding`
-- Branch: `cursor/wp3-fast-manufacturer-onboarding-backend`
-- Base: `33dae73` (V74 frozen)
-- Status: **A3 implemented — ChatGPT review pending.** Do not mark WP3 accepted.
+- Brief: **B2** — integrate WP3 manufacturer onboarding UI with Spring/BFF (`b378900`)
+- Worktree: `/Users/sameerkhanna/Developer/BEE-wp3-fast-onboarding-ui`
+- Branch: `cursor/wp3-fast-manufacturer-onboarding-integration`
+- Base: backend **A3** @ `b378900`; UI commits `2812649`, `954b5e4` cherry-picked
+- Status: **B2 integrated — ChatGPT review pending.** WP3 not complete until coordinated live smoke.
 
-Agent B (UI): `BEE-wp3-fast-onboarding-ui` / `cursor/wp3-fast-manufacturer-onboarding-ui`.
+Agent A (backend): `BEE-wp3-fast-onboarding` / `cursor/wp3-fast-manufacturer-onboarding-backend` @ `b378900`.

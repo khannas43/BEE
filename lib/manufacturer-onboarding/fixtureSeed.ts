@@ -2,6 +2,7 @@
  * Initial fixture records for the optimized manufacturer onboarding demo.
  * Imported only by the fixture client — components must use ManufacturerOnboardingClient.
  */
+import { annexureDocumentsFromHeads, MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "./documentKinds";
 import {
   PROVISIONAL_COMPANY_REGISTRATION_FEE_INR,
   PROVISIONAL_COMPANY_REGISTRATION_FEE_LABEL,
@@ -39,11 +40,13 @@ const baseDraft = {
     phone: "+91 98190 44556",
     role: "Managing Director",
   },
-  annexureDocuments: [
-    { id: "doc-inc", kind: "Certificate of incorporation", fileName: "aarav-incorporation.pdf", uploadedAt: "2026-10-01T06:30:00.000Z" },
-    { id: "doc-gst", kind: "GST registration", fileName: "aarav-gst.pdf", uploadedAt: "2026-10-01T06:35:00.000Z" },
-    { id: "doc-fac", kind: "Factory licence", fileName: "aarav-factory-licence.pdf", uploadedAt: "2026-10-01T06:40:00.000Z" },
-  ],
+  annexureDocuments: annexureDocumentsFromHeads(
+    MANUFACTURER_ONBOARDING_DOCUMENT_KINDS.map((documentKind, i) => ({
+      documentKind,
+      latestVersion: 1,
+      status: i < 3 ? "uploaded" : "missing",
+    })),
+  ),
   declarationAccepted: true,
   agreementAccepted: true,
 };
@@ -123,6 +126,7 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
     {
       id: FIXTURE_APPLICATION_IDS.draft,
       reference: "MFG-ONB-2026-DRAFT",
+      version: 1,
       syntheticDemo: true,
       companyCode: "AARAV",
       phase: "draft",
@@ -142,6 +146,7 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
     {
       id: FIXTURE_APPLICATION_IDS.director,
       reference: "MFG-ONB-2026-0102",
+      version: 1,
       syntheticDemo: true,
       companyCode: "AARAV",
       phase: "director_review",
@@ -165,6 +170,7 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
     {
       id: FIXTURE_APPLICATION_IDS.checksFailed,
       reference: "MFG-ONB-2026-0107",
+      version: 1,
       syntheticDemo: true,
       companyCode: "AARAV",
       phase: "automatic_checks_failed",
@@ -188,6 +194,7 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
     {
       id: FIXTURE_APPLICATION_IDS.observation,
       reference: "MFG-ONB-2026-0103",
+      version: 1,
       syntheticDemo: true,
       companyCode: "AARAV",
       phase: "active_observation",
@@ -213,6 +220,7 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
     {
       id: FIXTURE_APPLICATION_IDS.hold,
       reference: "MFG-ONB-2026-0104",
+      version: 1,
       syntheticDemo: true,
       companyCode: "AARAV",
       phase: "on_hold",
@@ -247,6 +255,7 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
     {
       id: FIXTURE_APPLICATION_IDS.resolved,
       reference: "MFG-ONB-2026-0105",
+      version: 1,
       syntheticDemo: true,
       companyCode: "AARAV",
       phase: "active",
@@ -281,6 +290,7 @@ export function buildFixtureApplications(): ManufacturerApplication[] {
     {
       id: FIXTURE_APPLICATION_IDS.revoked,
       reference: "MFG-ONB-2026-0106",
+      version: 1,
       syntheticDemo: true,
       companyCode: "AARAV",
       phase: "revoked",

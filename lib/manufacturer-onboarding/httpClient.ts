@@ -1,6 +1,7 @@
 import {
   errorCodeOf,
   INVALID_RESPONSE,
+  newIdempotencyKey,
   readFailure,
   runtimeCommand,
   runtimeReadInit,
@@ -18,10 +19,20 @@ import type {
   RaiseAnomalyInput,
   SaveDraftInput,
   SubmitApplicationInput,
+  UploadDocumentInput,
 } from "./types";
-import { normalizeManufacturerPhase } from "./phaseMapping";
+import { mapBackendDetail, mapBackendSummary, toBackendDraft, type BackendDetail } from "./mapBackend";
 
-const BASE = "/api/manufacturer-onboarding";
+/** Canonical browser BFF routes (OpenAPI 0.37.1). */
+export const MANUFACTURER_ONBOARDING_BFF = {
+  list: "/api/runtime/manufacturer-onboarding",
+  detail: (id: string) => `/api/runtime/manufacturer-onboarding/${encodeURIComponent(id)}`,
+  submit: (id: string) => `/api/runtime/manufacturer-onboarding/${encodeURIComponent(id)}/submit`,
+  directorDecision: (id: string) => `/api/runtime/manufacturer-onboarding/${encodeURIComponent(id)}/director-decision`,
+  anomalies: (id: string) => `/api/runtime/manufacturer-onboarding/${encodeURIComponent(id)}/anomalies`,
+  anomalyResolution: (id: string) => `/api/runtime/manufacturer-onboarding/${encodeURIComponent(id)}/anomaly-resolution`,
+  documents: (id: string) => `/api/runtime/manufacturer-onboarding/${encodeURIComponent(id)}/documents`,
+} as const;
 
 export class ManufacturerOnboardingHttpError extends Error {
   constructor(
@@ -51,39 +62,35 @@ function throwFromStatus(status: number, body: unknown): never {
   throwFromFailure(readFailure(status, body));
 }
 
-function normalizeApp(raw: ManufacturerApplication): ManufacturerApplication {
-  return { ...raw, phase: normalizeManufacturerPhase(raw.phase) };
+function parseDetailBody(body: unknown): ManufacturerApplication | null {
+  if (!body || typeof body !== "object") return null;
+  return mapBackendDetail(body as BackendDetail);
 }
 
 async function parseApplication(res: Response): Promise<ManufacturerApplication> {
   const body = await res.json().catch(() => null);
   if (!res.ok) throwFromStatus(res.status, body);
-  if (!body || typeof body !== "object") throw new ManufacturerOnboardingHttpError("unavailable", INVALID_RESPONSE.message);
-  return normalizeApp(body as ManufacturerApplication);
+  const app = parseDetailBody(body);
+  if (!app) throw new ManufacturerOnboardingHttpError("unavailable", INVALID_RESPONSE.message);
+  return app;
 }
 
-async function parseList(res: Response): Promise<ManufacturerApplicationSummary[]> {
+async function fetchList(fetchImpl: FetchLike): Promise<ManufacturerApplicationSummary[]> {
+  const res = await fetchImpl(MANUFACTURER_ONBOARDING_BFF.list, runtimeReadInit());
   const body = await res.json().catch(() => null);
   if (!res.ok) throwFromStatus(res.status, body);
-  const items = (body as { items?: ManufacturerApplicationSummary[] })?.items;
+  const items = (body as { items?: unknown[] })?.items;
   if (!Array.isArray(items)) throw new ManufacturerOnboardingHttpError("unavailable", INVALID_RESPONSE.message);
-  return items.map((item) => ({ ...item, phase: normalizeManufacturerPhase(item.phase) }));
+  return items.map((item) => mapBackendSummary(item as BackendDetail));
 }
 
 async function commandApp(
   fetchImpl: FetchLike,
   path: string,
-  payload: object,
+  payload: object | FormData,
   idempotencyKey: string,
 ): Promise<ManufacturerApplication> {
-  const result = await runtimeCommand(
-    `${BASE}${path}`,
-    "POST",
-    payload,
-    idempotencyKey,
-    (body) => (body && typeof body === "object" ? normalizeApp(body as ManufacturerApplication) : null),
-    fetchImpl,
-  );
+  const result = await runtimeCommand(path, "POST", payload, idempotencyKey, parseDetailBody, fetchImpl);
   if (!result.ok) {
     const f = result.failure;
     if (f.kind === "validation") throw new ManufacturerOnboardingHttpError("validation", f.message);
@@ -96,56 +103,106 @@ async function commandApp(
   return result.value;
 }
 
+const DIRECTOR_QUEUE_PHASES = new Set(["director_review"]);
+const MONITORING_QUEUE_PHASES = new Set(["active_observation", "active", "on_hold"]);
+
+const DEFAULT_CREATE_LEGAL_NAME = "Aarav Appliances Pvt Ltd";
+
 export function createManufacturerOnboardingHttpClient(fetchImpl: FetchLike = fetch): ManufacturerOnboardingClient {
   return {
-    listForApplicant: async () =>
-      parseList(await fetchImpl(`${BASE}/applications`, runtimeReadInit())),
-    listDirectorQueue: async () =>
-      parseList(await fetchImpl(`${BASE}/director/queue`, runtimeReadInit())),
-    listMonitoringQueue: async () =>
-      parseList(await fetchImpl(`${BASE}/monitoring/queue`, runtimeReadInit())),
-    getApplication: async (id) =>
-      parseApplication(await fetchImpl(`${BASE}/applications/${encodeURIComponent(id)}`, runtimeReadInit())),
-    saveDraft: async (input: SaveDraftInput) =>
-      parseApplication(
-        await fetchImpl(`${BASE}/applications/${encodeURIComponent(input.id)}/draft`, {
-          ...runtimeReadInit({ "Content-Type": "application/json" }),
-          method: "PUT",
-          body: JSON.stringify(input.draft),
-        }),
-      ),
+    listForApplicant: async () => fetchList(fetchImpl),
+    listDirectorQueue: async () => (await fetchList(fetchImpl)).filter((x) => DIRECTOR_QUEUE_PHASES.has(x.phase)),
+    listMonitoringQueue: async () => (await fetchList(fetchImpl)).filter((x) => MONITORING_QUEUE_PHASES.has(x.phase)),
+    getApplication: async (id) => parseApplication(await fetchImpl(MANUFACTURER_ONBOARDING_BFF.detail(id), runtimeReadInit())),
+    saveDraft: async (input: SaveDraftInput) => {
+      const payload = {
+        version: input.version,
+        legalName: input.draft.legalName.trim() || DEFAULT_CREATE_LEGAL_NAME,
+        draft: toBackendDraft(input.draft),
+      };
+      const key = input.idempotencyKey ?? newIdempotencyKey();
+      const result = await runtimeCommand(
+        MANUFACTURER_ONBOARDING_BFF.detail(input.id),
+        "PATCH",
+        payload,
+        key,
+        parseDetailBody,
+        fetchImpl,
+      );
+      if (!result.ok) {
+        const f = result.failure;
+        if (f.kind === "validation") throw new ManufacturerOnboardingHttpError("validation", f.message);
+        if (f.kind === "conflict") throw new ManufacturerOnboardingHttpError("conflict", f.message);
+        if (f.kind === "denied") throw new ManufacturerOnboardingHttpError("forbidden", f.message);
+        if (f.kind === "session") throw new ManufacturerOnboardingHttpError("session", f.message);
+        if (f.kind === "not_found") throw new ManufacturerOnboardingHttpError("not_found", f.message);
+        throw new ManufacturerOnboardingHttpError("unavailable", f.message);
+      }
+      return result.value;
+    },
+    uploadDocument: async (input: UploadDocumentInput) => {
+      const form = new FormData();
+      form.append("file", input.file);
+      form.append("documentKind", input.documentKind);
+      form.append("label", input.label);
+      if (input.issueOn) form.append("issueOn", input.issueOn);
+      if (input.expiresOn) form.append("expiresOn", input.expiresOn);
+      const key = input.idempotencyKey ?? newIdempotencyKey();
+      return commandApp(fetchImpl, MANUFACTURER_ONBOARDING_BFF.documents(input.applicationId), form, key);
+    },
     submit: async (input: SubmitApplicationInput) =>
-      commandApp(fetchImpl, `/applications/${encodeURIComponent(input.id)}/submit`, {}, `submit-${input.id}`),
+      commandApp(
+        fetchImpl,
+        MANUFACTURER_ONBOARDING_BFF.submit(input.id),
+        { version: input.version },
+        input.idempotencyKey ?? newIdempotencyKey(),
+      ),
     directorApprove: async (input: DirectorDecisionInput) =>
-      commandApp(fetchImpl, `/applications/${encodeURIComponent(input.id)}/director/approve`, { note: input.note ?? "" }, `approve-${input.id}`),
+      commandApp(
+        fetchImpl,
+        MANUFACTURER_ONBOARDING_BFF.directorDecision(input.id),
+        { version: input.version, decision: "approve", note: input.note ?? "" },
+        input.idempotencyKey ?? newIdempotencyKey(),
+      ),
     directorReject: async (input: DirectorRejectInput) =>
-      commandApp(fetchImpl, `/applications/${encodeURIComponent(input.id)}/director/reject`, { reason: input.reason }, `reject-${input.id}`),
+      commandApp(
+        fetchImpl,
+        MANUFACTURER_ONBOARDING_BFF.directorDecision(input.id),
+        { version: input.version, decision: "reject", note: input.reason },
+        input.idempotencyKey ?? newIdempotencyKey(),
+      ),
     raiseAnomaly: async (input: RaiseAnomalyInput) =>
       commandApp(
         fetchImpl,
-        `/applications/${encodeURIComponent(input.applicationId)}/anomalies`,
-        { summary: input.summary },
-        `anomaly-${input.applicationId}`,
+        MANUFACTURER_ONBOARDING_BFF.anomalies(input.applicationId),
+        { version: input.version, reason: input.summary },
+        input.idempotencyKey ?? newIdempotencyKey(),
       ),
     directorResolve: async (input: DirectorResolveInput) =>
       commandApp(
         fetchImpl,
-        `/applications/${encodeURIComponent(input.applicationId)}/director/resolve`,
-        { note: input.note },
-        `resolve-${input.applicationId}`,
+        MANUFACTURER_ONBOARDING_BFF.anomalyResolution(input.applicationId),
+        { version: input.version, resolution: "cleared", note: input.note },
+        input.idempotencyKey ?? newIdempotencyKey(),
       ),
     directorRevoke: async (input: DirectorRevokeInput) =>
       commandApp(
         fetchImpl,
-        `/applications/${encodeURIComponent(input.applicationId)}/director/revoke`,
-        { reason: input.reason },
-        `revoke-${input.applicationId}`,
+        MANUFACTURER_ONBOARDING_BFF.anomalyResolution(input.applicationId),
+        { version: input.version, resolution: "revoked", note: input.reason },
+        input.idempotencyKey ?? newIdempotencyKey(),
       ),
     defaultDraftId: async () => {
-      const list = await parseList(await fetchImpl(`${BASE}/applications`, runtimeReadInit()));
-      const draft = list.find((x) => x.phase === "draft");
-      if (!draft) throw new ManufacturerOnboardingHttpError("not_found", "No draft application is available.");
-      return draft.id;
+      const list = await fetchList(fetchImpl);
+      const editable = list.find((x) => x.phase === "draft" || x.phase === "automatic_checks_failed");
+      if (editable) return editable.id;
+      const created = await commandApp(
+        fetchImpl,
+        MANUFACTURER_ONBOARDING_BFF.list,
+        { legalName: DEFAULT_CREATE_LEGAL_NAME, draft: {} },
+        newIdempotencyKey(),
+      );
+      return created.id;
     },
   };
 }

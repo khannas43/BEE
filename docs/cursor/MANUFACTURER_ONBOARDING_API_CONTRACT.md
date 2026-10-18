@@ -1,17 +1,39 @@
-# Manufacturer onboarding — expected API contract (Agent A)
+# Manufacturer onboarding — BFF API contract (Brief B2)
 
 Frontend adapter: `lib/manufacturer-onboarding/client.ts` (`ManufacturerOnboardingClient`).
 
-- Default: fixture client (`lib/manufacturer-onboarding/fixtureClient.ts`).
-- Live: set `NEXT_PUBLIC_MANUFACTURER_ONBOARDING_API=1` to use `lib/manufacturer-onboarding/httpClient.ts` (BFF routes below; no throw at module load).
-- Integration may inject `adapter` via `ManufacturerOnboardingClientOptions` without changing UI components.
+- **Default:** real HTTP client (`lib/manufacturer-onboarding/httpClient.ts`) → browser routes under `/api/runtime/manufacturer-onboarding/**` (OpenAPI **0.37.1**).
+- **Fixture only:** set `NEXT_PUBLIC_MANUFACTURER_ONBOARDING_FIXTURE=1` for `lib/manufacturer-onboarding/fixtureClient.ts` (isolated UI tests).
+- Tests may inject `adapter` via `ManufacturerOnboardingClientOptions`.
 
-All times ISO-8601 UTC; UI displays Asia/Kolkata. Demo applicant: `onboarding.applicant` (seeded by Agent A).
+Backend `state` maps to UI `phase` in `lib/manufacturer-onboarding/mapBackend.ts`. Every PATCH and command sends the current backend `version`. Observation is **read-only** in the browser (no observation-close route; BL-263).
+
+## Browser routes (authoritative)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET, POST | `/api/runtime/manufacturer-onboarding` | List (server-scoped) / create (`legalName`, optional `draft`, `Idempotency-Key`) |
+| GET, PATCH | `/api/runtime/manufacturer-onboarding/{id}` | Detail / save draft (`version`, `legalName`, `draft`) |
+| GET, POST | `/api/runtime/manufacturer-onboarding/{id}/submit` | Submit preview / submit `{ "version": N }` |
+| POST | `/api/runtime/manufacturer-onboarding/{id}/director-decision` | `{ "version", "decision": "approve"\|"reject", "note" }` |
+| POST | `/api/runtime/manufacturer-onboarding/{id}/anomalies` | `{ "version", "reason" }` |
+| POST | `/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution` | `{ "version", "resolution": "cleared"\|"revoked", "note" }` |
+| GET, POST | `/api/runtime/manufacturer-onboarding/{id}/documents` | List / multipart upload (`file`, `documentKind`, `label`, optional dates) |
+
+**Not used:** `/applications/**`, `/director/queue`, `/monitoring/queue`, observation-close.
+
+## Queue filtering (client)
+
+Single authorized list GET, then filter:
+
+- **Director queue:** `director_review`
+- **Monitoring:** `active_observation`, `active`, `on_hold`
+- **Applicant:** full server-scoped list (no extra client filter)
 
 ## Phase contract
 
-| `phase` | UI label (summary) |
-|---------|-------------------|
+| `phase` (`state`) | UI label (summary) |
+|-------------------|-------------------|
 | `draft` | Draft — not yet submitted |
 | `submitted` | Submitted — processing |
 | `automatic_checks_failed` | Automated rules check — action required |
@@ -19,46 +41,26 @@ All times ISO-8601 UTC; UI displays Asia/Kolkata. Demo applicant: `onboarding.ap
 | `active_observation` | Active — under 15-day observation |
 | `active` | Active — observation completed |
 | `on_hold` | On hold — anomaly under review |
-| `rejected` | Registration rejected (pre-activation Director rejection) |
-| `revoked` | Revoked by Director (post-activation, after anomaly) |
+| `rejected` | Registration rejected (pre-activation) |
+| `revoked` | Revoked by Director (post-activation) |
 
-Legacy/cosmetic aliases normalized in the HTTP adapter (`lib/manufacturer-onboarding/phaseMapping.ts`): `awaiting_director` → `director_review`, `hold_anomaly` → `on_hold`, `observation_completed` → `active`.
+Legacy aliases in `phaseMapping.ts`: `awaiting_director` → `director_review`, `hold_anomaly` → `on_hold`, `observation_completed` → `active`.
 
-On Director approve: `observationStartedAt` = approval instant; `observationEndsAt` = approval + 15 calendar days.
+## Document kinds
 
-On Director resolve from hold: if now &lt; `observationEndsAt` → `active_observation`; else → `active`.
+`trade_licence`, `certificate_of_incorporation`, `gst_certificate`, `pan_card`, `signatory_photo_id`, `facility_address_proof`, `signed_declaration`, `signed_agreement`.
 
-## Resources
+## Idempotency
 
-| Method | Path | Role (Spring) | Description |
-|--------|------|-----------------|-------------|
-| GET | `/api/manufacturer-onboarding/applications` | Applicant | List summaries scoped to caller org |
-| GET | `/api/manufacturer-onboarding/applications/{id}` | Applicant, Director, Finance, Programme | Full application (Spring row scope) |
-| PUT | `/api/manufacturer-onboarding/applications/{id}/draft` | Applicant | Save wizard draft |
-| POST | `/api/manufacturer-onboarding/applications/{id}/submit` | Applicant | Submit → payment + automated checks → `director_review` or `automatic_checks_failed` |
-| GET | `/api/manufacturer-onboarding/director/queue` | Director | `director_review` only (not failed checks) |
-| POST | `/api/manufacturer-onboarding/applications/{id}/director/approve` | Director | Activate + observation window |
-| POST | `/api/manufacturer-onboarding/applications/{id}/director/reject` | Director | Pre-activation → `rejected` (body: `{ "reason": string }`) |
-| GET | `/api/manufacturer-onboarding/monitoring/queue` | Director, Finance, Programme | Observation / hold / active |
-| POST | `/api/manufacturer-onboarding/applications/{id}/anomalies` | Finance, Programme, Director | Body: `{ "summary": string }` only — **role derived from session** |
-| POST | `/api/manufacturer-onboarding/applications/{id}/director/resolve` | Director | Clear hold (body: `{ "note": string }`) |
-| POST | `/api/manufacturer-onboarding/applications/{id}/director/revoke` | Director | Post-activation terminal (body: `{ "reason": string }`) |
+Generate a **new** `Idempotency-Key` per distinct user action (create, submit, director decision, anomaly, resolution, upload). Reuse a key only when retrying the same in-flight payload.
 
-## JSON shape (core)
+## Fee
 
-Matches `ManufacturerApplication` in `lib/manufacturer-onboarding/types.ts`.
+Provisional company-registration fee **₹5,000.00** (`REG:manufacturer_onboarding`); simulated payment verification on submit.
 
-- `payment.amountInr`: `"5000.00"` (provisional company registration fee, assumption A07 / S&L Manual §4.1)
-- `payment.gatewayMode`: `simulated_demo` until live gateway wired
-- `syntheticDemo`: boolean
+## Acceptance notes (B2)
 
-## HTTP errors (adapter)
-
-| Status | Adapter error kind | UI treatment |
-|--------|-------------------|--------------|
-| 401 | `session` | Sign-in required / retry |
-| 403 | `forbidden` | Access denied message |
-| 404 | `not_found` | Not found / empty |
-| 422 | `validation` | Inline validation / form |
-| 409 | `conflict` | Refresh and retry |
-| 5xx / network | `unavailable` | Error state + retry |
+- A3 backend accepted at commit `b378900`.
+- B2 UI integrated — ChatGPT review pending.
+- WP3 not complete until coordinated live smoke (not run in B2).
+- BL-261, BL-262, BL-263 remain open.

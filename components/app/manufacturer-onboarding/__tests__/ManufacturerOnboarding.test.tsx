@@ -18,7 +18,9 @@ import { observationCountdown } from "@/lib/manufacturer-onboarding/observation"
 import { canAccessManufacturerRoute } from "@/lib/manufacturer-onboarding/access";
 import { effectiveOnboardingRoles } from "@/lib/manufacturer-onboarding/identity";
 import { runtimeNavFor } from "@/lib/runtimeRoutes";
-import { createManufacturerOnboardingHttpClient } from "@/lib/manufacturer-onboarding/httpClient";
+import { MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "@/lib/manufacturer-onboarding/documentKinds";
+import { MANUFACTURER_ONBOARDING_USE_FIXTURE } from "@/lib/manufacturer-onboarding/client";
+import { createManufacturerOnboardingHttpClient, MANUFACTURER_ONBOARDING_BFF } from "@/lib/manufacturer-onboarding/httpClient";
 import RegisterManufacturerPage from "@/app/register/manufacturer/page";
 import { ManufacturerOnboardingProvider } from "../ManufacturerOnboardingProvider";
 import { OnboardingWizard } from "../OnboardingWizard";
@@ -143,7 +145,12 @@ describe("manufacturer onboarding UI", () => {
     fireEvent.click(screen.getByTestId("step-contacts"));
     fireEvent.change(screen.getByTestId("field-signatory-name"), { target: { value: "Rahul Aarav" } });
     fireEvent.click(screen.getByTestId("step-annexure"));
-    for (const btn of screen.queryAllByRole("button", { name: /Mark uploaded/i })) fireEvent.click(btn);
+    const pdf = new File(["demo"], "demo.pdf", { type: "application/pdf" });
+    for (const kind of MANUFACTURER_ONBOARDING_DOCUMENT_KINDS) {
+      const input = screen.getByTestId(`upload-${kind}`) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [pdf] } });
+      await waitFor(() => expect(screen.getByTestId(`upload-status-${kind}`).textContent).toMatch(/Uploaded/i));
+    }
     fireEvent.click(screen.getByTestId("step-declaration"));
     fireEvent.click(screen.getByTestId("checkbox-declaration"));
     fireEvent.click(screen.getByTestId("checkbox-agreement"));
@@ -210,6 +217,8 @@ describe("manufacturer onboarding UI", () => {
   it("Finance raises anomaly → immediate hold", async () => {
     render(wrap(<MonitoringQueue />, "finance"));
     await screen.findByTestId("monitoring-queue-list");
+    fireEvent.click(screen.getByTestId("monitoring-item-MFG-ONB-2026-0103"));
+    await screen.findByTestId("anomaly-summary");
     fireEvent.change(screen.getByTestId("anomaly-summary"), { target: { value: "Fee mismatch demo" } });
     fireEvent.click(screen.getByTestId("raise-anomaly-submit"));
     await waitFor(() => expect(screen.getByText(LABEL_HOLD)).toBeTruthy());
@@ -265,11 +274,13 @@ describe("manufacturer onboarding UI", () => {
     expect(screen.getByText("No applications awaiting Director decision.")).toBeTruthy();
   });
 
-  it("http client adapter can be constructed without throwing", () => {
+  it("default client path is HTTP; fixture requires explicit flag", () => {
+    expect(MANUFACTURER_ONBOARDING_USE_FIXTURE).toBe(false);
     const c = createManufacturerOnboardingHttpClient(async () =>
       new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "Content-Type": "application/json" } }),
     );
     expect(c.listDirectorQueue).toBeTypeOf("function");
+    expect(MANUFACTURER_ONBOARDING_BFF.list).toBe("/api/runtime/manufacturer-onboarding");
   });
 
   it("awaiting director label on director queue item", async () => {

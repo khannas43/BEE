@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
+import { DOCUMENT_KIND_LABELS, MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "@/lib/manufacturer-onboarding/documentKinds";
 import { formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
 import type { ManufacturerApplication, ManufacturerDraft } from "@/lib/manufacturer-onboarding/types";
 import {
@@ -79,11 +80,12 @@ export function OnboardingWizard() {
   const issues = useMemo(() => (draft ? validationIssues(draft) : []), [draft]);
 
   async function saveProgress() {
-    if (!appId || !draft) return;
+    if (!appId || !draft || !appRecord) return;
     setBusy(true);
     setSaveNote(null);
     try {
-      await client.saveDraft({ id: appId, draft });
+      const updated = await client.saveDraft({ id: appId, version: appRecord.version, draft });
+      setAppRecord(updated);
       setSaveNote("Progress saved. You can resume later from this wizard.");
     } catch {
       setSaveNote("Save failed — please retry.");
@@ -92,13 +94,35 @@ export function OnboardingWizard() {
     }
   }
 
+  async function uploadKind(documentKind: (typeof MANUFACTURER_ONBOARDING_DOCUMENT_KINDS)[number], file: File) {
+    if (!appId || !appRecord) return;
+    setBusy(true);
+    setSaveNote(null);
+    try {
+      const updated = await client.uploadDocument({
+        applicationId: appId,
+        documentKind,
+        label: DOCUMENT_KIND_LABELS[documentKind],
+        file,
+      });
+      setAppRecord(updated);
+      setDraft(updated.draft);
+      setSaveNote(`${DOCUMENT_KIND_LABELS[documentKind]} uploaded.`);
+    } catch {
+      setSaveNote("Upload failed — check the file and retry.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitApplication() {
-    if (!appId || !draft || issues.length) return;
+    if (!appId || !draft || !appRecord || issues.length) return;
     setBusy(true);
     setSubmitError(null);
     try {
-      await client.saveDraft({ id: appId, draft });
-      const updated = await client.submit({ id: appId });
+      const saved = await client.saveDraft({ id: appId, version: appRecord.version, draft });
+      setAppRecord(saved);
+      const updated = await client.submit({ id: appId, version: saved.version });
       router.push(`/app/manufacturer/application/${updated.id}`);
     } catch {
       setSubmitError("Submit failed — check validation and retry.");
@@ -222,20 +246,26 @@ export function OnboardingWizard() {
                     <div>
                       <p className="font-label-md">{doc.kind}</p>
                       <p className="font-body-sm text-on-surface-variant">{doc.fileName}</p>
+                      {doc.uploadedAt ? (
+                        <p className="font-body-sm text-success" data-testid={`upload-status-${doc.id}`}>Uploaded</p>
+                      ) : (
+                        <p className="font-body-sm text-on-surface-variant" data-testid={`upload-status-${doc.id}`}>Required</p>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      className="text-primary font-semibold text-label-sm"
-                      onClick={() => {
-                        const annexureDocuments = draft.annexureDocuments.map((d) =>
-                          d.id === doc.id ? { ...d, uploadedAt: d.uploadedAt ?? new Date().toISOString() } : d,
-                        );
-                        setDraft({ ...draft, annexureDocuments });
-                      }}
-                      data-testid={`upload-${doc.id}`}
-                    >
-                      {doc.uploadedAt ? "Uploaded (demo)" : "Mark uploaded (demo)"}
-                    </button>
+                    <label className="text-primary font-semibold text-label-sm cursor-pointer">
+                      <input
+                        type="file"
+                        className="sr-only"
+                        accept=".pdf,image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void uploadKind(doc.id as (typeof MANUFACTURER_ONBOARDING_DOCUMENT_KINDS)[number], file);
+                          e.target.value = "";
+                        }}
+                        data-testid={`upload-${doc.id}`}
+                      />
+                      {doc.uploadedAt ? "Replace file" : "Upload file"}
+                    </label>
                   </li>
                 ))}
               </ul>

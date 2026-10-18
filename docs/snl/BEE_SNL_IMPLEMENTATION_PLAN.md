@@ -256,8 +256,8 @@ At the end of each development session, update the package status, progress, com
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | Accepted V69–V72; model journey wired. V73+19C-A accepted at `ae63275`. Brief 19C-B hooks `RegistrationReviewService` return/resubmit through `RegistrationReturnResponseWiring` with service-level db proofs (review pending). |
-| Next action | ChatGPT review of Brief 19C-B; then 19C-C forward disposition/read prep and 19D-A/B/C queue work (BL-257) |
+| Existing foundation | Accepted V69–V72; model journey wired. V73+19C-A accepted at `ae63275`. Brief 19C-B/19C-B1 hooks `RegistrationReviewService` return/resubmit through `RegistrationReturnResponseWiring` with V74 latest-return read and service-level db proofs (review pending). |
+| Next action | ChatGPT review of Brief 19C-B1; then 19C-C forward disposition/read prep and 19D-A/B/C queue work (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -285,15 +285,15 @@ At the end of each development session, update the package status, progress, com
 | Evidence | Result or link |
 |---|---|
 | Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_DB_BOUNDARY.md](SNL_WP02C_REGISTRATION_DB_BOUNDARY.md) |
-| Migration range | Accepted: V69–V73 at `ae63275` (19C-A). Brief 19C-B service wiring — review pending. |
+| Migration range | Accepted: V69–V73 at `ae63275` (19C-A). V74 + Brief 19C-B/19C-B1 service wiring — review pending. |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
-| Database tests | V73 wiring suite (35) + 19C-B service proofs (`SnlWp02cRegistrationReturnServiceDatabaseTest`); full gate counts at handback |
+| Database tests | V73 wiring suite (35) + 19C-B/B1 service proofs (11 in `SnlWp02cRegistrationReturnServiceDatabaseTest`, 46 total in that class with inherited wiring tests); full gate counts at handback |
 | UI tests | 251 web tests passed; live browser workflow remains pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | WP2A, Brief 19A, Brief 19B, Brief 19B-2, 19C-0, 19D-0 and V73+19C-A accepted at `ae63275`. Brief **19C-B** implemented — ChatGPT review pending. |
-| Brief 19C-B evidence | `RegistrationReturnResponseWiring`, `RegistrationReviewService` return/resubmit hook, `SnlWp02cRegistrationReturnServiceDatabaseTest` — review pending |
+| Review | WP2A, Brief 19A, Brief 19B, Brief 19B-2, 19C-0, 19D-0 and V73+19C-A accepted at `ae63275`. Brief **19C-B1** implemented — ChatGPT review pending (19C-B not accepted). |
+| Brief 19C-B1 evidence | V74 latest-open-cycle return read, `RegistrationRepository.latestReturnForOpenCycle`, resubmit task owner from bound return, `SnlWp02cRegistrationReturnServiceDatabaseTest` repeat-cycle/order/hash proofs — review pending |
 | Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec` |
 
 #### WP2 acceptance

@@ -67,7 +67,8 @@ public class RegistrationReturnResponseWiring {
     }
 
     public void completeResubmit(UUID applicationId, UUID returnId, UUID resubmissionId, UUID transitionEventId, String returnedFromStage, Instant returnedAt,
-                                 String returnReason, String note, Instant resubmittedAt, UUID actorAccountId, String actorRole, String idempotencyKey) {
+                                 String returnReason, String note, Instant resubmittedAt, UUID actorAccountId, String actorRole, UUID taskOwnerAccountId,
+                                 String taskOwnerRole, String idempotencyKey) {
         Runnable hook = testMidWiringFailureHook;
         if (hook != null) {
             hook.run();
@@ -78,18 +79,17 @@ public class RegistrationReturnResponseWiring {
         UUID wiringCommand = commandId(idempotencyKey, "registration_resubmit_wiring", applicationId);
         UUID notifyCommand = commandId(idempotencyKey, "registration_resubmit_notify", applicationId);
         UUID taskCommand = commandId(idempotencyKey, "registration_resubmit_task", applicationId);
-        var taskOwner = wiringRepo.returnOfficerFromLatestReturnTransition(applicationId);
-        var taskCmd = new WorkflowFoundationRepository.TaskCommand(SUBJECT, applicationId, returnedFromStage, TASK_ACTION, taskOwner.role(), taskOwner.accountId(),
+        var taskCmd = new WorkflowFoundationRepository.TaskCommand(SUBJECT, applicationId, returnedFromStage, TASK_ACTION, taskOwnerRole, taskOwnerAccountId,
             dueAt, policy.id(), returnedAt);
         String taskPayloadHash = WorkflowFoundationRepository.payloadHash(taskCmd);
         String wiringHash = wiringRepo.computeResubmitHash(applicationId, returnId, resubmissionId, transitionEventId, returnedFromStage, returnedAt, returnReason,
-            "programme_review", body, resubmittedAt, actorAccountId, actorRole, notifyCommand, taskCommand, taskPayloadHash, taskOwner.role(), taskOwner.accountId(),
+            "programme_review", body, resubmittedAt, actorAccountId, actorRole, notifyCommand, taskCommand, taskPayloadHash, taskOwnerRole, taskOwnerAccountId,
             dueAt, policy.id(), actorAccountId);
         try {
             wiringRepo.orchestrateResubmit(new RegistrationReturnResponseWiringRepository.OrchestrateResubmitCommand(
                 applicationId, returnId, resubmissionId, transitionEventId, returnedFromStage, returnedAt, returnReason, "programme_review", body, resubmittedAt,
                 actorAccountId, actorRole, wiringCommand, wiringHash, notifyCommand, taskCommand, taskPayloadHash,
-                taskOwner.role(), taskOwner.accountId(), dueAt, policy.id(), actorAccountId));
+                taskOwnerRole, taskOwnerAccountId, dueAt, policy.id(), actorAccountId));
         } catch (DataAccessException ex) {
             if (WorkflowFoundationRepository.isSqlMessage(ex, "registration_return_response_wiring_idempotency_conflict")) {
                 throw new WorkflowIdempotencyConflictException();

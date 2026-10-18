@@ -193,7 +193,7 @@ public class RegistrationReviewService {
                 } else if ("resubmit".equals(in.action())) {
                     var lr = openReturn.orElseThrow();
                     returnWiring.completeResubmit(id, lr.returnId(), resubmissionId, moved.get().transitionEventId(), lr.returnedFromState(), lr.returnedAt(),
-                        lr.reason(), null, at, caller.accountId(), actorRole, key);
+                        lr.reason(), null, at, caller.accountId(), actorRole, lr.returnedByAccountId(), lr.returnedByRole(), key);
                 }
             } catch (DataIntegrityViolationException e) {
                 if (WorkflowFoundationRepository.isSqlMessage(e, "notification_recipient_inactive")) {

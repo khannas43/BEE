@@ -202,24 +202,23 @@ public class RegistrationRepository {
     public record Moved(int versionAfter, java.time.Instant at, UUID transitionEventId) {
     }
 
-    public record LatestOpenCycleReturn(UUID returnId, String returnedFromState, java.time.Instant returnedAt, String reason) {
+    public record LatestOpenCycleReturn(UUID returnId, String returnedFromState, java.time.Instant returnedAt, String reason, UUID returnedByAccountId,
+                                      String returnedByRole) {
     }
 
-    /** Latest return bound to the open cycle using tables {@code bee_runtime} may read (no direct read of {@code registration_application_return}). */
+    /** Latest return bound to the open cycle via trusted read function V74 (ordered by {@code returned_at}, then {@code id}). */
     public Optional<LatestOpenCycleReturn> latestReturnForOpenCycle(UUID applicationId) {
         return jdbc.query(
-            "WITH latest_return_te AS ("
-                + "SELECT from_state, note, occurred_at FROM registration_transition_event "
-                + "WHERE application_id = ? AND action = 'return' AND to_state = 'returned' ORDER BY occurred_at DESC LIMIT 1"
-                + ") SELECT cr.return_id, lr.from_state, lr.note, lr.occurred_at "
-                + "FROM registration_return_response_cycle c "
-                + "JOIN registration_return_response_cycle_return cr ON cr.cycle_id = c.id "
-                + "CROSS JOIN latest_return_te lr "
-                + "WHERE c.application_id = ? AND c.status = 'open' "
-                + "ORDER BY cr.return_id DESC LIMIT 1",
-            (rs, i) -> new LatestOpenCycleReturn(rs.getObject("return_id", UUID.class), rs.getString("from_state"),
-                rs.getTimestamp("occurred_at").toInstant(), rs.getString("note")),
-            applicationId, applicationId).stream().findFirst();
+            "SELECT return_id, returned_from_stage, reason, returned_at, returned_by_account_id, returned_by_role "
+                + "FROM registration_return_response_latest_open_cycle_return(?)",
+            (rs, i) -> new LatestOpenCycleReturn(
+                rs.getObject("return_id", UUID.class),
+                rs.getString("returned_from_stage"),
+                rs.getTimestamp("returned_at").toInstant(),
+                rs.getString("reason"),
+                rs.getObject("returned_by_account_id", UUID.class),
+                rs.getString("returned_by_role")),
+            applicationId).stream().findFirst();
     }
 
     /** A review step (recommend, return, reject) or the applicant's resubmit, with its transition event; empty if the state or version has moved. */

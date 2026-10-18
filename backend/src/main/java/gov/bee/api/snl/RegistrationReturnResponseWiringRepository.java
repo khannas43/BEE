@@ -14,9 +14,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class RegistrationReturnResponseWiringRepository {
 
-    public record ReturnTaskOwner(UUID accountId, String role) {
-    }
-
     public record CycleRow(
         UUID id,
         UUID applicationId,
@@ -177,14 +174,6 @@ public class RegistrationReturnResponseWiringRepository {
     public int countDiscrepancyResponses(UUID discrepancyId) {
         Integer n = jdbc.queryForObject("SELECT count(*)::int FROM workflow_discrepancy_response WHERE discrepancy_id = ?", Integer.class, discrepancyId);
         return n == null ? 0 : n;
-    }
-
-    public ReturnTaskOwner returnOfficerFromLatestReturnTransition(UUID applicationId) {
-        return jdbc.queryForObject(
-            "SELECT actor_account_id, actor_role FROM registration_transition_event "
-                + "WHERE application_id = ? AND action = 'return' AND to_state = 'returned' ORDER BY occurred_at DESC LIMIT 1",
-            (rs, i) -> new ReturnTaskOwner(rs.getObject("actor_account_id", UUID.class), rs.getString("actor_role")),
-            applicationId);
     }
 
     public String computeReturnHash(UUID applicationId, UUID transitionEventId, UUID returnId, String fromStage, String reason, UUID returnedBy,

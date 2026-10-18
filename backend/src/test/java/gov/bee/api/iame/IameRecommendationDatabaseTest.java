@@ -102,7 +102,7 @@ class IameRecommendationDatabaseTest {
         submissions = new ModelApplicationSubmitRepository(db, applications);
         feeRepo = transactional(new FeeConfirmationRepository(db));
         repo = transactional(new IameRecommendationRepository(db));
-        assertEquals(73, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V73");
+        assertEquals(74, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V74");
     }
 
     @AfterAll

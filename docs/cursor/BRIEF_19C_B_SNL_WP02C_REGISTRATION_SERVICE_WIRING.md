@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation slice; **ChatGPT review pending** after handback.
+Implementation slice; superseded for review by **Brief 19C-B1** (repeat-cycle corrections). **Not accepted.**
 
 ## Branch
 

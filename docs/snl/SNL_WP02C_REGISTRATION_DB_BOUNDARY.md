@@ -1,9 +1,9 @@
 # SNL WP02C — registration return/resubmit trusted database boundary (Brief 19C-A / 19C-A1 / 19C-A2 / 19C-A3 / 19C-A4)
 
 **Branch:** `cursor/snl-wp02c-registration-db-boundary`
-**Migration:** V73 (`V73__snl_wp02c_registration_return_wiring.sql`) — corrected in place through Brief 19C-A4
+**Migration:** V73 (`V73__snl_wp02c_registration_return_wiring.sql`) — corrected in place through Brief 19C-A4; **V74** (`V74__snl_wp02c_registration_latest_open_cycle_return.sql`) — Brief 19C-B1 trusted latest-return read
 **Design:** [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md)
-**Status:** Brief 19C-A4 implemented / **review pending**; Brief **19C-B** wired `RegistrationReviewService` (review pending). OpenAPI/BFF/UI unchanged. **V73 and 19C are not accepted.**
+**Status:** Brief 19C-A4 implemented / **review pending**; Brief **19C-B** and **19C-B1** wired `RegistrationReviewService` (review pending). OpenAPI/BFF/UI unchanged. **V73, V74 and 19C are not accepted.**
 
 ## Schema
 
@@ -17,16 +17,17 @@
 
 Return stages: `programme_review` or `director_approval` only. Resubmit resumed stage: `programme_review` (provisional A03).
 
-## Runtime EXECUTE (only orchestrators)
+## Runtime EXECUTE (orchestrators + trusted read)
 
 | Function | Purpose |
 | --- | --- |
 | `registration_return_response_orchestrate_wired_return` | Atomic return bundle |
 | `registration_return_response_orchestrate_resubmit` | Atomic resubmit bundle |
+| `registration_return_response_latest_open_cycle_return` | **V74** — one internally consistent latest return on the open cycle (`returned_at DESC, id DESC`) |
 
 All other `registration_return_response_*` helpers are `SECURITY DEFINER` with pinned `search_path`; `REVOKE EXECUTE` from `PUBLIC` and `bee_runtime`. **`bee_app`** owns migration-created functions (Flyway session); Spring connects as **`bee_runtime`**.
 
-**Privilege audit honesty (19C-A3):** Tests prove **`bee_runtime`** may execute only the two orchestrators and **`PUBLIC`** has no execute on security-definer registration helpers. Helpers are owned by **`bee_app`** because Flyway applies V73 as `bee_app`; reassigning owners to a locked maint role inside the same migration requires `SET ROLE` the Flyway user does not hold. **`bee_app` is not exercised as a JDBC caller** in these proofs — only catalog ownership is recorded. Runtime tamper proofs use **`bee_runtime`**.
+**Privilege audit honesty (19C-A3 + B1):** Tests prove **`bee_runtime`** may execute only the two orchestrators, the **V74** latest-return read, and **`PUBLIC`** has no execute on other security-definer registration helpers. Helpers are owned by **`bee_app`** because Flyway applies V73 as `bee_app`; reassigning owners to a locked maint role inside the same migration requires `SET ROLE` the Flyway user does not hold. **`bee_app` is not exercised as a JDBC caller** in these proofs — only catalog ownership is recorded. Runtime tamper proofs use **`bee_runtime`**.
 
 **Maintenance EXECUTE (not registration closure):** `app_disposable_registration_cleanup` only. There is **no** production cycle-closure command; forward closure remains 19C-C.
 
@@ -74,7 +75,7 @@ Orchestrators acquire the wiring advisory lock and read wiring evidence **before
 
 - Advisory lock on wiring `command_id`; wiring hash mismatch → `registration_return_response_wiring_idempotency_conflict` (Java: `WorkflowIdempotencyConflictException`).
 - Notifications only through V70 deliver (return) and `registration_return_response_officer_resubmit_notify` (resubmit officer).
-- Runtime: no direct INSERT/UPDATE/DELETE on return/resubmission/cycle/cycle-return binding/wiring evidence tables; SELECT on cycle/evidence/link tables.
+- Runtime: no direct INSERT/UPDATE/DELETE on return/resubmission/cycle/cycle-return binding/wiring evidence tables; SELECT on open cycle + wiring evidence only (**V74** reads return/resubmission history; runtime SELECT on `registration_return_response_cycle_return` revoked in V74).
 
 ## Recipient resolution
 
@@ -129,9 +130,9 @@ Orchestrators acquire the wiring advisory lock and read wiring evidence **before
 
 **Complete bundle snapshot (`CompleteBundleSnapshot`):** application `state` + `version`, `registration_transition_event` count, all registration return/resubmit/cycle families, full workflow task/event/clock/discrepancy/disposition/response counts, `notification_command` + `notification` delivery counts, and wiring evidence count. Rollback and rejection proofs assert **equality** to baseline (no partial residue).
 
-## Service proofs (`SnlWp02cRegistrationReturnServiceDatabaseTest`, Brief 19C-B)
+## Service proofs (`SnlWp02cRegistrationReturnServiceDatabaseTest`, Brief 19C-B / 19C-B1)
 
-Programme/Director return success, resubmit success, HTTP idempotency replay, changed-payload wiring conflict, concurrent return, resubmit assignee failure, injected mid-wiring rollback with **no residue** (snapshot pattern from the wiring suite).
+**11** service-specific tests (class also inherits **35** V73 wiring tests from `SnlWp02cRegistrationReturnWiringDatabaseTest` → **46** `@Test` methods in the class). Service-only: Programme/Director return, resubmit, HTTP idempotency replay, changed-payload wiring conflict, concurrent return, assignee failure with **complete bundle snapshot** rollback, injected mid-wiring rollback with **no residue**, **repeat-cycle** return→resubmit→re-return→resubmit, **returned_at** ordering with controlled return UUIDs, **Java↔V73 hash parity** (microsecond timestamps and non-ASCII/punctuation).
 
 ## Deferrals (19C-C)
 

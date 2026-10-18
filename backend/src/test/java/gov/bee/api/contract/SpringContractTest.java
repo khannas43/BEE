@@ -2891,7 +2891,7 @@ class SpringContractTest {
             when(registrationRepo.submitter(REG)).thenReturn(Optional.of(UUID.randomUUID()));
             when(registrationRepo.transition(any(), anyInt(), any(), any(), any(), any(), any(), any())).thenReturn(Optional.of(moved));
             org.mockito.Mockito.doNothing().when(registrationReturnWiring).completeWiredReturn(any(), any(), any(), any(), any(), any(), any(), any(), any());
-            org.mockito.Mockito.doNothing().when(registrationReturnWiring).completeResubmit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+            org.mockito.Mockito.doNothing().when(registrationReturnWiring).completeResubmit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
             return true;
         };
         java.util.function.Consumer<String> staffAs = role -> {
@@ -2971,7 +2971,8 @@ class SpringContractTest {
         conforms(T, asApplicant.get(), 422, "document_required");
         when(registrationRepo.documentCount(REG)).thenReturn(1);
         when(registrationRepo.latestReturnForOpenCycle(REG)).thenReturn(Optional.of(
-            new RegistrationRepository.LatestOpenCycleReturn(UUID.randomUUID(), "programme_review", Instant.parse("2026-10-14T10:00:00Z"), "Fix documents.")));
+            new RegistrationRepository.LatestOpenCycleReturn(UUID.randomUUID(), "programme_review", Instant.parse("2026-10-14T10:00:00Z"), "Fix documents.",
+                UUID.fromString("00000000-0000-4000-a000-000000000006"), "programme")));
         conforms(T, asApplicant.get(), 200, null);
         when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(true);
         conforms(T, asApplicant.get(), 409, "brand_name_taken");

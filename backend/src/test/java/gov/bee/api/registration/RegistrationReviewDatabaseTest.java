@@ -131,7 +131,7 @@ class RegistrationReviewDatabaseTest {
         review = transactional(new RegistrationReviewService(registrationRepo, service, registrationWiring, idem, JSON));
         documentService = new RegistrationDocumentService(registrationRepo, documentRepo, new RegistrationDocumentRecorder(documentRepo, idem),
             new gov.bee.api.document.LocalSha256FileStore(props), idem, JSON);
-        assertEquals(73, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V73");
+        assertEquals(74, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V74");
     }
 
     @AfterAll

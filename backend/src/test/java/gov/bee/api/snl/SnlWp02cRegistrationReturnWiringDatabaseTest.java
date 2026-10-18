@@ -132,7 +132,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         wiringRepo = new RegistrationReturnResponseWiringRepository(db);
         policyRepo = new SnlReturnResponsePolicyRepository(db);
         json = new ObjectMapper();
-        assertEquals(73, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(74, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
     }
 
     @AfterAll
@@ -726,6 +726,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
             + "SELECT gen_random_uuid(), application_id, 99, 'open', review_stage, task_id, discrepancy_id FROM registration_return_response_cycle WHERE id = ?", cycleId));
         assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_return_response_cycle SET task_id = gen_random_uuid() WHERE id = ?", cycleId));
         assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_return_response_cycle WHERE id = ?", cycleId));
+        assertThrows(DataAccessException.class, () -> db.queryForObject("SELECT return_id FROM registration_return_response_cycle_return WHERE cycle_id = ? LIMIT 1", UUID.class, cycleId));
         assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_return_response_cycle_return (cycle_id, return_id) VALUES (?, gen_random_uuid())", cycleId));
         assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_return_response_cycle_return SET return_id = return_id WHERE cycle_id = ?", cycleId));
         assertThrows(DataAccessException.class, () -> db.update("DELETE FROM registration_return_response_cycle_return WHERE cycle_id = ?", cycleId));
@@ -743,7 +744,10 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
                 + "AND has_function_privilege(?, p.oid, 'EXECUTE') ORDER BY 1",
             String.class, MAIN, runtimeRole());
         assertEquals(
-            List.of("registration_return_response_orchestrate_resubmit", "registration_return_response_orchestrate_wired_return"),
+            List.of(
+                "registration_return_response_latest_open_cycle_return",
+                "registration_return_response_orchestrate_resubmit",
+                "registration_return_response_orchestrate_wired_return"),
             runtimeAllowed);
         var publicHelpers = owner.queryForList(
             "SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
@@ -1167,7 +1171,8 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         var internal = owner.queryForList(
             "SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
                 + "WHERE n.nspname = ? AND p.proname LIKE 'registration_return_response_%' AND p.prosecdef "
-                + "AND p.proname NOT IN ('registration_return_response_orchestrate_wired_return', 'registration_return_response_orchestrate_resubmit') "
+                + "AND p.proname NOT IN ('registration_return_response_orchestrate_wired_return', 'registration_return_response_orchestrate_resubmit', "
+                + "'registration_return_response_latest_open_cycle_return') "
                 + "AND has_function_privilege(?, p.oid, 'EXECUTE') ORDER BY 1",
             String.class, MAIN, runtimeRole());
         assertTrue(internal.isEmpty(), internal.toString());

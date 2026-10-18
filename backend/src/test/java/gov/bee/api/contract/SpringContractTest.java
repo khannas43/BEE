@@ -3280,9 +3280,15 @@ class SpringContractTest {
             when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(draft));
             when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.of(draft));
             when(manufacturerOnboardingRepo.documentCount(MOB)).thenReturn(1);
-            when(manufacturerOnboardingRepo.create(any(), any(), anyInt())).thenReturn(draft);
-            when(manufacturerOnboardingRepo.patchDraft(eq(MOB), eq(ONBOARD), anyInt(), any())).thenReturn(Optional.of(draft));
-            when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any(), any()))
+            when(manufacturerOnboardingRepo.create(any(), any(), anyInt(), any())).thenReturn(draft);
+            when(manufacturerOnboardingRepo.patchDraft(eq(MOB), eq(ONBOARD), anyInt(), any(), any())).thenReturn(Optional.of(draft));
+            when(manufacturerOnboardingRepo.draftPayloadJson(any())).thenReturn(Optional.of("{}"));
+            when(manufacturerOnboardingRepo.latestChecks(any())).thenReturn(List.of());
+            when(manufacturerOnboardingRepo.lifecycle(any())).thenReturn(List.of());
+            when(manufacturerOnboardingRepo.anomalies(any())).thenReturn(List.of());
+            when(manufacturerOnboardingDocumentRepo.list(MOB)).thenReturn(List.of());
+            when(manufacturerOnboardingDocumentRepo.list(any())).thenReturn(List.of());
+            when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any()))
                 .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.OrchestratorResult("not_permitted", null, null, null)));
             return true;
         };
@@ -3299,6 +3305,7 @@ class SpringContractTest {
             new Op(ONE + "/anomalies", rp -> post(base + "/anomalies").with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":2,\"reason\":\"x\"}"), "not_permitted"),
             new Op(ONE + "/anomaly-resolution", rp -> post(base + "/anomaly-resolution").with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":2,\"resolution\":\"cleared\"}"), "not_permitted"),
             new Op(ONE + "/observation/close", rp -> post(base + "/observation/close").with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":6}"), "not_permitted"),
+            new Op(ONE + "/documents", rp -> get(base + "/documents").with(rp), "no_read_scope"),
             new Op(ONE + "/documents", rp -> multipart(base + "/documents").file(new MockMultipartFile("file", "licence.pdf", "application/pdf", MIN_PDF)).with(rp), "no_write_scope"));
         for (Op op : ops) {
             fresh.get();
@@ -3332,7 +3339,7 @@ class SpringContractTest {
         when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
         conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 409, "idempotency_key_conflict");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
-        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).create(any(), any(), anyInt());
+        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).create(any(), any(), anyInt(), any());
         conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345c").contentType("application/json").content(createBody), 503, "service_unavailable");
         fresh.get();
         account("manufacturer", "own-org");
@@ -3349,7 +3356,7 @@ class SpringContractTest {
         when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.empty());
         conforms(ONE, patch(base).with(token("manufacturer")).contentType("application/json").content(patchBody), 404, "not_found");
         when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.of(draft));
-        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).patchDraft(eq(MOB), eq(ONBOARD), anyInt(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).patchDraft(eq(MOB), eq(ONBOARD), anyInt(), any(), any());
         conforms(ONE, patch(base).with(token("manufacturer")).contentType("application/json").content(patchBody), 503, "service_unavailable");
         fresh.get();
         account("manufacturer", "own-org");
@@ -3367,14 +3374,14 @@ class SpringContractTest {
         fresh.get();
         account("manufacturer", "own-org");
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(ONBOARD));
-        when(manufacturerOnboardingRepo.orchestrateSubmit(any(), any(), any(), anyInt(), any(), any(), anyInt(), any(), any(), any(), any(), any(), anyBoolean()))
+        when(manufacturerOnboardingRepo.orchestrateSubmit(any(), any(), any(), anyInt(), any(), any(), anyInt(), any(), any(), any(), any(), any()))
             .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.OrchestratorResult("director_review", 2, UUID.randomUUID(), null)));
         when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(directorReview));
         conforms(ONE + "/submit", post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), 200, null);
-        when(manufacturerOnboardingRepo.orchestrateSubmit(any(), any(), any(), anyInt(), any(), any(), anyInt(), any(), any(), any(), any(), any(), anyBoolean()))
+        when(manufacturerOnboardingRepo.orchestrateSubmit(any(), any(), any(), anyInt(), any(), any(), anyInt(), any(), any(), any(), any(), any()))
             .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.OrchestratorResult("organisation_not_eligible", null, null, null)));
         conforms(ONE + "/submit", post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012345f").contentType("application/json").content(submitBody), 403, "organisation_not_eligible");
-        when(manufacturerOnboardingRepo.orchestrateSubmit(any(), any(), any(), anyInt(), any(), any(), anyInt(), any(), any(), any(), any(), any(), anyBoolean()))
+        when(manufacturerOnboardingRepo.orchestrateSubmit(any(), any(), any(), anyInt(), any(), any(), anyInt(), any(), any(), any(), any(), any()))
             .thenReturn(Optional.empty());
         conforms(ONE + "/submit", post(base + "/submit").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123460").contentType("application/json").content(submitBody), 409, "version_conflict");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
@@ -3492,22 +3499,23 @@ class SpringContractTest {
         conforms(ONE + "/anomaly-resolution", post(base + "/anomaly-resolution").with(token("director")).header("Idempotency-Key", "0123456789abcdef0123477").contentType("application/json").content("{\"version\":5,\"resolution\":\"cleared\"}"), 503, "service_unavailable");
         account("manufacturer", "own-org");
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(ONBOARD));
-        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any(), any()))
+        conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":6,\"asOf\":\"2026-11-01\"}"), 422, "clock_override_refused");
+        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any()))
             .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.OrchestratorResult("active", 7, null, "PT-1")));
         when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.Row(MOB, "MOB-2026-0001", ONBOARD, "Onboard Mfg", "active", 7, "PT-1", null, Instant.parse("2026-10-01T00:00:00Z"))));
-        conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":6,\"asOf\":\"2026-11-01\"}"), 200, null);
-        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any(), any()))
+        conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123466").contentType("application/json").content("{\"version\":6}"), 200, null);
+        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any()))
             .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.OrchestratorResult("observation_not_ended", null, null, null)));
         conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123467").contentType("application/json").content("{\"version\":6}"), 409, "observation_not_ended");
-        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any(), any()))
+        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any()))
             .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.OrchestratorResult("segregation_refused", null, null, null)));
         conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123478").contentType("application/json").content("{\"version\":6}"), 403, "segregation_refused");
-        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any(), any()))
+        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any()))
             .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.OrchestratorResult("anomaly_open", null, null, null)));
         conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef0123479").contentType("application/json").content("{\"version\":6}"), 409, "anomaly_open");
-        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any(), any())).thenReturn(Optional.empty());
+        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any())).thenReturn(Optional.empty());
         conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012347a").contentType("application/json").content("{\"version\":6}"), 409, "version_conflict");
-        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any(), any()))
+        when(manufacturerOnboardingRepo.orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any()))
             .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.OrchestratorResult("not_found", null, null, null)));
         conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012347b").contentType("application/json").content("{\"version\":6}"), 404, "not_found");
         when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.Row(MOB, "MOB-2026-0001", ONBOARD, "Onboard Mfg", "active_observation", 6, "PT-1", null, Instant.parse("2026-10-01T00:00:00Z"))));
@@ -3519,8 +3527,17 @@ class SpringContractTest {
         when(idempotency.bodyHash(any(), any(), any(), any(), any())).thenReturn(Optional.of(new byte[] {9}));
         conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{\"version\":6}"), 409, "idempotency_key_conflict");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
-        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).orchestrateObservationClose(any(), any(), any(), anyInt(), any(), any());
         conforms(ONE + "/observation/close", post(base + "/observation/close").with(token("manufacturer")).header("Idempotency-Key", "0123456789abcdef012347c").contentType("application/json").content("{\"version\":6}"), 503, "service_unavailable");
+        fresh.get();
+        account("manufacturer", "own-org");
+        when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(ONBOARD));
+        conforms(ONE + "/documents", get(base + "/documents").with(token("manufacturer")), 200, null);
+        when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.empty());
+        conforms(ONE + "/documents", get(base + "/documents").with(token("manufacturer")), 404, "not_found");
+        when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(draft));
+        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingDocumentRepo).list(MOB);
+        conforms(ONE + "/documents", get(base + "/documents").with(token("manufacturer")), 503, "service_unavailable");
         fresh.get();
         account("manufacturer", "own-org");
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(ONBOARD));

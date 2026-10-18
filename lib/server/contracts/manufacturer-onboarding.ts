@@ -57,6 +57,8 @@ const isCount = (v: unknown) => Number.isInteger(v) && (v as number) >= 0;
 const isState = (v: unknown) => (MANUFACTURER_ONBOARDING_STATES as readonly unknown[]).includes(v);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
 export const validateManufacturerOnboardingItem: Validator<ManufacturerOnboardingItem> = (body) => {
   if (!exactKeys(body, ["id", "reference", "organisationId", "legalName", "state", "version", "tradeLicenceUploaded", "createdAt"], ["permitteeNumber", "observationEndsOn"])) {
     return null;
@@ -145,16 +147,63 @@ export const SPRING_MANUFACTURER_ONBOARDING_SUBMIT_ERRORS: UpstreamErrors = {
   503: ["service_unavailable"],
 };
 
+export const validateManufacturerOnboardingDetail: Validator<ManufacturerOnboardingItem & Record<string, unknown>> = (body) => {
+  if (
+    !exactKeys(
+      body,
+      ["id", "reference", "organisationId", "legalName", "state", "version", "tradeLicenceUploaded", "createdAt"],
+      ["permitteeNumber", "observationEndsOn", "draft", "documents", "automatedChecks", "lifecycle", "anomalies", "outcome", "paymentId"],
+    )
+  ) {
+    return null;
+  }
+  if (validateManufacturerOnboardingItem(body) === null) return null;
+  const b = body as Record<string, unknown>;
+  if (b.draft !== undefined && !isObject(b.draft)) return null;
+  if (b.documents !== undefined && (!Array.isArray(b.documents) || !b.documents.every(isObject))) return null;
+  if (b.automatedChecks !== undefined && (!Array.isArray(b.automatedChecks) || !b.automatedChecks.every(isObject))) return null;
+  if (b.lifecycle !== undefined && (!Array.isArray(b.lifecycle) || !b.lifecycle.every(isObject))) return null;
+  if (b.anomalies !== undefined && (!Array.isArray(b.anomalies) || !b.anomalies.every(isObject))) return null;
+  if (b.outcome !== undefined && !isString(b.outcome)) return null;
+  if (b.paymentId !== undefined && !isUuid(b.paymentId)) return null;
+  return body as ManufacturerOnboardingItem & Record<string, unknown>;
+};
+
+export interface ManufacturerOnboardingDocumentList {
+  applicationId: string;
+  documents: { documentKind: string; latestVersion: number; status: string; expiresOn?: string }[];
+}
+
+export const validateManufacturerOnboardingDocumentList: Validator<ManufacturerOnboardingDocumentList> = (body) => {
+  if (!exactKeys(body, ["applicationId", "documents"])) return null;
+  const b = body;
+  if (!isUuid(b.applicationId) || !Array.isArray(b.documents)) return null;
+  const ok = b.documents.every((d) => {
+    if (!isObject(d) || !exactKeys(d, ["documentKind", "latestVersion", "status"], ["expiresOn"])) return false;
+    return isString(d.documentKind) && isCount(d.latestVersion) && isString(d.status);
+  });
+  return ok ? (b as unknown as ManufacturerOnboardingDocumentList) : null;
+};
+
+const COMMAND_ERRORS: UpstreamErrors = {
+  401: ["unauthenticated"],
+  403: [...RESOLVER_DENIALS, "not_permitted", "segregation_refused", "organisation_not_eligible"],
+  404: ["not_found"],
+  409: ["version_conflict", "anomaly_open", "observation_not_ended", ...IDEMPOTENCY],
+  422: ["validation_failed", "idempotency_key_required", "clock_override_refused"],
+  503: ["service_unavailable"],
+};
+
 export const SPRING_MANUFACTURER_ONBOARDING_LIST = { errors: SPRING_MANUFACTURER_ONBOARDING_LIST_ERRORS, validate: validateManufacturerOnboardingList };
-export const SPRING_MANUFACTURER_ONBOARDING_READ = { errors: SPRING_MANUFACTURER_ONBOARDING_READ_ERRORS, validate: validateManufacturerOnboardingItem };
+export const SPRING_MANUFACTURER_ONBOARDING_READ = { errors: SPRING_MANUFACTURER_ONBOARDING_READ_ERRORS, validate: validateManufacturerOnboardingDetail };
 export const SPRING_MANUFACTURER_ONBOARDING_CREATE = {
   errors: SPRING_MANUFACTURER_ONBOARDING_CREATE_ERRORS,
-  validate: validateManufacturerOnboardingItem,
+  validate: validateManufacturerOnboardingDetail,
   successStatuses: [201] as const,
 };
 export const SPRING_MANUFACTURER_ONBOARDING_PATCH = {
   errors: SPRING_MANUFACTURER_ONBOARDING_PATCH_ERRORS,
-  validate: validateManufacturerOnboardingItem,
+  validate: validateManufacturerOnboardingDetail,
   successStatuses: [200] as const,
 };
 export const SPRING_MANUFACTURER_ONBOARDING_PREVIEW = {
@@ -163,6 +212,41 @@ export const SPRING_MANUFACTURER_ONBOARDING_PREVIEW = {
 };
 export const SPRING_MANUFACTURER_ONBOARDING_SUBMIT = {
   errors: SPRING_MANUFACTURER_ONBOARDING_SUBMIT_ERRORS,
-  validate: validateManufacturerOnboardingItem,
+  validate: validateManufacturerOnboardingDetail,
+  successStatuses: [200] as const,
+};
+export const SPRING_MANUFACTURER_ONBOARDING_DIRECTOR_DECISION = {
+  errors: COMMAND_ERRORS,
+  validate: validateManufacturerOnboardingDetail,
+  successStatuses: [200] as const,
+};
+export const SPRING_MANUFACTURER_ONBOARDING_RAISE_ANOMALY = {
+  errors: COMMAND_ERRORS,
+  validate: validateManufacturerOnboardingDetail,
+  successStatuses: [200] as const,
+};
+export const SPRING_MANUFACTURER_ONBOARDING_RESOLVE_ANOMALY = {
+  errors: COMMAND_ERRORS,
+  validate: validateManufacturerOnboardingDetail,
+  successStatuses: [200] as const,
+};
+export const SPRING_MANUFACTURER_ONBOARDING_OBSERVATION_CLOSE = {
+  errors: COMMAND_ERRORS,
+  validate: validateManufacturerOnboardingDetail,
+  successStatuses: [200] as const,
+};
+export const SPRING_MANUFACTURER_ONBOARDING_DOC_LIST = {
+  errors: SPRING_MANUFACTURER_ONBOARDING_READ_ERRORS,
+  validate: validateManufacturerOnboardingDocumentList,
+};
+export const SPRING_MANUFACTURER_ONBOARDING_DOC_UPLOAD = {
+  errors: {
+    401: ["unauthenticated"],
+    403: [...WRITE, "not_editable"],
+    404: ["not_found"],
+    422: ["validation_failed"],
+    503: ["service_unavailable"],
+  } satisfies UpstreamErrors,
+  validate: validateManufacturerOnboardingDetail,
   successStatuses: [200] as const,
 };

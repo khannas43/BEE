@@ -93,7 +93,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/delegations", "/api/delegations/*/decision").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/register-revocations").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/register-revocations", "/api/register-revocations/*/decision").authenticated()
-                .requestMatchers(HttpMethod.GET, "/api/manufacturer-onboarding", "/api/manufacturer-onboarding/*", "/api/manufacturer-onboarding/*/submit").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/manufacturer-onboarding", "/api/manufacturer-onboarding/*", "/api/manufacturer-onboarding/*/submit",
+                    "/api/manufacturer-onboarding/*/documents").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/manufacturer-onboarding", "/api/manufacturer-onboarding/*/submit",
                     "/api/manufacturer-onboarding/*/director-decision", "/api/manufacturer-onboarding/*/anomalies",
                     "/api/manufacturer-onboarding/*/anomaly-resolution", "/api/manufacturer-onboarding/*/observation/close",

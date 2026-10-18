@@ -235,7 +235,13 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_application_delete_refused';
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF current_setting('bee.mob_trusted', true) = 'create' THEN
+      RETURN NEW;
+    END IF;
     RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_application_insert_via_trusted';
+  END IF;
+  IF current_setting('bee.mob_trusted', true) = 'orchestrator' THEN
+    RETURN NEW;
   END IF;
   IF OLD.state IN ('draft', 'automatic_checks_failed') AND NEW.state = OLD.state
      AND NEW.reference IS NOT DISTINCT FROM OLD.reference
@@ -252,7 +258,8 @@ CREATE TRIGGER manufacturer_onboarding_application_runtime_guard BEFORE INSERT O
 
 CREATE FUNCTION manufacturer_onboarding_event_runtime_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF current_user = 'bee_runtime' OR session_user = 'bee_runtime' THEN
+  IF (current_user = 'bee_runtime' OR session_user = 'bee_runtime')
+     AND coalesce(current_setting('bee.mob_trusted', true), '') <> 'orchestrator' THEN
     RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'manufacturer_onboarding_event_insert_via_orchestrator';
   END IF;
   RETURN NEW;
@@ -297,6 +304,7 @@ CREATE FUNCTION manufacturer_onboarding_trusted_create(
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE id uuid := gen_random_uuid(); ref text;
 BEGIN
+  PERFORM set_config('bee.mob_trusted', 'create', true);
   ref := manufacturer_onboarding_next_reference(p_year);
   INSERT INTO manufacturer_onboarding_application (id, reference, organisation_id, legal_name, draft_payload)
   VALUES (id, ref, p_organisation, btrim(p_legal_name), coalesce(p_draft, '{}'::jsonb));
@@ -316,6 +324,7 @@ DECLARE
     'facility_address_proof', 'signed_declaration', 'signed_agreement'];
   kind text;
   exp date;
+  plc text;
 BEGIN
   SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application;
   d := coalesce(a.draft_payload, '{}'::jsonb);
@@ -349,6 +358,28 @@ BEGIN
     CASE WHEN d->'authorisedSignatory' ?& ARRAY['name','designation'] THEN 'pass' ELSE 'fail' END,
     CASE WHEN d->'authorisedSignatory' ?& ARRAY['name','designation'] THEN NULL ELSE 'Authorised signatory incomplete' END);
   ok := ok AND (d->'authorisedSignatory' ?& ARRAY['name','designation']);
+  SELECT permittee_lifecycle INTO plc FROM organisation WHERE id = a.organisation_id;
+  INSERT INTO manufacturer_onboarding_automated_check (application_id, check_code, outcome, detail)
+  VALUES (p_application, 'eligible_applicant_organisation',
+    CASE WHEN plc = 'none' THEN 'pass' ELSE 'fail' END,
+    CASE WHEN plc = 'none' THEN NULL ELSE format('Organisation lifecycle %s blocks onboarding', plc) END);
+  ok := ok AND plc = 'none';
+  IF d->>'cin' IS NOT NULL AND EXISTS (
+    SELECT 1 FROM manufacturer_onboarding_application o2
+     WHERE o2.id <> p_application AND o2.state NOT IN ('rejected', 'revoked')
+       AND btrim(coalesce(o2.draft_payload->>'cin', '')) = btrim(d->>'cin')) THEN
+    INSERT INTO manufacturer_onboarding_automated_check (application_id, check_code, outcome, detail)
+    VALUES (p_application, 'cin_duplicate', 'fail', 'CIN already used on another live application');
+    ok := false;
+  END IF;
+  IF d->>'gstin' IS NOT NULL AND EXISTS (
+    SELECT 1 FROM manufacturer_onboarding_application o2
+     WHERE o2.id <> p_application AND o2.state NOT IN ('rejected', 'revoked')
+       AND btrim(coalesce(o2.draft_payload->>'gstin', '')) = btrim(d->>'gstin')) THEN
+    INSERT INTO manufacturer_onboarding_automated_check (application_id, check_code, outcome, detail)
+    VALUES (p_application, 'gstin_duplicate', 'fail', 'GSTIN already used on another live application');
+    ok := false;
+  END IF;
   FOREACH kind IN ARRAY req LOOP
     SELECT EXISTS (SELECT 1 FROM manufacturer_onboarding_document doc
       JOIN manufacturer_onboarding_document_version v ON v.document_id = doc.id
@@ -391,8 +422,9 @@ DECLARE
   checks_ok boolean;
   to_state text;
   notify_id uuid := gen_random_uuid();
-  notify_hash char(64) := md5(p_command_id::text || 'mob-notify-submit')::char(64);
+  notify_hash char(64) := md5(p_command_id::text || 'mob-notify-submit') || md5('mob-notify-submit|' || p_command_id::text);
 BEGIN
+  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     SELECT l.payment_id INTO out_payment_id FROM manufacturer_onboarding_payment_link l WHERE l.application_id = p_application;
@@ -429,6 +461,8 @@ BEGIN
   VALUES (pay_id, 'started', p_actor, p_role, 'Onboarding fee at simulated gateway'),
          (pay_id, 'paid', p_actor, p_role, 'Simulated auto-settle on submit');
   INSERT INTO manufacturer_onboarding_payment_link (application_id, payment_id) VALUES (p_application, pay_id);
+  INSERT INTO manufacturer_onboarding_automated_check (application_id, check_code, outcome, detail)
+  VALUES (p_application, 'payment_receipt', 'pass', receipt);
   INSERT INTO manufacturer_onboarding_fee_snapshot (application_id, amount_inr, tax_rate_percent, fee_rule_key, fee_rule_version, verification_status, source_reference, note)
   VALUES (p_application, p_amount_inr, 0, p_fee_rule_key, p_fee_rule_version, p_verification_status, p_source_reference, p_note);
   v_after := a.version + 1;
@@ -463,6 +497,7 @@ DECLARE
   obs_start date;
   obs_end date;
 BEGIN
+  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version, a.permittee_number INTO out_state, out_version, out_permittee_number FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     RETURN NEXT; RETURN;
@@ -504,6 +539,9 @@ BEGIN
   INSERT INTO manufacturer_onboarding_observation (application_id, started_on, ends_on) VALUES (p_application, obs_start, obs_end);
   INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
   VALUES (p_application, 'director_approve', 'director_review', 'active_observation', p_actor, 'director', p_note);
+  PERFORM notification_foundation_deliver(gen_random_uuid(), md5(p_command_id::text || 'mob-notify-info') || md5('mob-notify-info|' || p_command_id::text),
+    'manufacturer_onboarding_application', p_application, 'manufacturer_onboarding_information',
+    'Director approved; permittee in observation.', p_actor);
   INSERT INTO manufacturer_onboarding_command_evidence (command_id, application_id, purpose, payload_hash)
   VALUES (p_command_id, p_application, 'director_decision', p_payload_hash);
   RETURN QUERY SELECT 'active_observation'::text, v_after, pt;
@@ -516,6 +554,7 @@ RETURNS TABLE (out_state text, out_version integer)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE a manufacturer_onboarding_application%ROWTYPE; holds boolean; v_after integer;
 BEGIN
+  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     RETURN NEXT; RETURN;
@@ -551,6 +590,7 @@ RETURNS TABLE (out_state text, out_version integer)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE a manufacturer_onboarding_application%ROWTYPE; holds boolean; v_after integer; resume text; today date; ev uuid := gen_random_uuid();
 BEGIN
+  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version INTO out_state, out_version FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     RETURN NEXT; RETURN;
@@ -606,6 +646,7 @@ RETURNS TABLE (out_state text, out_version integer, out_permittee_number text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE a manufacturer_onboarding_application%ROWTYPE; today date; v_after integer; ev uuid := gen_random_uuid();
 BEGIN
+  PERFORM set_config('bee.mob_trusted', 'orchestrator', true);
   IF EXISTS (SELECT 1 FROM manufacturer_onboarding_command_evidence WHERE command_id = p_command_id) THEN
     SELECT a.state, a.version, a.permittee_number INTO out_state, out_version, out_permittee_number FROM manufacturer_onboarding_application a WHERE a.id = p_application;
     RETURN NEXT; RETURN;
@@ -637,7 +678,7 @@ END $$;
 CREATE FUNCTION manufacturer_onboarding_maint_observation_close_as_of(
   p_application uuid, p_as_of date)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
-DECLARE a manufacturer_onboarding_application%ROWTYPE; cmd uuid := gen_random_uuid(); hash char(64) := md5(random()::text)::char(64);
+DECLARE a manufacturer_onboarding_application%ROWTYPE; cmd uuid := gen_random_uuid(); hash char(64) := md5(random()::text) || md5('mob-maint-close|' || random()::text);
 BEGIN
   IF current_user <> 'bee_local_maint' AND session_user <> 'bee_local_maint' THEN
     RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'maint_only';
@@ -645,7 +686,7 @@ BEGIN
   SELECT * INTO a FROM manufacturer_onboarding_application WHERE id = p_application;
   IF NOT FOUND OR a.state <> 'active_observation' THEN RETURN 'not_found'; END IF;
   IF p_as_of < a.observation_ends_on THEN RETURN 'observation_not_ended'; END IF;
-  PERFORM * FROM manufacturer_onboarding_orchestrate_observation_close(
+  PERFORM manufacturer_onboarding_orchestrate_observation_close(
     p_application, (SELECT id FROM user_account WHERE username = 'bee.director' LIMIT 1), 'director', a.version, cmd, hash);
   RETURN 'active';
 END $$;
@@ -664,10 +705,98 @@ BEGIN
       AND NOT EXISTS (SELECT 1 FROM manufacturer_onboarding_anomaly an WHERE an.application_id = a.id AND an.resolved_at IS NULL)
     FOR UPDATE LOOP
     cmd := gen_random_uuid();
-    hash := md5(r.id::text || cmd::text)::char(64);
-    PERFORM * FROM manufacturer_onboarding_orchestrate_observation_close(r.id, dir, 'director', r.version, cmd, hash);
+    hash := md5(r.id::text || cmd::text) || md5('mob-batch-close|' || r.id::text || cmd::text);
+    PERFORM manufacturer_onboarding_orchestrate_observation_close(r.id, dir, 'director', r.version, cmd, hash);
     n := n + 1;
   END LOOP;
+  RETURN n;
+END $$;
+
+ALTER TABLE notification DROP CONSTRAINT IF EXISTS notification_subject_kind_check;
+ALTER TABLE notification ADD CONSTRAINT notification_subject_kind_check
+  CHECK (subject_kind IN ('registration_application', 'model_application', 'manufacturer_onboarding_application'));
+ALTER TABLE notification DROP CONSTRAINT IF EXISTS notification_model_application_id_check;
+ALTER TABLE notification ADD CONSTRAINT notification_model_application_id_check
+  CHECK (
+    (subject_kind = 'model_application' AND application_id IS NOT NULL AND application_id = subject_id)
+    OR (subject_kind = 'registration_application' AND application_id IS NULL)
+    OR (subject_kind = 'manufacturer_onboarding_application' AND application_id IS NULL)
+  );
+ALTER TABLE notification DROP CONSTRAINT IF EXISTS notification_kind_check;
+ALTER TABLE notification ADD CONSTRAINT notification_kind_check
+  CHECK (kind IN ('returned', 'rejected', 'fee_due', 'approved', 'applicant_resubmitted',
+    'manufacturer_onboarding_director_review', 'manufacturer_onboarding_information'));
+
+ALTER TABLE notification_command DROP CONSTRAINT IF EXISTS notification_command_subject_kind_check;
+ALTER TABLE notification_command ADD CONSTRAINT notification_command_subject_kind_check
+  CHECK (subject_kind IN ('registration_application', 'model_application', 'manufacturer_onboarding_application'));
+ALTER TABLE notification_command DROP CONSTRAINT IF EXISTS notification_command_kind_check;
+ALTER TABLE notification_command ADD CONSTRAINT notification_command_kind_check
+  CHECK (kind IN ('returned', 'rejected', 'fee_due', 'approved', 'applicant_resubmitted',
+    'manufacturer_onboarding_director_review', 'manufacturer_onboarding_information'));
+
+CREATE OR REPLACE FUNCTION notification_foundation_subject_message(p_kind text, p_id uuid, p_suffix text) RETURNS text
+LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
+DECLARE prefix text;
+BEGIN
+  IF p_kind = 'model_application' THEN
+    SELECT a.reference || ' (' || a.brand_name || ' ' || a.model_number || ') ' INTO prefix FROM model_application a WHERE a.id = p_id;
+  ELSIF p_kind = 'registration_application' THEN
+    SELECT a.reference || ' (' || a.brand_name || ') ' INTO prefix FROM registration_application a WHERE a.id = p_id;
+  ELSIF p_kind = 'manufacturer_onboarding_application' THEN
+    SELECT a.reference || ' (' || a.legal_name || ') ' INTO prefix FROM manufacturer_onboarding_application a WHERE a.id = p_id;
+  ELSE
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'workflow_subject_kind_invalid';
+  END IF;
+  IF prefix IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_subject_missing';
+  END IF;
+  RETURN prefix || p_suffix;
+END $$;
+
+CREATE OR REPLACE FUNCTION notification_foundation_fan_out(
+  p_subject_kind text, p_subject_id uuid, p_kind text, p_message text
+) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE n integer; org_id uuid;
+BEGIN
+  IF p_subject_kind = 'manufacturer_onboarding_application' THEN
+    IF p_kind = 'manufacturer_onboarding_director_review' THEN
+      INSERT INTO notification (recipient_account_id, application_id, subject_kind, subject_id, kind, message)
+      SELECT DISTINCT ra.user_id, NULL::uuid, p_subject_kind, p_subject_id, p_kind, p_message
+        FROM role_assignment ra
+        JOIN capability_grant g ON g.role = ra.role AND g.capability = 'manufacturer_onboarding_director'
+        JOIN user_account u ON u.id = ra.user_id
+       WHERE ra.active AND u.status = 'active';
+    ELSIF p_kind = 'manufacturer_onboarding_information' THEN
+      INSERT INTO notification (recipient_account_id, application_id, subject_kind, subject_id, kind, message)
+      SELECT DISTINCT ra.user_id, NULL::uuid, p_subject_kind, p_subject_id, p_kind, p_message
+        FROM role_assignment ra
+        JOIN user_account u ON u.id = ra.user_id
+       WHERE ra.active AND u.status = 'active' AND ra.role IN ('finance', 'programme') AND ra.scope = 'all';
+    ELSE
+      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'notification_kind_invalid';
+    END IF;
+    GET DIAGNOSTICS n = ROW_COUNT;
+    RETURN n;
+  END IF;
+  IF p_subject_kind = 'model_application' THEN
+    SELECT organisation_id INTO org_id FROM model_application WHERE id = p_subject_id;
+  ELSE
+    SELECT organisation_id INTO org_id FROM registration_application WHERE id = p_subject_id;
+  END IF;
+  IF org_id IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_subject_missing';
+  END IF;
+  INSERT INTO notification (recipient_account_id, application_id, subject_kind, subject_id, kind, message)
+  SELECT DISTINCT m.user_id,
+         CASE WHEN p_subject_kind = 'model_application' THEN p_subject_id ELSE NULL END,
+         p_subject_kind, p_subject_id, p_kind, p_message
+    FROM organisation_membership m
+    JOIN organisation o ON o.id = m.organisation_id
+    JOIN user_account u ON u.id = m.user_id
+   WHERE m.organisation_id = org_id AND m.active AND o.status = 'active' AND u.status = 'active'
+     AND now() >= m.valid_from AND now() < m.valid_to;
+  GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
 END $$;
 
@@ -724,6 +853,10 @@ BEGIN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.manufacturer_onboarding_trusted_create(uuid, text, integer, jsonb) TO bee_runtime', home_schema);
     EXECUTE format('REVOKE SELECT, UPDATE ON %I.manufacturer_onboarding_allocator FROM bee_runtime', home_schema);
     EXECUTE format('REVOKE INSERT ON %I.manufacturer_onboarding_event FROM bee_runtime', home_schema);
+    EXECUTE format('GRANT SELECT ON %I.manufacturer_onboarding_event TO bee_runtime', home_schema);
+    EXECUTE format('GRANT SELECT ON %I.manufacturer_onboarding_anomaly, %I.manufacturer_onboarding_director_decision, %I.manufacturer_onboarding_observation, %I.manufacturer_onboarding_permittee_activation TO bee_runtime',
+      home_schema, home_schema, home_schema, home_schema);
+    EXECUTE format('GRANT SELECT ON %I.manufacturer_onboarding_payment_link TO bee_runtime', home_schema);
     EXECUTE format('GRANT SELECT, INSERT ON %I.manufacturer_onboarding_document, %I.manufacturer_onboarding_document_version TO bee_runtime', home_schema, home_schema);
     EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %I.manufacturer_onboarding_command_evidence FROM bee_runtime', home_schema);
     EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %I.manufacturer_onboarding_automated_check FROM bee_runtime', home_schema);

@@ -40,13 +40,15 @@ public class ManufacturerOnboardingService {
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     private final ManufacturerOnboardingRepository repo;
+    private final ManufacturerOnboardingDocumentRepository documents;
     private final MasterDataRepository masters;
     private final IdempotencyRepository idempotency;
     private final ObjectMapper json;
 
-    public ManufacturerOnboardingService(ManufacturerOnboardingRepository repo, MasterDataRepository masters, IdempotencyRepository idempotency,
-                                         ObjectMapper json) {
+    public ManufacturerOnboardingService(ManufacturerOnboardingRepository repo, ManufacturerOnboardingDocumentRepository documents,
+                                         MasterDataRepository masters, IdempotencyRepository idempotency, ObjectMapper json) {
         this.repo = repo;
+        this.documents = documents;
         this.masters = masters;
         this.idempotency = idempotency;
         this.json = json;
@@ -76,7 +78,19 @@ public class ManufacturerOnboardingService {
         if (row.isEmpty()) {
             return error(scope.isEmpty() ? HttpStatus.FORBIDDEN : HttpStatus.NOT_FOUND, scope.isEmpty() ? "no_read_scope" : "not_found");
         }
-        return ResponseEntity.ok(view(row.get()));
+        return ResponseEntity.ok(detailView(row.get()));
+    }
+
+    public ResponseEntity<Map<String, Object>> listDocuments(Caller caller, UUID id) {
+        var scope = ManufacturerOnboardingPolicy.readScope(caller);
+        Optional<ManufacturerOnboardingRepository.Row> row = scope.isEmpty() ? Optional.empty() : repo.find(id).filter(scope::canRead);
+        if (row.isEmpty()) {
+            return error(scope.isEmpty() ? HttpStatus.FORBIDDEN : HttpStatus.NOT_FOUND, scope.isEmpty() ? "no_read_scope" : "not_found");
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("applicationId", id.toString());
+        body.put("documents", documentHeads(id));
+        return ResponseEntity.ok(body);
     }
 
     @Transactional
@@ -100,8 +114,9 @@ public class ManufacturerOnboardingService {
         if (!idempotency.begin(caller.accountId(), "POST", ROUTE_CREATE, NIL, idempotencyKey, hash)) {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
-        var row = repo.create(org.get(), legalName, LocalDate.now(IST).getYear());
-        Map<String, Object> view = view(row);
+        JsonNode draft = body == null ? null : body.get("draft");
+        var row = repo.create(org.get(), legalName, LocalDate.now(IST).getYear(), draft);
+        Map<String, Object> view = detailView(row);
         idempotency.complete(caller.accountId(), "POST", ROUTE_CREATE, NIL, idempotencyKey, 201, json.valueToTree(view).toString(), row.version());
         return ResponseEntity.status(HttpStatus.CREATED).body(view);
     }
@@ -116,18 +131,20 @@ public class ManufacturerOnboardingService {
             return error(HttpStatus.FORBIDDEN, "no_read_scope");
         }
         Optional<Integer> version = intField(body, "version");
-        String legalName = text(body, "legalName");
-        if (version.isEmpty() || legalName == null) {
+        String legalName = body != null && body.has("legalName") ? text(body, "legalName") : null;
+        JsonNode draft = body == null ? null : body.get("draft");
+        if (version.isEmpty() || (legalName == null && (draft == null || draft.isNull()))) {
             return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }
-        if (repo.findOwned(id, org.get()).isEmpty()) {
-            return error(HttpStatus.NOT_FOUND, "not_found");
+        Optional<ManufacturerOnboardingRepository.Row> owned = repo.findOwned(id, org.get());
+        if (owned.isEmpty() || !ManufacturerOnboardingPolicy.editable(owned.get().state())) {
+            return error(owned.isEmpty() ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN, owned.isEmpty() ? "not_found" : "not_editable");
         }
-        Optional<ManufacturerOnboardingRepository.Row> updated = repo.patchDraft(id, org.get(), version.get(), legalName);
+        Optional<ManufacturerOnboardingRepository.Row> updated = repo.patchDraft(id, org.get(), version.get(), legalName, draft);
         if (updated.isEmpty()) {
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
-        return ResponseEntity.ok(view(updated.get()));
+        return ResponseEntity.ok(detailView(updated.get()));
     }
 
     public ResponseEntity<Map<String, Object>> submitPreview(Caller caller, UUID id) {
@@ -139,7 +156,7 @@ public class ManufacturerOnboardingService {
         if (row.isEmpty()) {
             return error(HttpStatus.NOT_FOUND, "not_found");
         }
-        if (!"draft".equals(row.get().state())) {
+        if (!submittable(row.get().state())) {
             return error(HttpStatus.FORBIDDEN, "not_submittable");
         }
         Optional<FeeRule> fee = masters.feeRule("REG", "manufacturer_onboarding", LocalDate.now(IST));
@@ -173,7 +190,7 @@ public class ManufacturerOnboardingService {
         if (row.isEmpty()) {
             return error(HttpStatus.NOT_FOUND, "not_found");
         }
-        if (!"draft".equals(row.get().state())) {
+        if (!submittable(row.get().state())) {
             return error(HttpStatus.FORBIDDEN, "not_submittable");
         }
         Optional<FeeRule> fee = masters.feeRule("REG", "manufacturer_onboarding", LocalDate.now(IST));
@@ -188,7 +205,7 @@ public class ManufacturerOnboardingService {
         String payloadHash = payloadHash(hash);
         MasterVersion fv = fee.get().version();
         var result = repo.orchestrateSubmit(id, caller.accountId(), actorRole(caller), version.get(), fee.get().amountInr(), fv.ruleKey(), fv.version(),
-            fv.verification().name().toLowerCase(), fv.sourceReference(), fv.note(), commandId, payloadHash, false);
+            fv.verification().name().toLowerCase(), fv.sourceReference(), fv.note(), commandId, payloadHash);
         if (result.isEmpty() || result.get().outState() == null) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE_SUBMIT, id, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
@@ -250,15 +267,10 @@ public class ManufacturerOnboardingService {
     @Transactional
     public ResponseEntity<Map<String, Object>> closeObservation(Caller caller, UUID id, String idempotencyKey, JsonNode body) {
         return orchestratorAction(caller, id, idempotencyKey, body, ROUTE_OBS_CLOSE, "observation_close", (commandId, payloadHash, version, node) -> {
-            LocalDate asOf = null;
-            if (node != null && node.hasNonNull("asOf")) {
-                try {
-                    asOf = LocalDate.parse(node.get("asOf").asText());
-                } catch (Exception e) {
-                    return Optional.of(error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed"));
-                }
+            if (node != null && node.has("asOf")) {
+                return Optional.of(error(HttpStatus.UNPROCESSABLE_ENTITY, "clock_override_refused"));
             }
-            return repo.orchestrateObservationClose(id, caller.accountId(), actorRole(caller), version, commandId, payloadHash, asOf)
+            return repo.orchestrateObservationClose(id, caller.accountId(), actorRole(caller), version, commandId, payloadHash)
                 .map(r -> finishOrchestrator(caller, id, "POST", ROUTE_OBS_CLOSE, idempotencyKey, r))
                 .or(() -> Optional.of(error(HttpStatus.CONFLICT, "version_conflict")));
         });
@@ -314,7 +326,7 @@ public class ManufacturerOnboardingService {
             return error(status, state);
         }
         ManufacturerOnboardingRepository.Row row = repo.find(id).orElseThrow();
-        Map<String, Object> view = view(row);
+        Map<String, Object> view = detailView(row);
         view.put("outcome", state);
         if (result.paymentId() != null) {
             view.put("paymentId", result.paymentId().toString());
@@ -368,6 +380,65 @@ public class ManufacturerOnboardingService {
         }
         m.put("createdAt", r.createdAt().toString());
         return m;
+    }
+
+    private Map<String, Object> detailView(ManufacturerOnboardingRepository.Row r) {
+        Map<String, Object> m = view(r);
+        repo.draftPayloadJson(r.id()).ifPresent(raw -> {
+            try {
+                m.put("draft", json.readTree(raw));
+            } catch (Exception ignored) {
+                m.put("draft", Map.of());
+            }
+        });
+        m.put("documents", documentHeads(r.id()));
+        m.put("automatedChecks", repo.latestChecks(r.id()).stream().map(c -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("checkCode", c.checkCode());
+            row.put("outcome", c.outcome());
+            row.put("detail", c.detail());
+            row.put("checkedAt", c.checkedAt().toString());
+            return row;
+        }).toList());
+        m.put("lifecycle", repo.lifecycle(r.id()).stream().map(e -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("eventKind", e.eventKind());
+            row.put("fromState", e.fromState());
+            row.put("toState", e.toState());
+            row.put("actorRole", e.actorRole());
+            row.put("detail", e.detail());
+            row.put("occurredAt", e.occurredAt().toString());
+            return row;
+        }).toList());
+        m.put("anomalies", repo.anomalies(r.id()).stream().map(a -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("raisedByRole", a.raisedByRole());
+            row.put("reason", a.reason());
+            row.put("resolution", a.resolution());
+            row.put("raisedAt", a.raisedAt().toString());
+            if (a.resolvedAt() != null) {
+                row.put("resolvedAt", a.resolvedAt().toString());
+            }
+            return row;
+        }).toList());
+        return m;
+    }
+
+    private List<Map<String, Object>> documentHeads(UUID applicationId) {
+        return documents.list(applicationId).stream().map(d -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("documentKind", d.documentKind());
+            row.put("latestVersion", d.latestVersion());
+            row.put("status", d.status());
+            if (d.expiresOn() != null) {
+                row.put("expiresOn", d.expiresOn().toString());
+            }
+            return row;
+        }).toList();
+    }
+
+    private static boolean submittable(String state) {
+        return "draft".equals(state) || "automatic_checks_failed".equals(state);
     }
 
     private static Map<String, Object> feeView(FeeRule fee) {

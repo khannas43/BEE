@@ -147,10 +147,19 @@ public class ManufacturerOnboardingController {
             : service.closeObservation(resolved.caller(), uuid(id), key, body);
     }
 
+    @GetMapping("/api/manufacturer-onboarding/{id}/documents")
+    public ResponseEntity<Map<String, Object>> listDocuments(@AuthenticationPrincipal Jwt jwt, @PathVariable("id") String id) {
+        var resolved = callers.resolve(jwt);
+        return resolved.caller() == null ? denied(resolved.denial()) : service.listDocuments(resolved.caller(), uuid(id));
+    }
+
     @PostMapping(path = "/api/manufacturer-onboarding/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> upload(@AuthenticationPrincipal Jwt jwt, @PathVariable("id") String id,
                                                       @RequestParam(value = "file", required = false) MultipartFile file,
-                                                      @RequestParam(value = "label", required = false) String label) {
+                                                      @RequestParam(value = "documentKind", required = false) String documentKind,
+                                                      @RequestParam(value = "label", required = false) String label,
+                                                      @RequestParam(value = "issueOn", required = false) String issueOn,
+                                                      @RequestParam(value = "expiresOn", required = false) String expiresOn) {
         var resolved = callers.resolve(jwt);
         if (resolved.caller() == null) {
             return denied(resolved.denial());
@@ -170,13 +179,21 @@ public class ManufacturerOnboardingController {
         if (state.isEmpty() || !ManufacturerOnboardingPolicy.editable(state.get())) {
             return ApiErrors.response(HttpStatus.FORBIDDEN, "not_editable");
         }
+        String kind = documentKind == null || documentKind.isBlank() ? "trade_licence" : documentKind.trim();
+        if (!ManufacturerOnboardingDocumentRepository.DOCUMENT_KINDS.contains(kind)) {
+            return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+        }
         try {
             byte[] bytes = file.getBytes();
             byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes);
-            documents.recordVersion(appId, HexFormat.of().formatHex(digest), bytes.length,
+            java.time.LocalDate issue = issueOn == null || issueOn.isBlank() ? null : java.time.LocalDate.parse(issueOn);
+            java.time.LocalDate expiry = expiresOn == null || expiresOn.isBlank() ? null : java.time.LocalDate.parse(expiresOn);
+            documents.recordVersion(appId, kind, HexFormat.of().formatHex(digest), bytes.length,
                 file.getOriginalFilename() == null ? "document.pdf" : file.getOriginalFilename(),
-                label == null || label.isBlank() ? "Trade licence" : label, resolved.caller().accountId());
+                label == null || label.isBlank() ? kind : label, issue, expiry, resolved.caller().accountId());
             return service.get(resolved.caller(), appId);
+        } catch (IllegalArgumentException e) {
+            return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         } catch (Exception e) {
             return ApiErrors.response(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
         }

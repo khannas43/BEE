@@ -34,6 +34,7 @@ export const ERROR_MESSAGES = {
   not_permitted: "This role cannot perform this action.",
   observation_not_ended: "The observation period has not ended yet.",
   anomaly_open: "An anomaly is already open on this application.",
+  clock_override_refused: "A caller-supplied date cannot override the observation clock.",
   rule_not_available: "Required category, standard or fee rules are not available.",
   validation_failed: "The request could not be accepted.",
   role_not_permitted: "This role cannot perform this action.",

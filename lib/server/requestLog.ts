@@ -69,7 +69,12 @@ export type WebRoute =
   | "/api/runtime/demo"
   | "/api/runtime/manufacturer-onboarding"
   | "/api/runtime/manufacturer-onboarding/{id}"
-  | "/api/runtime/manufacturer-onboarding/{id}/submit";
+  | "/api/runtime/manufacturer-onboarding/{id}/submit"
+  | "/api/runtime/manufacturer-onboarding/{id}/director-decision"
+  | "/api/runtime/manufacturer-onboarding/{id}/anomalies"
+  | "/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution"
+  | "/api/runtime/manufacturer-onboarding/{id}/observation/close"
+  | "/api/runtime/manufacturer-onboarding/{id}/documents";
 
 export type SpringRoute =
   | "/actuator/health"
@@ -190,6 +195,14 @@ export function springRoute(path: string): SpringRoute {
     return "/api/model-applications/{id}/documents/{documentId}/versions/{versionId}/content";
   }
   if (/^\/api\/model-applications\/[^/]+$/.test(p)) return "/api/model-applications/{id}";
+  if (p === "/api/manufacturer-onboarding") return "/api/manufacturer-onboarding";
+  if (/^\/api\/manufacturer-onboarding\/[^/]+\/submit$/.test(p)) return "/api/manufacturer-onboarding/{id}/submit";
+  if (/^\/api\/manufacturer-onboarding\/[^/]+\/director-decision$/.test(p)) return "/api/manufacturer-onboarding/{id}/director-decision";
+  if (/^\/api\/manufacturer-onboarding\/[^/]+\/anomalies$/.test(p)) return "/api/manufacturer-onboarding/{id}/anomalies";
+  if (/^\/api\/manufacturer-onboarding\/[^/]+\/anomaly-resolution$/.test(p)) return "/api/manufacturer-onboarding/{id}/anomaly-resolution";
+  if (/^\/api\/manufacturer-onboarding\/[^/]+\/observation\/close$/.test(p)) return "/api/manufacturer-onboarding/{id}/observation/close";
+  if (/^\/api\/manufacturer-onboarding\/[^/]+\/documents$/.test(p)) return "/api/manufacturer-onboarding/{id}/documents";
+  if (/^\/api\/manufacturer-onboarding\/[^/]+$/.test(p)) return "/api/manufacturer-onboarding/{id}";
   return "/api/model-applications/{id}";
 }
 

@@ -16,7 +16,7 @@ public final class ManufacturerOnboardingPolicy {
     }
 
     public static boolean editable(String state) {
-        return "draft".equals(state);
+        return "draft".equals(state) || "automatic_checks_failed".equals(state);
     }
 
     public static Optional<UUID> filingOrganisation(Caller caller) {
@@ -45,7 +45,7 @@ public final class ManufacturerOnboardingPolicy {
             } else if ("director".equals(g.role()) && "all".equals(g.scope())) {
                 stages.addAll(List.of("director_review", "active_observation", "active", "on_hold", "rejected", "revoked", "automatic_checks_failed", "submitted"));
             } else if (("finance".equals(g.role()) || "programme".equals(g.role())) && "all".equals(g.scope())) {
-                stages.addAll(List.of("active_observation", "active", "on_hold"));
+                stages.addAll(List.of("director_review", "submitted", "automatic_checks_failed", "active_observation", "active", "on_hold"));
             }
         }
         return new ReadScope(orgs, stages);
@@ -58,6 +58,9 @@ public final class ManufacturerOnboardingPolicy {
         }
         if (caller.holds("programme", "all")) {
             return "programme";
+        }
+        if (caller.holds("director", "all")) {
+            return "director";
         }
         return null;
     }

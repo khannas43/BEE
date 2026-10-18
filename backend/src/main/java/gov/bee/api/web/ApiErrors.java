@@ -31,6 +31,7 @@ public final class ApiErrors {
         Map.entry("not_permitted", "This role cannot perform this action."),
         Map.entry("observation_not_ended", "The observation period has not ended yet."),
         Map.entry("anomaly_open", "An anomaly is already open on this application."),
+        Map.entry("clock_override_refused", "A caller-supplied date cannot override the observation clock."),
         Map.entry("rule_not_available", "Required category, standard or fee rules are not available."),
         Map.entry("validation_failed", "The request could not be accepted."),
         Map.entry("role_not_permitted", "This role cannot perform this action."),

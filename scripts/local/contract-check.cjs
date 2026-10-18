@@ -202,6 +202,42 @@ const DELEGATIONS_UPSTREAM = {
 };
 const DELEGATION_DECISION_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...DELEGATION_RESOLVER, "role_not_permitted", "segregation_refused"], 404: ["not_found"], 409: ["proposal_not_pending", "delegation_not_active", "effective_date_passed", "delegate_not_eligible", "idempotency_key_conflict", "idempotency_in_progress"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const REG_UPLOAD_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_editable"], 404: ["not_found"], 409: [...REG_IDEM], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
+// WP03 optimized manufacturer onboarding. Keep equal to lib/server/contracts/manufacturer-onboarding.ts and the artifact.
+const MOB_ROUTE = "/api/runtime/manufacturer-onboarding";
+const MOB_ONE_ROUTE = "/api/runtime/manufacturer-onboarding/{id}";
+const MOB_SUBMIT_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/submit";
+const MOB_DIRECTOR_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/director-decision";
+const MOB_ANOMALY_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/anomalies";
+const MOB_RESOLVE_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution";
+const MOB_OBS_CLOSE_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/observation/close";
+const MOB_DOCS_ROUTE = "/api/runtime/manufacturer-onboarding/{id}/documents";
+const MOB_RESOLVER = ["mfa_required", "no_active_account", "no_effective_role"];
+const MOB_READ = [...MOB_RESOLVER, "no_read_scope"];
+const MOB_WRITE = [...MOB_RESOLVER, "no_write_scope"];
+const MOB_IDEM = ["idempotency_key_conflict", "idempotency_in_progress"];
+const MOB_COMMAND_UPSTREAM = {
+  POST: {
+    401: ["unauthenticated"],
+    403: [...MOB_RESOLVER, "not_permitted", "segregation_refused", "organisation_not_eligible"],
+    404: ["not_found"],
+    409: ["version_conflict", "anomaly_open", "observation_not_ended", ...MOB_IDEM],
+    422: ["validation_failed", "idempotency_key_required", "clock_override_refused"],
+    503: ["service_unavailable"],
+  },
+};
+const MOB_LIST_UPSTREAM = {
+  GET: { 401: ["unauthenticated"], 403: MOB_READ, 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: MOB_WRITE, 409: MOB_IDEM, 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+};
+const MOB_READ_UPSTREAM = {
+  GET: { 401: ["unauthenticated"], 403: MOB_READ, 404: ["not_found"], 503: ["service_unavailable"] },
+  PATCH: { 401: ["unauthenticated"], 403: [...MOB_WRITE, "not_editable"], 404: ["not_found"], 409: ["version_conflict", ...MOB_IDEM], 422: ["validation_failed"], 503: ["service_unavailable"] },
+};
+const MOB_SUBMIT_UPSTREAM = {
+  GET: { 401: ["unauthenticated"], 403: [...MOB_WRITE, "not_submittable"], 404: ["not_found"], 422: ["rule_not_available"], 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: [...MOB_WRITE, "organisation_not_eligible", "not_submittable"], 404: ["not_found"], 409: ["version_conflict", ...MOB_IDEM], 422: ["validation_failed", "idempotency_key_required", "rule_not_available"], 503: ["service_unavailable"] },
+};
+const MOB_DOC_UPLOAD_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...MOB_WRITE, "not_editable"], 404: ["not_found"], 422: ["validation_failed"], 503: ["service_unavailable"] } };
 const upstreamLogRoute = (route, method) => {
   if (route === "/api/runtime/me") return "/api/me";
   if (route === VERIFICATION_ROUTE) return "/api/public/verification";
@@ -715,7 +751,7 @@ async function plantedValues(sessionJar, m0) {
   async function exerciseStandInPairs(route, url, method, jar, upstreamTable = SUBMIT_UPSTREAM) {
     const op = doc.paths[route]?.[method.toLowerCase()];
     if (!op) return;
-    const uploadMultipart = (route === DOC_LIST_ROUTE || route === REG_DOCS_ROUTE) && method === "POST";
+    const uploadMultipart = (route === DOC_LIST_ROUTE || route === REG_DOCS_ROUTE || route === MOB_DOCS_ROUTE) && method === "POST";
     for (const [status, spec] of Object.entries(op.responses)) {
       const st = Number(status);
       if (st === 200 || st === 201) continue;
@@ -826,6 +862,19 @@ async function plantedValues(sessionJar, m0) {
     await exerciseStandInPairs(REG_DOCS_ROUTE, `${REG_URL}/documents`, "GET", sessionJar, REG_READ_UPSTREAM);
     await exerciseStandInPairs(REG_DOCS_ROUTE, `${REG_URL}/documents`, "POST", sessionJar, REG_UPLOAD_UPSTREAM);
     await exerciseStandInPairs(REG_CONTENT_ROUTE, `${REG_URL}/documents/${crypto.randomUUID()}/versions/${crypto.randomUUID()}/content`, "GET", sessionJar, REG_READ_UPSTREAM);
+    const MOB_URL = `/api/runtime/manufacturer-onboarding/${NOVA_APP}`;
+    await exerciseStandInPairs(MOB_ROUTE, MOB_ROUTE, "GET", sessionJar, MOB_LIST_UPSTREAM);
+    await exerciseStandInPairs(MOB_ROUTE, MOB_ROUTE, "POST", sessionJar, MOB_LIST_UPSTREAM);
+    await exerciseStandInPairs(MOB_ONE_ROUTE, MOB_URL, "GET", sessionJar, MOB_READ_UPSTREAM);
+    await exerciseStandInPairs(MOB_ONE_ROUTE, MOB_URL, "PATCH", sessionJar, MOB_READ_UPSTREAM);
+    await exerciseStandInPairs(MOB_SUBMIT_ROUTE, `${MOB_URL}/submit`, "GET", sessionJar, MOB_SUBMIT_UPSTREAM);
+    await exerciseStandInPairs(MOB_SUBMIT_ROUTE, `${MOB_URL}/submit`, "POST", sessionJar, MOB_SUBMIT_UPSTREAM);
+    await exerciseStandInPairs(MOB_DIRECTOR_ROUTE, `${MOB_URL}/director-decision`, "POST", sessionJar, MOB_COMMAND_UPSTREAM);
+    await exerciseStandInPairs(MOB_ANOMALY_ROUTE, `${MOB_URL}/anomalies`, "POST", sessionJar, MOB_COMMAND_UPSTREAM);
+    await exerciseStandInPairs(MOB_RESOLVE_ROUTE, `${MOB_URL}/anomaly-resolution`, "POST", sessionJar, MOB_COMMAND_UPSTREAM);
+    await exerciseStandInPairs(MOB_OBS_CLOSE_ROUTE, `${MOB_URL}/observation/close`, "POST", sessionJar, MOB_COMMAND_UPSTREAM);
+    await exerciseStandInPairs(MOB_DOCS_ROUTE, `${MOB_URL}/documents`, "GET", sessionJar, MOB_READ_UPSTREAM);
+    await exerciseStandInPairs(MOB_DOCS_ROUTE, `${MOB_URL}/documents`, "POST", sessionJar, MOB_DOC_UPLOAD_UPSTREAM);
   } finally {
     contract.setSource("live");
     await fake.close();

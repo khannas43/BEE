@@ -1,10 +1,15 @@
 # SNL WP02D — common work projection, queues and SLA read model (Brief 19D-0)
 
 **Status:** Design and analysis only (19D-0). No migrations, Java, API, OpenAPI, BFF or UI on this slice.
+
 **Branch:** `cursor/snl-wp02d-work-queue-design`
+
 **Base:** `main` @ `d981bb6` (post WP02B acceptance through Brief 19B-2B)
+
 **Governing source:** *SnL Disha Advisory Manual* (`SnL_Disha_Advisory_Manual.pdf`, printed footer page numbers verified with `pdftotext` from `/Users/sameerkhanna/Documents/Documents/BEE/SnL_Disha_Advisory_Manual.pdf`, 18 October 2026)
+
 **Depends on:** Accepted V69–V72; [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESIGN.md) (19C writes must populate the same projection keys once wired)
+
 **Related:** [SNL_WP01_ROLE_MATRIX.md](SNL_WP01_ROLE_MATRIX.md), [docs/BEE_DECISIONS.md](../BEE_DECISIONS.md) (B14, B15, D10), [docs/wp07/WP07.1j_INBOX.md](../wp07/WP07.1j_INBOX.md), **BL-257**, **BL-128**, **BL-129**, **BL-135**, **BL-253**, **BL-255**, **BL-256**
 
 ---
@@ -71,9 +76,11 @@ The manual expects visible processing timelines and applicant response windows (
 | `taskStatus` | enum? | `workflow_task.status` | `open`, `completed`, `cancelled` |
 | `taskOwnerRole` | string? | `workflow_task.owner_role` | programme, iame, … |
 | `taskOwnerAccountId` | uuid? | `workflow_task.owner_account_id` | **Officer/supervisor only** |
-| `assigneeAccountId` | uuid? | `assignment` active row for stage | My work match key for IAME/reviewer |
+| `assigneeAccountId` | uuid? | resolved `assignment` active row for stage | My work match key for IAME/reviewer; null when zero or ambiguous |
+| `activeAssignmentCount` | integer | count of active assignment rows for subject/stage | Prevents a join from duplicating queue rows |
+| `assignmentStatus` | enum | derived | `unassigned`, `assigned`, `ambiguous`; never choose an arbitrary user when count > 1 |
 | `assigneeDisplay` | string? | identity join | **Supervisor only**; optional redacted hash for officers |
-| `taskCreatedAt` | instant? | first `workflow_task_event` `created` | **Task age** anchor |
+| `taskCreatedAt` | instant? | `workflow_task.created_at` | **Task age** anchor; creation event is audit corroboration, not the read anchor |
 | `taskVersion` | integer? | `workflow_task.version` | For future reassign/terminal commands |
 
 ### 4.3 SLA, due date, age, pause (manual §3.10; **A17**)
@@ -85,21 +92,21 @@ The manual expects visible processing timelines and applicant response windows (
 | `policyKey` | string? | `workflow_sla_policy_version.policy_key` | e.g. `snl_return_response` |
 | `policyVersion` | integer? | pinned on clock | Immutable after task create |
 | `policyAnchorAt` | instant? | clock row | Return/resubmit anchor (Asia/Kolkata date for version pick at write time) |
-| `dueAt` | instant? | `workflow_task.due_at` | Immutable after insert (V69); officer/applicant display |
-| `applicantRespondBy` | instant? | same as `dueAt` when clock paused for applicant | Table 2 row 5 / Table 3 row 5 context (**BL-256** job separate) |
+| `dueAt` | instant? | `workflow_task.due_at` | Immutable after insert (V69); provisional pinned-policy deadline |
+| `applicantRespondBy` | instant? | same as `dueAt` when the current portal notification instructs the applicant to respond | **Provisional portal date only**; not the Manual's 60-day statutory outcome deadline (**BL-253**, **BL-256**) |
 | `bureauWorkingMillis` | long | `WorkingDaySla.elapsedWorkingMillis(start, asOf, calendar, pauses)` | Excludes applicant pauses |
 | `pausedMillis` | long | sum of applicant pause intervals | Open pause uses `asOf = now()` |
 | `taskAgeMillis` | long | `now - taskCreatedAt` | Wall-clock age for sorting |
-| `overdue` | boolean | `clockState == running && now > dueAt` | **B14:** false when no policy/due |
+| `overdue` | boolean | `dueAt != null && now > dueAt` | Deadline-passed flag regardless of responsibility; pair with `clockState` / `awaitingApplicant` |
 | `escalationStatus` | enum | derived | `none`, `approaching_due`, `overdue` — **no** auto-escalation recipient in 19D (**BL-148**) |
 
 **Calculation rules (normative for 19D-A):**
 
-- **Calendar:** load `workflow_working_day_calendar` + closures for the policy’s `calendar_key` (same as `SnlReturnResponsePolicyRepository`).
+- **Calendar:** load `workflow_calendar` + `workflow_calendar_closure` for the policy’s `calendar_key` (same as `SnlReturnResponsePolicyRepository`).
 - **Pause intervals:** `WorkingDaySla.applicantPausesFromClockEvents(events, asOf)` on the task’s clock events ordered by `occurred_at`.
 - **Bureau elapsed:** from clock `start` event to `asOf`, minus pauses; if `stopped`, cap at `stop` event.
 - **Due date:** persisted `due_at` at task creation (return orchestrate); **do not recompute** on read (replay/idempotency safety).
-- **Applicant hold notice:** manual Table 2 row 4 (**12 working days** from receipt for brand discrepancy communication, p. 29) vs §3.10 narrative (**7 days**, p. 28) vs Table 3 row 4 (**15 days**, p. 30 for model) — projection **displays the policy row used at write time** only (**BL-255**); 19D does not reconcile tables.
+- **Deadline meaning:** manual Table 2 row 4 (**12 working days** from receipt for brand discrepancy communication, p. 29) vs §3.10 narrative (**7 days**, p. 28) vs Table 3 row 4 (**15 days**, p. 30 for model), while applicant revised documents have a separate **60-day** window (Table 2 row 5, p. 29; Table 3 row 5, p. 30). The current V70 policy is provisional and its portal message says “respond by”; the projection displays that pinned value but must not label it as the Manual's statutory 60-day deadline (**BL-253**, **BL-255**, **BL-256**).
 
 ### 4.4 Discrepancy and return cycle
 
@@ -119,9 +126,11 @@ The manual expects visible processing timelines and applicant response windows (
 
 | Field | Type | Source | Notes |
 | --- | --- | --- | --- |
-| `lastApplicantNotificationAt` | instant? | latest delivered `notification` / `notification_command` for org fan-out kinds | returned, applicant_resubmitted (officer), fee_due, approved — **registration/model kinds from wiring** |
-| `lastApplicantNotificationKind` | string? | kind column | No message body in list projection |
-| `unreadNotificationCount` | integer? | bell query scope | Optional embed; may stay on separate notifications API (**BL-171**) |
+| `lastNotificationAt` | instant? | latest `notification.created_at` where `recipient_account_id = caller` | Strictly caller-scoped; never subject-wide |
+| `lastNotificationKind` | string? | same caller-scoped row | Applicant may see `returned`/fee/outcome kinds; officer may see `applicant_resubmitted` |
+| `unreadNotificationCount` | integer? | caller's bell-query scope | Optional embed; may stay on separate notifications API (**BL-171**) |
+
+`applicant_resubmitted` is an **officer-directed** event. It must never be selected as an applicant notification merely because it shares the same subject id. Supervisor rows do not expose another user's notification state.
 
 ### 4.6 Applicant-specific task rows (no WP2 task)
 
@@ -167,9 +176,9 @@ Required: `subjectKind`, `subjectId`, `reference`, `legacyState`, `legacyVersion
 
 Role-gated optional blocks:
 
-- **`officer`:** `taskId`, `taskStage`, `assigneeAccountId`, `taskOwnerAccountId`, `escalationStatus`, `latestDisposition`, `openCycleStage`
+- **`officer`:** `taskId`, `taskStage`, `assigneeAccountId`, `activeAssignmentCount`, `assignmentStatus`, `taskOwnerAccountId`, `escalationStatus`, `latestDisposition`, `openCycleStage`
 - **`supervisor`:** officer block + `assigneeDisplay`, team counts not in row (separate aggregate endpoint deferred)
-- **`applicant`:** `applicantRespondBy`, `lastApplicantNotificationAt`, `lastApplicantNotificationKind` — **no** officer ids
+- **`applicant`:** `applicantRespondBy`, caller-scoped `lastNotificationAt`, `lastNotificationKind` — **no** officer ids
 
 Existing list routes (`/api/model-applications`, `/api/registrations`) may embed a **`workQueueSummary`** object later; 19D-B should prefer **one** queue endpoint to avoid N+1 joins on dashboard loads.
 
@@ -196,6 +205,8 @@ Existing list routes (`/api/model-applications`, `/api/registrations`) may embed
 | Finance | `fee_due` registration/model fee confirmation |
 
 **May see:** SLA fields, discrepancy status, cycle seq, disposition, task owner ids for **own** assignments. **May not see:** other officers’ personal notes in list row (detail command history unchanged).
+
+The read query must aggregate active assignments before joining. One active row yields `assigned`; zero yields `unassigned`; more than one yields `ambiguous` and a null `assigneeAccountId`. An ambiguous assignment is visible to the supervisor for correction and must not produce duplicate queue items or silently select one officer.
 
 ### 6.3 Supervisor (**B15** / **BL-135**)
 
@@ -262,6 +273,7 @@ Per [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESI
 | Officer account ids | hidden | own row / assigned | visible |
 | `bureauWorkingMillis` | hidden | visible | visible |
 | Internal wiring evidence ids | hidden | hidden | hidden |
+| Caller-scoped notification kind/time | own notifications only | own notifications only | hidden for other users |
 | Notification message body | bell/detail | — | — |
 
 ---
@@ -301,17 +313,18 @@ Per [SNL_WP02C_REGISTRATION_RETURN_DESIGN.md](SNL_WP02C_REGISTRATION_RETURN_DESI
 | 2 | After resubmit, before forward | DB read | `clockState=running`, latest response seq incremented |
 | 3 | After forward closure | DB read | No open task row for cycle; `taskStatus=completed` |
 | 4 | Bureau elapsed through pause | Unit | Matches `WorkingDaySla` fixture |
-| 5 | Overdue running clock | DB read | `overdue=true`, `escalationStatus=overdue` |
+| 5 | Persisted deadline passed | DB read | `overdue=true` whether running or paused; responsibility remains explicit in `clockState` |
 | 6 | Pre-wiring application | DB read | Null task; applicant row from legacy state only |
 | 7 | IAME assignee scope | API | Sees only assigned rows; Programme sees stage-wide |
 | 8 | Applicant scope | API | No officer ids; no bureau millis |
 | 9 | Supervisor without role | API | 403 on `view=supervisor` |
 | 10 | Registration (post-19C) | DB read | Same keys as model; `programme_review` stage |
-| 11 | Notification kind join | DB read | `lastApplicantNotificationKind=returned` after V70 deliver |
+| 11 | Recipient-scoped notification join | DB read/API | Applicant sees own `returned`; officer sees own `applicant_resubmitted`; neither sees the other's event |
 | 12 | Repeat cycle seq 2 | DB read | `openCycleSeq=2`, prior cycle closed |
 | 13 | Concurrent list + command | Live | Queue version / state consistent with detail GET |
 | 14 | Privacy | API | Applicant list never includes `taskOwnerAccountId` |
 | 15 | Policy conflict display | DB read | Row shows persisted policy version note, not alternate 12/15-day recompute (**BL-255**) |
+| 16 | Multiple active assignments | DB read/API | One queue row, `assignmentStatus=ambiguous`, null assignee; no arbitrary selection |
 
 **WP2 acceptance mapping:** items “Every pending task has an owner, due date and visible SLA state” and “SLA clock pauses while applicant is responsible” gain evidence from rows 1–2, 4–5, and live 13.
 

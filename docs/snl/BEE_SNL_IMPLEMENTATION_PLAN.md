@@ -292,7 +292,7 @@ At the end of each development session, update the package status, progress, com
 | UI tests | 251 web tests passed; live browser workflow remains pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design and Brief 19D-0 work-queue design accepted (ChatGPT review pending for 19D-0). |
+| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design and corrected Brief 19D-0 work-queue design accepted. |
 | Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec`; Brief 19D-0 design on `cursor/snl-wp02d-work-queue-design` |
 
 #### WP2 acceptance

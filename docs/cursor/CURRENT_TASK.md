@@ -1,6 +1,6 @@
 # Current Cursor task
 
-**Holder:** cursor (final demo integration), from 18 October 2026.
+**Holder:** claude (Cursor final demo integration handback), 18 October 2026.
 
 - Brief: URGENT DEMO — WP3–WP9 scenario, rehearsal and reliability (integrate Manufacturer 360 from `cursor/demo-wp3-wp9-360`)
 - Branch: `cursor/demo-wp3-wp9-rehearsal`

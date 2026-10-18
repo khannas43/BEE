@@ -256,8 +256,8 @@ At the end of each development session, update the package status, progress, com
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | Accepted V69–V72; model journey wired. Brief 19C-A adds V73 registration return/resubmit orchestrators and `RegistrationReturnResponseWiringRepository` (review pending); HTTP registration journey still unwired. |
-| Next action | Accept 19C-A; implement 19C-B service integration, 19C-C forward disposition/read prep and 19D queue work (BL-257) |
+| Existing foundation | Accepted V69–V72; model journey wired. Brief 19C-A added the V73 registration candidate, but review found a production maint closure bypass, caller-trusted actor/owner/due metadata, lifecycle-unstable replay and incomplete proof assertions. HTTP registration journey remains unwired. |
+| Next action | Complete Brief 19C-A1 and repeat acceptance review; only then implement 19C-B service integration, 19C-C forward disposition/read prep and 19D queue work (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -285,7 +285,7 @@ At the end of each development session, update the package status, progress, com
 | Evidence | Result or link |
 |---|---|
 | Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md); [SNL_WP02C_REGISTRATION_DB_BOUNDARY.md](SNL_WP02C_REGISTRATION_DB_BOUNDARY.md) |
-| Migration range | Accepted: V69–V72; V73 (19C-A) review pending |
+| Migration range | Accepted: V69–V72; V73 (19C-A1 corrections required, unaccepted) |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
 | Database tests | 482 passed after Brief 19B-2B; includes staged V71→V72 migration, privilege boundary, real post-legacy rollback, repeat-cycle, constraint and concurrency survivor proofs |
@@ -788,6 +788,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2B implemented | In progress (60%), ChatGPT review pending | V72 corrected in place: revoked `bind_cycle_return` from PUBLIC/runtime, open-cycle bind guard, runtime execute audit, real post-legacy wiring-evidence 409 service proofs, staged V71→V72 backfill and constraint/cross-cycle/rejection proofs. Awaiting acceptance (BL-257). | Repeat acceptance review; then 19C registration wiring (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), ChatGPT review pending | In progress (65%), Brief 19B-2 and 19C-0 accepted | V72 privilege, post-legacy rollback, staged migration, constraint and concurrency proofs accepted and merged at `798667e`. The PDF-traced registration design was merged at `80d9aec`. | Implement 19C-A, 19C-B and 19C-C, then 19D (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (65%), Brief 19C-A review pending | In progress (68%), V73 registration DB boundary | V73 trusted orchestrators, internal repository and 18 database proof groups on throwaway schema; HTTP journey unchanged. | Accept 19C-A; implement 19C-B and 19C-C, then 19D (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (68%), V73 registration DB boundary | In progress (65%), Brief 19C-A1 corrections required | Review found a production maint closure bypass, caller-trusted actor/owner/role/due metadata, replay that fails after later lifecycle changes, and incomplete rollback/concurrency/tamper/recipient proofs. V73 remains unaccepted. | Complete Brief 19C-A1 and repeat acceptance review before 19C-B/C (BL-257) |
 
 ### 6.2 Standard completion record
 

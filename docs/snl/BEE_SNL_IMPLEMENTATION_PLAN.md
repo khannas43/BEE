@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress — Brief 19B-2 review pending | 65% | WP1 | R1 | V69–V72 landed; model return/resubmit and forward closure wired; 19C–19D remain |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19B-2A corrections | 60% | WP1 | R1 | V69–V71 accepted; V72 forward closure remains unaccepted pending trusted-boundary corrections |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -252,12 +252,12 @@ At the end of each development session, update the package status, progress, com
 | Tracking field | Current value |
 |---|---|
 | Status | In progress |
-| Progress | 65% |
+| Progress | 60% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
 | Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation and V71 model return/resubmit wiring. Model commands now commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response and evidence writes. Registration remains unwired. |
-| Next action | ChatGPT review of 19B-2, then 19C registration wiring and 19D read projection/consolidated proof (BL-257) |
+| Next action | Complete Brief 19B-2A and accept V72; then 19C registration wiring and 19D read projection/consolidated proof (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -783,6 +783,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (45%) | In progress (55%), Brief 19B-A in review | V71 candidate added return/resubmit wiring, trusted commands and rollback handling; reported gates passed, but acceptance proof remained incomplete | ChatGPT review before any merge |
 | 18 Oct 2026 | WP2 | In progress (55%), Brief 19B-A in review | In progress (50%), Brief 19B-B corrections underway | Review found residual runtime bypasses in return/evidence/stage commands; Spring-service rollback, rating-supersession, concurrent-command and integrated due-date proofs remain required. V71 is unmerged and 19B is not accepted. | Complete all Brief 19B-B sections; accept 19B before starting 19B-2 or 19C (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (50%), Brief 19B-B corrections underway | In progress (60%), Brief 19B accepted | Trusted V71 orchestrate boundaries and all 14 proof groups accepted. Review removed a production magic failure input; its rollback proof now uses a test-schema trigger. Verified 160 backend, 355 database and 251 web tests, TypeScript and production build. | Merge acceptance correction; start 19B-2 stage-forward closure, then 19C–19D (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (65%), Brief 19B-2 review pending | In progress (60%), Brief 19B-2A corrections | Review found no cycle/return binding, no hard-coded accepted-forward map, caller-controlled closure time, incomplete structural constraints, and missing real mapped-409/changed-payload proofs. V72 remains unmerged. | Complete Brief 19B-2A; repeat acceptance review before 19C (BL-257) |
 
 ### 6.2 Standard completion record
 

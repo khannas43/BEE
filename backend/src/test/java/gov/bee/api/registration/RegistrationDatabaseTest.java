@@ -106,7 +106,7 @@ class RegistrationDatabaseTest {
             new gov.bee.api.settings.BusinessSettingRepository(db), idem, JSON), JSON);
         documentService = new RegistrationDocumentService(registrationRepo, documentRepo, new RegistrationDocumentRecorder(documentRepo, idem),
             new gov.bee.api.document.LocalSha256FileStore(props), idem, JSON);
-        assertEquals(75, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V75");
+        assertEquals(76, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V76");
     }
 
     @AfterAll
@@ -154,10 +154,14 @@ class RegistrationDatabaseTest {
 
     @Test
     void registrationFeesAreRegRulesAndRegIsNotAModelCategory() {
-        assertEquals(2, owner.queryForObject("SELECT count(*) FROM master_fee_rule WHERE category_code = 'REG'", Integer.class));
+        assertEquals(3, owner.queryForObject("SELECT count(*) FROM master_fee_rule WHERE category_code = 'REG'", Integer.class));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM master_category WHERE rule_key = 'REG'", Integer.class));
         assertEquals(0, new java.math.BigDecimal("5000.00").compareTo(owner.queryForObject(
             "SELECT amount_inr FROM master_fee_rule WHERE rule_key = 'REG:brand_registration'", java.math.BigDecimal.class)));
+        assertEquals(0, new java.math.BigDecimal("5000.00").compareTo(owner.queryForObject(
+            "SELECT amount_inr FROM master_fee_rule WHERE rule_key = 'REG:manufacturer_onboarding'", java.math.BigDecimal.class)));
+        assertEquals("manufacturer_onboarding", owner.queryForObject(
+            "SELECT application_type FROM master_fee_rule WHERE rule_key = 'REG:manufacturer_onboarding'", String.class));
     }
 
     @Test

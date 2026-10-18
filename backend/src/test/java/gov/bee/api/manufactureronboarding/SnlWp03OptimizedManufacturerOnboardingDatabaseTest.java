@@ -87,9 +87,43 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         docRepo = new ManufacturerOnboardingDocumentRepository(db);
         json = new ObjectMapper();
         service = new ManufacturerOnboardingService(repo, docRepo, new MasterDataRepository(db), new IdempotencyRepository(db), json);
-        assertEquals(75, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(76, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(1, owner.queryForObject(
+            "SELECT count(*) FROM flyway_schema_history WHERE success AND version = '76'", Integer.class));
         assertEquals("none", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
         assertEquals("active", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, NOVA_ORG));
+    }
+
+    static List<String> pinnedSearchPath(String funcName) {
+        List<String> cfg = owner.queryForList("""
+            SELECT unnest(p.proconfig)::text FROM pg_proc p
+              JOIN pg_namespace n ON n.oid = p.pronamespace
+             WHERE n.nspname = current_schema() AND p.proname = ?
+            """, String.class, funcName);
+        return cfg.stream().filter(s -> s.startsWith("search_path=")).findFirst()
+            .map(s -> List.of(s.substring("search_path=".length()).split(",\\s*")))
+            .orElse(List.of());
+    }
+
+    @Test
+    void wp03V76SecurityDefinerFunctionsPinSearchPathWithCatalogAndTempLast() {
+        List<String> funcs = List.of(
+            "manufacturer_onboarding_trusted_create",
+            "manufacturer_onboarding_trusted_patch_draft",
+            "manufacturer_onboarding_trusted_append_document",
+            "manufacturer_onboarding_run_automated_checks",
+            "manufacturer_onboarding_orchestrate_submit",
+            "manufacturer_onboarding_orchestrate_director_decision",
+            "manufacturer_onboarding_orchestrate_raise_anomaly",
+            "manufacturer_onboarding_orchestrate_resolve_anomaly",
+            "manufacturer_onboarding_orchestrate_observation_close",
+            "manufacturer_onboarding_maint_observation_close_as_of",
+            "manufacturer_onboarding_maint_close_expired_observations");
+        for (String func : funcs) {
+            List<String> path = pinnedSearchPath(func);
+            assertEquals(List.of(schemaName, "pg_catalog", "pg_temp"), path, func + " search_path");
+            assertEquals("pg_temp", path.get(path.size() - 1), func + " must end in pg_temp");
+        }
     }
 
     @AfterAll

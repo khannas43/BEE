@@ -1,6 +1,6 @@
 # SNL WP03 — optimized manufacturer onboarding (backend slice)
 
-**Status:** A3 backend accepted at **`b378900`** (Flyway **V69–V75** frozen). **B2** frontend integrated on demo branch `cursor/demo-wp3-onboarding-final`. **Brief C1A (18 Oct 2026):** live upload fixed (`readStateForUpload` — no `FOR UPDATE` on application reads; append stays in `manufacturer_onboarding_trusted_append_document`); **`scripts/demo/c1-manufacturer-onboarding-journey.cjs`** passed **25/25** on presentation stack + ngrok. Production identity/payment/scheduler gaps remain **BL-261–263**. Provisional local rules, not BEE rules.
+**Status:** A3 backend accepted at **`b378900`** (Flyway **V69–V75** frozen; **V76** adds WP3 definer `search_path` hardening only). **B2** frontend on demo branch `cursor/demo-wp3-onboarding-final`. **Brief C1A (18 Oct 2026):** live upload + **25/25** C1 journey. **Brief C1B (18 Oct 2026):** full database-tagged suite **590/590** (0 failures, 0 errors); presentation `app` schema at Flyway **76**; C1 journey **25/25** and **`npm run demo:wp3-wp9-check` 21/21** re-verified after API restart. Production identity/payment/scheduler gaps remain **BL-261–263**. Provisional local rules, not BEE rules.
 
 ## Scope
 
@@ -76,7 +76,7 @@ Idempotency: each command accepts a client **`Idempotency-Key`**; replays are ke
 
 ## Proof
 
-`SnlWp03OptimizedManufacturerOnboardingDatabaseTest` — migration rank, trusted-boundary guards, create/patch/document commands, trade-licence gate, cross-org refusal, **seven-command** runtime EXECUTE inventory, idempotency replay/conflict proofs, **`runtimeDocumentUploadViaTrustedAppendWithoutDirectTableUpdate`**, maint observation close, happy path, model-submit guard.
+`SnlWp03OptimizedManufacturerOnboardingDatabaseTest` — Flyway rank **76** and **V76** installed; **`wp03V76SecurityDefinerFunctionsPinSearchPathWithCatalogAndTempLast`** (`<schema>, pg_catalog, pg_temp` with **`pg_temp` last** on all eleven WP3 definer commands); trusted-boundary guards; create/patch/document commands; trade-licence gate; cross-org refusal; **seven-command** runtime EXECUTE inventory; idempotency replay/conflict proofs; **`runtimeDocumentUploadViaTrustedAppendWithoutDirectTableUpdate`**; maint observation close; happy path; model-submit guard. **`MessagesDatabaseTest.everySecurityDefinerFunctionPinsItsSearchPathWithTempLast`** passes with V76 (project-wide definer inventory).
 
 ## Deferred
 

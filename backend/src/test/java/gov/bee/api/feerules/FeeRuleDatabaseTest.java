@@ -75,7 +75,7 @@ class FeeRuleDatabaseTest {
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         repo = new FeeRuleRepository(db);
         masters = new MasterDataRepository(db);
-        assertEquals(75, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V75");
+        assertEquals(76, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V76");
     }
 
     @AfterAll
@@ -102,7 +102,8 @@ class FeeRuleDatabaseTest {
     @Test
     void theAdministratorHoldsTheCapabilityAndNobodyElseDoes() {
         assertEquals(java.util.Set.of("admin"), repo.rolesHolding(FeeRuleRepository.CAPABILITY));
-        assertEquals(java.util.List.of("agency_registration", "brand_registration", "new_model"), repo.applicationTypes().stream().map(FeeRuleRepository.AppType::code).toList());
+        assertEquals(java.util.List.of("agency_registration", "brand_registration", "manufacturer_onboarding", "new_model"),
+            repo.applicationTypes().stream().map(FeeRuleRepository.AppType::code).toList());
         assertTrue(repo.categoryAppliesOn("RAC", TODAY));
         assertFalse(repo.categoryAppliesOn("ZZ", TODAY));
     }
@@ -207,16 +208,19 @@ class FeeRuleDatabaseTest {
     void theMenuLearnsThePermissionsFromTheRolesThatHoldThem() {
         var identity = new gov.bee.api.identity.IdentityRepository(db);
         assertEquals(java.util.List.of("business_setting_manage", "delegation_approve", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin")));
-        assertEquals(java.util.List.of("fee_confirmation_correct"), identity.capabilities(java.util.List.of("finance")), "Finance holds only the right to correct a fee confirmation until a permission is given to it");
+        assertEquals(java.util.List.of("fee_confirmation_correct", "manufacturer_onboarding_anomaly"), identity.capabilities(java.util.List.of("finance")),
+            "Finance holds fee confirmation correction and manufacturer onboarding anomaly capabilities until extra permissions are granted");
         assertEquals(java.util.List.of(), identity.capabilities(java.util.List.of()));
         grantFinance();
         try {
-            assertEquals(java.util.List.of("fee_confirmation_correct", "fee_rule_manage"), identity.capabilities(java.util.List.of("finance", "reviewer")));
-            assertEquals(java.util.List.of("business_setting_manage", "delegation_approve", "fee_confirmation_correct", "fee_rule_manage", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin", "finance")), "each permission once");
+            assertEquals(java.util.List.of("fee_confirmation_correct", "fee_rule_manage", "manufacturer_onboarding_anomaly"),
+                identity.capabilities(java.util.List.of("finance", "reviewer")));
+            assertEquals(java.util.List.of("business_setting_manage", "delegation_approve", "fee_confirmation_correct", "fee_rule_manage",
+                "manufacturer_onboarding_anomaly", "rating_scheme_manage"), identity.capabilities(java.util.List.of("admin", "finance")), "each permission once");
         } finally {
             revokeFinance();
         }
-        assertEquals(java.util.List.of("fee_confirmation_correct"), identity.capabilities(java.util.List.of("finance")));
+        assertEquals(java.util.List.of("fee_confirmation_correct", "manufacturer_onboarding_anomaly"), identity.capabilities(java.util.List.of("finance")));
     }
 
     @Test

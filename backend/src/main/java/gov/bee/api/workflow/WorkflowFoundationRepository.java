@@ -10,6 +10,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -40,11 +41,13 @@ public class WorkflowFoundationRepository {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
 
+    @Autowired
     public WorkflowFoundationRepository(JdbcTemplate jdbc) {
         this(jdbc, new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource())));
     }
 
-    public WorkflowFoundationRepository(JdbcTemplate jdbc, TransactionTemplate tx) {
+    /** Tests and same-package callers only; not a Spring bean constructor. */
+    WorkflowFoundationRepository(JdbcTemplate jdbc, TransactionTemplate tx) {
         this.jdbc = jdbc;
         this.tx = tx;
     }

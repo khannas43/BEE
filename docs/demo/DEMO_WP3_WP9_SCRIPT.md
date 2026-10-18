@@ -12,7 +12,7 @@ Binding references: `docs/snl/BEE_SNL_IMPLEMENTATION_PLAN.md`, `docs/BEE_DECISIO
 
 | Work package | What to open | Reference | Real vs simulated |
 |---|---|---|---|
-| WP3 | Register → Brands | **Nova Cool** (active; ties to **REG-2026-9001** in requests) | **Real** register row + approved registration seed |
+| WP3 | Register → Brands | **Nova Cool** (active; ties to **REG-2026-9001** in requests) | **Real** register row from demo seeds; **s9** verifies only |
 | WP3 | Registration requests | **REG-2026-9001** (approved) | **Real** `registration_application` |
 | WP4 | My model applications | **DEMO-MA-0101**, model **NC-RAC-12D**, state **approved** | **Real** model application + certificate |
 | WP4 | Public verify | **BEE/RAC/2026/10101** | **Real** verification API |
@@ -32,7 +32,7 @@ Binding references: `docs/snl/BEE_SNL_IMPLEMENTATION_PLAN.md`, `docs/BEE_DECISIO
 | Min | WP | Persona (username) | Route | Record / action | One sentence (real vs simulated) |
 |---|---|---|---|---|---|
 | 0–1 | — | *(none)* | `/login` | Demo panel | “Every account uses **demo123**; the role switcher swaps persona in one click.” |
-| 1–3 | WP3 | `bee.director` | `/app/registrations/register` | **Brands** tab → search **Nova Cool** | “**Real** register: Nova Cool is **active** from approved request **REG-2026-9001**; the note is synthetic showcase text from seed **s9**.” |
+| 1–3 | WP3 | `bee.director` | `/app/registrations/register` | **Brands** tab → search **Nova Cool** | “**Real** register row from existing demo seeds (**s5**, **s7**, **s8**); seed **s9** only **verifies** WP3–WP9 anchors exist—it does **not** add or change register rows.” |
 | 3–4 | WP3 | `nova.applicant` | `/app/registrations/requests` | Open **REG-2026-9001** | “**Real** trail: fee confirmation, programme recommendation and director approval are in the database—not a spreadsheet.” |
 | 4–6 | WP4 | `nova.applicant` | `/app/model-label/model-dashboard` | **DEMO-MA-0101** / **NC-RAC-12D** | “**Real** approved model in Spring; full six-step SnL wizard and category deposit are **WP3/WP4** future work.” |
 | 6–7 | WP4 | *(public)* | `/verify` | **BEE/RAC/2026/10101** | “**Real** public read: valid permission for Nova Cool **NC-RAC-12D**.” |
@@ -62,12 +62,14 @@ Binding references: `docs/snl/BEE_SNL_IMPLEMENTATION_PLAN.md`, `docs/BEE_DECISIO
 
 ## Five-minute cut
 
-1. **`bee.director`** — `/app/registrations/register` → **Nova Cool** + **REG-2026-9001** (WP3).  
-2. **`nova.applicant`** — `/app/model-label/model-dashboard` → **DEMO-MA-0101** (WP4).  
-3. **Public** — `/verify` → **BEE/RAC/2026/10101** (WP4/6).  
-4. **`nova.applicant`** — `/app/demo/payments` → **DEMO-PAY-0001** (WP5 simulated).  
-5. **`bee.director`** — `/app/demo/executive` (WP8 simulated) + `/app/registrations/register` pending revocation (WP9).  
+1. **`bee.director`** — `/app/registrations/register` → **Nova Cool** + **REG-2026-9001** (WP3).
+2. **`nova.applicant`** — `/app/model-label/model-dashboard` → **DEMO-MA-0101** (WP4).
+3. **Public** — `/verify` → **BEE/RAC/2026/10101** (WP4/6).
+4. **`nova.applicant`** — `/app/demo/payments` → **DEMO-PAY-0001** (WP5 simulated).
+5. **`bee.director`** — `/app/demo/executive` (WP8 simulated) + `/app/registrations/register` pending revocation (WP9).
 6. One line each: renewal and withdrawal routes are **demo preview** only.
+
+Register and registration rows come from existing demo seeds (**s5**, **s7**, **s8**, **s4**, and related slices). **`s9_wp3_wp9_showcase.sql`** runs **readiness assertions only** after those seeds; it confirms required WP3–WP9 anchor records exist and **does not mutate** them (see `local/seed/demo/s9_wp3_wp9_showcase.sql`).
 
 ---
 

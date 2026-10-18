@@ -3,7 +3,7 @@
 /**
  * WP3–WP9 demo rehearsal: seeded references and key routes.
  *   npm run demo:wp3-wp9-check
- * Needs Postgres (npm run local:app:up or local:up). Web/API checks are skipped when down.
+ * Needs full demo runtime (npm run local:up with BEE_DEMO_LOGIN=1). Fails if web or Spring is down.
  */
 const { execFileSync } = require("child_process");
 
@@ -13,17 +13,11 @@ const API = `http://127.0.0.1:${env("BEE_API_PORT", "8090")}`;
 
 let pass = 0;
 let fail = 0;
-let skip = 0;
 
 function check(id, ok, detail) {
   const r = ok ? "PASS" : "FAIL";
   ok ? pass++ : fail++;
   console.log(`${r.padEnd(4)} ${id.padEnd(42)} ${detail}`);
-}
-
-function skipCheck(id, detail) {
-  skip++;
-  console.log(`${"SKIP".padEnd(4)} ${id.padEnd(42)} ${detail}`);
 }
 
 function psql(q) {
@@ -98,48 +92,49 @@ function routeOk(status) {
     check("seed.idempotent-second-run", false, String(e.message || e).slice(0, 120));
   }
 
-  let webUp = false;
+  let portalHealthOk = false;
   try {
     const h = await fetchStatus(`${WEB}/api/runtime/health`);
-    webUp = h.status === 200 && (h.body.includes('"api":"UP"') || h.body.includes("UP"));
-  } catch {
-    webUp = false;
+    portalHealthOk = h.status === 200 && h.body.includes('"api":"UP"');
+    check("route.portal-health", portalHealthOk, `HTTP ${h.status}`);
+  } catch (e) {
+    check("route.portal-health", false, String(e.message || e).slice(0, 80));
   }
 
-  if (webUp) {
-    for (const [id, path] of [
-      ["route.login", "/login"],
-      ["route.verify", "/verify"],
-      ["route.registrations", "/app/registrations"],
-      ["route.payments-demo", "/app/demo/payments"],
-      ["route.qr-demo", "/app/demo/qr"],
-      ["route.production-demo", "/app/demo/production"],
-      ["route.mis-demo", "/app/demo/mis"],
-      ["route.register", "/app/register"],
-    ]) {
+  for (const [id, path] of [
+    ["route.login", "/login"],
+    ["route.verify", "/verify"],
+    ["route.registration-requests", "/app/registrations/requests"],
+    ["route.registration-register", "/app/registrations/register"],
+    ["route.payments-demo", "/app/demo/payments"],
+    ["route.qr-demo", "/app/demo/qr"],
+    ["route.production-demo", "/app/demo/production"],
+    ["route.mis-demo", "/app/demo/mis"],
+    ["route.manufacturer-360", "/app/demo/manufacturer-360"],
+  ]) {
+    try {
       const r = await fetchStatus(`${WEB}${path}`);
       check(id, routeOk(r.status), `HTTP ${r.status}`);
+    } catch (e) {
+      check(id, false, String(e.message || e).slice(0, 80));
     }
+  }
+
+  try {
     const v = await fetchStatus(`${WEB}/api/runtime/verification?reg=${encodeURIComponent("BEE/RAC/2026/10101")}`);
     const valid = v.status === 200 && (v.body.includes('"status":"valid"') || v.body.includes('"valid"'));
     check("route.verification-10101", valid, `HTTP ${v.status}`);
-  } else {
-    skipCheck("route.*", "web/API not up — start with npm run local:up for route checks");
+  } catch (e) {
+    check("route.verification-10101", false, String(e.message || e).slice(0, 80));
   }
 
-  let apiUp = false;
   try {
     const a = await fetchStatus(`${API}/actuator/health`);
-    apiUp = a.status === 200;
-  } catch {
-    apiUp = false;
-  }
-  if (apiUp) {
-    check("route.spring-health", apiUp, "actuator UP");
-  } else {
-    skipCheck("route.spring-health", "Spring API not reachable");
+    check("route.spring-health", a.status === 200, `HTTP ${a.status}`);
+  } catch (e) {
+    check("route.spring-health", false, String(e.message || e).slice(0, 80));
   }
 
-  console.log(`\nTotals: ${pass} passed, ${fail} failed, ${skip} skipped`);
+  console.log(`\nTotals: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();

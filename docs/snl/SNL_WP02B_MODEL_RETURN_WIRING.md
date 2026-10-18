@@ -2,7 +2,7 @@
 
 **Branch:** `cursor/snl-wp02b-model-forward-closure` (19B-2)
 **Migrations:** V71 (return/resubmit), V72 (cycle lifecycle + forward closure)
-**Status:** 19B accepted 18 Oct 2026; **19B-2 implementation complete, ChatGPT review pending**
+**Status:** 19B accepted 18 Oct 2026; **19B-2A corrections complete, ChatGPT review pending**
 
 ## Transaction boundary
 
@@ -27,10 +27,13 @@ Each `model_return_response_cycle` row is one auditable return episode:
 | `review_stage`, `task_id`, `discrepancy_id` | Immutable identity for the episode |
 | `last_resumed_stage` | Updated on wired resubmit only while `open` |
 | `closure_*` | Set once on close: transition event id, from/to state, `closed_at` |
+| `model_return_response_cycle_return` | Append-only `(cycle_id, return_id)` link; each return binds to exactly one cycle |
 
 Rules:
 
 - At most **one** `open` cycle per application (partial unique index).
+- `UNIQUE (application_id, cycle_seq)`, `UNIQUE (task_id)`, `UNIQUE (discrepancy_id)`; declarative open/closed lifecycle `CHECK`.
+- Resubmit, notify, response resume and forward closure use the **latest return bound to the open cycle**; stale returns from closed cycles are refused.
 - V71 rows migrate to `cycle_seq = 1`, `status = open` with history untouched.
 - **Re-return before accepted forward** (same open cycle): existing V71 `needs_more` + same task/discrepancy.
 - **Return after accepted forward** (prior cycle closed): new task, clock, discrepancy, and cycle row; `workflow_discrepancy` subject uniqueness on `(subject_kind, subject_id, line_code)` is dropped so multiple `return_response` discrepancies can exist across closed cycles (cycle ↔ discrepancy id is the occurrence key).
@@ -46,7 +49,7 @@ Rules:
 | `director_review` | `director_recommend` | `director_review` → `secretary_approval` or `approved` | `DirectorRecommendationService` |
 | `secretary_approval` | `secretary_approve` | `secretary_approval` → `approved` | `SecretaryApprovalService` |
 
-Forward closure validates the persisted `model_application_transition_event` (id, action, from/to, version, actor) against the open cycle, requires exactly one latest undisposed applicant response, then atomically: `accepted` disposition, clock `stop`, task `completed` + task event, cycle close, wiring evidence (`forward_closure`).
+Forward closure enforces the table map above (refuses `return`, `reject`, and every other action/destination), validates the persisted `model_application_transition_event` (id, action, from/to, version, actor) against the open cycle and current application state/version, requires the event `occurred_at` to be after the latest applicant clock `resume`, requires exactly one latest undisposed applicant response, then atomically: `accepted` disposition, clock `stop` at stored event time, task `completed` + task event, cycle close, wiring evidence (`forward_closure`). No caller-supplied forward timestamp parameter.
 
 No open cycle → orchestrate forward closure is a **no-op** (no evidence row).
 
@@ -72,13 +75,13 @@ Purposes include `model_forward_closure` for accepted-forward wiring.
 
 `WorkflowReturnResponseWiring.testMidWiringFailureHook` (test-only) and test-schema triggers for post-disposition rollback proofs.
 
-## Proof map (Brief 19B-2)
+## Proof map (Brief 19B-2 / 19B-2A)
 
-| Section | Named tests (see `SnlWp02bModelForwardClosureDatabaseTest`) |
+| Section | Named tests |
 | --- | --- |
-| 1 Cycle normalization | `existingV71OpenCycleMigratesWithoutHistoryLoss`, `onlyOneOpenCyclePerApplication`, `acceptedCycleThenLaterStageReturnCreatesIndependentCycle`, `closedCycleCannotReceiveNewResponseDispositionOrClockEvent` |
-| 2 Forward closure command | `forwardClosureAcceptsLatestResponseStopsClockAndCompletesTask`, `forwardClosureWithoutOpenCycleIsNoOp`, `forwardClosureRejectsWrongStageActorActionOrTransition`, `forwardClosureReplayIsStableAndChangedPayloadConflicts`, `runtimeCannotForgeDispositionTaskClockCycleOrEvidence`, `injectedFailureAfterDispositionRollsBackLegacyForwardAndClosureBundle` |
-| 3 Service wiring | Per-stage `*AcceptedForwardClosesReturnCycle`, director both paths, no-cycle parity, rollback/conflict, concurrency |
+| 1 Cycle / return binding | `v71ReturnsBackfillIntoMigratedCycle`, `eachNewAndRepeatReturnIsBoundToExactlyOneCycle`, `oldCycleReturnCannotResubmitOrNotifyCurrentCycle`, `currentCycleLatestReturnResubmitsNormally`, plus cycle normalization tests in `SnlWp02bModelForwardClosureDatabaseTest` |
+| 2 Forward closure command | `stalePreResubmitForwardEventCannotCloseCurrentCycle`, `rejectionOrReturnTransitionCannotCloseCycleAsAccepted`, `forgedForwardTimestampCannotChangeAuditOrClockTime`, `allAllowedForwardMappingsStillCloseNormally`, `forwardClosureAcceptsLatestResponseStopsClockAndCompletesTask`, `forwardClosureWithoutOpenCycleIsNoOp`, `forwardClosureReplayIsStableAndChangedPayloadConflicts`, `runtimeHighLevelClosureRejectsStaleRejectionAndWrongCycleInputs`, `duplicateCycleSeqTaskOrDiscrepancyRefused` |
+| 3 Service wiring | Per-stage `*AcceptedForwardClosesReturnCycle`; `SnlWp02bModelForwardServiceDatabaseTest`: `serviceForwardClosureConflictReturns409AndRollsBackAssignment`, `serviceFinalApprovalClosureConflictReturns409AndRollsBackCertificate`, `serviceInjectedClosureFailureRollsBackCompleteBundle`; `concurrentChangedForwardPayloadHasOneWinnerAndOneConflict` |
 | 4 Multi-cycle journeys | IAME→BEE two-cycle, director/rating/secretary path, re-return before forward |
 
 Prior 19B proof map (items 1–14) remains in git history for V71 acceptance; regression covered by existing `SnlWp02bModelReturnWiringDatabaseTest` on V72 schema.

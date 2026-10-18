@@ -30,10 +30,97 @@ ALTER TABLE model_return_response_cycle DROP CONSTRAINT IF EXISTS model_return_r
 CREATE UNIQUE INDEX model_return_response_cycle_one_open_per_app
   ON model_return_response_cycle (application_id) WHERE status = 'open';
 
-CREATE INDEX model_return_response_cycle_app_seq
-  ON model_return_response_cycle (application_id, cycle_seq);
+DROP INDEX IF EXISTS model_return_response_cycle_task;
+
+ALTER TABLE model_return_response_cycle
+  ADD CONSTRAINT model_return_response_cycle_application_id_cycle_seq_key UNIQUE (application_id, cycle_seq),
+  ADD CONSTRAINT model_return_response_cycle_task_id_key UNIQUE (task_id),
+  ADD CONSTRAINT model_return_response_cycle_discrepancy_id_key UNIQUE (discrepancy_id),
+  ADD CONSTRAINT model_return_response_cycle_lifecycle_check CHECK (
+    (status = 'open' AND closed_at IS NULL AND closure_transition_event_id IS NULL AND closure_from_state IS NULL AND closure_to_state IS NULL)
+    OR (status = 'closed' AND closed_at IS NOT NULL AND closure_transition_event_id IS NOT NULL AND closure_from_state IS NOT NULL AND closure_to_state IS NOT NULL));
 
 ALTER TABLE workflow_discrepancy DROP CONSTRAINT IF EXISTS workflow_discrepancy_subject_kind_subject_id_line_code_key;
+
+CREATE TABLE model_return_response_cycle_return (
+  cycle_id   uuid NOT NULL REFERENCES model_return_response_cycle (id),
+  return_id  uuid NOT NULL REFERENCES model_application_return (id),
+  bound_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (cycle_id, return_id),
+  CONSTRAINT model_return_response_cycle_return_return_id_key UNIQUE (return_id)
+);
+
+INSERT INTO model_return_response_cycle_return (cycle_id, return_id)
+SELECT c.id, r.id
+  FROM model_return_response_cycle c
+  JOIN model_application_return r ON r.application_id = c.application_id;
+
+CREATE FUNCTION model_return_response_cycle_return_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'model_return_response_cycle_return_immutable';
+  END IF;
+  IF TG_OP = 'DELETE' THEN
+    IF session_user <> 'bee_local_maint' AND current_user <> 'bee_local_maint' THEN
+      RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'model_return_response_cycle_return_delete_refused';
+    END IF;
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER model_return_response_cycle_return_immutable_row
+  BEFORE UPDATE OR DELETE ON model_return_response_cycle_return
+  FOR EACH ROW EXECUTE FUNCTION model_return_response_cycle_return_guard();
+
+CREATE FUNCTION model_return_response_bind_cycle_return(p_cycle_id uuid, p_return_id uuid) RETURNS void
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM model_return_response_cycle c
+      JOIN model_application_return r ON r.id = p_return_id
+     WHERE c.id = p_cycle_id AND c.application_id = r.application_id
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_return_cycle_bind_invalid';
+  END IF;
+  INSERT INTO model_return_response_cycle_return (cycle_id, return_id) VALUES (p_cycle_id, p_return_id);
+END $$;
+
+CREATE FUNCTION model_return_response_latest_cycle_return(p_cycle_id uuid) RETURNS uuid
+  LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
+DECLARE
+  v_return_id uuid;
+BEGIN
+  SELECT cr.return_id INTO v_return_id
+    FROM model_return_response_cycle_return cr
+    JOIN model_application_return r ON r.id = cr.return_id
+   WHERE cr.cycle_id = p_cycle_id
+   ORDER BY r.returned_at DESC, r.id DESC
+   LIMIT 1;
+  RETURN v_return_id;
+END $$;
+
+CREATE FUNCTION model_return_response_validate_forward_transition(
+  p_resumed_stage text,
+  p_action text,
+  p_from_state text,
+  p_to_state text,
+  p_actor_role text
+) RETURNS void LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+  IF p_action IN ('return', 'reject') THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_forward_action_refused';
+  END IF;
+  IF NOT (
+    (p_resumed_stage = 'iame_scrutiny' AND p_action = 'iame_recommend' AND p_from_state = 'iame_scrutiny' AND p_to_state = 'bee_scrutiny' AND p_actor_role = 'iame')
+    OR (p_resumed_stage = 'bee_scrutiny' AND p_action = 'reviewer_forward' AND p_from_state = 'bee_scrutiny' AND p_to_state = 'rating' AND p_actor_role = 'reviewer')
+    OR (p_resumed_stage = 'rating' AND p_action = 'compute_rating' AND p_from_state = 'rating' AND p_to_state = 'director_review' AND p_actor_role = 'programme')
+    OR (p_resumed_stage = 'director_review' AND p_action = 'director_recommend' AND p_from_state = 'director_review' AND p_to_state IN ('secretary_approval', 'approved') AND p_actor_role = 'director')
+    OR (p_resumed_stage = 'secretary_approval' AND p_action = 'secretary_approve' AND p_from_state = 'secretary_approval' AND p_to_state = 'approved' AND p_actor_role = 'secretary')
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_forward_transition_refused';
+  END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION model_return_response_cycle_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -198,8 +285,9 @@ BEGIN
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM model_return_response_cycle c
-     JOIN model_application_return r ON r.application_id = c.application_id
-     WHERE c.application_id = p_application_id AND c.status = 'open' AND r.id = p_return_id
+     JOIN model_return_response_cycle_return cr ON cr.cycle_id = c.id
+     WHERE c.application_id = p_application_id AND c.status = 'open' AND cr.return_id = p_return_id
+       AND cr.return_id = model_return_response_latest_cycle_return(c.id)
   ) THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_return_cycle_mismatch';
   END IF;
@@ -256,6 +344,7 @@ CREATE OR REPLACE FUNCTION model_return_response_orchestrate_wired_return(
 DECLARE
   v_prior model_return_response_wiring_evidence;
   v_cycle model_return_response_cycle;
+  v_cycle_id uuid;
   v_task_id uuid;
   v_discrepancy_id uuid;
   v_clock_id uuid;
@@ -285,7 +374,8 @@ BEGIN
     INSERT INTO workflow_discrepancy (subject_kind, subject_id, line_code, summary, opened_by)
     VALUES ('model_application', p_application_id, 'return_response', p_reason, p_returned_by)
     RETURNING id INTO v_discrepancy_id;
-    PERFORM model_return_response_link_cycle(p_application_id, p_from_stage, v_task_id, v_discrepancy_id);
+    v_cycle_id := model_return_response_link_cycle(p_application_id, p_from_stage, v_task_id, v_discrepancy_id);
+    PERFORM model_return_response_bind_cycle_return(v_cycle_id, p_return_id);
     SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_task_id;
     PERFORM workflow_foundation_append_clock_event(v_clock_id, 'start', 'bureau', p_returned_at, NULL);
     PERFORM workflow_foundation_append_clock_event(v_clock_id, 'pause', 'applicant', p_returned_at + interval '1 millisecond', NULL);
@@ -306,6 +396,7 @@ BEGIN
     END IF;
     SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_cycle.task_id;
     PERFORM workflow_foundation_append_clock_event(v_clock_id, 'pause', 'applicant', p_returned_at + interval '1 millisecond', NULL);
+    PERFORM model_return_response_bind_cycle_return(v_cycle.id, p_return_id);
   END IF;
   PERFORM model_return_response_record_wiring_evidence(p_wiring_command_id, p_application_id, 'model_return_wiring', p_wiring_payload_hash);
   RETURN p_return_id;
@@ -368,6 +459,15 @@ BEGIN
     PERFORM workflow_foundation_append_clock_event(v_clock_id, 'pause', 'applicant', p_returned_at + interval '1 millisecond', NULL);
     SELECT * INTO v_cycle FROM model_return_response_cycle WHERE application_id = p_application_id AND status = 'open';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM model_return_response_cycle_return WHERE cycle_id = v_cycle.id AND return_id = p_return_id) THEN
+    IF EXISTS (SELECT 1 FROM model_return_response_cycle_return WHERE return_id = p_return_id) THEN
+      RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_return_cycle_mismatch';
+    END IF;
+    PERFORM model_return_response_bind_cycle_return(v_cycle.id, p_return_id);
+  END IF;
+  IF p_return_id IS DISTINCT FROM model_return_response_latest_cycle_return(v_cycle.id) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_return_cycle_mismatch';
+  END IF;
   PERFORM model_return_response_update_last_resumed_stage(p_application_id, p_resubmission_id, p_resumed_stage);
   PERFORM model_return_response_append_response(v_cycle.discrepancy_id, p_response_body, p_responded_by);
   SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_cycle.task_id;
@@ -382,7 +482,10 @@ BEGIN
   PERFORM model_return_response_record_wiring_evidence(p_notify_command_id, p_application_id, 'model_resubmit_notify', v_notify_hash);
 END $$;
 
-CREATE OR REPLACE FUNCTION model_return_response_orchestrate_forward_closure(
+DROP FUNCTION IF EXISTS model_return_response_orchestrate_forward_closure(
+  uuid, uuid, text, text, text, integer, uuid, text, timestamptz, uuid, char(64));
+
+CREATE FUNCTION model_return_response_orchestrate_forward_closure(
   p_application_id uuid,
   p_transition_event_id uuid,
   p_action text,
@@ -391,7 +494,6 @@ CREATE OR REPLACE FUNCTION model_return_response_orchestrate_forward_closure(
   p_version_after integer,
   p_actor_account uuid,
   p_actor_role text,
-  p_forward_occurred_at timestamptz,
   p_wiring_command_id uuid,
   p_wiring_payload_hash char(64)
 ) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
@@ -403,6 +505,8 @@ DECLARE
   v_task_version integer;
   v_clock_id uuid;
   v_discrepancy_status text;
+  v_forward_at timestamptz;
+  v_latest_resume timestamptz;
 BEGIN
   PERFORM workflow_validate_subject('model_application', p_application_id);
   SELECT * INTO v_te FROM model_application_transition_event
@@ -416,6 +520,7 @@ BEGIN
      OR v_te.actor_role IS DISTINCT FROM p_actor_role THEN
     RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_forward_transition_mismatch';
   END IF;
+  v_forward_at := v_te.occurred_at;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_wiring_command_id::text, 0));
   SELECT * INTO v_prior FROM model_return_response_wiring_evidence WHERE command_id = p_wiring_command_id;
   IF FOUND THEN
@@ -430,8 +535,26 @@ BEGIN
   IF NOT FOUND THEN
     RETURN;
   END IF;
+  IF v_cycle.last_resumed_stage IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_forward_stage_mismatch';
+  END IF;
+  PERFORM model_return_response_validate_forward_transition(
+    v_cycle.last_resumed_stage, p_action, p_from_state, p_to_state, p_actor_role);
   IF v_cycle.last_resumed_stage IS DISTINCT FROM p_from_state THEN
     RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_forward_stage_mismatch';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM model_application a
+     WHERE a.id = p_application_id AND a.state = p_to_state AND a.version = p_version_after
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_forward_application_state_mismatch';
+  END IF;
+  SELECT max(e.occurred_at) INTO v_latest_resume
+    FROM workflow_sla_clock_event e
+    JOIN workflow_sla_clock cl ON cl.id = e.clock_id
+   WHERE cl.task_id = v_cycle.task_id AND e.event_kind = 'resume';
+  IF v_latest_resume IS NOT NULL AND v_forward_at <= v_latest_resume THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_forward_event_stale';
   END IF;
   SELECT r.response_seq INTO v_response_seq
     FROM workflow_discrepancy_response r
@@ -457,11 +580,11 @@ BEGIN
   END IF;
   PERFORM workflow_foundation_discrepancy_dispose(v_cycle.discrepancy_id, v_response_seq, 'accepted', NULL, p_actor_account);
   SELECT id INTO v_clock_id FROM workflow_sla_clock WHERE task_id = v_cycle.task_id;
-  PERFORM workflow_foundation_append_clock_event(v_clock_id, 'stop', 'bureau', p_forward_occurred_at + interval '1 millisecond', NULL);
+  PERFORM workflow_foundation_append_clock_event(v_clock_id, 'stop', 'bureau', v_forward_at + interval '1 millisecond', NULL);
   PERFORM workflow_foundation_terminal_task(v_cycle.task_id, v_task_version, 'completed', p_actor_account, p_actor_role, 'return_response_accepted_forward');
   UPDATE model_return_response_cycle
      SET status = 'closed',
-         closed_at = p_forward_occurred_at,
+         closed_at = v_forward_at,
          closure_transition_event_id = p_transition_event_id,
          closure_from_state = p_from_state,
          closure_to_state = p_to_state
@@ -477,7 +600,7 @@ BEGIN
 END $$;
 
 REVOKE ALL ON FUNCTION model_return_response_orchestrate_forward_closure(
-  uuid, uuid, text, text, text, integer, uuid, text, timestamptz, uuid, char(64)) FROM PUBLIC;
+  uuid, uuid, text, text, text, integer, uuid, text, uuid, char(64)) FROM PUBLIC;
 
 DROP FUNCTION IF EXISTS app_disposable_model_cleanup(uuid[]);
 
@@ -499,6 +622,10 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'cleanup refused: unregistered application id';
   END IF;
   EXECUTE format('DELETE FROM %I.model_return_response_wiring_evidence WHERE application_id = ANY ($1)', home_schema) USING app_ids;
+  EXECUTE format(
+    'DELETE FROM %I.model_return_response_cycle_return cr USING %I.model_return_response_cycle c '
+      || 'WHERE c.application_id = ANY ($1) AND cr.cycle_id = c.id', home_schema, home_schema)
+    USING app_ids;
   EXECUTE format(
     'DELETE FROM %I.workflow_discrepancy_disposition d USING %I.model_return_response_cycle c '
       || 'WHERE c.application_id = ANY ($1) AND d.discrepancy_id = c.discrepancy_id', home_schema, home_schema)
@@ -576,7 +703,8 @@ BEGIN
   EXECUTE format('ALTER FUNCTION %I.model_return_response_update_last_resumed_stage(uuid, uuid, text) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_orchestrate_wired_return(uuid, uuid, uuid, text, text, uuid, timestamptz, text, uuid, char(64), text, uuid, char(64), text, uuid, timestamptz, uuid, uuid, char(64), uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_orchestrate_resubmit(uuid, uuid, uuid, text, timestamptz, text, text, text, timestamptz, uuid, text, uuid, char(64), uuid, uuid, char(64), text, uuid, timestamptz, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
-  EXECUTE format('ALTER FUNCTION %I.model_return_response_orchestrate_forward_closure(uuid, uuid, text, text, text, integer, uuid, text, timestamptz, uuid, char(64)) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_bind_cycle_return(uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_orchestrate_forward_closure(uuid, uuid, text, text, text, integer, uuid, text, uuid, char(64)) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_link_cycle(uuid, text, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.model_return_response_append_response(uuid, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
 
@@ -584,6 +712,9 @@ BEGIN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.app_disposable_model_cleanup(uuid[]) TO bee_local_maint', home_schema);
   END IF;
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_runtime') THEN
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_orchestrate_forward_closure(uuid, uuid, text, text, text, integer, uuid, text, timestamptz, uuid, char(64)) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_orchestrate_forward_closure(uuid, uuid, text, text, text, integer, uuid, text, uuid, char(64)) TO bee_runtime', home_schema);
+    EXECUTE format('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON %I.model_return_response_cycle_return FROM bee_runtime', home_schema);
+    EXECUTE format('GRANT SELECT ON %I.model_return_response_cycle_return TO bee_runtime', home_schema);
+    EXECUTE format('GRANT SELECT, DELETE ON %I.model_return_response_cycle_return TO bee_local_maint', home_schema);
   END IF;
 END $$;

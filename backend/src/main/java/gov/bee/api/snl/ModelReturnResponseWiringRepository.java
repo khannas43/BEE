@@ -110,7 +110,7 @@ public class ModelReturnResponseWiringRepository {
 
     public void orchestrateForwardClosure(OrchestrateForwardClosureCommand cmd) {
         jdbc.query(
-            "SELECT model_return_response_orchestrate_forward_closure(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "SELECT model_return_response_orchestrate_forward_closure(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             rs -> {
             },
             cmd.applicationId(),
@@ -121,7 +121,6 @@ public class ModelReturnResponseWiringRepository {
             cmd.versionAfter(),
             cmd.actorAccount(),
             cmd.actorRole(),
-            java.sql.Timestamp.from(cmd.forwardOccurredAt()),
             cmd.wiringCommandId(),
             cmd.wiringPayloadHash());
     }

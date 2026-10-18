@@ -11,6 +11,7 @@ import gov.bee.api.policy.SliceAction;
 import gov.bee.api.policy.SlicePolicy;
 import gov.bee.api.snl.WorkflowReturnResponseWiring;
 import gov.bee.api.web.ApiErrors;
+import gov.bee.api.workflow.WorkflowFoundationRepository;
 import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.security.MessageDigest;
 import org.springframework.dao.DataAccessException;
@@ -111,15 +112,18 @@ public class DirectorRecommendationService {
                 DirectorRecommendationRepository.FROM_STATE, done.toState(), done.versionAfter(), caller.accountId(), "director", done.recommendedAt(),
                 idempotencyKey);
         } catch (WorkflowIdempotencyConflictException ex) {
-            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
         } catch (DataAccessException ex) {
             if (ex instanceof DataAccessResourceFailureException) {
                 throw ex;
             }
-            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            if (WorkflowFoundationRepository.isSqlMessage(ex, "model_return_response_wiring_idempotency_conflict")) {
+                return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+            }
+            idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             throw ex;
         }
         Map<String, Object> receipt = new LinkedHashMap<>();

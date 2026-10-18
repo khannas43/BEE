@@ -21,6 +21,7 @@ import gov.bee.api.settings.BusinessSettingRepository;
 import gov.bee.api.settings.BusinessSettingService;
 import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -402,6 +403,205 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
         secretaryService.run(SECRETARY_CALLER, id, idemKey("0000000000000034"), json.readTree("{\"version\":" + v + ",\"note\":\"ok\"}"));
         assertTrue(owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ? AND status = 'closed'", Integer.class, id) >= 2);
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ? AND status = 'open'", Integer.class, id));
+    }
+
+    @Test
+    void v71ReturnsBackfillIntoMigratedCycle() {
+        UUID id = atIame("WP02B2A-BF-" + TAG);
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle_return cr JOIN model_return_response_cycle c ON c.id = cr.cycle_id WHERE c.application_id = ?", Integer.class, id));
+        wiredResubmit(id, UUID.randomUUID().toString(), "bound");
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        assertEquals(2, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle_return cr JOIN model_return_response_cycle c ON c.id = cr.cycle_id WHERE c.application_id = ?", Integer.class, id));
+        assertEquals(1, owner.queryForObject("SELECT count(DISTINCT cycle_id) FROM model_return_response_cycle_return cr JOIN model_return_response_cycle c ON c.id = cr.cycle_id WHERE c.application_id = ?", Integer.class, id));
+    }
+
+    @Test
+    void eachNewAndRepeatReturnIsBoundToExactlyOneCycle() {
+        UUID id = atIame("WP02B2A-BIND-" + TAG);
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        UUID cycle = owner.queryForObject("SELECT id FROM model_return_response_cycle WHERE application_id = ? AND status = 'open'", UUID.class, id);
+        UUID return1 = owner.queryForObject("SELECT return_id FROM model_return_response_cycle_return WHERE cycle_id = ? ORDER BY bound_at LIMIT 1", UUID.class, cycle);
+        wiredResubmit(id, UUID.randomUUID().toString(), "between returns");
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        UUID return2 = owner.queryForObject("SELECT return_id FROM model_return_response_cycle_return WHERE cycle_id = ? ORDER BY bound_at DESC LIMIT 1", UUID.class, cycle);
+        assertNotEquals(return1, return2);
+        assertEquals(2, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle_return WHERE cycle_id = ?", Integer.class, cycle));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle_return WHERE return_id = ?", Integer.class, return1));
+    }
+
+    @Test
+    void oldCycleReturnCannotResubmitOrNotifyCurrentCycle() throws Exception {
+        UUID id = atIame("WP02B2A-OLDRET-" + TAG);
+        returnResubmitAt(id, "iame_scrutiny", IAME_USER, "iame");
+        UUID oldReturn = owner.queryForObject(
+            "SELECT cr.return_id FROM model_return_response_cycle_return cr JOIN model_return_response_cycle c ON c.id = cr.cycle_id WHERE c.application_id = ? AND c.cycle_seq = 1",
+            UUID.class, id);
+        int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        iameService.run(IAME_CALLER, id, idemKey("0000000000000040"), json.readTree("{\"version\":" + v + ",\"verification\":\"verified\",\"note\":\"c1\"}"));
+        wiredReturn(id, "bee_scrutiny", REVIEWER_USER, "reviewer", UUID.randomUUID().toString());
+        UUID resubId = UUID.randomUUID();
+        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> wiring.afterResubmit(
+            id, oldReturn, resubId, "bee_scrutiny", Instant.now(), REASON, "bee_scrutiny", "stale", Instant.now(), NOVA_USER, "manufacturer", UUID.randomUUID().toString())));
+    }
+
+    @Test
+    void currentCycleLatestReturnResubmitsNormally() throws Exception {
+        UUID id = atIame("WP02B2A-CURR-" + TAG);
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        int version = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        assertEquals(HttpStatus.OK, resubmitService.run(MANUFACTURER, id, idemKey("0000000000000041"), json.readTree("{\"version\":" + version + "}")).getStatusCode());
+    }
+
+    @Test
+    void stalePreResubmitForwardEventCannotCloseCurrentCycle() {
+        UUID id = atIame("WP02B2A-STALE-" + TAG);
+        returnResubmitAt(id, "iame_scrutiny", IAME_USER, "iame");
+        int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        var resumeAt = owner.queryForObject(
+            "SELECT max(e.occurred_at) FROM workflow_sla_clock_event e JOIN workflow_sla_clock cl ON cl.id = e.clock_id "
+                + "JOIN model_return_response_cycle c ON c.task_id = cl.task_id WHERE c.application_id = ? AND e.event_kind = 'resume'",
+            java.sql.Timestamp.class, id);
+        UUID staleEvent = UUID.randomUUID();
+        java.sql.Timestamp staleAt = new java.sql.Timestamp(resumeAt.getTime() - 2 * 3600_000L);
+        owner.update(
+            "INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, version_after, actor_account_id, actor_role, occurred_at) "
+                + "VALUES (?, ?, 'iame_recommend', 'iame_scrutiny', 'bee_scrutiny', ?, ?, 'iame', ?)",
+            staleEvent, id, v + 1, IAME_USER, staleAt);
+        owner.update("UPDATE model_application SET state = 'bee_scrutiny', version = ? WHERE id = ?", v + 1, id);
+        assertThrows(DataAccessException.class, () -> wiring.afterAcceptedForward(
+            id, staleEvent, IameRecommendationRepository.ACTION, IameRecommendationRepository.FROM_STATE, IameRecommendationRepository.TO_STATE,
+            v + 1, IAME_USER, "iame", Instant.now(), UUID.randomUUID().toString()));
+        assertEquals("open", owner.queryForObject("SELECT status FROM model_return_response_cycle WHERE application_id = ? AND status = 'open'", String.class, id));
+    }
+
+    @Test
+    void rejectionOrReturnTransitionCannotCloseCycleAsAccepted() {
+        UUID id = atIame("WP02B2A-REJ-" + TAG);
+        returnResubmitAt(id, "iame_scrutiny", IAME_USER, "iame");
+        var retTe = owner.queryForMap(
+            "SELECT e.id, e.version_after, e.occurred_at FROM model_application_transition_event e "
+                + "JOIN model_application_return r ON r.transition_event_id = e.id WHERE r.application_id = ? ORDER BY e.occurred_at DESC LIMIT 1",
+            id);
+        assertThrows(DataAccessException.class, () -> wiring.afterAcceptedForward(
+            id, (UUID) retTe.get("id"), "return", "iame_scrutiny", "returned", (Integer) retTe.get("version_after"), IAME_USER, "iame",
+            ((java.sql.Timestamp) retTe.get("occurred_at")).toInstant(), UUID.randomUUID().toString()));
+    }
+
+    @Test
+    void forgedForwardTimestampCannotChangeAuditOrClockTime() {
+        UUID id = atIame("WP02B2A-FORGE-T-" + TAG);
+        returnResubmitAt(id, "iame_scrutiny", IAME_USER, "iame");
+        int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        var done = iameRepo.recommend(id, v, IAME_USER, "iame", "verified", "n");
+        Instant forged = done.recommendedAt().plusSeconds(86400);
+        wiring.afterAcceptedForward(id, done.transitionEventId(), IameRecommendationRepository.ACTION, IameRecommendationRepository.FROM_STATE,
+            IameRecommendationRepository.TO_STATE, done.versionAfter(), IAME_USER, "iame", forged, idemKey("0000000000000042"));
+        var closedAt = owner.queryForObject("SELECT closed_at FROM model_return_response_cycle WHERE application_id = ? AND cycle_seq = 1", java.sql.Timestamp.class, id);
+        assertEquals(done.recommendedAt(), closedAt.toInstant());
+        UUID task = owner.queryForObject("SELECT task_id FROM model_return_response_cycle WHERE application_id = ? AND cycle_seq = 1", UUID.class, id);
+        var stopAt = owner.queryForObject(
+            "SELECT e.occurred_at FROM workflow_sla_clock_event e JOIN workflow_sla_clock cl ON cl.id = e.clock_id WHERE cl.task_id = ? AND e.event_kind = 'stop' ORDER BY e.occurred_at DESC LIMIT 1",
+            java.sql.Timestamp.class, task);
+        assertTrue(stopAt.toInstant().isBefore(forged));
+    }
+
+    @Test
+    void allAllowedForwardMappingsStillCloseNormally() throws Exception {
+        UUID id = atIame("WP02B2A-MAP-" + TAG);
+        returnResubmitAt(id, "iame_scrutiny", IAME_USER, "iame");
+        int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        iameService.run(IAME_CALLER, id, idemKey("0000000000000043"), json.readTree("{\"version\":" + v + ",\"verification\":\"verified\",\"note\":\"m1\"}"));
+        returnResubmitAt(id, "bee_scrutiny", REVIEWER_USER, "reviewer");
+        v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        reviewerService.run(REVIEWER_CALLER, id, idemKey("0000000000000044"), json.readTree("{\"version\":" + v + ",\"note\":\"m2\"}"));
+        UUID idDir = atDirector("WP02B2A-MAP2-" + TAG);
+        returnResubmitAt(idDir, "director_review", DIRECTOR_USER, "director");
+        v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, idDir);
+        directorService.run(DIRECTOR_CALLER, idDir, idemKey("0000000000000045"), json.readTree("{\"version\":" + v + ",\"note\":\"m3\"}"));
+        directorRepo.recommend(idDir, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, idDir), DIRECTOR_USER, "director", "n", false);
+        returnResubmitAt(idDir, "secretary_approval", DIRECTOR_USER, "director");
+        v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, idDir);
+        secretaryService.run(SECRETARY_CALLER, idDir, idemKey("0000000000000046"), json.readTree("{\"version\":" + v + ",\"note\":\"m4\"}"));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ? AND status = 'open'", Integer.class, idDir));
+    }
+
+    @Test
+    void duplicateCycleSeqTaskOrDiscrepancyRefused() {
+        UUID id = atIame("WP02B2A-UNIQ-" + TAG);
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        var row = owner.queryForMap("SELECT application_id, review_stage, task_id, discrepancy_id, cycle_seq FROM model_return_response_cycle WHERE application_id = ?", id);
+        assertThrows(DataAccessException.class, () -> owner.update(
+            "INSERT INTO model_return_response_cycle (application_id, review_stage, task_id, discrepancy_id, cycle_seq, status) VALUES (?, ?, ?, ?, ?, 'closed')",
+            row.get("application_id"), row.get("review_stage"), UUID.randomUUID(), UUID.randomUUID(), row.get("cycle_seq")));
+        assertThrows(DataAccessException.class, () -> owner.update(
+            "INSERT INTO model_return_response_cycle (application_id, review_stage, task_id, discrepancy_id, cycle_seq, status) VALUES (?, ?, ?, ?, 99, 'closed')",
+            row.get("application_id"), row.get("review_stage"), row.get("task_id"), UUID.randomUUID()));
+        assertThrows(DataAccessException.class, () -> owner.update(
+            "INSERT INTO model_return_response_cycle (application_id, review_stage, task_id, discrepancy_id, cycle_seq, status) VALUES (?, ?, ?, ?, 99, 'closed')",
+            row.get("application_id"), row.get("review_stage"), UUID.randomUUID(), row.get("discrepancy_id")));
+    }
+
+    @Test
+    void concurrentChangedForwardPayloadHasOneWinnerAndOneConflict() throws Exception {
+        UUID id = atIame("WP02B2A-CONC-PAY-" + TAG);
+        returnResubmitAt(id, "iame_scrutiny", IAME_USER, "iame");
+        int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        String idem = idemKey("0000000000000047");
+        var first = json.readTree("{\"version\":" + v + ",\"verification\":\"verified\",\"note\":\"a\"}");
+        var second = json.readTree("{\"version\":" + v + ",\"verification\":\"verified\",\"note\":\"b\"}");
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        Future<?> a = pool.submit(() -> {
+            start.await(5, TimeUnit.SECONDS);
+            return iameService.run(IAME_CALLER, id, idem, first);
+        });
+        Future<?> b = pool.submit(() -> {
+            start.await(5, TimeUnit.SECONDS);
+            return iameService.run(IAME_CALLER, id, idem, second);
+        });
+        start.countDown();
+        pool.shutdown();
+        assertTrue(pool.awaitTermination(30, TimeUnit.SECONDS));
+        int ok = 0;
+        int conflict = 0;
+        for (Future<?> f : List.of(a, b)) {
+            @SuppressWarnings("unchecked")
+            var res = (org.springframework.http.ResponseEntity<java.util.Map<String, Object>>) f.get();
+            if (res.getStatusCode().is2xxSuccessful()) {
+                ok++;
+            } else if (HttpStatus.CONFLICT.equals(res.getStatusCode())) {
+                conflict++;
+            }
+        }
+        assertEquals(1, ok);
+        assertEquals(1, conflict);
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM model_return_response_wiring_evidence WHERE application_id = ? AND purpose = 'forward_closure'", Integer.class, id));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ? AND status = 'closed'", Integer.class, id));
+    }
+
+    @Test
+    void runtimeHighLevelClosureRejectsStaleRejectionAndWrongCycleInputs() {
+        UUID id = atIame("WP02B2A-RT-" + TAG);
+        returnResubmitAt(id, "iame_scrutiny", IAME_USER, "iame");
+        int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        var done = iameRepo.recommend(id, v, IAME_USER, "iame", "verified", "n");
+        wiring.afterAcceptedForward(id, done.transitionEventId(), IameRecommendationRepository.ACTION, IameRecommendationRepository.FROM_STATE,
+            IameRecommendationRepository.TO_STATE, done.versionAfter(), IAME_USER, "iame", done.recommendedAt(), idemKey("0000000000000048"));
+        UUID cycle1Event = done.transitionEventId();
+        wiredReturn(id, "bee_scrutiny", REVIEWER_USER, "reviewer", UUID.randomUUID().toString());
+        wiredResubmit(id, UUID.randomUUID().toString(), "cycle2");
+        int vAfter = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+        assertThrows(DataAccessException.class, () -> db.query(
+            "SELECT model_return_response_orchestrate_forward_closure(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rs -> {
+            }, id, cycle1Event, ReviewerForwardRepository.ACTION, ReviewerForwardRepository.FROM_STATE, ReviewerForwardRepository.TO_STATE,
+            vAfter + 1, REVIEWER_USER, "reviewer", UUID.randomUUID(), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"));
+        var retTe = owner.queryForMap(
+            "SELECT e.id, e.version_after, e.occurred_at FROM model_application_transition_event e WHERE e.application_id = ? AND e.action = 'return' ORDER BY e.occurred_at DESC LIMIT 1", id);
+        assertThrows(DataAccessException.class, () -> db.query(
+            "SELECT model_return_response_orchestrate_forward_closure(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rs -> {
+            }, id, retTe.get("id"), ReviewerForwardRepository.ACTION, ReviewerForwardRepository.FROM_STATE, ReviewerForwardRepository.TO_STATE,
+            retTe.get("version_after"), REVIEWER_USER, "reviewer", UUID.randomUUID(), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"));
     }
 
     @Test

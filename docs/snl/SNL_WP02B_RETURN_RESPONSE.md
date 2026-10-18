@@ -1,6 +1,6 @@
 # SNL WP02B — return, applicant response and review-task wiring
 
-**Status:** Umbrella design recorded; Briefs 19A and 19B accepted; **Brief 19B-2 implemented (ChatGPT review pending)**; Briefs 19C–19D remain.
+**Status:** Umbrella design recorded; Briefs 19A, 19B and 19B-2 accepted; Brief 19C-0 design accepted; implementation slices 19C-A–19C-C and Brief 19D remain.
 **Depends on:** WP2A merge `80b1da7`, `WorkflowFoundationRepository`, V69 command functions.
 **Migration sequence:** V70 starts the policy and generic notification foundation; later migrations wire model and registration journeys. V69 remains unchanged.
 
@@ -10,8 +10,8 @@
 | --- | --- | --- |
 | 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Accepted (`64accd5` plus acceptance corrections) |
 | 19B | Model return/resubmit/response wiring | Accepted (V71 trusted orchestrate commands + `WorkflowReturnResponseWiring`; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
-| 19B-2 | Model stage-forward closure + repeat-cycle safety | **Review pending** (V72: cycle/return binding with revoked `bind_cycle_return`, enforced forward map + stored event time, structural constraints, post-legacy service 409 proofs; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
-| 19C | Registration return/resubmit/response wiring | Planned |
+| 19B-2 | Model stage-forward closure + repeat-cycle safety | Accepted (V72: cycle/return binding with revoked `bind_cycle_return`, enforced forward map + stored event time, structural constraints, post-legacy service 409 proofs; merged at `798667e`) |
+| 19C | Registration return/resubmit/response wiring | Design accepted (`SNL_WP02C_REGISTRATION_RETURN_DESIGN.md`); 19C-A–19C-C implementation pending |
 | 19D | Common read projection, consolidated concurrency/rollback proof and plan evidence | Planned |
 
 ## Integration map (return / resubmit loop)

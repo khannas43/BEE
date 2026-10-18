@@ -21,7 +21,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 | WP | Work package | Status | Progress | Depends on | Target release | Completion evidence |
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
-| WP2 | Common workflow tasks and SLA | In progress — Brief 19B-2B corrections | 60% | WP1 | R1 | V69–V71 accepted; V72 remains unaccepted pending final privilege and proof corrections |
+| WP2 | Common workflow tasks and SLA | In progress — Brief 19C registration wiring | 65% | WP1 | R1 | V69–V72 and the 19C-0 registration design accepted; registration implementation and 19D remain |
 | WP3 | Entity brand and category registration | Not started | 0% | WP2, WP5 foundation | R2 | Pending |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
@@ -252,12 +252,12 @@ At the end of each development session, update the package status, progress, com
 | Tracking field | Current value |
 |---|---|
 | Status | In progress |
-| Progress | 60% |
+| Progress | 65% |
 | Target release | R1 |
 | Depends on | WP1 |
 | Manual references | Sections 3.2–3.4 and 3.10, printed pages 24–25 and 28–30 |
-| Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation and V71 model return/resubmit wiring. Model commands now commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response and evidence writes. Registration remains unwired. |
-| Next action | Complete Brief 19B-2B and accept V72; then 19C registration wiring and 19D read projection/consolidated proof (BL-257) |
+| Existing foundation | Accepted V69 workflow/SLA foundation, V70 policy/notification foundation, V71 model return/resubmit wiring and V72 accepted-forward closure with repeat-cycle safety. Model commands commit through trusted orchestrate boundaries with atomic notification, task, clock, discrepancy, response, disposition and evidence writes. The accepted 19C-0 design defines registration integration; registration remains unwired. |
+| Next action | Implement 19C-A database trusted boundary, followed by 19C-B service integration, 19C-C forward disposition/read preparation and 19D consolidated read/proof work (BL-257) |
 
 **Outcome:** one reusable workflow and task service for entity, brand, category and model applications.
 
@@ -285,15 +285,15 @@ At the end of each development session, update the package status, progress, com
 | Evidence | Result or link |
 |---|---|
 | Plan and schema | [SNL_WP02A_WORKFLOW_FOUNDATION.md](SNL_WP02A_WORKFLOW_FOUNDATION.md); [SNL_WP02B_RETURN_RESPONSE.md](SNL_WP02B_RETURN_RESPONSE.md); [SNL_WP02B_MODEL_RETURN_WIRING.md](SNL_WP02B_MODEL_RETURN_WIRING.md) |
-| Migration range | Accepted: V69–V71 |
+| Migration range | Accepted: V69–V72 |
 | Contract version | Pending (no OpenAPI in WP2A) |
 | Unit and contract tests | `WorkingDaySlaTest` |
-| Database tests | 355 passed after Brief 19B acceptance correction; includes rating-supersession, service concurrency, rollback, exact due-date and runtime-boundary proofs |
+| Database tests | 482 passed after Brief 19B-2B; includes staged V71→V72 migration, privilege boundary, real post-legacy rollback, repeat-cycle, constraint and concurrency survivor proofs |
 | UI tests | 251 web tests passed; live browser workflow remains pending |
 | Live check | Pending |
 | Full gate | Pending |
-| Review | WP2A, Brief 19A and Brief 19B accepted. Review removed a production magic failure input and retained the rollback proof as a test-schema-only trigger. |
-| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B merged to `main` at `a9cde66` |
+| Review | WP2A, Brief 19A, Brief 19B and Brief 19B-2 accepted. V72 exposes only the three high-level model return/resubmit/closure orchestrators to runtime; acceptance includes genuine post-legacy rollback and staged migration proofs. Brief 19C-0 registration design also accepted. |
+| Completion commit or PR | WP2A and Brief 19A merged at `582f0b5`; Brief 19B at `a9cde66`; Brief 19B-2 at `798667e`; Brief 19C-0 design at `80d9aec` |
 
 #### WP2 acceptance
 
@@ -786,6 +786,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2 review pending | In progress (60%), Brief 19B-2A implemented | V72 corrected in place: cycle/return binding, enforced five-stage forward map with stored event time, structural UNIQUE/CHECK constraints, real service 409 rollback and concurrency/runtime proofs. Awaiting ChatGPT acceptance before 19C (BL-257). | Repeat acceptance review; then 19C registration wiring (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2A implemented | In progress (60%), Brief 19B-2B corrections | Review found PUBLIC execute on the security-definer cycle-binding helper. The claimed service 409 tests exit at the HTTP replay check before any legacy/closure write, and several migration/constraint tests fail for masking reasons. V72 remains unmerged. | Complete Brief 19B-2B and repeat acceptance review (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (60%), Brief 19B-2B implemented | In progress (60%), ChatGPT review pending | V72 corrected in place: revoked `bind_cycle_return` from PUBLIC/runtime, open-cycle bind guard, runtime execute audit, real post-legacy wiring-evidence 409 service proofs, staged V71→V72 backfill and constraint/cross-cycle/rejection proofs. Awaiting acceptance (BL-257). | Repeat acceptance review; then 19C registration wiring (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (60%), ChatGPT review pending | In progress (65%), Brief 19B-2 and 19C-0 accepted | V72 privilege, post-legacy rollback, staged migration, constraint and concurrency proofs accepted and merged at `798667e`. The PDF-traced registration design was merged at `80d9aec`. | Implement 19C-A, 19C-B and 19C-C, then 19D (BL-257) |
 
 ### 6.2 Standard completion record
 

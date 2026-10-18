@@ -2,7 +2,7 @@
 
 **Branch:** `cursor/snl-wp02b-model-forward-closure` (19B-2)
 **Migrations:** V71 (return/resubmit), V72 (cycle lifecycle + forward closure)
-**Status:** 19B accepted 18 Oct 2026; **19B-2B corrections complete, ChatGPT review pending**
+**Status:** 19B and 19B-2 accepted 18 Oct 2026; V72 merged to `main` at `798667e`
 
 ## Transaction boundary
 

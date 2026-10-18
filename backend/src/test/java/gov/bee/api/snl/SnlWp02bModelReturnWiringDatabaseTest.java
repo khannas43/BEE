@@ -20,7 +20,11 @@ import gov.bee.api.workflow.WorkflowIdempotencyConflictException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import org.springframework.dao.DataAccessException;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
@@ -66,8 +70,11 @@ class SnlWp02bModelReturnWiringDatabaseTest {
     static RatingRepository ratingRepo;
     static DirectorRecommendationRepository directorRepo;
     static StageReturnRepository returns;
+    static StageReturnRepository legacyReturns;
     static ResubmitApplicationRepository resub;
     static WorkflowReturnResponseWiring wiring;
+    static SnlReturnResponsePolicyRepository policyRepo;
+    static final ZoneId KOLKATA = ZoneId.of("Asia/Kolkata");
 
     static String env(String k, String d) {
         String v = System.getenv(k);
@@ -112,10 +119,11 @@ class SnlWp02bModelReturnWiringDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         returns = transactional(new StageReturnRepository(db));
+        legacyReturns = transactional(new StageReturnRepository(owner));
         resub = transactional(new ResubmitApplicationRepository(db));
         var foundation = new WorkflowFoundationRepository(db);
-        wiring = new WorkflowReturnResponseWiring(new ModelReturnResponseWiringRepository(db), foundation, new SnlReturnResponsePolicyRepository(db),
-            new NotificationCommandRepository(db));
+        policyRepo = new SnlReturnResponsePolicyRepository(db);
+        wiring = new WorkflowReturnResponseWiring(new ModelReturnResponseWiringRepository(db), foundation, policyRepo, new NotificationCommandRepository(db));
         assertEquals(71, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
     }
 
@@ -139,9 +147,12 @@ class SnlWp02bModelReturnWiringDatabaseTest {
 
     void wiredReturn(UUID id, String stage, UUID officer, String role, String idem) {
         tx.executeWithoutResult(s -> {
-            returns.prepareWiredApplicantNotification();
-            var r = returns.doReturn(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), officer, role, stage, REASON);
-            wiring.afterReturn(id, r.returnId(), stage, REASON, r.returnedAt(), officer, role, idem);
+            int version = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+            UUID returnId = UUID.randomUUID();
+            var trans = returns.transitionToReturned(id, version, officer, role, stage);
+            UUID notifyCmd = wiring.deliverApplicantReturnBeforeInsert(id, REASON, trans.returnedAt(), officer, idem);
+            returns.insertFoundationReturn(returnId, id, trans.transitionEventId(), stage, REASON, officer, notifyCmd);
+            wiring.afterReturn(id, returnId, stage, REASON, trans.returnedAt(), officer, role, idem);
         });
     }
 
@@ -167,9 +178,13 @@ class SnlWp02bModelReturnWiringDatabaseTest {
         assertEquals(2, owner.queryForObject(
             "SELECT count(*) FROM workflow_sla_clock_event e JOIN workflow_sla_clock c ON c.id = e.clock_id JOIN workflow_task t ON t.id = c.task_id WHERE t.subject_id = ?",
             Integer.class, id));
+        Instant returnedAt = owner.queryForObject("SELECT returned_at FROM model_application_return WHERE application_id = ?", Instant.class, id);
+        var policy = policyRepo.requireApplicableVersion(returnedAt);
+        String dueLabel = WorkflowReturnResponseWiring.DUE_LABEL.format(policyRepo.dueAtEndOfWorkingDays(returnedAt, policy));
         var msg = owner.queryForObject("SELECT message FROM notification WHERE application_id = ? AND kind = 'returned' LIMIT 1", String.class, id);
-        assertTrue(msg.contains("Respond by"), msg);
+        assertTrue(msg.contains("Respond by " + dueLabel), msg);
         assertTrue(msg.contains(REASON), msg);
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM notification WHERE application_id = ? AND kind = 'returned'", Integer.class, id));
     }
 
     @Test
@@ -189,11 +204,13 @@ class SnlWp02bModelReturnWiringDatabaseTest {
         UUID id = atIame("WP02B2-REPLAY-" + TAG);
         String idem = UUID.randomUUID().toString();
         tx.executeWithoutResult(s -> {
-            returns.prepareWiredApplicantNotification();
-            var r = returns.doReturn(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), IAME_USER, "iame", "iame_scrutiny",
-                REASON);
-            wiring.afterReturn(id, r.returnId(), "iame_scrutiny", REASON, r.returnedAt(), IAME_USER, "iame", idem);
-            wiring.afterReturn(id, r.returnId(), "iame_scrutiny", REASON, r.returnedAt(), IAME_USER, "iame", idem);
+            int version = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+            UUID returnId = UUID.randomUUID();
+            var trans = returns.transitionToReturned(id, version, IAME_USER, "iame", "iame_scrutiny");
+            UUID notifyCmd = wiring.deliverApplicantReturnBeforeInsert(id, REASON, trans.returnedAt(), IAME_USER, idem);
+            returns.insertFoundationReturn(returnId, id, trans.transitionEventId(), "iame_scrutiny", REASON, IAME_USER, notifyCmd);
+            wiring.afterReturn(id, returnId, "iame_scrutiny", REASON, trans.returnedAt(), IAME_USER, "iame", idem);
+            wiring.afterReturn(id, returnId, "iame_scrutiny", REASON, trans.returnedAt(), IAME_USER, "iame", idem);
         });
         assertTrue(owner.queryForObject("SELECT count(*) FROM model_return_response_wiring_evidence WHERE application_id = ? AND purpose = 'model_return_wiring'",
             Integer.class, id) >= 1);
@@ -228,8 +245,8 @@ class SnlWp02bModelReturnWiringDatabaseTest {
     @Test
     void lazyLinksPreV71OpenReturnOnFirstWiredResubmit() {
         UUID id = atIame("WP02B2-LAZY-" + TAG);
-        tx.executeWithoutResult(s -> returns.doReturn(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), IAME_USER,
-            "iame", "iame_scrutiny", REASON));
+        tx.executeWithoutResult(s -> legacyReturns.doReturn(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id),
+            IAME_USER, "iame", "iame_scrutiny", REASON));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ?", Integer.class, id));
         wiredResubmit(id, UUID.randomUUID().toString(), "Late link.");
         assertEquals(1, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ?", Integer.class, id));
@@ -241,12 +258,14 @@ class SnlWp02bModelReturnWiringDatabaseTest {
         UUID id = atIame("WP02B2-CONFLICT-" + TAG);
         String idem = UUID.randomUUID().toString();
         tx.executeWithoutResult(s -> {
-            returns.prepareWiredApplicantNotification();
-            var r = returns.doReturn(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), IAME_USER, "iame",
-                "iame_scrutiny", REASON);
-            wiring.afterReturn(id, r.returnId(), "iame_scrutiny", REASON, r.returnedAt(), IAME_USER, "iame", idem);
+            int version = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+            UUID returnId = UUID.randomUUID();
+            var trans = returns.transitionToReturned(id, version, IAME_USER, "iame", "iame_scrutiny");
+            UUID notifyCmd = wiring.deliverApplicantReturnBeforeInsert(id, REASON, trans.returnedAt(), IAME_USER, idem);
+            returns.insertFoundationReturn(returnId, id, trans.transitionEventId(), "iame_scrutiny", REASON, IAME_USER, notifyCmd);
+            wiring.afterReturn(id, returnId, "iame_scrutiny", REASON, trans.returnedAt(), IAME_USER, "iame", idem);
             assertThrows(WorkflowIdempotencyConflictException.class,
-                () -> wiring.afterReturn(id, r.returnId(), "iame_scrutiny", "Different reason.", r.returnedAt(), IAME_USER, "iame", idem));
+                () -> wiring.afterReturn(id, returnId, "iame_scrutiny", "Different reason.", trans.returnedAt(), IAME_USER, "iame", idem));
         });
     }
 
@@ -262,5 +281,86 @@ class SnlWp02bModelReturnWiringDatabaseTest {
         assertEquals(2, owner.queryForObject(
             "SELECT count(*) FROM workflow_discrepancy_response r JOIN model_return_response_cycle c ON c.discrepancy_id = r.discrepancy_id WHERE c.application_id = ?",
             Integer.class, id));
+    }
+
+    @Test
+    void runtimeCannotForgeOrRewriteCycleOrEvidence() {
+        UUID id = atIame("WP02B2-TAMPER-" + TAG);
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        UUID taskId = owner.queryForObject("SELECT task_id FROM model_return_response_cycle WHERE application_id = ?", UUID.class, id);
+        assertThrows(DataAccessException.class,
+            () -> db.update("INSERT INTO model_return_response_cycle (application_id, review_stage, task_id, discrepancy_id) VALUES (?, 'iame_scrutiny', ?, ?)",
+                UUID.randomUUID(), taskId, taskId));
+        assertThrows(DataAccessException.class, () -> db.update("UPDATE model_return_response_cycle SET task_id = ? WHERE application_id = ?", UUID.randomUUID(), id));
+        assertThrows(DataAccessException.class,
+            () -> db.update("INSERT INTO model_return_response_wiring_evidence (command_id, application_id, purpose, payload_hash) VALUES (?, ?, 'model_return_wiring', repeat('a', 64))",
+                UUID.randomUUID(), id));
+    }
+
+    @Test
+    void settingLegacyGucCannotBypassFoundationReturnInsert() {
+        UUID id = atIame("WP02B2-GUC-" + TAG);
+        assertThrows(DataAccessException.class, () -> tx.executeWithoutResult(s -> {
+            db.query("SELECT set_config('bee.model_return_wired', 'true', true)", rs -> {
+            });
+            int version = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+            var trans = returns.transitionToReturned(id, version, IAME_USER, "iame", "iame_scrutiny");
+            returns.insertLegacyReturn(UUID.randomUUID(), id, trans.transitionEventId(), "iame_scrutiny", REASON, IAME_USER);
+        }));
+    }
+
+    @Test
+    void assigneeUnavailableRollsBackLegacyResubmitAndWorkflowWrites() {
+        UUID id = atIame("WP02B2-ASSIGNEE-" + TAG);
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        owner.update("UPDATE assignment SET active = false WHERE subject_id = ? AND stage = 'iame_scrutiny'", id);
+        assertThrows(Exception.class, () -> wiredResubmit(id, UUID.randomUUID().toString(), "note"));
+        assertEquals("returned", owner.queryForObject("SELECT state FROM model_application WHERE id = ?", String.class, id));
+        assertEquals(0, owner.queryForObject(
+            "SELECT count(*) FROM workflow_discrepancy_response r JOIN model_return_response_cycle c ON c.discrepancy_id = r.discrepancy_id WHERE c.application_id = ?",
+            Integer.class, id));
+    }
+
+    @Test
+    void wiringConflictRollsBackLegacyReturnAndAllFoundationWrites() {
+        UUID id = atIame("WP02B2-ROLLBACK-" + TAG);
+        String idem = UUID.randomUUID().toString();
+        assertThrows(WorkflowIdempotencyConflictException.class, () -> tx.executeWithoutResult(s -> {
+            int version = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
+            UUID returnId = UUID.randomUUID();
+            var trans = returns.transitionToReturned(id, version, IAME_USER, "iame", "iame_scrutiny");
+            UUID notifyCmd = wiring.deliverApplicantReturnBeforeInsert(id, REASON, trans.returnedAt(), IAME_USER, idem);
+            returns.insertFoundationReturn(returnId, id, trans.transitionEventId(), "iame_scrutiny", REASON, IAME_USER, notifyCmd);
+            wiring.afterReturn(id, returnId, "iame_scrutiny", REASON, trans.returnedAt(), IAME_USER, "iame", idem);
+            wiring.afterReturn(id, returnId, "iame_scrutiny", "Changed reason.", trans.returnedAt(), IAME_USER, "iame", idem);
+        }));
+        assertEquals("iame_scrutiny", owner.queryForObject("SELECT state FROM model_application WHERE id = ?", String.class, id));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_application_return WHERE application_id = ?", Integer.class, id));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ?", Integer.class, id));
+    }
+
+    @Test
+    void officerResubmitNotificationTargetsAssignedOfficerOnly() {
+        UUID id = atIame("WP02B2-OFFICER-" + TAG);
+        wiredReturn(id, "iame_scrutiny", IAME_USER, "iame", UUID.randomUUID().toString());
+        int beforeIame = owner.queryForObject("SELECT count(*) FROM notification WHERE recipient_account_id = ? AND kind = 'applicant_resubmitted'", Integer.class,
+            IAME_USER);
+        int beforeReviewer = owner.queryForObject("SELECT count(*) FROM notification WHERE recipient_account_id = ? AND kind = 'applicant_resubmitted'", Integer.class,
+            REVIEWER_USER);
+        wiredResubmit(id, UUID.randomUUID().toString(), "Applicant note.");
+        assertEquals(beforeIame + 1, owner.queryForObject("SELECT count(*) FROM notification WHERE recipient_account_id = ? AND kind = 'applicant_resubmitted'", Integer.class,
+            IAME_USER));
+        assertEquals(beforeReviewer, owner.queryForObject("SELECT count(*) FROM notification WHERE recipient_account_id = ? AND kind = 'applicant_resubmitted'", Integer.class,
+            REVIEWER_USER));
+    }
+
+    @Test
+    void policyDueDateUsesPersistedCalendarForKnownReturnAnchor() {
+        owner.update("INSERT INTO workflow_calendar_closure (calendar_key, closure_date, reason) VALUES ('india_bee_default', ?, 'wp02b2 closure') ON CONFLICT DO NOTHING",
+            LocalDate.of(2026, 3, 18));
+        Instant anchor = ZonedDateTime.of(2026, 3, 16, 10, 0, 0, 0, KOLKATA).toInstant();
+        var version = policyRepo.requireApplicableVersion(anchor);
+        Instant due = policyRepo.dueAtEndOfWorkingDays(anchor, version);
+        assertEquals(LocalDate.of(2026, 3, 25), due.atZone(KOLKATA).toLocalDate());
     }
 }

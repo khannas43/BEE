@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -1518,10 +1519,15 @@ class SpringContractTest {
         var pwdOnly = jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")).claim("realm_access", Map.of("roles", List.of("iame"))));
         var done = new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.RETURNED, 4, Instant.parse("2026-10-04T10:00:00Z"),
             UUID.randomUUID());
+        var transOk = new gov.bee.api.rework.StageReturnRepository.TransitionResult(gov.bee.api.rework.StageReturnRepository.Outcome.RETURNED, 4,
+            Instant.parse("2026-10-04T10:00:00Z"), UUID.randomUUID());
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
         when(returnRepo.actorsAtOtherStages(org.mockito.ArgumentMatchers.eq(NOVA_APP), any())).thenReturn(Set.of());
-        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
+        when(returnRepo.transitionToReturned(any(), anyInt(), any(), any(), any())).thenReturn(transOk);
+        when(returnRepo.insertFoundationReturn(any(), any(), any(), any(), any(), any(), any())).thenReturn(done.returnId());
+        when(returnWiring.deliverApplicantReturnBeforeInsert(any(), any(), any(), any(), any())).thenReturn(UUID.randomUUID());
+        doNothing().when(returnWiring).afterReturn(any(), any(), any(), any(), any(), any(), any(), any());
 
         // Each stage owner returns from its own stage, and the receipt names the stage it came from.
         record Owner(String role, String scope, String state, Set<String> assigned) {
@@ -1543,10 +1549,9 @@ class SpringContractTest {
 
         // Version, idempotency and replay.
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok.replace("\"version\":3", "\"version\":2")), 409, "version_conflict");
-        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(
-            new gov.bee.api.rework.StageReturnRepository.Result(gov.bee.api.rework.StageReturnRepository.Outcome.STALE, 0, null, null));
+        when(returnRepo.transitionToReturned(any(), anyInt(), any(), any(), any())).thenReturn(gov.bee.api.rework.StageReturnRepository.TransitionResult.stale());
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "version_conflict");
-        when(returnRepo.doReturn(any(), anyInt(), any(), any(), any(), any())).thenReturn(done);
+        when(returnRepo.transitionToReturned(any(), anyInt(), any(), any(), any())).thenReturn(transOk);
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(true, 200, "{}", 0)));
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 409, "idempotency_in_progress");
         when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.of(new IdempotencyRepository.Stored(false, 200, "{}", 1)));
@@ -1590,7 +1595,7 @@ class SpringContractTest {
         when(identity.activeAccount(any())).thenReturn(Optional.empty());
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 403, "no_active_account");
         officerAccount("iame", "assigned", "iame_scrutiny", Set.of("iame_scrutiny"));
-        doThrow(new DataAccessResourceFailureException("down")).when(returnRepo).doReturn(any(), anyInt(), any(), any(), any(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(returnRepo).transitionToReturned(any(), anyInt(), any(), any(), any());
         conforms(r, post(path).with(token("iame")).header("Idempotency-Key", "0123456789abcdef0123457").contentType("application/json").content(ok), 503, "service_unavailable");
     }
 
@@ -2443,6 +2448,7 @@ class SpringContractTest {
         when(resubmitRepo.openReturn(NOVA_APP)).thenReturn(Optional.of(openIame));
         when(resubmitRepo.ratingInputsChanged(any(), any())).thenReturn(false);
         when(resubmitRepo.resubmit(any(), anyInt(), any(), any(), any(), any(), anyBoolean(), any())).thenReturn(done);
+        doNothing().when(returnWiring).afterResubmit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         // Back to the stage that returned it; and through rating again when a rating input changed after the rating existed.
         var back = conforms(r, post(path).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(ok), 200, null);

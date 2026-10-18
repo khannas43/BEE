@@ -1,6 +1,6 @@
 # SNL WP02B — return, applicant response and review-task wiring
 
-**Status:** Umbrella design recorded; Brief 19A accepted; Brief 19B model wiring accepted on branch; Briefs 19C–19D remain.
+**Status:** Umbrella design recorded; Brief 19A accepted; Brief 19B/19B-A model wiring in review on branch; Briefs 19C–19D remain.
 **Depends on:** WP2A merge `80b1da7`, `WorkflowFoundationRepository`, V69 command functions.
 **Migration sequence:** V70 starts the policy and generic notification foundation; later migrations wire model and registration journeys. V69 remains unchanged.
 
@@ -9,7 +9,7 @@
 | Slice | Scope | Status |
 | --- | --- | --- |
 | 19A | V70 provisional A08 policy + generic replay-safe in-portal notification foundation | Accepted (`64accd5` plus acceptance corrections) |
-| 19B | Model return/resubmit/response wiring | Accepted (V71 + `WorkflowReturnResponseWiring`; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
+| 19B | Model return/resubmit/response wiring | In review (V71 trusted commands + `WorkflowReturnResponseWiring`; see `SNL_WP02B_MODEL_RETURN_WIRING.md`) |
 | 19C | Registration return/resubmit/response wiring | Planned |
 | 19D | Common read projection, consolidated concurrency/rollback proof and plan evidence | Planned |
 

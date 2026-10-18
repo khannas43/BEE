@@ -25,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
  * The applicant resubmits a returned application after editing it (FIRST_SLICE.md section 4, decision B7). Provisional
@@ -127,10 +128,12 @@ public class ResubmitApplicationService {
                 input.get().note().orElse(null), done.resubmittedAt(), caller.accountId(), actorRole(caller), idempotencyKey);
         } catch (WorkflowIdempotencyConflictException ex) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
         } catch (IllegalStateException ex) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
-            if ("model_return_officer_ambiguous".equals(ex.getMessage())) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            if ("model_return_officer_ambiguous".equals(ex.getMessage()) || "model_return_officer_unavailable".equals(ex.getMessage())) {
                 return error(HttpStatus.CONFLICT, "assignee_unavailable");
             }
             throw ex;

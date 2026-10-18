@@ -23,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
  * The owner of a scrutiny or approval stage returns the application to the applicant with a reason (FIRST_SLICE.md
@@ -96,22 +97,28 @@ public class StageReturnService {
         }
         String fromState = row.state();
         StageReturnRepository.Result done;
+        UUID returnId = UUID.randomUUID();
         try {
-            repository.prepareWiredApplicantNotification();
-            done = repository.doReturn(appId, row.version(), caller.accountId(), StageReturn.forState(fromState).orElseThrow().actor().role(), fromState,
-                input.get().reason());
-            if (done.outcome() != StageReturnRepository.Outcome.RETURNED) {
+            var trans = repository.transitionToReturned(appId, row.version(), caller.accountId(), StageReturn.forState(fromState).orElseThrow().actor().role(),
+                fromState);
+            if (trans.outcome() != StageReturnRepository.Outcome.RETURNED) {
                 idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
                 return error(HttpStatus.CONFLICT, "version_conflict");
             }
+            UUID notifyCommandId = returnWiring.deliverApplicantReturnBeforeInsert(appId, input.get().reason(), trans.returnedAt(), caller.accountId(),
+                idempotencyKey);
+            repository.insertFoundationReturn(returnId, appId, trans.transitionEventId(), fromState, input.get().reason(), caller.accountId(), notifyCommandId);
+            done = new StageReturnRepository.Result(StageReturnRepository.Outcome.RETURNED, trans.versionAfter(), trans.returnedAt(), returnId);
             returnWiring.afterReturn(appId, done.returnId(), fromState, input.get().reason(), done.returnedAt(), caller.accountId(),
                 StageReturn.forState(fromState).orElseThrow().actor().role(), idempotencyKey);
         } catch (WorkflowIdempotencyConflictException ex) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
         } catch (IllegalStateException ex) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
-            if ("model_return_officer_ambiguous".equals(ex.getMessage())) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            if ("model_return_officer_ambiguous".equals(ex.getMessage()) || "model_return_officer_unavailable".equals(ex.getMessage())) {
                 return error(HttpStatus.CONFLICT, "assignee_unavailable");
             }
             throw ex;

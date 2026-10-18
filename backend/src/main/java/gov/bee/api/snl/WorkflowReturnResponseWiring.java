@@ -37,6 +37,18 @@ public class WorkflowReturnResponseWiring {
         this.notifications = notifications;
     }
 
+    /** Applicant notification command delivered before the return row is inserted (V71 foundation path). */
+    public UUID deliverApplicantReturnBeforeInsert(UUID applicationId, String reason, Instant returnedAt, UUID actorAccountId, String idempotencyKey) {
+        var policy = policyRepo.requireApplicableVersion(returnedAt);
+        Instant dueAt = policyRepo.dueAtEndOfWorkingDays(returnedAt, policy);
+        String dueText = DUE_LABEL.format(dueAt);
+        UUID notifyCommand = commandId(idempotencyKey, "model_return_notify", applicationId);
+        String suffix = "was returned to you: " + reason + " Respond by " + dueText + ". Edit it and send it again.";
+        var cmd = new NotificationCommandRepository.DeliverCommand(SUBJECT, applicationId, "returned", suffix);
+        notifications.deliver(cmd, notifyCommand, actorAccountId);
+        return notifyCommand;
+    }
+
     public void afterReturn(UUID applicationId, UUID returnId, String fromStage, String reason, Instant returnedAt, UUID actorAccountId, String actorRole,
                             String idempotencyKey) {
         UUID wiringCommand = commandId(idempotencyKey, "model_return_wiring", applicationId);
@@ -45,44 +57,42 @@ public class WorkflowReturnResponseWiring {
             return;
         }
 
-        var policy = policyRepo.requireApplicableVersion(returnedAt);
-        Instant dueAt = policyRepo.dueAtEndOfWorkingDays(returnedAt, policy);
-        String dueText = DUE_LABEL.format(dueAt);
-
         Optional<ModelReturnResponseWiringRepository.CycleRow> existing = wiringRepo.findCycle(applicationId);
         if (existing.isPresent()) {
-            reReturn(existing.get(), reason, returnedAt, actorAccountId, dueText, idempotencyKey, applicationId);
+            reReturn(existing.get(), reason, returnedAt, actorAccountId, idempotencyKey, applicationId);
         } else {
-            firstReturn(applicationId, fromStage, reason, returnedAt, actorAccountId, actorRole, dueAt, policy.id(), idempotencyKey, dueText);
+            firstReturn(applicationId, fromStage, reason, returnedAt, actorAccountId, actorRole, idempotencyKey);
         }
         wiringRepo.recordWiringEvidence(wiringCommand, applicationId, "model_return_wiring", wiringHash);
     }
 
-    void firstReturn(UUID applicationId, String fromStage, String reason, Instant returnedAt, UUID actorAccountId, String actorRole, Instant dueAt,
-                     UUID policyVersionId, String idempotencyKey, String dueText) {
+    void firstReturn(UUID applicationId, String fromStage, String reason, Instant returnedAt, UUID actorAccountId, String actorRole, String idempotencyKey) {
+        var policy = policyRepo.requireApplicableVersion(returnedAt);
+        Instant dueAt = policyRepo.dueAtEndOfWorkingDays(returnedAt, policy);
         StageReturn stageReturn = StageReturn.forState(fromStage).orElseThrow();
         UUID taskCommand = commandId(idempotencyKey, "model_return_task", applicationId);
         var taskCmd = new WorkflowFoundationRepository.TaskCommand(SUBJECT, applicationId, fromStage, TASK_ACTION, stageReturn.actor().role(), actorAccountId,
-            dueAt, policyVersionId, returnedAt);
+            dueAt, policy.id(), returnedAt);
         var task = foundation.createTaskIdempotent(taskCmd, taskCommand, actorAccountId, actorRole);
         UUID discrepancyId = foundation.openDiscrepancy(SUBJECT, applicationId, DISCREPANCY_LINE, reason, actorAccountId);
-        wiringRepo.insertCycle(applicationId, fromStage, task.id(), discrepancyId);
+        wiringRepo.linkCycle(applicationId, fromStage, task.id(), discrepancyId);
         var clock = foundation.findClockByTaskId(task.id()).orElseThrow();
         foundation.appendClockEvent(clock.id(), "start", "bureau", returnedAt, null);
         foundation.appendClockEvent(clock.id(), "pause", "applicant", returnedAt.plusMillis(1), null);
-        deliverApplicantReturn(applicationId, reason, dueText, actorAccountId, idempotencyKey);
     }
 
-    void reReturn(ModelReturnResponseWiringRepository.CycleRow cycle, String reason, Instant returnedAt, UUID actorAccountId, String dueText,
-                  String idempotencyKey, UUID applicationId) {
+    void reReturn(ModelReturnResponseWiringRepository.CycleRow cycle, String reason, Instant returnedAt, UUID actorAccountId, String idempotencyKey,
+                  UUID applicationId) {
         String status = wiringRepo.discrepancyStatus(cycle.discrepancyId());
         if ("awaiting_review".equals(status)) {
             int seq = wiringRepo.latestUndisposedResponseSeq(cycle.discrepancyId()).orElseThrow();
             foundation.disposeDiscrepancy(cycle.discrepancyId(), seq, "needs_more", reason, actorAccountId);
+        } else if (!"needs_more".equals(status) && !"open".equals(status)) {
+            throw new IllegalStateException("model_return_response_unexpected_discrepancy_status");
         }
         var clock = foundation.findClockByTaskId(cycle.taskId()).orElseThrow();
         foundation.appendClockEvent(clock.id(), "pause", "applicant", returnedAt.plusMillis(1), null);
-        deliverApplicantReturn(applicationId, reason, dueText, actorAccountId, idempotencyKey);
+        deliverApplicantReturn(applicationId, reason, returnedAt, actorAccountId, idempotencyKey);
     }
 
     public void afterResubmit(UUID applicationId, UUID returnId, String returnedFromStage, Instant returnedAt, String returnReason, String resumedStage,
@@ -98,21 +108,17 @@ public class WorkflowReturnResponseWiring {
 
         wiringRepo.updateLastResumedStage(applicationId, resumedStage);
 
-        int seq = wiringRepo.nextResponseSeq(cycle.discrepancyId());
         String body = note == null || note.isBlank() ? NEUTRAL_RESUBMIT_BODY : note.trim();
-        foundation.addDiscrepancyResponse(cycle.discrepancyId(), seq, body, actorAccountId);
+        wiringRepo.appendDiscrepancyResponse(cycle.discrepancyId(), body, actorAccountId);
 
         var clock = foundation.findClockByTaskId(cycle.taskId()).orElseThrow();
         foundation.appendClockEvent(clock.id(), "resume", "applicant", resubmittedAt.plusMillis(1), null);
 
-        UUID officer = resolveOfficer(applicationId, returnId, resumedStage);
         UUID notifyCommand = commandId(idempotencyKey, "model_resubmit_notify", applicationId);
-        var notify = new NotificationCommandRepository.RecipientDeliverCommand(SUBJECT, applicationId, "applicant_resubmitted",
-            "was resubmitted by the applicant.", officer);
-        notifications.deliverToRecipient(notify, notifyCommand, actorAccountId);
+        notifications.deliverModelResubmitOfficer(notifyCommand, applicationId, returnId, resumedStage, actorAccountId);
 
         wiringRepo.recordWiringEvidence(wiringCommand, applicationId, "model_resubmit_wiring", wiringHash);
-        wiringRepo.recordWiringEvidence(notifyCommand, applicationId, "model_resubmit_notify", NotificationCommandRepository.recipientPayloadHash(notify));
+        wiringRepo.recordWiringEvidence(notifyCommand, applicationId, "model_resubmit_notify", sha256(resumedStage + "|" + returnId + "|officer_notify"));
     }
 
     ModelReturnResponseWiringRepository.CycleRow lazyCreateCycle(UUID applicationId, UUID returnId, String returnedFromStage, Instant returnedAt,
@@ -126,27 +132,15 @@ public class WorkflowReturnResponseWiring {
             dueAt, policy.id(), returnedAt);
         var task = foundation.createTaskIdempotent(taskCmd, taskCommand, actorAccountId, actorRole);
         UUID discrepancyId = foundation.openDiscrepancy(SUBJECT, applicationId, DISCREPANCY_LINE, returnReason, ownerAccount);
-        wiringRepo.insertCycle(applicationId, returnedFromStage, task.id(), discrepancyId);
+        wiringRepo.linkCycle(applicationId, returnedFromStage, task.id(), discrepancyId);
         var clock = foundation.findClockByTaskId(task.id()).orElseThrow();
         foundation.appendClockEvent(clock.id(), "start", "bureau", returnedAt, null);
         foundation.appendClockEvent(clock.id(), "pause", "applicant", returnedAt.plusMillis(1), null);
         return wiringRepo.findCycle(applicationId).orElseThrow();
     }
 
-    void deliverApplicantReturn(UUID applicationId, String reason, String dueText, UUID actorAccountId, String idempotencyKey) {
-        UUID notifyCommand = commandId(idempotencyKey, "model_return_notify", applicationId);
-        String suffix = "was returned to you: " + reason + " Respond by " + dueText + ". Edit it and send it again.";
-        var cmd = new NotificationCommandRepository.DeliverCommand(SUBJECT, applicationId, "returned", suffix);
-        notifications.deliver(cmd, notifyCommand, actorAccountId);
-        wiringRepo.recordWiringEvidence(notifyCommand, applicationId, "model_return_notify", NotificationCommandRepository.payloadHash(cmd));
-    }
-
-    UUID resolveOfficer(UUID applicationId, UUID returnId, String resumedStage) {
-        if ("director_review".equals(resumedStage) || "secretary_approval".equals(resumedStage)) {
-            return wiringRepo.returnedByAccount(returnId);
-        }
-        return wiringRepo.soleActiveAssignee(applicationId, resumedStage)
-            .orElseThrow(() -> new IllegalStateException("model_return_officer_ambiguous"));
+    void deliverApplicantReturn(UUID applicationId, String reason, Instant returnedAt, UUID actorAccountId, String idempotencyKey) {
+        deliverApplicantReturnBeforeInsert(applicationId, reason, returnedAt, actorAccountId, idempotencyKey);
     }
 
     boolean replayIfComplete(UUID commandId, String payloadHash) {

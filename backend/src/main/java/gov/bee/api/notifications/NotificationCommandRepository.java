@@ -15,11 +15,10 @@ public class NotificationCommandRepository {
     public record DeliverCommand(String subjectKind, UUID subjectId, String kind, String messageSuffix) {
     }
 
-    public record RecipientDeliverCommand(String subjectKind, UUID subjectId, String kind, String messageSuffix, UUID recipientAccountId) {
-    }
-
     public record DeliverResult(int recipientCount) {
     }
+
+    static final String MODEL_RESUBMIT_SUFFIX = "was resubmitted by the applicant.";
 
     private final JdbcTemplate jdbc;
 
@@ -29,11 +28,6 @@ public class NotificationCommandRepository {
 
     public static String payloadHash(DeliverCommand command) {
         return sha256(command.subjectKind() + "|" + command.subjectId() + "|" + command.kind() + "|" + command.messageSuffix());
-    }
-
-    public static String recipientPayloadHash(RecipientDeliverCommand command) {
-        return sha256(command.subjectKind() + "|" + command.subjectId() + "|" + command.kind() + "|" + command.messageSuffix() + "|"
-            + command.recipientAccountId());
     }
 
     public static String sha256(String canonical) {
@@ -60,18 +54,15 @@ public class NotificationCommandRepository {
         return new DeliverResult(count == null ? 0 : count);
     }
 
-    public DeliverResult deliverToRecipient(RecipientDeliverCommand command, UUID commandId, UUID actorAccountId) {
-        String hash = recipientPayloadHash(command);
+    public DeliverResult deliverModelResubmitOfficer(UUID commandId, UUID applicationId, UUID returnId, String resumedStage, UUID actorAccountId) {
         Integer count = jdbc.queryForObject(
-            "SELECT notification_foundation_deliver_recipient(?, ?, ?, ?, ?, ?, ?, ?)",
+            "SELECT model_return_response_officer_resubmit_notify(?, ?, ?, ?, ?, ?)",
             Integer.class,
             commandId,
-            hash,
-            command.subjectKind(),
-            command.subjectId(),
-            command.kind(),
-            command.messageSuffix(),
-            command.recipientAccountId(),
+            applicationId,
+            returnId,
+            resumedStage,
+            MODEL_RESUBMIT_SUFFIX,
             actorAccountId);
         return new DeliverResult(count == null ? 0 : count);
     }

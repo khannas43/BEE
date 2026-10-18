@@ -780,7 +780,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | WP2 | In progress (5%) | In progress (35%) | Brief 18 WP2A: V69 schema, WorkingDaySla, db/unit tests | WP2B wiring, APIs, UI; BL-257 |
 | 18 Oct 2026 | WP2 | In progress (35%) | In progress (35%), WP2A accepted | Per-task policy-pinned clocks, atomic due-dated tasks, multi-cycle discrepancies and India-date policy boundary accepted; 160 backend, 287 database and 251 web tests passed | Begin WP2B journey wiring (BL-257) |
 | 18 Oct 2026 | WP2 | In progress (35%) | In progress (45%), Brief 19A accepted | V70 `snl_return_response` policy, polymorphic notifications and replay-safe delivery accepted; conflicting policy seed and zero-recipient replay were closed; 160 back-end, 299 database and 251 web tests passed | Brief 19B model wiring, then 19C–19D (BL-257) |
-| 18 Oct 2026 | WP2 | In progress (45%) | In progress (55%), Brief 19B accepted | V71 model cycle linkage, wired return/resubmit in `StageReturnService`/`ResubmitApplicationService`, officer recipient command, GUC-skipped V39 duplicate; eight focused DB tests in `SnlWp02bModelReturnWiringDatabaseTest` | Brief 19C registration wiring; 19B-2 forward closure proof (BL-257) |
+| 18 Oct 2026 | WP2 | In progress (45%) | In progress (55%), Brief 19B-A in review | V71 trusted commands (no runtime cycle/evidence mutation, foundation return insert, DB-resolved officer notify), rollback-only on wiring failures | ChatGPT 19B-A acceptance; then 19C (BL-257) |
 
 ### 6.2 Standard completion record
 

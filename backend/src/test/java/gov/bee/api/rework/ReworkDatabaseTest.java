@@ -123,7 +123,7 @@ class ReworkDatabaseTest {
         ratingRepo = transactional(new RatingRepository(db));
         directorRepo = transactional(new DirectorRecommendationRepository(db));
         secretaryRepo = transactional(new SecretaryApprovalRepository(db));
-        returns = transactional(new StageReturnRepository(db));
+        returns = transactional(new StageReturnRepository(owner));
         resub = transactional(new ResubmitApplicationRepository(db));
         rejects = transactional(new StageRejectRepository(db));
         history = new HistoryRepository(db);

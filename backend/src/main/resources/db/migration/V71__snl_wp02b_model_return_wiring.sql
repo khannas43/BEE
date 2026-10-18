@@ -1,4 +1,4 @@
--- SNL WP02B-2 (Brief 19B): durable model return/resubmit cycle linkage and officer notification command.
+-- SNL WP02B-2 (Brief 19B / 19B-A): durable model return/resubmit cycle linkage and trusted wiring commands.
 
 CREATE TABLE model_return_response_cycle (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -38,67 +38,259 @@ CREATE TRIGGER model_return_response_wiring_evidence_immutable_row
   BEFORE UPDATE OR DELETE ON model_return_response_wiring_evidence
   FOR EACH ROW EXECUTE FUNCTION model_return_response_wiring_evidence_guard();
 
+ALTER TABLE model_application_return
+  ADD COLUMN foundation_notify_command_id uuid REFERENCES notification_command (command_id);
+
 CREATE OR REPLACE FUNCTION notify_on_return() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 BEGIN
-  IF coalesce(current_setting('bee.model_return_wired', true), '') = 'true' THEN
+  IF NEW.foundation_notify_command_id IS NOT NULL THEN
     RETURN NEW;
   END IF;
   PERFORM notify_application_organisation(NEW.application_id, 'returned', 'was returned to you: ' || NEW.reason || ' Edit it and send it again.');
   RETURN NEW;
 END $$;
 
-CREATE FUNCTION notification_foundation_deliver_recipient(
+CREATE FUNCTION model_return_response_resolve_officer(
+  p_application_id uuid,
+  p_return_id uuid,
+  p_resumed_stage text
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_recipient uuid;
+  v_count integer;
+BEGIN
+  PERFORM workflow_validate_subject('model_application', p_application_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM model_application_return r
+     WHERE r.id = p_return_id AND r.application_id = p_application_id
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_return_mismatch';
+  END IF;
+  IF p_resumed_stage IN ('director_review', 'secretary_approval') THEN
+    SELECT returned_by_account_id INTO v_recipient FROM model_application_return WHERE id = p_return_id;
+  ELSE
+    SELECT count(*)::int INTO v_count
+      FROM assignment
+     WHERE subject_type = 'model_application' AND subject_id = p_application_id
+       AND stage = p_resumed_stage AND active;
+    IF v_count <> 1 THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_officer_ambiguous';
+    END IF;
+    SELECT user_id INTO v_recipient
+      FROM assignment
+     WHERE subject_type = 'model_application' AND subject_id = p_application_id
+       AND stage = p_resumed_stage AND active;
+  END IF;
+  IF v_recipient IS NULL OR NOT EXISTS (
+    SELECT 1 FROM user_account u WHERE u.id = v_recipient AND u.status = 'active'
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'notification_recipient_inactive';
+  END IF;
+  RETURN v_recipient;
+END $$;
+
+CREATE FUNCTION model_return_response_officer_resubmit_notify(
   p_command_id uuid,
-  p_payload_hash char(64),
-  p_subject_kind text,
-  p_subject_id uuid,
-  p_kind text,
+  p_application_id uuid,
+  p_return_id uuid,
+  p_resumed_stage text,
   p_message_suffix text,
-  p_recipient_account uuid,
   p_actor_account uuid
 ) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
 DECLARE
   v_row notification_command;
+  v_recipient uuid;
+  v_subject_kind text := 'model_application';
+  v_kind text := 'applicant_resubmitted';
+  v_suffix text := 'was resubmitted by the applicant.';
   v_full text;
+  v_hash char(64);
 BEGIN
-  IF p_command_id IS NULL OR p_payload_hash IS NULL OR p_recipient_account IS NULL THEN
+  IF p_command_id IS NULL THEN
     RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'notification_command_id_hash_required';
   END IF;
-  PERFORM workflow_validate_subject(p_subject_kind, p_subject_id);
-  IF NOT EXISTS (
-    SELECT 1 FROM user_account u WHERE u.id = p_recipient_account AND u.status = 'active'
-  ) THEN
-    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'notification_recipient_inactive';
+  PERFORM workflow_validate_subject(v_subject_kind, p_application_id);
+  IF p_message_suffix IS DISTINCT FROM v_suffix THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_notify_suffix_invalid';
   END IF;
-  v_full := notification_foundation_subject_message(p_subject_kind, p_subject_id, p_message_suffix);
+  v_recipient := model_return_response_resolve_officer(p_application_id, p_return_id, p_resumed_stage);
+  v_hash := encode(
+    sha256(convert_to(v_subject_kind || '|' || p_application_id::text || '|' || v_kind || '|' || v_suffix || '|' || v_recipient::text, 'UTF8')),
+    'hex');
+  v_full := notification_foundation_subject_message(v_subject_kind, p_application_id, v_suffix);
   PERFORM pg_advisory_xact_lock(hashtextextended(p_command_id::text, 0));
   INSERT INTO notification_command (command_id, payload_hash, subject_kind, subject_id, kind, message, actor_account_id, recipient_count)
-  VALUES (p_command_id, p_payload_hash, p_subject_kind, p_subject_id, p_kind, v_full, p_actor_account, 0)
+  VALUES (p_command_id, v_hash, v_subject_kind, p_application_id, v_kind, v_full, p_actor_account, 0)
   ON CONFLICT (command_id) DO NOTHING;
   SELECT * INTO v_row FROM notification_command WHERE command_id = p_command_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'notification_command_create_race_retry';
   END IF;
   IF v_row.delivered_at IS NOT NULL THEN
-    IF NOT notification_idempotency_payload_matches(v_row, p_payload_hash, p_subject_kind, p_subject_id, p_kind, v_full) THEN
+    IF NOT notification_idempotency_payload_matches(v_row, v_hash, v_subject_kind, p_application_id, v_kind, v_full) THEN
       RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'notification_idempotency_conflict';
     END IF;
     RETURN v_row.recipient_count;
   END IF;
-  IF NOT notification_idempotency_payload_matches(v_row, p_payload_hash, p_subject_kind, p_subject_id, p_kind, v_full) THEN
+  IF NOT notification_idempotency_payload_matches(v_row, v_hash, v_subject_kind, p_application_id, v_kind, v_full) THEN
     RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'notification_idempotency_conflict';
   END IF;
   INSERT INTO notification (recipient_account_id, application_id, subject_kind, subject_id, kind, message)
-  VALUES (
-    p_recipient_account,
-    CASE WHEN p_subject_kind = 'model_application' THEN p_subject_id ELSE NULL END,
-    p_subject_kind, p_subject_id, p_kind, v_full
-  );
+  VALUES (v_recipient, p_application_id, v_subject_kind, p_application_id, v_kind, v_full);
   UPDATE notification_command SET recipient_count = 1, delivered_at = now() WHERE command_id = p_command_id;
   RETURN 1;
 END $$;
 
-REVOKE ALL ON FUNCTION notification_foundation_deliver_recipient(uuid, char(64), text, uuid, text, text, uuid, uuid) FROM PUBLIC;
+CREATE FUNCTION model_return_response_link_cycle(
+  p_application_id uuid,
+  p_review_stage text,
+  p_task_id uuid,
+  p_discrepancy_id uuid
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_id uuid;
+BEGIN
+  PERFORM workflow_validate_subject('model_application', p_application_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM workflow_task t
+     WHERE t.id = p_task_id
+       AND t.subject_kind = 'model_application'
+       AND t.subject_id = p_application_id
+       AND t.stage = p_review_stage
+       AND t.action = 'review'
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_task_link_invalid';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM workflow_discrepancy d
+     WHERE d.id = p_discrepancy_id
+       AND d.subject_kind = 'model_application'
+       AND d.subject_id = p_application_id
+       AND d.line_code = 'return_response'
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_discrepancy_link_invalid';
+  END IF;
+  INSERT INTO model_return_response_cycle (application_id, review_stage, task_id, discrepancy_id)
+  VALUES (p_application_id, p_review_stage, p_task_id, p_discrepancy_id)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+CREATE FUNCTION model_return_response_update_last_resumed_stage(
+  p_application_id uuid,
+  p_stage text
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+BEGIN
+  PERFORM workflow_validate_subject('model_application', p_application_id);
+  UPDATE model_return_response_cycle SET last_resumed_stage = p_stage WHERE application_id = p_application_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_cycle_missing';
+  END IF;
+END $$;
+
+CREATE FUNCTION model_return_response_record_wiring_evidence(
+  p_command_id uuid,
+  p_application_id uuid,
+  p_purpose text,
+  p_payload_hash char(64)
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_row model_return_response_wiring_evidence;
+BEGIN
+  IF p_command_id IS NULL OR p_payload_hash IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_wiring_command_required';
+  END IF;
+  PERFORM workflow_validate_subject('model_application', p_application_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_command_id::text, 0));
+  INSERT INTO model_return_response_wiring_evidence (command_id, application_id, purpose, payload_hash)
+  VALUES (p_command_id, p_application_id, p_purpose, p_payload_hash)
+  ON CONFLICT (command_id) DO NOTHING;
+  SELECT * INTO v_row FROM model_return_response_wiring_evidence WHERE command_id = p_command_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'model_return_response_wiring_evidence_race_retry';
+  END IF;
+  IF v_row.payload_hash IS DISTINCT FROM p_payload_hash
+     OR v_row.application_id IS DISTINCT FROM p_application_id
+     OR v_row.purpose IS DISTINCT FROM p_purpose THEN
+    RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'model_return_response_wiring_idempotency_conflict';
+  END IF;
+END $$;
+
+CREATE FUNCTION model_return_response_append_response(
+  p_discrepancy_id uuid,
+  p_body text,
+  p_responded_by uuid
+) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_seq integer;
+BEGIN
+  PERFORM 1 FROM workflow_discrepancy WHERE id = p_discrepancy_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_discrepancy_missing';
+  END IF;
+  SELECT coalesce(max(response_seq), 0) + 1 INTO v_seq
+    FROM workflow_discrepancy_response WHERE discrepancy_id = p_discrepancy_id;
+  PERFORM workflow_foundation_discrepancy_respond(p_discrepancy_id, v_seq, p_body, p_responded_by);
+  RETURN v_seq;
+END $$;
+
+CREATE FUNCTION model_return_response_insert_return(
+  p_return_id uuid,
+  p_application_id uuid,
+  p_transition_event_id uuid,
+  p_from_state text,
+  p_reason text,
+  p_returned_by uuid,
+  p_foundation_notify_command_id uuid
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_id uuid;
+BEGIN
+  IF p_foundation_notify_command_id IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_foundation_notify_required';
+  END IF;
+  PERFORM workflow_validate_subject('model_application', p_application_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM notification_command nc
+     WHERE nc.command_id = p_foundation_notify_command_id
+       AND nc.delivered_at IS NOT NULL
+       AND nc.subject_kind = 'model_application'
+       AND nc.subject_id = p_application_id
+       AND nc.kind = 'returned'
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_response_foundation_notify_undelivered';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM model_application_transition_event e
+     WHERE e.id = p_transition_event_id AND e.application_id = p_application_id
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_transition_mismatch';
+  END IF;
+  INSERT INTO model_application_return (
+    id, application_id, transition_event_id, returned_from_state, reason,
+    fp_declared_iseer, fp_laboratory_code, fp_tested_on, fp_report_versions,
+    returned_by_account_id, foundation_notify_command_id
+  )
+  SELECT p_return_id, a.id, p_transition_event_id, p_from_state, p_reason,
+    a.declared_iseer, a.laboratory_code, a.tested_on,
+    (SELECT count(*)::int FROM model_application_document_version v
+      JOIN model_application_document d ON d.id = v.document_id WHERE d.application_id = a.id),
+    p_returned_by, p_foundation_notify_command_id
+  FROM model_application a WHERE a.id = p_application_id
+  RETURNING id INTO v_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'workflow_subject_missing';
+  END IF;
+  RETURN v_id;
+END $$;
+
+REVOKE ALL ON FUNCTION model_return_response_resolve_officer(uuid, uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_officer_resubmit_notify(uuid, uuid, uuid, text, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_link_cycle(uuid, text, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_update_last_resumed_stage(uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_record_wiring_evidence(uuid, uuid, text, char(64)) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_append_response(uuid, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION model_return_response_insert_return(uuid, uuid, uuid, text, text, uuid, uuid) FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION workflow_block_subject_delete() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -208,16 +400,31 @@ DO $$
 DECLARE
   home_schema text := current_schema();
 BEGIN
-  EXECUTE format('ALTER FUNCTION %I.notification_foundation_deliver_recipient(uuid, char(64), text, uuid, text, text, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
   EXECUTE format('ALTER FUNCTION %I.notify_on_return() SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_resolve_officer(uuid, uuid, text) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_officer_resubmit_notify(uuid, uuid, uuid, text, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_link_cycle(uuid, text, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_update_last_resumed_stage(uuid, text) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_record_wiring_evidence(uuid, uuid, text, char(64)) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_append_response(uuid, text, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_insert_return(uuid, uuid, uuid, text, text, uuid, uuid) SET search_path = %I, pg_temp', home_schema, home_schema);
+
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_local_maint') THEN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.app_disposable_model_cleanup(uuid[]) TO bee_local_maint', home_schema);
     EXECUTE format('GRANT SELECT, DELETE ON %I.model_return_response_cycle TO bee_local_maint', home_schema);
     EXECUTE format('GRANT SELECT, DELETE ON %I.model_return_response_wiring_evidence TO bee_local_maint', home_schema);
   END IF;
   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'bee_runtime') THEN
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.notification_foundation_deliver_recipient(uuid, char(64), text, uuid, text, text, uuid, uuid) TO bee_runtime', home_schema);
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE ON %I.model_return_response_cycle TO bee_runtime', home_schema);
-    EXECUTE format('GRANT SELECT, INSERT ON %I.model_return_response_wiring_evidence TO bee_runtime', home_schema);
+    EXECUTE format('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON %I.model_return_response_cycle FROM bee_runtime', home_schema);
+    EXECUTE format('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON %I.model_return_response_wiring_evidence FROM bee_runtime', home_schema);
+    EXECUTE format('GRANT SELECT ON %I.model_return_response_cycle TO bee_runtime', home_schema);
+    EXECUTE format('GRANT SELECT ON %I.model_return_response_wiring_evidence TO bee_runtime', home_schema);
+    EXECUTE format('REVOKE INSERT ON %I.model_application_return FROM bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_link_cycle(uuid, text, uuid, uuid) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_update_last_resumed_stage(uuid, text) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_record_wiring_evidence(uuid, uuid, text, char(64)) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_officer_resubmit_notify(uuid, uuid, uuid, text, text, uuid) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_append_response(uuid, text, uuid) TO bee_runtime', home_schema);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.model_return_response_insert_return(uuid, uuid, uuid, text, text, uuid, uuid) TO bee_runtime', home_schema);
   END IF;
 END $$;

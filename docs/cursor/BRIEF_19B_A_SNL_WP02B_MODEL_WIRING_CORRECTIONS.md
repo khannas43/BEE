@@ -136,4 +136,3 @@ Do not mark 19B complete in the plan or BL-257 yet.
 ## Handback
 
 Run `/bee-handback`. Resolve each of the five numbered findings separately, list the exact named tests, full pass counts, final V71 privileges/command functions, transaction rollback mechanism, commit hash and remaining 19B-2/19C–19D deferrals.
-

@@ -280,6 +280,18 @@ Each decision below gives what the system does today, the realistic options, a r
 
 **Policy conflicts recorded in WP01 (not decisions):** discrepancy day counts (A08); entity approval roles silent (A02–A03); portal `agency` registration kind not described as such in the manual.
 
+## Role-based lifecycle navigation (Brief C3, 19 October 2026)
+
+**Status:** owner-approved menu structure. ChatGPT review of the implementation is pending. Design and mapping: [cursor/BRIEF_C3_ROLE_LIFECYCLE_NAVIGATION.md](cursor/BRIEF_C3_ROLE_LIFECYCLE_NAVIGATION.md).
+
+| ID | Decision | Label |
+|---|---|---|
+| N1 | **Admin** is a demonstration umbrella profile. It sees every available screen in exactly four groups (Executive Dashboard; Registration & Applications; Labels & Consumer Services; Operations & Intelligence). It is not a workflow actor, and its menu grants no permission. | Owner-approved |
+| N2 | **The four operational roles stay distinct, each with at most four primary groups:** Manufacturer (own organisation only; no internal risk scores or BEE queues); Director (observation, anomalies, holds, revocation and model recommendations; no onboarding pre-approval queue); Secretary (model approval only); Finance (automatically verified payments for information, reconciliation and anomalies; no manual confirmation of ordinary successful payments). | Owner-approved |
+| N3 | **AI is advisory and human-controlled.** AI entries carry an "Advisory" label. The ledger carries "Simulated". | Owner-approved |
+| N4 | **Functions not yet built are shown as Preview (a sample-data prototype screen) or Planned (no screen, not a link).** OCR, MCA/GSTN checks, production AI, Hyperledger, signed QR payloads, Merkle anchoring, e-signing and unavailable official templates are not presented as complete. | Owner-approved |
+| N5 | **The development "All screens" menu link is removed.** The menu follows the Spring sign-in; the browser preview role never opens a screen. | Owner-approved |
+
 ## References for the engineering team
 
 Source decision records and the build's provisional values: [wp01/SCREEN_ACTION_MATRIX.md](wp01/SCREEN_ACTION_MATRIX.md) (D1 to D6), [wp04/WP04.1_MASTERS.md](wp04/WP04.1_MASTERS.md) section 10 (M1 to M7), [wp05/WP05.1d_DECISIONS.md](wp05/WP05.1d_DECISIONS.md) and [wp05/WP05.1d_EVIDENCE_GATES.md](wp05/WP05.1d_EVIDENCE_GATES.md) (B1 to B8). Tracked in [BACKLOG.md](BACKLOG.md): BL-040 to BL-043, BL-064, BL-065, BL-068, BL-073, BL-084, BL-085, BL-086.

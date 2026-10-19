@@ -3,20 +3,21 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { runtimeNavFor } from "@/lib/runtimeRoutes";
+import { leaves, navigationFor } from "@/lib/navigation";
 import { useLang } from "@/components/i18n/LangProvider";
 import { useSpringIdentity } from "./SessionBadge";
 
-/** Finds the screens the signed-in person's menu offers (the same entries as the sidebar) and opens one. It searches screen names only. */
+/** Finds the screens the signed-in person's menu offers (the same entries as the sidebar, planned ones excluded) and opens one. It searches screen names only. */
 export function TopbarSearch() {
-  const { t, lang } = useLang();
+  const { t } = useLang();
   const router = useRouter();
   const id = useSpringIdentity();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const entries = id.status === "signed-in" ? runtimeNavFor(id.me.effectiveRoles, id.me.capabilities ?? []) : [];
+  const groups = id.status === "signed-in" ? navigationFor(id.me.effectiveRoles, id.me.capabilities ?? []) : [];
+  const entries = groups.flatMap((g) => leaves(g.children).filter((e) => e.route && e.state !== "planned").map((e) => ({ ...e, route: e.route!, group: g.title })));
   const term = q.trim().toLowerCase();
-  const hits = term ? entries.filter((r) => `${r.en} ${r.hi}`.toLowerCase().includes(term)) : [];
+  const hits = term ? entries.filter((e) => `${e.title} ${e.group}`.toLowerCase().includes(term)) : [];
   const go = (href: string) => {
     setQ("");
     setOpen(false);
@@ -35,17 +36,18 @@ export function TopbarSearch() {
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && hits[0]) go(hits[0].href);
+            if (e.key === "Enter" && hits[0]) go(hits[0].route);
             if (e.key === "Escape") setOpen(false);
           }}
         />
       </div>
       {open && term && (
         <ul role="listbox" aria-label="Matching screens" className="absolute left-0 right-0 top-full mt-1 z-30 bg-surface-container-lowest border border-border-subtle rounded-lg shadow-lg py-1">
-          {hits.length ? hits.map((r) => (
-            <li key={r.href} role="option" aria-selected={false}>
-              <button type="button" className="w-full text-left flex items-center gap-space-sm px-space-md py-1.5 hover:bg-surface-container-low font-body-sm text-body-sm text-on-surface" onMouseDown={(e) => e.preventDefault()} onClick={() => go(r.href)}>
-                <Icon name={r.icon} size={18} className="text-on-surface-variant" /> {lang === "hi" ? r.hi : r.en}
+          {hits.length ? hits.map((e) => (
+            <li key={e.id} role="option" aria-selected={false}>
+              <button type="button" className="w-full text-left flex items-center gap-space-sm px-space-md py-1.5 hover:bg-surface-container-low font-body-sm text-body-sm text-on-surface" onMouseDown={(ev) => ev.preventDefault()} onClick={() => go(e.route)}>
+                <Icon name={e.icon} size={18} className="text-on-surface-variant" /> {e.title}
+                <span className="ml-auto font-label-sm text-label-sm text-on-surface-variant">{e.group}</span>
               </button>
             </li>
           )) : <li className="px-space-md py-1.5 font-body-sm text-body-sm text-on-surface-variant">No matching screen</li>}

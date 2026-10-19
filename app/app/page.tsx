@@ -5,15 +5,17 @@ import { Icon } from "@/components/ui/Icon";
 import { PREVIEW_SUFFIX, useRole } from "@/components/app/RoleContext";
 import { useLang } from "@/components/i18n/LangProvider";
 import { countForRole, SCREEN_COUNT } from "@/lib/screens";
-import { categoriesForRole } from "@/lib/categories";
+import { leaves, navigationFor } from "@/lib/navigation";
 import { isExternalRole, RoleKey } from "@/lib/roles";
 import { useLifecycle } from "@/components/app/LifecycleStore";
+import { useSpringIdentity } from "@/components/app/SessionBadge";
 
 export default function AppOverview() {
   const { role } = useRole();
-  const { t, lang } = useLang();
+  const { t } = useLang();
   const { tasks } = useLifecycle();
-  const categories = categoriesForRole(role);
+  const identity = useSpringIdentity();
+  const categories = identity.status === "signed-in" ? navigationFor(identity.me.effectiveRoles, identity.me.capabilities ?? []) : [];
   const external = isExternalRole(role);
   const visible = countForRole(role);
 
@@ -79,26 +81,35 @@ export default function AppOverview() {
       <div>
         <h2 className="font-headline-sm text-headline-sm text-on-surface mb-space-md">{t("app.workAreasTitle")}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-space-md">
-          {categories.map((c) => (
-            <div key={c.id} className="bg-surface-card rounded-xl shadow-sm p-space-md hover:shadow-md transition-all">
-              <div className="flex items-center gap-space-sm mb-space-sm">
-                <span className="w-10 h-10 rounded-lg bg-forest-light text-primary flex items-center justify-center">
-                  <Icon name={c.icon} size={22} fill />
-                </span>
-                <div>
-                  <h3 className="font-title-lg text-title-lg text-on-surface">{lang === "hi" ? c.hi : c.en}</h3>
-                  <span className="font-label-sm text-label-sm text-on-surface-variant">{c.items.length} {t("app.areasWord")}</span>
+          {categories.map((c) => {
+            const items = leaves(c.children);
+            return (
+              <div key={c.id} className="bg-surface-card rounded-xl shadow-sm p-space-md hover:shadow-md transition-all" data-testid={`work-area-${c.id}`}>
+                <div className="flex items-center gap-space-sm mb-space-sm">
+                  <span className="w-10 h-10 rounded-lg bg-forest-light text-primary flex items-center justify-center">
+                    <Icon name={c.icon} size={22} fill />
+                  </span>
+                  <div>
+                    <h3 className="font-title-lg text-title-lg text-on-surface">{c.title}</h3>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant">{items.length} {t("app.areasWord")}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {items.map((it) =>
+                    it.route && it.state !== "planned" ? (
+                      <Link key={it.id} href={it.route} className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface font-label-sm text-label-sm hover:bg-forest-light hover:text-forest-dark">
+                        {it.title}{it.state === "preview" ? " · Preview" : ""}
+                      </Link>
+                    ) : (
+                      <span key={it.id} aria-disabled="true" className="px-2 py-0.5 rounded-full border border-border-subtle text-on-surface-variant font-label-sm text-label-sm">
+                        {it.title} · Planned
+                      </span>
+                    ),
+                  )}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1">
-                {c.items.map((it) => (
-                  <Link key={it.href + it.en} href={it.href} className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface font-label-sm text-label-sm hover:bg-forest-light hover:text-forest-dark">
-                    {lang === "hi" ? it.hi : it.en}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

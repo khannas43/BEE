@@ -101,7 +101,7 @@ const READ_UI_MESSAGES_NO_SESSION = "Sign in to continue.";
 const others = (all, org) => all.filter((a) => a.org !== org);
 const leaks = (s, foreign) => foreign.filter((a) => s.body.includes(a.reference) || s.body.includes(a.id) || s.body.includes(a.model));
 
-const SIMULATED = ["Scoping is simulated", "Your access", "Download or export", "Not in this preview", "not available to the current role"];
+const SIMULATED = ["Scoping is simulated", "Your access", "Download or export", "Not in this preview", "Not in your menu", "Preview screen: sample data", "not available to the current role"];
 const NAV = "[data-testid=runtime-nav-model-dashboard]";
 const focus = (page) => page.eval(`window.dispatchEvent(new Event("focus")); true`);
 const hasNav = (page) => page.eval(`!!document.querySelector(${JSON.stringify(NAV)})`);
@@ -193,20 +193,21 @@ async function main() {
       check(`read-ui.${persona}.no-token-in-page`, s.cookie === "" && !/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\./.test(s.body), `document.cookie "${s.cookie}"; no JWT in the page text`);
     }
 
-    /* ---------- preview behaviour is unchanged elsewhere ---------- */
+    /* ---------- prototype screens follow the Spring sign-in, not the preview role (Brief C3) ---------- */
     {
       const nova = pages["nova.applicant"], other = "/app/administration/appliance-master";
+      const refused = `location.pathname === ${JSON.stringify(other)} && !!document.querySelector("[data-testid=route-guard-refused]")`;
       await preview(nova, "manufacturer");
       await nova.goto(`${WEB}${other}`);
-      const denied = await nova.waitFor(`location.pathname === ${JSON.stringify(other)} && document.body.innerText.includes("Not in this preview")`, 30000);
+      const denied = await nova.waitFor(refused, 30000);
       await nova.goto(`${WEB}/app/model-label/model-payment`);
       const banner = await nova.waitFor(`document.body.innerText.includes("Scoping is simulated") && document.body.innerText.includes("Your access")`, 30000);
       await preview(nova, "admin");
       await nova.goto(`${WEB}${other}`);
-      const allowed = await nova.waitFor(`location.pathname === ${JSON.stringify(other)} && !!document.querySelector("h1") && !document.body.innerText.includes("Not in this preview") && !document.body.innerText.includes("not available to the current role")`, 30000);
+      const stillDenied = await nova.waitFor(refused, 30000);
       await nova.eval(`localStorage.removeItem("bee-role"); true`);
-      check("read-ui.preview-elsewhere-unchanged", denied && banner && allowed,
-        `${other}: manufacturer preview still "Not in this preview" (${denied}), admin preview still shows it (${allowed}); another partner screen still has the simulated-scoping banner and access chips (${banner})`);
+      check("read-ui.preview-grants-nothing", denied && banner && stillDenied,
+        `${other}: refused to the manufacturer sign-in (${denied}) and still refused with the Admin preview role chosen (${stillDenied}); the manufacturer's own payment screen still has the simulated-scoping banner and access chips (${banner})`);
     }
 
     /* ---------- empty and no read access: real Spring answers, no entry for these roles ---------- */

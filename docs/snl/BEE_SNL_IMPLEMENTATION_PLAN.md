@@ -861,6 +861,7 @@ Add one row whenever a package status or material result changes.
 | 18 Oct 2026 | Strategy | Manual-backed WP plan | Blueprint-aligned strategy | Reviewed the 13-page solution blueprint. A21–A29, BL-258–BL-260 govern conditional integrations. | Keep WP2 sequence; obtain owner/BEE decisions before activating integrations |
 | 18 Oct 2026 | WP3–WP9 (demo) | — | Demo accelerator | Guided WP3–WP9 showcase (`docs/demo/DEMO_WP3_WP9_SCRIPT.md`, seed **s9**, `npm run demo:wp3-wp9-check`) for rehearsal; does not alone complete WP3–WP9 packages | Brief C1 merges real onboarding with demo stack |
 | 18 Oct 2026 | WP3 | In progress (15%) | Brief C1 live integration | Merge demo @ `098b05c` + WP3 UI/backend @ `aeafc7c`; coordinated applicant → Director → anomaly smoke through ngrok | Record evidence; mark WP3 complete only if live journey passes |
+| 19 Oct 2026 | WP3–WP9 (demo navigation) | Flat preview-role menu with a development "All screens" link | Brief C3 implemented; ChatGPT review pending | Role-based lifecycle menu (`lib/navigation.ts`, section 7.1). Admin is the umbrella profile; four distinct operational roles. AI is labelled advisory, the ledger simulated, and unbuilt functions Preview or Planned. The "All screens" link is removed. 24 navigation tests, 264 web tests, 263 UI tests and the production build pass. | ChatGPT review; BL-265–BL-267 |
 
 ### 6.2 Standard completion record
 
@@ -901,6 +902,23 @@ The following demonstrated modules should be promoted into the formal API rather
 | Messages | Already promoted; connect approved delivery providers later |
 | Simulated ledger | Keep only for demonstrations; if approved, replace it with a provider-neutral integrity-anchor adapter while the portal database remains authoritative |
 | AI demonstrations | Keep outside the core transactional release; promote individual assisted use cases only after evidence, model/version, human-override, privacy and security gates pass |
+
+### 7.1 Console navigation for the WP3–WP9 demonstration (Brief C3)
+
+The console menu is a role-based lifecycle hierarchy, defined once in `lib/navigation.ts`. It is owner-approved; see decisions N1–N5 in [BEE_DECISIONS.md](../BEE_DECISIONS.md).
+
+- **Admin is the demonstration umbrella profile.**
+  - It has exactly four groups: Executive Dashboard; Registration & Applications; Labels & Consumer Services; Operations & Intelligence.
+  - Together they cover every available screen.
+  - Narration: "The Admin demonstration profile provides a consolidated view of all screens. In normal operation, each user sees only the menus and records permitted for their assigned role."
+- **The four operational roles stay distinct, each with at most four groups:**
+  - Manufacturer: Dashboard; Registration & Applications; Labels & Operations; Compliance & Support.
+  - Director: Dashboard; Work Queue & Decisions; Oversight & Intelligence; Registers & Compliance.
+  - Secretary: Dashboard; Final Approvals; Certificates & Formats; Oversight & Reports.
+  - Finance: Dashboard; Payments & Receipts; Reconciliation; Monitoring & Reports.
+- **AI is advisory and human-controlled.** The ledger is simulated. Future blueprint functions appear as Preview (sample-data prototype) or Planned (not a link). None is presented as complete.
+- **The development "All screens" link is removed.** The menu and the client route guard follow the Spring sign-in; the preview role grants nothing.
+- Promoting a Preview or Planned entry to a working screen means changing its entry from `proto(...)` or `PLANNED` to `live(...)` once its runtime route exists.
 
 ## 8. Release schedule
 

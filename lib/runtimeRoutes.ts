@@ -312,11 +312,11 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   },
   {
     href: "/app/manufacturer/director",
-    en: "Manufacturer registration decisions",
-    hi: "निर्माता पंजीकरण निर्णय",
+    en: "Company registration activation",
+    hi: "कंपनी पंजीकरण सक्रियण",
     icon: "how_to_reg",
     navRoles: ["director"],
-    implemented: ["Director queue for company registration", "Approve or reject with mandatory reason", "View payment and automated-check evidence"],
+    implemented: ["Explains that company registration activates automatically after the automated checks", "Open observation monitoring"],
   },
   {
     href: "/app/manufacturer/monitoring",

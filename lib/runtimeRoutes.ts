@@ -168,8 +168,8 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   },
   {
     href: "/app/workflow/workflow-history",
-    en: "Workflow history",
-    hi: "कार्यप्रवाह इतिहास",
+    en: "Audit History",
+    hi: "ऑडिट इतिहास",
     icon: "history",
     navRoles: [],
     implemented: ["Choose an application", "Read its steps as you are allowed to see them"],

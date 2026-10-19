@@ -253,8 +253,8 @@ export const NAVIGATION: readonly NavGroup[] = [
         adminEntry("admin.business-settings", "Business settings", "tune", live(R.businessSettings)),
         adminEntry("admin.master-data", "Master data", "database", proto("administration", "appliance-master")),
       ]),
-      parent("admin.audit", "Audit history", "history", [
-        adminEntry("admin.workflow-history", "Workflow history", "history", live(R.history)),
+      parent("admin.audit", "Audit History", "history", [
+        adminEntry("admin.workflow-history", "Audit History", "history", live(R.history)),
         adminEntry("admin.audit-overview", "Audit overview", "fact_check", live(R.auditorDash)),
       ]),
     ],
@@ -344,7 +344,7 @@ export const NAVIGATION: readonly NavGroup[] = [
       entry("dir.brand-register", "Brand and category register", "menu_book", live(R.register), BEE_OFFICER),
       entry("dir.model-register", "Model and certificate register", "verified_user", proto("mis-ai", "model-dashboard"), BEE_OFFICER),
       entry("dir.reconciliation", "QR and production reconciliation", "balance", proto("production", "reconciliation"), BEE_OFFICER),
-      entry("dir.audit", "Audit history", "history", live(R.history), BEE_OFFICER),
+      entry("dir.audit", "Audit History", "history", live(R.history), BEE_OFFICER),
       entry("dir.delegations", "Delegations", "group", live(R.delegations), BEE_OFFICER),
       grantedSettings("dir"),
     ],
@@ -423,7 +423,7 @@ export const NAVIGATION: readonly NavGroup[] = [
       entry("fin.anomaly", "Raise anomaly", "report", live(R.monitoring), FINANCE),
       // hidden (MIS page is not in menus): entry("fin.reports", "Payment reports", "monitoring", live(R.mis), FINANCE),
       entry("fin.m360", "Manufacturer 360", "hub", live(R.m360), FINANCE, { activePrefixes: ["/app/manufacturer/360/"] }),
-      entry("fin.audit", "Audit history", "history", live(R.history), FINANCE),
+      entry("fin.audit", "Audit History", "history", live(R.history), FINANCE),
       entry("fin.delegations", "Delegations", "group", live(R.delegations), FINANCE),
       grantedSettings("fin"),
     ],

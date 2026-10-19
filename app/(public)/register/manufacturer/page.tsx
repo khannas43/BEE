@@ -105,7 +105,7 @@ export default function RegisterManufacturerPage() {
 
               <button type="submit" disabled={busy} className="w-full rounded-lg bg-primary text-on-primary py-2.5 px-space-md font-label-lg text-label-lg inline-flex justify-center items-center gap-2 disabled:opacity-50" data-testid="create-demo-applicant">
                 <Icon name={busy ? "progress_activity" : "how_to_reg"} size={18} className={busy ? "animate-spin" : ""} />
-                {busy ? "Creating applicant account…" : "Create applicant account and continue"}
+                {busy ? "Submitting…" : "Submit"}
               </button>
             </form>
         </div>

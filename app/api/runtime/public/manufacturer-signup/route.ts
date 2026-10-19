@@ -35,13 +35,14 @@ export const POST = logged("/api/runtime/public/manufacturer-signup", async (req
   if (!key || !IDEMPOTENCY.test(key)) {
     return errorResponse("idempotency_key_required", 422, correlationId);
   }
-  let body: { fullName?: unknown; email?: unknown; mobile?: unknown; username?: unknown; password?: unknown } = {};
+  let body: { legalName?: unknown; fullName?: unknown; email?: unknown; mobile?: unknown; username?: unknown; password?: unknown } = {};
   try {
     body = await request.json();
   } catch {
     return errorResponse("validation_failed", 422, correlationId);
   }
   const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+  const legalName = typeof body.legalName === "string" ? body.legalName.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const mobile = typeof body.mobile === "string" ? body.mobile.trim() : "";
   const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
@@ -101,6 +102,21 @@ export const POST = logged("/api/runtime/public/manufacturer-signup", async (req
     if (!tokens.id_token) throw new Error("no id token");
     const kid = JSON.parse(Buffer.from(tokens.id_token.split(".")[0], "base64url").toString("utf8")).kid as string | undefined;
     const claims = verifyIdToken(tokens.id_token, { issuer: AUTH.issuer, clientId: AUTH.clientId, jwks: await signingKeys(kid, correlationId) });
+    // The company name typed at sign-up becomes the legal name on the new draft (the sign-up function itself only knows the
+    // applicant's name). Best effort: the applicant can always edit it on step 1.
+    if (legalName.length >= 2 && legalName.length <= 200) {
+      try {
+        await callBeeApi(`/api/manufacturer-onboarding/${created.applicationId}`, {
+          correlationId,
+          method: "PATCH",
+          accessToken: tokens.access_token,
+          body: JSON.stringify({ version: 0, legalName }),
+          extraHeaders: { "Idempotency-Key": `signup-legal-${key}`.slice(0, 64) },
+        });
+      } catch {
+        // keep the signup result
+      }
+    }
     destroySession(sessionCookieOf(request));
     const { cookie } = createSession(claims.sub, claims.preferred_username ?? claims.sub, tokens, authMethods(claims));
     const res = json(

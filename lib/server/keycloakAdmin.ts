@@ -59,6 +59,35 @@ export async function createGuestIdentity(input: {
   const location = res.headers.get("Location") ?? "";
   const id = location.split("/").filter(Boolean).at(-1);
   if (!id) throw new Error("keycloak_admin_unavailable");
+  // The portal resolves a caller only when the Keycloak realm role and the
+  // BEE database role agree. Public manufacturer sign-up creates the database
+  // assignment in the same flow, so give the new local demonstration identity
+  // its matching realm role before returning it to the BFF.
+  const roleResponse = await fetch(`${adminBase()}/roles/manufacturer`, {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const role = await roleResponse.json().catch(() => null);
+  if (!roleResponse.ok || !role || typeof role !== "object") {
+    await fetch(`${adminBase()}/users/${encodeURIComponent(id)}`, {
+      method: "DELETE", cache: "no-store", headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    throw new Error("keycloak_admin_unavailable");
+  }
+  const mapping = await fetch(`${adminBase()}/users/${encodeURIComponent(id)}/role-mappings/realm`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify([role]),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (!mapping.ok) {
+    await fetch(`${adminBase()}/users/${encodeURIComponent(id)}`, {
+      method: "DELETE", cache: "no-store", headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    throw new Error("keycloak_admin_unavailable");
+  }
   return { ok: true, id };
 }
 

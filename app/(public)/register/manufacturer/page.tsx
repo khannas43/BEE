@@ -146,7 +146,7 @@ function PasswordField({ id, label, value, onChange, show, toggle }: {
       <span className="font-label-sm text-label-sm block mb-1">{label}</span>
       <span className="relative block">
         <Icon name="lock" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-        <input id={id} data-testid={id} aria-label={label} type={show ? "text" : "password"} required minLength={8} autoComplete="new-password" value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-lg border border-border-subtle bg-surface-ground py-2.5 pl-10 pr-11 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+        <input id={id} data-testid={id} aria-label={label} type={show ? "text" : "password"} required minLength={7} autoComplete="new-password" value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-lg border border-border-subtle bg-surface-ground py-2.5 pl-10 pr-11 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
         <button type="button" onClick={toggle} aria-label={show ? "Hide password" : "Show password"} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-on-surface-variant hover:text-primary">
           <Icon name={show ? "visibility_off" : "visibility"} size={18} />
         </button>

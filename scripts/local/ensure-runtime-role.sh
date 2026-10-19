@@ -180,7 +180,8 @@ GRANT EXECUTE ON FUNCTION app.manufacturer_onboarding_trusted_create(uuid, uuid,
   app.manufacturer_onboarding_orchestrate_submit(uuid, uuid, text, integer, numeric, text, integer, text, text, text, uuid, char),
   app.manufacturer_onboarding_orchestrate_director_decision(uuid, uuid, integer, text, text, uuid, char),
   app.manufacturer_onboarding_orchestrate_raise_anomaly(uuid, uuid, text, integer, text, uuid, char),
-  app.manufacturer_onboarding_orchestrate_resolve_anomaly(uuid, uuid, integer, text, text, uuid, char)
+  app.manufacturer_onboarding_orchestrate_resolve_anomaly(uuid, uuid, integer, text, text, uuid, char),
+  app.manufacturer_onboarding_orchestrate_public_signup(text, text, text, uuid, uuid, char)
   TO ${BEE_RUNTIME_DB_USER};
 REVOKE EXECUTE ON FUNCTION app.manufacturer_onboarding_orchestrate_observation_close(uuid, uuid, text, integer, uuid, char) FROM ${BEE_RUNTIME_DB_USER};
 REVOKE SELECT, UPDATE ON app.manufacturer_onboarding_allocator FROM ${BEE_RUNTIME_DB_USER};

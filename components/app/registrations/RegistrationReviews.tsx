@@ -48,10 +48,11 @@ export function RegistrationReviews({ module, screen }: { module: Module; screen
             const rows = r.list.items.filter((item) => matches(tab, item.state, waiting));
             return (
               <div className="space-y-space-sm">
-                <div className="flex gap-space-sm">
-                  <TabButton id="rev-tab-waiting" selected={tab === "waiting"} onSelect={() => setTab("waiting")}>Waiting for me</TabButton>
-                  <TabButton id="rev-tab-decided" selected={tab === "decided"} onSelect={() => setTab("decided")}>Decided</TabButton>
-                  <TabButton id="rev-tab-all" selected={tab === "all"} onSelect={() => setTab("all")}>All</TabButton>
+                <p className="text-sm text-on-surface-variant">Brand and agency registration requests that reached review. Open one to read the trail and take the next step.</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Tile id="rev-tab-waiting" selected={tab === "waiting"} onSelect={() => setTab("waiting")} count={r.list.items.filter((i) => matches("waiting", i.state, waiting)).length} label="Waiting for me" tone="warn" />
+                  <Tile id="rev-tab-decided" selected={tab === "decided"} onSelect={() => setTab("decided")} count={r.list.items.filter((i) => matches("decided", i.state, waiting)).length} label="Decided" tone="ok" />
+                  <Tile id="rev-tab-all" selected={tab === "all"} onSelect={() => setTab("all")} count={r.list.items.length} label="All requests" tone="info" />
                 </div>
                 {rows.length === 0 ? <p className="font-body-sm text-on-surface-variant" data-testid="rev-tab-empty">Nothing in this tab.</p> : (
                   <RegistrationsTable items={rows} variant="review" />
@@ -71,10 +72,20 @@ function matches(tab: Tab, state: RegistrationState, waiting: Set<RegistrationSt
   return waiting.has(state);
 }
 
-function TabButton({ id, selected, onSelect, children }: { id: string; selected: boolean; onSelect: () => void; children: string }) {
+const TILE_TONE = { warn: "text-[#8a4b00]", ok: "text-[#14532d]", info: "text-primary" } as const;
+
+function Tile({ id, selected, onSelect, count, label, tone }: { id: string; selected: boolean; onSelect: () => void; count: number; label: string; tone: keyof typeof TILE_TONE }) {
   return (
-    <button type="button" aria-pressed={selected} onClick={onSelect} data-testid={id} data-selected={selected ? "true" : "false"} className="border border-primary text-primary py-1.5 px-3 rounded-lg font-label-sm">
-      {children}
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      data-testid={id}
+      data-selected={selected ? "true" : "false"}
+      className={`rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors ${selected ? "border-primary bg-primary/10" : "border-border-subtle bg-white hover:bg-surface-container-lowest"}`}
+    >
+      <span className={`block text-2xl font-bold tabular-nums ${TILE_TONE[tone]}`}>{count}</span>
+      <span className="block text-sm font-semibold text-on-surface">{label}</span>
     </button>
   );
 }

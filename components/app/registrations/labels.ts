@@ -5,7 +5,7 @@ export const REGISTRATION_STATE_LABEL: Record<RegistrationState, string> = {
   draft: "Draft",
   fee_due: "Fee due",
   programme_review: "Fee confirmed, with Programme review",
-  director_approval: "With the Director",
+  director_approval: "Awaiting BEE Officer approval",
   approved: "Approved",
   returned: "Returned",
   rejected: "Rejected",

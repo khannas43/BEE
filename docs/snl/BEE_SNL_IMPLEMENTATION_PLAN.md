@@ -1016,3 +1016,16 @@ Optional blueprint capabilities are not core-completion blockers unless BEE expl
 ## 12. Supplementary solution-blueprint traceability
 
 The seven-screen experience, AI proposals, secure-QR architecture, conceptual data model and generated-template proposals from the 13-page solution blueprint are mapped to the work packages in [SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md](SNL_SOLUTION_BLUEPRINT_ALIGNMENT.md). Every material point is individually tracked as BP-001–BP-121 in [SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md](SNL_SOLUTION_BLUEPRINT_REQUIREMENTS.md). Future implementation briefs must cite the relevant `BP-###` identifiers. Both documents are subordinate to the manual traceability index above.
+
+## 13. Integration record: WP3 demonstration line and C3 role succession (19 October 2026)
+
+**Branch:** `integration/wp3-c3` (worktree `~/Developer/BEE-integration`), created from `cursor/wp3-guest-director-approval` at `0c9b04a`. Owner decisions O1 to O7 are in [../BEE_DECISIONS.md](../BEE_DECISIONS.md).
+
+| Item | Outcome |
+|---|---|
+| Base | Running demonstration line, frozen at `0c9b04a` (manufacturer self-registration, guest Director activation, V73 to V78). |
+| Migrations | V78 `snl_wp03_guest_director_activation` unchanged. C3 role succession renumbered **V79** `role_succession_officer_director`, extended so manufacturer onboarding (V75 to V78) records and checks the operational approver as `officer`: anomaly role check, observation close, director decision, anomaly resolution, staff notification fan-out; search paths pinned. |
+| C3 merge | Four C3 commits (five-role selector, preview-only role dropdown, neutral portal label, role succession) merged; six conflicts resolved. `GET /manufacturer-onboarding/{id}/submit` keeps the running line's `no_read_scope` (contract 0.38.0). |
+| Other branches | `demo-wp3-wp9-rehearsal`, `wp3-auto-activation`, `snl-wp02c-*` are already inside the base. The public header "Register" link and the Manufacturer 360 page are already in the base. `wp3-auto-activation` (conflicting automatic-activation approach) is reference only. The uncommitted work in `wp3-guest-integration` is an earlier parallel attempt that still records the approver as `director`; not used. |
+| Preserved | All worktrees and branches are untouched; the old demonstration database is backed up in `~/Developer/handover/demo-backup-2026-10-19/`. |
+| Evidence so far | Types, lint, 274 UI tests, 272 portal tests, 165 default back-end tests and the database suite on the integration branch; full gate and the manufacturer journey are recorded below when run. |

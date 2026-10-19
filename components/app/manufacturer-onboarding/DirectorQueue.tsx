@@ -11,11 +11,23 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  NavLinks,
   OnboardingChrome,
   PhaseStatus,
-  SimulatedPaymentNote,
 } from "./shared";
+
+function Panel({ title, icon, children, testId }: { title: string; icon: string; children: React.ReactNode; testId?: string }) {
+  return (
+    <div className="rounded-2xl border border-border-subtle bg-white shadow-sm overflow-hidden" data-testid={testId}>
+      <div className="flex items-center gap-2 border-b border-border-subtle bg-surface-container-lowest/70 px-space-md py-2.5">
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon name={icon} size={16} />
+        </span>
+        <div role="heading" aria-level={3} className="font-label-md font-semibold text-on-surface">{title}</div>
+      </div>
+      <div className="p-space-md space-y-2">{children}</div>
+    </div>
+  );
+}
 
 export function DirectorQueue() {
   const client = useManufacturerOnboardingClient();
@@ -81,78 +93,107 @@ export function DirectorQueue() {
 
   if (error) return <ErrorState message={error} onRetry={() => void loadQueue()} />;
 
-  const navLinks = [
-    { href: "/app/manufacturer/director", label: "Registrations awaiting decision", testId: "nav-director-queue" },
-    { href: "/app/manufacturer/monitoring", label: "Observation monitoring", testId: "nav-monitoring" },
-  ];
+  const passed = detail ? detail.automatedChecks.filter((c) => c.outcome === "pass").length : 0;
 
   return (
-    <OnboardingChrome icon="verified_user" title="Manufacturer registrations awaiting BEE Officer approval">
-      <NavLinks links={navLinks} />
-      <div className="grid lg:grid-cols-[minmax(0,18rem)_1fr] gap-space-md">
-        <section className="bg-surface-card rounded-xl shadow-sm p-space-md space-y-2" data-testid="director-pending-queue">
-          <h2 className="font-headline-sm">Pending registrations</h2>
+    <OnboardingChrome icon="verified_user" title="Manufacturer registrations awaiting decision">
+      <div className="grid lg:grid-cols-[minmax(0,19rem)_1fr] gap-space-md items-start">
+        <div className="rounded-2xl border border-border-subtle bg-white shadow-sm overflow-hidden" data-testid="director-pending-queue">
+          <div className="flex items-center justify-between border-b border-border-subtle bg-surface-container-lowest/70 px-space-md py-2.5">
+            <div role="heading" aria-level={2} className="font-label-md font-semibold text-on-surface">Pending registrations</div>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{queue.length}</span>
+          </div>
           {queue.length === 0 ? (
-            <EmptyState title="No manufacturer registrations are waiting for a Director decision." />
+            <EmptyState title="No manufacturer registrations are waiting for a decision." />
           ) : (
-            <ul className="space-y-1">
+            <ul className="p-2 space-y-1.5">
               {queue.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     data-testid={`director-item-${item.reference}`}
                     onClick={() => setSelectedId(item.id)}
-                    className={`w-full text-left rounded-lg px-3 py-2 ${selectedId === item.id ? "bg-primary/10" : "hover:bg-surface-ground"}`}
+                    className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${selectedId === item.id ? "border-primary bg-primary/10" : "border-transparent hover:bg-surface-container-low"}`}
                   >
-                    <span className="font-label-md block">{item.reference}</span>
-                    <span className="font-body-sm text-on-surface-variant">{item.legalName}</span>
+                    <span className="block font-mono text-sm font-semibold text-on-surface">{item.reference}</span>
+                    <span className="mt-0.5 block text-sm text-on-surface-variant">{item.legalName}</span>
                   </button>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </div>
 
-        <section className="bg-surface-card rounded-xl shadow-sm p-space-lg space-y-space-md" data-testid="director-decision-panel">
+        <div className="space-y-space-md min-w-0" data-testid="director-decision-panel">
           {!selectedId || !detail || detail.id !== selectedId ? (
-            <LoadingState label="Select a registration to review." />
+            <div className="rounded-2xl border border-border-subtle bg-white shadow-sm p-space-lg">
+              <LoadingState label="Select a registration to review." />
+            </div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-headline-sm">{detail.reference}</h2>
-                <PhaseStatus phase={detail.phase} />
+              <div className="rounded-2xl bg-gradient-to-r from-forest-dark to-primary text-on-primary shadow-md p-space-md lg:p-space-lg">
+                <div className="flex flex-wrap items-start justify-between gap-space-md">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.14em] text-on-primary/70">Registration</p>
+                    <p className="mt-1 font-mono text-2xl font-bold tracking-wide">{detail.reference}</p>
+                    <p className="mt-2 text-base font-medium" data-testid="director-legal-name">{detail.draft.legalName}</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full bg-white/15 px-2.5 py-1">CIN {detail.draft.cin || "—"}</span>
+                      <span className="rounded-full bg-white/15 px-2.5 py-1">GSTIN {detail.draft.gstin || "—"}</span>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-white/95 px-3 py-2 text-on-surface shadow-sm">
+                    <PhaseStatus phase={detail.phase} />
+                  </div>
+                </div>
               </div>
-              <p className="font-body-md" data-testid="director-legal-name">{detail.draft.legalName}</p>
-              <p className="font-body-sm text-on-surface-variant">CIN {detail.draft.cin || "—"} · GSTIN {detail.draft.gstin || "—"}</p>
 
               <div className="grid md:grid-cols-2 gap-space-md">
-                <div data-testid="director-document-status">
-                  <h3 className="font-label-md font-semibold">Document status</h3>
-                  <ul className="mt-2 space-y-1 font-body-sm">
+                <Panel title="Document status" icon="folder_open" testId="director-document-status">
+                  <ul className="space-y-1.5">
                     {detail.draft.annexureDocuments.map((doc) => (
-                      <li key={doc.id}>{doc.kind}: {doc.uploadedAt ? "uploaded" : "missing"}</li>
+                      <li key={doc.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span>{doc.kind}</span>
+                        <span className={`inline-flex items-center gap-1 text-xs font-semibold ${doc.uploadedAt ? "text-success" : "text-error"}`}>
+                          <Icon name={doc.uploadedAt ? "check_circle" : "cancel"} size={16} />
+                          {doc.uploadedAt ? "Uploaded" : "Missing"}
+                        </span>
+                      </li>
                     ))}
                   </ul>
+                </Panel>
+                <div className="space-y-space-md">
+                  <Panel title="Payment" icon="payments" testId="director-payment-status">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="whitespace-nowrap text-2xl font-bold text-on-surface">₹ {formatFeeInr(detail.payment.amountInr)}</span>
+                      <span className={`inline-flex items-center gap-1 text-sm font-semibold ${detail.payment.verifiedAt ? "text-success" : "text-on-surface-variant"}`}>
+                        <Icon name={detail.payment.verifiedAt ? "check_circle" : "schedule"} size={16} />
+                        {detail.payment.verifiedAt ? LABEL_AUTO_PAYMENT : "Pending"}
+                      </span>
+                    </div>
+                    {detail.payment.receiptNumber ? (
+                      <p className="text-sm text-on-surface-variant">Receipt <span className="font-mono text-on-surface">{detail.payment.receiptNumber}</span></p>
+                    ) : null}
+                    <p className="text-xs text-on-surface-variant">Demonstration gateway: no live transaction is made.</p>
+                  </Panel>
+                  <Panel title={LABEL_AUTO_RULES} icon="rule" testId="director-automated-checks">
+                    <p className="text-sm font-semibold text-success">{passed} of {detail.automatedChecks.length} checks passed</p>
+                    <ul className="grid gap-x-3 gap-y-1 sm:grid-cols-2">
+                      {detail.automatedChecks.map((check) => (
+                        <li key={check.id} className="flex items-start gap-1.5 text-[13px] leading-snug">
+                          <span className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${check.outcome === "pass" ? "bg-success text-on-success" : "bg-error text-on-error"}`}>
+                            <Icon name={check.outcome === "pass" ? "check" : "close"} size={12} />
+                          </span>
+                          <span>{check.label.charAt(0).toUpperCase() + check.label.slice(1)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </Panel>
                 </div>
-                <div data-testid="director-payment-status">
-                  <h3 className="font-label-md font-semibold">Payment</h3>
-                  <SimulatedPaymentNote />
-                  <p className="font-body-sm mt-1">₹ {formatFeeInr(detail.payment.amountInr)} — {detail.payment.verifiedAt ? LABEL_AUTO_PAYMENT : "pending"}</p>
-                  {detail.payment.receiptNumber ? <p className="font-body-sm">Receipt {detail.payment.receiptNumber}</p> : null}
-                </div>
-              </div>
-
-              <div data-testid="director-automated-checks">
-                <h3 className="font-label-md font-semibold">{LABEL_AUTO_RULES}</h3>
-                <ul className="mt-2 space-y-1 font-body-sm">
-                  {detail.automatedChecks.map((check) => (
-                    <li key={check.id}>{check.label}: {check.outcome}</li>
-                  ))}
-                </ul>
               </div>
 
               {detail.phase === "director_review" ? (
-                <div className="space-y-3">
+                <Panel title="Your decision" icon="gavel">
                   <label className="block" htmlFor="director-decision-note">
                     <span className="font-label-md">Decision note / reason</span>
                     <textarea
@@ -160,30 +201,33 @@ export function DirectorQueue() {
                       data-testid="director-decision-note"
                       value={note}
                       onChange={(event) => setNote(event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-border-subtle p-3"
+                      placeholder="Optional for approval; at least 8 characters to return or reject"
+                      className="mt-1 w-full rounded-xl border border-border-subtle bg-white p-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                       rows={3}
                     />
                   </label>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" disabled={busy} data-testid="director-approve" onClick={() => void decide("approve")} className="rounded-lg bg-primary text-on-primary px-4 py-2 font-semibold disabled:opacity-50">
-                      Approve and activate
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button type="button" disabled={busy} data-testid="director-approve" onClick={() => void decide("approve")} className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-on-primary px-4 py-2.5 font-semibold shadow-sm hover:opacity-95 disabled:opacity-50">
+                      <Icon name="verified" size={18} /> Approve and activate
                     </button>
-                    <button type="button" disabled={busy} data-testid="director-return" onClick={() => void decide("return")} className="rounded-lg border border-border-subtle px-4 py-2 font-semibold disabled:opacity-50">
-                      Return to applicant
+                    <button type="button" disabled={busy} data-testid="director-return" onClick={() => void decide("return")} className="inline-flex items-center gap-1.5 rounded-xl border border-outline-variant bg-white px-4 py-2.5 font-semibold text-on-surface hover:bg-surface-container-low disabled:opacity-50">
+                      <Icon name="undo" size={18} /> Return to applicant
                     </button>
-                    <button type="button" disabled={busy} data-testid="director-reject-open" onClick={() => void decide("reject")} className="rounded-lg bg-error text-on-error px-4 py-2 font-semibold disabled:opacity-50">
-                      Reject
+                    <button type="button" disabled={busy} data-testid="director-reject-open" onClick={() => void decide("reject")} className="inline-flex items-center gap-1.5 rounded-xl border border-error bg-white px-4 py-2.5 font-semibold text-error hover:bg-error-container/40 disabled:opacity-50">
+                      <Icon name="block" size={18} /> Reject
                     </button>
                   </div>
-                </div>
+                </Panel>
               ) : null}
-              {statusMsg ? <p className="font-body-sm" data-testid="director-decision-status">{statusMsg}</p> : null}
-              <Link href={`/app/manufacturer/360/${detail.id}`} className="inline-flex items-center gap-1 font-label-md text-primary" data-testid="director-open-360">
+              {statusMsg ? (
+                <div className="rounded-xl border border-primary/30 bg-primary/5 px-space-md py-2.5 text-sm font-medium" data-testid="director-decision-status">{statusMsg}</div>
+              ) : null}
+              <Link href={`/app/manufacturer/360/${detail.id}`} className="inline-flex items-center gap-1 font-label-md text-primary hover:underline" data-testid="director-open-360">
                 Open Manufacturer 360 <Icon name="arrow_forward" size={16} />
               </Link>
             </>
           )}
-        </section>
+        </div>
       </div>
     </OnboardingChrome>
   );

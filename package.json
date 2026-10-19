@@ -17,6 +17,7 @@
     "demo:seed": "bash scripts/demo/seed-demo.sh",
     "demo:reset": "bash scripts/demo/reset-demo.sh",
     "demo:ensure-ravik24": "bash scripts/demo/ensure-ravik24.sh",
+    "demo:prepare-approval": "bash scripts/demo/prepare-approval-stage.sh",
     "demo:wp3-wp9-check": "node scripts/demo/wp3-wp9-reliability-check.cjs",
     "demo:ngrok": "bash scripts/local/ngrok-demo.sh",
     "local:reset": "bash scripts/local/reset.sh",

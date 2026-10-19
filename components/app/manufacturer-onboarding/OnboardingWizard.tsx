@@ -121,37 +121,83 @@ export function OnboardingWizard() {
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // The client and its identity can be re-created while the page is open (session refresh, window focus). Reloading the draft
+  // from the server each time would overwrite what the applicant has typed and not yet saved, so the draft is loaded once per
+  // application and the latest client is read through a ref.
+  const lastSavedRef = useRef<string>("");
+  const savingRef = useRef<Promise<void> | null>(null);
+  const latestRef = useRef<{ appId: string | null; appRecord: ManufacturerApplication | null; draft: ManufacturerDraft | null }>({ appId: null, appRecord: null, draft: null });
+  const clientRef = useRef(client);
+  useEffect(() => {
+    clientRef.current = client;
+  }, [client]);
+  const loadedKeyRef = useRef<string | null>(null);
+
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const id = requestedApplicationId || (await client.defaultDraftId());
-      const app = await client.getApplication(id);
+      const id = requestedApplicationId || (await clientRef.current.defaultDraftId());
+      const app = await clientRef.current.getApplication(id);
+      const normalised = normalizeLoadedDraft(app.draft);
+      lastSavedRef.current = JSON.stringify(normalised);
       setAppId(id);
       setAppRecord(app);
-      setDraft(normalizeLoadedDraft(app.draft));
+      setDraft(normalised);
     } catch {
+      loadedKeyRef.current = null;
       setLoadError("Could not load the onboarding draft.");
     }
-  }, [client, requestedApplicationId]);
+  }, [requestedApplicationId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fixture client fetch on mount
+    const key = requestedApplicationId ?? "default";
+    if (loadedKeyRef.current === key) return;
+    loadedKeyRef.current = key;
     void load();
-  }, [load]);
+  }, [load, requestedApplicationId]);
 
-  const reviewPersistedRef = useRef(false);
+  // Every step is saved as the applicant leaves it (and shortly after a field loses focus), so nothing typed on steps 1 to 6
+  // is lost and the review step shows the stored draft.
   useEffect(() => {
-    if (step !== STEPS.length - 1) {
-      reviewPersistedRef.current = false;
-      return;
-    }
-    if (reviewPersistedRef.current || !appId || !draft || !appRecord) return;
-    reviewPersistedRef.current = true;
-    void client
-      .saveDraft({ id: appId, version: appRecord.version, draft })
-      .then((updated) => setAppRecord(updated))
-      .catch(() => undefined);
-  }, [step, appId, draft, appRecord, client]);
+    latestRef.current = { appId, appRecord, draft };
+  }, [appId, appRecord, draft]);
+
+  const markSaved = useCallback((d: ManufacturerDraft) => {
+    lastSavedRef.current = JSON.stringify(d);
+  }, []);
+
+  const autosave = useCallback(async () => {
+    if (savingRef.current) await savingRef.current;
+    const { appId: id, appRecord: rec, draft: d } = latestRef.current;
+    if (!id || !rec || !d) return;
+    const json = JSON.stringify(d);
+    if (json === lastSavedRef.current) return;
+    const run = (async () => {
+      try {
+        const updated = await clientRef.current.saveDraft({ id, version: latestRef.current.appRecord?.version ?? rec.version, draft: d });
+        lastSavedRef.current = json;
+        latestRef.current = { ...latestRef.current, appRecord: updated };
+        setAppRecord(updated);
+      } catch {
+        // the explicit Save button still reports failures; a failed background save is retried on the next change
+      }
+    })();
+    savingRef.current = run;
+    await run;
+    savingRef.current = null;
+  }, []);
+
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleAutosave = useCallback(() => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    blurTimerRef.current = setTimeout(() => void autosave(), 400);
+  }, [autosave]);
+  useEffect(() => () => { if (blurTimerRef.current) clearTimeout(blurTimerRef.current); }, []);
+
+  function goToStep(next: number | ((current: number) => number)) {
+    void autosave();
+    setStep(next);
+  }
 
   const issues = useMemo(() => (draft ? validationIssues(draft) : []), [draft]);
   const stepMeta = STEPS[step];
@@ -161,7 +207,9 @@ export function OnboardingWizard() {
     setBusy(true);
     setSaveNote(null);
     try {
-      const updated = await client.saveDraft({ id: appId, version: appRecord.version, draft });
+      if (savingRef.current) await savingRef.current;
+      const updated = await client.saveDraft({ id: appId, version: latestRef.current.appRecord?.version ?? appRecord.version, draft });
+      markSaved(draft);
       setAppRecord(updated);
       setSaveNote("Progress saved. You can resume later from this wizard.");
     } catch {
@@ -228,12 +276,12 @@ export function OnboardingWizard() {
 
   function goToStepId(id: ManufacturerRegistrationStepId) {
     const index = stepIndexForId(id);
-    if (index >= 0) setStep(index);
+    if (index >= 0) goToStep(index);
   }
 
   if (loadError) {
     return (
-      <RegistrationWizardLayout appRecord={appRecord} step={step} onStepChange={setStep}>
+      <RegistrationWizardLayout appRecord={appRecord} step={step} onStepChange={goToStep}>
         <ErrorState message={loadError} onRetry={() => void load()} />
       </RegistrationWizardLayout>
     );
@@ -247,11 +295,12 @@ export function OnboardingWizard() {
   }
 
   return (
-    <RegistrationWizardLayout appRecord={appRecord} step={step} onStepChange={setStep}>
+    <RegistrationWizardLayout appRecord={appRecord} step={step} onStepChange={goToStep}>
       <div className="space-y-space-md w-full">
         <WizardStepHero stepIndex={step} stepCount={STEPS.length} title={stepMeta.title} blurb={stepMeta.blurb} />
 
         <WizardPanel>
+          <div onBlur={scheduleAutosave} className="contents">
           {step === 0 && (
             <div className="space-y-space-lg">
               <WizardSection title="Legal entity" description="As registered with the Ministry of Corporate Affairs." icon="corporate_fare">
@@ -513,11 +562,12 @@ export function OnboardingWizard() {
             issuesCount={issues.length}
             saveNote={saveNote}
             submitError={submitError}
-            onBack={() => setStep((s) => Math.max(0, s - 1))}
-            onNext={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+            onBack={() => goToStep((s) => Math.max(0, s - 1))}
+            onNext={() => goToStep((s) => Math.min(STEPS.length - 1, s + 1))}
             onSave={() => void saveProgress()}
             onSubmit={() => void submitApplication()}
           />
+          </div>
         </WizardPanel>
 
         <WizardReadinessAside issues={issues} />

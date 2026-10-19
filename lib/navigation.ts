@@ -317,9 +317,9 @@ export const NAVIGATION: readonly NavGroup[] = [
       entry("dir.work-queue", "Officer work queue", "inbox", live(R.myWork), BEE_OFFICER),
       // "Registration observations" is hidden for now (demonstration); the screen stays reachable by URL and from "Anomalies and holds".
       entry("dir.holds", "Anomalies and holds", "pause_circle", live(R.monitoring), BEE_OFFICER),
-      entry("dir.recommendations", "Model recommendations", "how_to_reg", live(R.approval), BEE_OFFICER),
+      // "Model recommendations" is hidden (duplicates the Officer work queue); the screen opens from the queue.
       entry("dir.brand-reviews", "Brand registration reviews", "rate_review", live(R.regReviews), BEE_OFFICER),
-      entry("dir.withdrawals", "Withdrawal requests", "cancel", proto("withdrawal", "withdrawal-approval"), BEE_OFFICER),
+      // "Withdrawal requests" is hidden for now (demonstration).
       entry("dir.revocation", "Rejection and revocation", "gavel", live(R.register), BEE_OFFICER),
     ],
   },

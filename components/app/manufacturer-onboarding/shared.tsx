@@ -105,13 +105,13 @@ export function EmptyState({ title, children, testId = "onboarding-empty" }: { t
   );
 }
 
-export function OnboardingChrome({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
+export function OnboardingChrome({ icon, title, children, showDisclosure = true }: { icon: string; title: string; children: React.ReactNode; showDisclosure?: boolean }) {
   return (
     <DemoShell icon={icon}>
       <div className="p-space-md lg:p-space-lg max-w-5xl mx-auto space-y-space-md">
         <header className="space-y-2">
           <h1 className="font-headline-md text-headline-md text-on-surface flex flex-wrap items-center gap-2">{title}</h1>
-          <OnboardingDisclosure />
+          {showDisclosure && <OnboardingDisclosure />}
         </header>
         {children}
       </div>

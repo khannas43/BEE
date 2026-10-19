@@ -17,9 +17,7 @@ import {
   LoadingState,
   NavLinks,
   OnboardingChrome,
-  OperationalFlowNote,
   SimulatedPaymentNote,
-  SyntheticBadge,
 } from "./shared";
 
 const STEPS = [
@@ -139,17 +137,17 @@ export function OnboardingWizard() {
   ];
 
   return (
-    <OnboardingChrome icon="factory" title="Manufacturer / company registration">
-      <div className="flex flex-col lg:flex-row lg:items-start gap-space-md">
-        <aside className="lg:w-64 shrink-0 space-y-space-sm">
-          <NavLinks links={navLinks} />
-          <ol className="space-y-1" aria-label="Progress" data-testid="onboarding-stepper">
+    <OnboardingChrome icon="factory" title="Manufacturer / company registration" showDisclosure={false}>
+      <div className="space-y-space-md">
+        <NavLinks links={navLinks} />
+        <section className="rounded-xl border border-border-subtle bg-surface-card p-space-sm" aria-label="Progress">
+          <ol className="flex min-w-max gap-1 overflow-x-auto pb-1" data-testid="onboarding-stepper">
             {STEPS.map((s, i) => (
               <li key={s.id}>
                 <button
                   type="button"
                   onClick={() => setStep(i)}
-                  className={`w-full text-left flex items-center gap-2 rounded-lg px-2 py-1.5 text-label-md ${i === step ? "bg-primary/10 text-primary font-semibold" : "text-on-surface-variant hover:bg-surface-container-low"}`}
+                  className={`min-w-32 text-left flex items-center gap-2 rounded-lg px-2 py-2 text-label-sm ${i === step ? "bg-primary/10 text-primary font-semibold" : "text-on-surface-variant hover:bg-surface-container-low"}`}
                   data-testid={`step-${s.id}`}
                 >
                   <Icon name={s.icon} size={18} />
@@ -158,13 +156,9 @@ export function OnboardingWizard() {
               </li>
             ))}
           </ol>
-        </aside>
+        </section>
 
-        <div className="flex-1 space-y-space-md min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <SyntheticBadge />
-            <OperationalFlowNote />
-          </div>
+        <div className="space-y-space-md min-w-0">
 
           <section className="bg-surface-card rounded-xl shadow-sm p-space-md space-y-space-md" aria-labelledby="step-heading">
             <h2 id="step-heading" className="font-headline-sm text-headline-sm">{STEPS[step].title}</h2>

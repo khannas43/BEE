@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Pill } from "./DemoShell";
+import { Icon } from "@/components/ui/Icon";
 import { QuarterlySubmission } from "./QuarterlySubmission";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
@@ -43,10 +44,14 @@ const inputCls = "w-full rounded border border-outline-variant bg-surface px-spa
 const btnCls = "rounded bg-primary px-space-md py-space-xs font-label-md text-on-primary disabled:opacity-50";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
   return (
     <section className="rounded border border-outline-variant p-space-md space-y-space-sm">
-      <h2 className="font-headline-sm text-headline-sm text-on-surface">{title}</h2>
-      {children}
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 !bg-transparent text-left" data-testid={`prod-section-toggle-${title}`}>
+        <h2 className="font-headline-sm text-headline-sm text-on-surface">{title}</h2>
+        <Icon name={open ? "expand_less" : "expand_more"} size={22} className="text-[#475569]" />
+      </button>
+      {open ? children : null}
     </section>
   );
 }

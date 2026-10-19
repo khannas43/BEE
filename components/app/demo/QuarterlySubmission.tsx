@@ -34,6 +34,37 @@ function Stat({ icon, label, value, note, tone = "text-[#14315E]" }: { icon: str
   );
 }
 
+/** A box whose header toggles its body. */
+function Box({ title, note, testId, children }: { title: string; note?: string; testId: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className={`${card} p-5`} data-testid={testId}>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 text-left" data-testid={`${testId}-toggle`}>
+        <span role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">{title}</span>
+        <Icon name={open ? "expand_less" : "expand_more"} size={22} className="text-[#475569]" />
+      </button>
+      {open ? <div className="mt-1">{note ? <p className="mb-3 text-[13px] text-[#64748b]">{note}</p> : null}{children}</div> : null}
+    </div>
+  );
+}
+
+const fieldCls = "mt-1 block rounded-lg border border-outline-variant bg-white px-3 py-2 text-[13px]";
+function Filters({ children, active, onClear, testId }: { children: React.ReactNode; active: boolean; onClear: () => void; testId: string }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-end gap-3" data-testid={testId}>
+      {children}
+      {active ? <button type="button" onClick={onClear} className="rounded-lg border border-outline-variant bg-white px-3 py-2 text-[13px] font-semibold text-primary">Clear filters</button> : null}
+    </div>
+  );
+}
+function Select({ label, value, onChange, options, testId }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][]; testId: string }) {
+  return (
+    <label className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">{label}
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={fieldCls} data-testid={testId}>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+    </label>
+  );
+}
+
 function Stars({ n }: { n: number }) {
   return <span aria-label={`${n} star`} className="whitespace-nowrap text-[#b45309]">{"★".repeat(n)}<span className="text-[#cbd5e1]">{"★".repeat(Math.max(0, 5 - n))}</span></span>;
 }
@@ -51,6 +82,13 @@ export function QuarterlySubmission() {
   const [apps, setApps] = useState<ModelApplication[]>([]);
   const directory = useManufacturers();
   const [error, setError] = useState<string | null>(null);
+  const [glance, setGlance] = useState(true);
+  const [pq, setPq] = useState("");
+  const [pQr, setPQr] = useState("");
+  const [pResult, setPResult] = useState("");
+  const [tq, setTq] = useState("");
+  const [tStage, setTStage] = useState("");
+  const [tResult, setTResult] = useState("");
 
   useEffect(() => {
     let live = true;
@@ -108,11 +146,19 @@ export function QuarterlySubmission() {
     const rated = org?.models.find((m) => m.certificate === reg);
     return { reg, ...e, gen, boundAll: bound, voided, batches: mine.length, app, rated };
   });
+  const result = (ref: string) => org?.models.find((m) => m.reference === ref);
+  const qrKind = (p: (typeof products)[number]) => (p.bound === null || p.flag === "unavailable" ? "na" : p.flag === "review" ? "review" : "match");
+  const shownProducts = products.filter((p) => (!pq || `${p.model} ${p.reg}`.toLowerCase().includes(pq.toLowerCase())) && (!pQr || qrKind(p) === pQr) && (!pResult || (pResult === "rated") === Boolean(p.rated && p.rated.stars > 0)));
+  const finished = (st: string) => ["approved", "rejected"].includes(st);
+  const stages = [...new Set(apps.map((a) => a.state))].sort();
+  const shownApps = [...apps]
+    .filter((a) => (!tq || `${a.reference} ${a.brandName} ${a.modelNumber}`.toLowerCase().includes(tq.toLowerCase())) && (!tStage || a.state === tStage)
+      && (!tResult || (tResult === "rated") === Boolean(result(a.reference) && (result(a.reference)?.stars ?? 0) > 0)))
+    .sort((a, b) => Number(finished(a.state)) - Number(finished(b.state)) || a.reference.localeCompare(b.reference));
   const totalUnits = products.reduce((n, p) => n + p.units, 0);
   const totalBound = products.reduce((n, p) => n + (p.bound ?? 0), 0);
   const tested = products.filter((p) => p.rated && p.rated.stars > 0).length;
   const inTesting = apps.filter((a) => !["approved", "rejected"].includes(a.state));
-  const result = (ref: string) => org?.models.find((m) => m.reference === ref);
 
   if (subs === null) return <p role="status" className="font-body-sm">Loading the quarterly submission…</p>;
   return (
@@ -120,7 +166,10 @@ export function QuarterlySubmission() {
       {error ? <p role="alert" className="rounded-lg bg-error-container text-on-error-container p-space-sm font-body-sm">{error}</p> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">Quarter at a glance</div>
+        <button type="button" onClick={() => setGlance((o) => !o)} aria-expanded={glance} className="flex items-center gap-2 !bg-transparent text-left" data-testid="qs-glance-toggle">
+          <Icon name={glance ? "expand_less" : "expand_more"} size={22} className="text-[#475569]" />
+          <span role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">Quarter at a glance</span>
+        </button>
         {canCreate ? (
           <Link href="/app/model-label/new-model-application" className="inline-flex items-center gap-1 rounded-lg !bg-[#1f3c88] px-4 py-2 text-[13px] font-semibold !text-white hover:!bg-[#14315E]" data-testid="qs-submit-product">
             <Icon name="note_add" size={16} /> Submit a product for testing
@@ -130,6 +179,7 @@ export function QuarterlySubmission() {
 
       {subs.length === 0 ? <p className="font-body-sm text-on-surface-variant">No quarter has been submitted yet.</p> : (
         <>
+          {glance ? (<>
           <div role="tablist" aria-label="Quarters" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {subs.slice(0, 4).map((s) => (
               <button key={s.id} role="tab" aria-selected={s.id === selected} onClick={() => setPick(s.id)} className="ai-tile" data-testid={`qs-quarter-${s.quarter}`}>
@@ -146,11 +196,17 @@ export function QuarterlySubmission() {
             <Stat icon="rule" label="Needs review" value={products.filter((p) => p.flag === "review").length} note="declared above bound QR" tone={products.some((p) => p.flag === "review") ? "text-[#8a4b00]" : "text-[#14532d]"} />
             <Stat icon="verified" label="Tested and rated" value={`${tested} of ${products.length}`} note="with a star result" />
           </div>
+          </>) : null}
 
-          <div className={`${card} p-5`}>
-            <div role="heading" aria-level={2} className="mb-1 text-[16px] font-bold text-[#14315E]">Products in {sub?.quarter}</div>
-            <p className="mb-3 text-[13px] text-[#64748b]">Units declared for the quarter, the QR codes generated for each product and their status, and the BEE test result.</p>
-            {products.length === 0 ? <p className="text-[13px] text-[#64748b]">No product rows have been entered for this quarter.</p> : (
+          <Box testId="qs-box-products" title={`Products in ${sub?.quarter ?? ""}`} note="Units declared for the quarter, the QR codes generated for each product and their status, and the BEE test result.">
+            <Filters testId="qs-product-filters" active={Boolean(pq || pQr || pResult)} onClear={() => { setPq(""); setPQr(""); setPResult(""); }}>
+              <label className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Search
+                <input value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Model or registration" className={fieldCls} data-testid="qs-product-search" />
+              </label>
+              <Select label="QR status" value={pQr} onChange={setPQr} testId="qs-product-qr" options={[["", "Any"], ["match", "Matches QR"], ["review", "Needs review"], ["na", "Not available"]]} />
+              <Select label="Test result" value={pResult} onChange={setPResult} testId="qs-product-result" options={[["", "Any"], ["rated", "Rated"], ["none", "No result yet"]]} />
+            </Filters>
+            {products.length === 0 ? <p className="text-[13px] text-[#64748b]">No product rows have been entered for this quarter.</p> : shownProducts.length === 0 ? <p className="text-[13px] text-[#64748b]">No product matches these filters.</p> : (
               <div className="overflow-x-auto rounded-lg border border-[#e2e8f0]">
                 <table className="w-full text-[13px]" data-testid="qs-products">
                   <caption className="sr-only">Products declared in the quarter with QR status and test result</caption>
@@ -158,7 +214,7 @@ export function QuarterlySubmission() {
                     <th className={th}>Model</th><th className={th}>Units declared</th><th className={th}>QR generated</th><th className={th}>QR bound</th><th className={th}>QR void</th><th className={th}>QR status</th><th className={th}>Test result</th>
                   </tr></thead>
                   <tbody>
-                    {products.map((p) => (
+                    {shownProducts.map((p) => (
                       <tr key={p.reg} className="border-t border-[#e7edf6]" data-testid={`qs-row-${p.reg}`}>
                         <td className={td}>
                           {p.appId ? <Link href={modelDashboardHref(p.appId)} className="font-semibold text-primary hover:underline">{p.model}</Link> : <span className="font-semibold text-[#14315E]">{p.model}</span>}
@@ -183,12 +239,17 @@ export function QuarterlySubmission() {
               </div>
             )}
             {recon ? <p className="mt-2 text-[12px] text-[#64748b]">{recon.message}</p> : null}
-          </div>
+          </Box>
 
-          <div className={`${card} p-5`}>
-            <div role="heading" aria-level={2} className="mb-1 text-[16px] font-bold text-[#14315E]">Products submitted for testing</div>
-            <p className="mb-3 text-[13px] text-[#64748b]">Each model application is a product sent to BEE for testing. The result appears when the rating is computed and approved.</p>
-            {apps.length === 0 ? <p className="text-[13px] text-[#64748b]">No product has been submitted for testing.</p> : (
+          <Box testId="qs-box-testing" title="Products submitted for testing" note="Each model application is a product sent to BEE for testing. The result appears when the rating is computed and approved.">
+            <Filters testId="qs-testing-filters" active={Boolean(tq || tStage || tResult)} onClear={() => { setTq(""); setTStage(""); setTResult(""); }}>
+              <label className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Search
+                <input value={tq} onChange={(e) => setTq(e.target.value)} placeholder="Reference or model" className={fieldCls} data-testid="qs-testing-search" />
+              </label>
+              <Select label="Stage" value={tStage} onChange={setTStage} testId="qs-testing-stage" options={[["", "Any"], ...stages.map((x): [string, string] => [x, stateLabel(x)])]} />
+              <Select label="Result" value={tResult} onChange={setTResult} testId="qs-testing-result" options={[["", "Any"], ["rated", "Rated"], ["none", "Awaiting result"]]} />
+            </Filters>
+            {apps.length === 0 ? <p className="text-[13px] text-[#64748b]">No product has been submitted for testing.</p> : shownApps.length === 0 ? <p className="text-[13px] text-[#64748b]">No application matches these filters.</p> : (
               <div className="overflow-x-auto rounded-lg border border-[#e2e8f0]">
                 <table className="w-full text-[13px]" data-testid="qs-testing">
                   <caption className="sr-only">Model applications and their test status</caption>
@@ -196,7 +257,7 @@ export function QuarterlySubmission() {
                     <th className={th}>Application</th><th className={th}>Model</th><th className={th}>Stage</th><th className={th}>Test lab</th><th className={th}>Tested on</th><th className={th}>Declared ISEER</th><th className={th}>Result</th>
                   </tr></thead>
                   <tbody>
-                    {[...apps].sort((a, b) => Number(["approved", "rejected"].includes(a.state)) - Number(["approved", "rejected"].includes(b.state)) || a.reference.localeCompare(b.reference)).slice(0, 12).map((a) => {
+                    {shownApps.map((a) => {
                       const r = result(a.reference);
                       return (
                         <tr key={a.id} className="border-t border-[#e7edf6]">
@@ -214,8 +275,8 @@ export function QuarterlySubmission() {
                 </table>
               </div>
             )}
-            <p className="mt-2 text-[12px] text-[#64748b]">{inTesting.length} in progress{org ? <> · <Link href={manufacturerProfileHref(org.code)} className="text-primary hover:underline">Open the Manufacturer 360 profile</Link></> : null}</p>
-          </div>
+            <p className="mt-2 text-[12px] text-[#64748b]">Showing {shownApps.length} of {apps.length} · {inTesting.length} in progress{org ? <> · <Link href={manufacturerProfileHref(org.code)} className="text-primary hover:underline">Open the Manufacturer 360 profile</Link></> : null}</p>
+          </Box>
         </>
       )}
     </div>

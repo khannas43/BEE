@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ListPager, SortableTh, useListTools } from "@/components/app/kit/listTools";
+import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
+import { manufacturerProfileHref, useManufacturers } from "@/lib/client/runtimeManufacturers";
 import { demoGet, demoPath, demoPost } from "@/lib/client/runtimeDemo";
 
 /**
@@ -297,12 +299,48 @@ function useUseCase(model: ModelCard | null) {
     void loadRuns();
   }, [loadRuns]);
 
-  async function open(id: string) {
+  /** The output has the shape this screen draws. A few runs stored by the first seeds use an older shape. */
+  function usable(run: RunDetail): boolean {
+    const o = (run.output ?? {}) as Record<string, unknown>;
+    switch (run.useCase) {
+      case "compliance-risk": return Array.isArray(o.entities);
+      case "production-anomaly": return Array.isArray(o.series);
+      case "rating-trends": return Array.isArray(o.categories);
+      case "document-extraction": return Array.isArray(o.fields);
+      default: return true;
+    }
+  }
+
+  /** Opens a stored run; returns false when it could not be shown (older format or unreadable). */
+  async function open(id: string): Promise<boolean> {
     setError(null);
     const r = await demoGet<RunDetail>(demoPath("ai", id));
-    if (r.ok) setSelected(r.value);
-    else setError(r.message);
+    if (!r.ok) {
+      setError(r.message);
+      return false;
+    }
+    if (!usable(r.value)) {
+      setError("This stored run was made in an older format and cannot be shown. Run the model again.");
+      return false;
+    }
+    setSelected(r.value);
+    return true;
   }
+
+  const autoDone = useRef<string | null>(null);
+  useEffect(() => {
+    // The page opens with a result: the latest stored run, or (compliance risk only) a first run when none exists yet.
+    if (!uc || runs === null || selected || autoDone.current === uc) return;
+    autoDone.current = uc;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (runs.length > 0) {
+      void open(runs[0].id).then((shown) => {
+        if (!shown && model?.canRun) void run();
+      });
+    } else if (model?.canRun && uc === "compliance-risk") void run();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uc, runs, selected]);
 
   async function run() {
     if (!uc) return;
@@ -716,6 +754,8 @@ const RISK_SORT = (e: RiskEntity & { rank: number }, k: string): string | number
 /** The scored manufacturers: sortable, paged, and one row is selected; the evidence below is for that row only. */
 function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; selKey: string | null; onSelect: (key: string) => void }) {
   const ranked = entities.map((e, i) => ({ ...e, rank: i + 1 }));
+  const manufacturers = useManufacturers();
+  const profileFor = (key: string) => (manufacturers.phase === "ready" ? manufacturers.list.find((m) => m.id === key) : undefined);
   const [band, setBand] = useState("");
   const [factor, setFactor] = useState("");
   const [data, setData] = useState("");
@@ -759,7 +799,14 @@ function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; sel
               return (
                 <tr key={e.key} className={`border-t border-outline-variant cursor-pointer ${on ? "bg-[#e7effb]" : "hover:bg-[#f4f8ff]"}`} onClick={() => onSelect(e.key)} aria-selected={on} data-testid="ai-risk-row">
                   <td className={cell}>{e.rank}</td>
-                  <td className={`${cell} font-semibold text-[#14315E]`}>{e.name}{e.synthetic ? " [synthetic]" : ""}</td>
+                  <td className={`${cell} font-semibold text-[#14315E]`}>
+                    {e.name}{e.synthetic ? <span className="ml-1 text-[11px] font-normal text-[#64748b]">(sample figures)</span> : null}
+                    {profileFor(e.key) ? (
+                      <Link href={manufacturerProfileHref(profileFor(e.key)!.code)} onClick={(ev) => ev.stopPropagation()} className="ml-2 inline-flex items-center gap-0.5 text-[12px] font-semibold text-primary underline" data-testid={`ai-risk-profile-${e.key}`}>
+                        360 profile <Icon name="arrow_forward" size={12} />
+                      </Link>
+                    ) : null}
+                  </td>
                   <td className={cell}>{e.applications}</td>
                   <td className={cell}>
                     <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-16 rounded-full bg-[#e7edf6] overflow-hidden"><span className={`block h-full ${band.bar}`} style={{ width: `${Math.min(100, e.score)}%` }} /></span><strong>{e.score}</strong></span>
@@ -777,7 +824,14 @@ function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; sel
       <ListPager tools={tools} />
       {sel ? (
         <div className="rounded-xl border border-[#dbe6f7] bg-[#f4f8ff] p-3" data-testid="ai-risk-selected">
-          <div className="font-semibold text-[#14315E]">{sel.name}: score {sel.score} ({sel.band})</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="font-semibold text-[#14315E]">{sel.name}: score {sel.score} ({sel.band})</div>
+            {profileFor(sel.key) ? (
+              <Link href={manufacturerProfileHref(profileFor(sel.key)!.code)} className="inline-flex items-center gap-1 rounded-lg border border-primary bg-white px-3 py-1 text-[13px] font-semibold text-primary" data-testid="ai-risk-open-profile">
+                <Icon name="hub" size={16} /> Open Manufacturer 360 profile
+              </Link>
+            ) : null}
+          </div>
           <div className="pt-2 flex flex-wrap gap-1.5">
             {top.length ? top.map((f) => <Chip key={f.feature}>{f.feature}: {f.value} → {f.contribution}/{f.weight}</Chip>) : <span className="text-[13px] text-[#64748b]">No contributing factors.</span>}
           </div>
@@ -810,8 +864,34 @@ function AnomalyTable({ series, synthetic, selKey, onSelect }: { series: SeriesR
   const sel = series.find((s) => s.series === selKey) ?? null;
   const flaggedIdx = sel ? sel.quarters.map((q, i) => (sel.flags.some((f) => f.quarter === q.quarter) ? i : -1)).filter((i) => i >= 0) : [];
   const fieldCls = "rounded-lg border border-outline-variant px-3 !h-10 !py-0 box-border font-body-sm bg-surface-card";
+  const manufacturers = useManufacturers();
+  const plain = (n: string) => n.replace(/\s*\((synthetic[^)]*|not yet permittee)\)\s*$/i, "").trim().toLowerCase();
+  const profileByName = (n: string | undefined) => (n && manufacturers.phase === "ready" ? manufacturers.list.find((m) => plain(m.name) === plain(n)) : undefined);
+  const chartSeries = [...series].sort((a, b) => b.flags.length - a.flags.length || b.quarters.length - a.quarters.length).slice(0, 3);
   return (
     <div className="mt-4 space-y-3" data-testid="ai-output-anomaly">
+      <div className="grid gap-3 lg:grid-cols-3" data-testid="ai-production-charts">
+        {chartSeries.map((c) => {
+          const idx = c.quarters.map((q, i) => (c.flags.some((f) => f.quarter === q.quarter) ? i : -1)).filter((i) => i >= 0);
+          return (
+            <div key={c.series} className={`rounded-xl border p-3 ${c.status === "flagged" ? "border-[#f5c2c0] bg-[#fdecea]/40" : "border-[#dbe6f7] bg-[#f4f8ff]"}`} data-testid={`ai-production-chart-${c.series}`}>
+              <div className="flex items-center justify-between gap-2 text-[13px] font-bold text-[#14315E]">
+                <span>{c.organisation ?? c.series}</span>
+                {profileByName(c.organisation) ? (
+                  <Link href={manufacturerProfileHref(profileByName(c.organisation)!.code)} className="shrink-0 text-[12px] font-semibold text-primary underline" data-testid={`ai-production-profile-${c.series}`}>360 profile →</Link>
+                ) : null}
+              </div>
+              <div className="text-[12px] text-[#64748b]">{c.model} · units declared per quarter</div>
+              <div className="mt-2"><MiniBars values={c.quarters.map((q) => q.units)} labels={c.quarters.map((q) => q.quarter)} flagged={idx} height={64} /></div>
+              <div className="mt-1 text-[12px] text-[#475569]">
+                {c.status === "flagged" ? <span className="font-semibold text-[#93000a]">Flagged: </span> : <span className="font-semibold text-[#14532d]">Normal: </span>}
+                {c.flags.length ? c.flags[0].detail : "no quarter outside the usual range."}
+                {c.boundSerials != null ? ` ${c.boundSerials} QR serials bound.` : ""}
+              </div>
+            </div>
+          );
+        })}
+      </div>
       {synthetic ? <p className="font-body-sm font-semibold">Sample production data is shown because there are no live production submissions yet.</p> : null}
       <p className="font-body-sm text-on-surface-variant">{series.length} production series checked. Click a row to select it: the evidence below is shown for the selected series only.</p>
       <div className="flex flex-wrap items-end gap-space-sm" data-testid="ai-anomaly-filters">

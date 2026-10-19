@@ -17,6 +17,7 @@ export default function RegisterManufacturerPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [existingAccount, setExistingAccount] = useState(false);
 
   const detailsValid = useMemo(() => legalName.trim().length > 0
     && fullName.trim().length > 0
@@ -31,6 +32,7 @@ export default function RegisterManufacturerPage() {
     event.preventDefault();
     if (busy) return;
     setError(null);
+    setExistingAccount(false);
     if (!detailsValid) {
       setError("Complete all registration fields and ensure the passwords match.");
       return;
@@ -54,9 +56,12 @@ export default function RegisterManufacturerPage() {
       }
       router.push(typeof body.returnTo === "string" ? body.returnTo : "/app/manufacturer/onboarding");
     } catch (err) {
-      setError(err instanceof Error && err.message === "registration_not_available"
-        ? "This registration could not be completed. Sign in if you already have an account, or try different details."
-        : "The applicant account could not be started. Please try again.");
+      if (err instanceof Error && err.message === "registration_not_available") {
+        setExistingAccount(true);
+        setError("An applicant account already exists for one of these details. Sign in to continue your manufacturer application.");
+      } else {
+        setError("We could not complete this registration. Please check the email, mobile number, username and password, then try again.");
+      }
     } finally {
       setBusy(false);
     }
@@ -82,7 +87,16 @@ export default function RegisterManufacturerPage() {
             </p>
           </div>
 
-          {error && <div role="alert" className="rounded-lg bg-error-container text-on-error-container px-3 py-2 font-body-sm" data-testid="registration-error">{error}</div>}
+          {error && (
+            <div role="alert" className="rounded-lg bg-error-container text-on-error-container px-3 py-2 font-body-sm" data-testid="registration-error">
+              <p>{error}</p>
+              {existingAccount && (
+                <Link href="/login?returnTo=/app/manufacturer/onboarding" className="inline-flex mt-2 font-semibold text-primary hover:underline" data-testid="existing-account-sign-in">
+                  Sign in to continue
+                </Link>
+              )}
+            </div>
+          )}
 
           <form onSubmit={createAccountAndContinue} noValidate className="space-y-space-md" data-testid="manufacturer-account-form">
               <div className="grid sm:grid-cols-2 gap-space-md">

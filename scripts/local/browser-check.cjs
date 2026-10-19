@@ -200,19 +200,21 @@ async function main() {
 
       // Sign out through the top-bar form.
       await page.eval(`document.querySelector("[data-testid=session-badge] form button").click(); true`);
-      const out = await page.waitFor(`location.pathname === "/login" && location.search.includes("signedOut=1")`, 20000);
+      // A same-origin sign-out returns to the portal home page (commit 6c40482, owner decision on the guest journey).
+      const out = await page.waitFor(`location.pathname === "/"`, 20000);
       const after = out ? await page.eval(`fetch("/api/auth/session").then((r) => r.json())`) : null;
-      check(`browser.${u.username}.sign-out`, out && after?.authenticated === false, `top-bar sign-out -> /login?signedOut=1; session ${JSON.stringify(after)}`);
+      check(`browser.${u.username}.sign-out`, out && after?.authenticated === false, `top-bar sign-out -> portal home; session ${JSON.stringify(after)}`);
       await page.close();
     }
 
     // Login page shows only implemented controls.
     const page = await openPage(chrome.cdp);
     await page.goto(`${WEB}/login`);
-    await page.waitFor(`!!document.querySelector("[data-testid=implemented-controls]")`, 60000);
+    await page.waitFor(`!!document.querySelector("[data-testid=login-card]")`, 60000);
     const login = await page.eval(`document.body.textContent`);
     const claims = ["MFA enforced", "RBAC + object policy", "Every action audited"].filter((c) => login.includes(c));
-    check("browser.login-claims", claims.length === 0 && login.includes("PKCE") && login.includes("authenticator-app code (TOTP)"), `unproven claims shown: ${claims.length ? claims.join(", ") : "none"}; implemented controls listed, including TOTP`);
+    // The login page is the plain card of the guest journey (owner decision O1); it lists no controls, so only the absence of unproven claims is asserted.
+    check("browser.login-claims", claims.length === 0, `unproven claims shown: ${claims.length ? claims.join(", ") : "none"}; sign-in card shown`);
     await page.close();
   } finally {
     await chrome.close();

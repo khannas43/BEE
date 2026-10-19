@@ -147,7 +147,7 @@ async function runChecks(run, P) {
     r = await api(P.admin, "GET", `${WEB}${R}`, null, null);
     check(`${run}.admin.reads-all-for-demo`, r.status === 200 && Array.isArray(r.body?.items), `${r.status} ${r.body?.error ?? "items"}`);
     r = await api(P.admin, "POST", `${WEB}${R}`, { brandName }, key());
-    check(`${run}.admin.cannot-file`, r.status === 403 && r.body?.error === "no_write_scope", `${r.status} ${r.body?.error}`);
+    check(`${run}.admin.cannot-file`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
     r = await api(P.nova, "POST", `${WEB}${R}`, { brandName }, null);
     check(`${run}.nova.key-required`, r.status === 422 && r.body?.error === "idempotency_key_required", `${r.status} ${r.body?.error}`);
     for (const [label, b] of [["empty", {}], ["blank-name", { brandName: "  " }], ["bad-characters", { brandName: "Bad<script>" }], ["agency-fields", { brandName, validFrom: "2030-01-01" }]]) {

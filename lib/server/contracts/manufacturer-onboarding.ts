@@ -251,14 +251,14 @@ export const SPRING_MANUFACTURER_ONBOARDING_LIST_ERRORS: UpstreamErrors = {
 export const SPRING_MANUFACTURER_ONBOARDING_READ_ERRORS: UpstreamErrors = { ...SPRING_READ_ERRORS, 404: ["not_found"] };
 export const SPRING_MANUFACTURER_ONBOARDING_CREATE_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
-  403: WRITE,
+  403: [...RESOLVER_DENIALS, "no_read_scope"],
   409: [...IDEMPOTENCY],
   422: ["validation_failed", "idempotency_key_required"],
   503: ["service_unavailable"],
 };
 export const SPRING_MANUFACTURER_ONBOARDING_PATCH_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
-  403: [...WRITE, "not_editable"],
+  403: [...RESOLVER_DENIALS, "no_read_scope", "not_editable"],
   404: ["not_found"],
   409: ["version_conflict", ...IDEMPOTENCY],
   422: ["validation_failed"],
@@ -282,7 +282,7 @@ export const validateManufacturerOnboardingSubmitPreview: Validator<Manufacturer
 
 export const SPRING_MANUFACTURER_ONBOARDING_PREVIEW_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
-  403: [...WRITE, "not_submittable"],
+  403: [...RESOLVER_DENIALS, "no_read_scope", "not_submittable"],
   404: ["not_found"],
   422: ["rule_not_available"],
   503: ["service_unavailable"],

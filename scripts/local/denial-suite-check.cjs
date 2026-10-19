@@ -161,7 +161,7 @@ async function main() {
     { m: "GET", path: "/api/rating-schemes", who: ["bee.admin"] },
     { m: "GET", path: "/api/business-settings", who: ["bee.admin"] },
     { m: "GET", path: "/api/fee-corrections", who: ["bee.finance"] },
-    { m: "GET", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant", "bee.finance", "bee.programme", "bee.officer"] },
+    { m: "GET", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant", "bee.finance", "bee.programme", "bee.officer", "bee.admin"] }, // Admin: read-only demonstration access (Brief C3A)
     { m: "GET", path: "/api/registrations/eligible-brands", who: ["nova.applicant", "pixel.applicant"] },
     { m: "GET", path: "/api/register-revocations", who: ["bee.programme", "bee.officer", "bee.admin"] },
     { m: "POST", path: "/api/fee-rules/proposals", who: ["bee.admin"] },

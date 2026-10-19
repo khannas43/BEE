@@ -3,7 +3,7 @@ import { AUTH } from "@/lib/server/authConfig";
 import { callBeeApi } from "@/lib/server/beeApi";
 import { fromUpstream, isErrorCode } from "@/lib/server/apiContract";
 import { SPRING_PUBLIC_MANUFACTURER_SIGNUP } from "@/lib/server/contracts/manufacturer-signup";
-import { correlationIdOf, errorResponse, logged, setOutcome, withContractHeaders } from "@/lib/server/http";
+import { correlationIdOf, errorResponse, logged, methodNotAllowed, setOutcome, withContractHeaders } from "@/lib/server/http";
 import { createGuestIdentity, deleteGuestIdentity } from "@/lib/server/keycloakAdmin";
 import { KeycloakError, passwordGrant, signingKeys } from "@/lib/server/keycloak";
 import { authMethods, verifyIdToken } from "@/lib/server/oidc";
@@ -124,8 +124,7 @@ export const POST = logged("/api/runtime/public/manufacturer-signup", async (req
   }
 });
 
-export const GET = logged("/api/runtime/public/manufacturer-signup", (request: NextRequest) =>
-  errorResponse("method_not_allowed", 405, correlationIdOf(request)));
+export const GET = logged("/api/runtime/public/manufacturer-signup", methodNotAllowed("POST"));
 export const PUT = GET;
 export const PATCH = GET;
 export const DELETE = GET;

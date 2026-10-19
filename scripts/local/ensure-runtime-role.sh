@@ -205,3 +205,21 @@ if psql_super -d bee_app -c "SELECT to_regprocedure('app.manufacturer_onboarding
 GRANT EXECUTE ON FUNCTION app.manufacturer_onboarding_system_close_expired_observations() TO ${BEE_RUNTIME_DB_USER};
 SQL
 fi
+
+# SNL workflow foundation, return/resubmit wiring, forward closure and notification delivery (V69 to V79): the entry points Spring's repositories call
+# by name. Their helpers are called only by these definer functions and stay without a runtime grant. Matched by name so the signatures can change.
+psql_super -d bee_app <<SQL
+DO \$\$
+DECLARE f regprocedure;
+BEGIN
+  FOR f IN SELECT p.oid::regprocedure FROM pg_proc p WHERE p.pronamespace = 'app'::regnamespace AND p.proname IN (
+    'model_return_response_insert_return', 'model_return_response_officer_resubmit_notify', 'model_return_response_orchestrate_forward_closure',
+    'model_return_response_orchestrate_resubmit', 'model_return_response_orchestrate_wired_return',
+    'registration_return_response_latest_open_cycle_return', 'registration_return_response_orchestrate_resubmit', 'registration_return_response_orchestrate_wired_return',
+    'notification_foundation_deliver',
+    'workflow_foundation_append_clock_event', 'workflow_foundation_create_task', 'workflow_foundation_discrepancy_dispose',
+    'workflow_foundation_discrepancy_respond', 'workflow_foundation_reassign_task', 'workflow_foundation_terminal_task') LOOP
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO ${BEE_RUNTIME_DB_USER}', f);
+  END LOOP;
+END \$\$;
+SQL

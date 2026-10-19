@@ -3132,6 +3132,10 @@ class SpringContractTest {
         conforms(LIST, post(LIST).with(token("manufacturer")).contentType("application/json").content(createBody), 422, "idempotency_key_required");
         conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
         conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 201, null);
+        // Admin has read-only demonstration access (Brief C3A): a write is refused with role_not_permitted.
+        account("admin", "all");
+        conforms(LIST, post(LIST).with(token("admin")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 403, "role_not_permitted");
+        account("manufacturer", "own-org");
         when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(true);
         conforms(LIST, post(LIST).with(token("manufacturer")).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), 409, "brand_name_taken");
         when(registrationRepo.brandNameTaken("Zephyr Cool")).thenReturn(false);

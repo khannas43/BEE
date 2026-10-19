@@ -88,7 +88,7 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         docRepo = new ManufacturerOnboardingDocumentRepository(db);
         json = new ObjectMapper();
         service = new ManufacturerOnboardingService(repo, docRepo, new MasterDataRepository(db), new IdempotencyRepository(db), json);
-        assertEquals(79, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(80, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
         assertEquals(1, owner.queryForObject(
             "SELECT count(*) FROM flyway_schema_history WHERE success AND version = '78'", Integer.class));
         assertEquals("none", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));

@@ -130,11 +130,15 @@ async function main() {
   for (const u of ["bee.programme", "bee.officer", "bee.director"]) stage.push([u, await call(u, "/api/model-applications")]);
   check("scope.stage-roles-empty", stage.every(([, x]) => x.status === 200 && x.json.count === 0), stage.map(([u, x]) => `${u} ${x.status}/${x.json?.count}`).join("; ") + " (no seeded application at their stage)");
   const none = [];
-  for (const u of ["bee.admin", "bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer"]) {
+  // Admin has read-only demonstration access to every operational record (Brief C3A, owner decision O3): it is checked below and is not in this list.
+  for (const u of ["bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer"]) {
     none.push([u, await call(u, "/api/model-applications"), await call(u, `/api/model-applications/${byRef["LOCAL-MA-0002"].id}`)]);
   }
   check("scope.no-read-rule-denied", none.every(([, l, g]) => l.status === 403 && l.json?.error === "no_read_scope" && g.status === 403 && !g.body.includes("LOCAL-MA")),
-    none.map(([u, l, g]) => `${u} ${l.status}/${g.status}`).join("; ") + " (no_read_scope; Admin, Helpdesk and partners not widened)");
+    none.map(([u, l, g]) => `${u} ${l.status}/${g.status}`).join("; ") + " (no_read_scope; Helpdesk, Auditor and partners not widened)");
+  const adminList = await call("bee.admin", "/api/model-applications");
+  const adminDetail = await call("bee.admin", `/api/model-applications/${byRef["LOCAL-MA-0002"].id}`);
+  check("scope.admin-read-only-demonstration", adminList.status === 200 && adminDetail.status === 200, `bee.admin ${adminList.status}/${adminDetail.status} (read-only demonstration access; writes are refused: see the registration and model checks)`);
 
   /* ---------- Keycloak alone never grants: account, role, membership ---------- */
   for (const [u, want] of [["no.account", "no_active_account"], ["inactive.role", "no_effective_role"], ["role.mismatch", "no_effective_role"]]) {

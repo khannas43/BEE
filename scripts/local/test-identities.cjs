@@ -58,6 +58,11 @@ async function teardown(tag = "test") {
   const ids = USERS.map((u) => q(usr(TAGS[tag] + u.n))).join(",");
   // Steps a twin takes (a registration, a revocation, a payment) can write simulated messages to it; they block deleting the account.
   sqlMaint(`DELETE FROM app.demo_message WHERE recipient_account_id IN (${ids})`);
+  sqlMaint(`DELETE FROM app.notification WHERE recipient_account_id IN (${ids})`);
+  // A check that stopped half way can leave delegations of a twin; they block removing the account.
+  sqlMaint(`DELETE FROM app.delegation_use WHERE delegation_id IN (SELECT id FROM app.delegation WHERE delegator_id IN (${ids}) OR delegate_id IN (${ids}));
+    DELETE FROM app.delegation_event WHERE delegation_id IN (SELECT id FROM app.delegation WHERE delegator_id IN (${ids}) OR delegate_id IN (${ids}));
+    DELETE FROM app.delegation WHERE delegator_id IN (${ids}) OR delegate_id IN (${ids})`);
   sql(`BEGIN; DELETE FROM app.idempotency_record WHERE account_id IN (${ids}); DELETE FROM app.assignment WHERE user_id IN (${ids}); DELETE FROM app.role_assignment WHERE user_id IN (${ids}); DELETE FROM app.organisation_membership WHERE user_id IN (${ids}); DELETE FROM app.user_account WHERE id IN (${ids}); COMMIT;`);
   for (const u of USERS) { try { fs.unlinkSync(path.join(totp.DIR, `${name(u.username, tag)}.json`)); } catch {} }
 }

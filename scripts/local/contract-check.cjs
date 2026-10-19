@@ -175,7 +175,7 @@ const REG_IDEM = ["idempotency_key_conflict", "idempotency_in_progress"];
 const REG_LIST_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: REG_READ, 503: ["service_unavailable"] } };
 const REG_READ_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: REG_READ, 404: ["not_found"], 503: ["service_unavailable"] } };
 const REG_BRANDS_UPSTREAM = { GET: { 401: ["unauthenticated"], 403: REG_WRITE, 503: ["service_unavailable"] } };
-const REG_CREATE_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: REG_WRITE, 409: [...REG_IDEM, "brand_name_taken", "duplicate_registration"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
+const REG_CREATE_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...REG_WRITE, "role_not_permitted"], 409: [...REG_IDEM, "brand_name_taken", "duplicate_registration"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const REG_PATCH_UPSTREAM = { PATCH: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_editable"], 404: ["not_found"], 409: ["version_conflict", ...REG_IDEM, "brand_name_taken", "duplicate_registration"], 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] } };
 const REG_SUBMIT_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: [...REG_WRITE, "not_submittable"], 404: ["not_found"], 503: ["service_unavailable"] },
@@ -226,14 +226,14 @@ const MOB_COMMAND_UPSTREAM = {
 };
 const MOB_LIST_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: MOB_READ, 503: ["service_unavailable"] },
-  POST: { 401: ["unauthenticated"], 403: MOB_WRITE, 409: MOB_IDEM, 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
+  POST: { 401: ["unauthenticated"], 403: MOB_READ, 409: MOB_IDEM, 422: ["validation_failed", "idempotency_key_required"], 503: ["service_unavailable"] },
 };
 const MOB_READ_UPSTREAM = {
   GET: { 401: ["unauthenticated"], 403: MOB_READ, 404: ["not_found"], 503: ["service_unavailable"] },
-  PATCH: { 401: ["unauthenticated"], 403: [...MOB_WRITE, "not_editable"], 404: ["not_found"], 409: ["version_conflict", ...MOB_IDEM], 422: ["validation_failed"], 503: ["service_unavailable"] },
+  PATCH: { 401: ["unauthenticated"], 403: [...MOB_READ, "not_editable"], 404: ["not_found"], 409: ["version_conflict", ...MOB_IDEM], 422: ["validation_failed"], 503: ["service_unavailable"] },
 };
 const MOB_SUBMIT_UPSTREAM = {
-  GET: { 401: ["unauthenticated"], 403: [...MOB_WRITE, "not_submittable"], 404: ["not_found"], 422: ["rule_not_available"], 503: ["service_unavailable"] },
+  GET: { 401: ["unauthenticated"], 403: [...MOB_READ, "not_submittable"], 404: ["not_found"], 422: ["rule_not_available"], 503: ["service_unavailable"] },
   POST: { 401: ["unauthenticated"], 403: [...MOB_WRITE, "organisation_not_eligible", "not_submittable"], 404: ["not_found"], 409: ["version_conflict", ...MOB_IDEM], 422: ["validation_failed", "idempotency_key_required", "rule_not_available"], 503: ["service_unavailable"] },
 };
 const MOB_DOC_UPLOAD_UPSTREAM = { POST: { 401: ["unauthenticated"], 403: [...MOB_WRITE, "not_editable"], 404: ["not_found"], 422: ["validation_failed"], 503: ["service_unavailable"] } };

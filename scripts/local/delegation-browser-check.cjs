@@ -120,7 +120,7 @@ function cleanup(twinIds, appIds) {
 
 async function runChecks(run, P) {
   const tag = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  const PERSONA = ["nova.applicant", "bee.programme", "bee.officer", "bee.finance", "bee.admin", "bee.officer"];
+  const PERSONA = ["nova.applicant", "bee.programme", "bee.officer", "bee.finance", "bee.admin", "bee.director"];
   const twinIds = PERSONA.map((u) => `'${ids.accountId(u)}'`).join(",");
   const before = sqlApp(`SELECT count(*) FROM app.model_application`) + "|" + sqlApp(`SELECT count(*) FROM app.role_assignment`);
   const appIds = [];
@@ -277,7 +277,7 @@ async function runChecks(run, P) {
 async function main() {
   const chrome = await launchChrome();
   try {
-    const who = { nova: ids.name("nova.applicant"), programme: ids.name("bee.programme"), director: ids.name("bee.officer"), finance: ids.name("bee.finance"), admin: ids.name("bee.admin"), director: ids.name("bee.director") };
+    const who = { nova: ids.name("nova.applicant"), programme: ids.name("bee.programme"), director: ids.name("bee.officer"), finance: ids.name("bee.finance"), admin: ids.name("bee.admin"), secretary: ids.name("bee.director") };
     const P = {};
     for (const [k, u] of Object.entries(who)) {
       await totp.ensureEnrolled(u);

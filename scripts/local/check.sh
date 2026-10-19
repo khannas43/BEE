@@ -104,7 +104,7 @@ check "db.keycloak-isolated" "$(ok grep -q 'permission denied' <<<"$iso")" "bee_
 
 # ---- tokens: Keycloak identifies, Spring decides (as disposable twins of the personas)
 id_out="$(node "$ROOT/scripts/local/test-identities.cjs" setup test 2>&1)"
-check "test-identities.created" "$(ok grep -q '^created 16' <<<"$id_out")" "$id_out (test.<persona>: same Keycloak role and bee_app rows as the seeded persona)"
+check "test-identities.created" "$(ok grep -q '^created 17' <<<"$id_out")" "$id_out (test.<persona>: same Keycloak role and bee_app rows as the seeded persona)"
 export BEE_TEST_IDENTITIES=test
 trap 'node "$ROOT/scripts/local/test-identities.cjs" teardown test >/dev/null 2>&1' EXIT
 token() { # password grant with TOTP for the persona's twin (scripts/local/totp.cjs enrolls the twin)

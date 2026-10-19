@@ -262,7 +262,7 @@ export const SPRING_REGISTRATION_READ_ERRORS: UpstreamErrors = { ...SPRING_READ_
 export const SPRING_REGISTRATION_BRANDS_ERRORS: UpstreamErrors = { 401: ["unauthenticated"], 403: WRITE, 503: ["service_unavailable"] };
 export const SPRING_REGISTRATION_CREATE_ERRORS: UpstreamErrors = {
   401: ["unauthenticated"],
-  403: WRITE,
+  403: [...WRITE, "role_not_permitted"], // role_not_permitted: Admin has read-only demonstration access (Brief C3A)
   409: [...IDEMPOTENCY, "brand_name_taken", "duplicate_registration"],
   422: ["validation_failed", "idempotency_key_required"],
   503: ["service_unavailable"],

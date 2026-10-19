@@ -769,7 +769,6 @@ function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; sel
     pageSize: 8,
   });
   const sel = ranked.find((e) => e.key === selKey) ?? null;
-  const top = sel ? sel.features.filter((f) => f.contribution > 0).sort((x, y) => y.contribution - x.contribution) : [];
   return (
     <div className="mt-4 space-y-3" data-testid="ai-output-risk">
       <p className="font-body-sm text-on-surface-variant">{entities.length} manufacturers scored. Click a row to select it: the evidence below is shown for the selected manufacturer only.</p>
@@ -824,17 +823,56 @@ function RiskTable({ entities, selKey, onSelect }: { entities: RiskEntity[]; sel
       </div>
       <ListPager tools={tools} />
       {sel ? (
-        <div className="rounded-xl border border-[#dbe6f7] bg-[#f4f8ff] p-3" data-testid="ai-risk-selected">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="font-semibold text-[#14315E]">{sel.name}: score {sel.score} ({sel.band})</div>
-            {profileFor(sel.key) ? (
-              <Link href={manufacturerProfileHref(profileFor(sel.key)!.code)} className="inline-flex items-center gap-1 rounded-lg border border-primary bg-white px-3 py-1 text-[13px] font-semibold text-primary" data-testid="ai-risk-open-profile">
-                <Icon name="hub" size={16} /> Open Manufacturer 360 profile
-              </Link>
-            ) : null}
-          </div>
-          <div className="pt-2 flex flex-wrap gap-1.5">
-            {top.length ? top.map((f) => <Chip key={f.feature}>{f.feature}: {f.value} → {f.contribution}/{f.weight}</Chip>) : <span className="text-[13px] text-[#64748b]">No contributing factors.</span>}
+        <SelectedRisk entity={sel} profileCode={profileFor(sel.key)?.code ?? null} />
+      ) : null}
+    </div>
+  );
+}
+
+/** The selected manufacturer's evidence: collapsible, with every scoring criterion listed one under the other. */
+function SelectedRisk({ entity, profileCode }: { entity: RiskEntity; profileCode: string | null }) {
+  const [open, setOpen] = useState(true);
+  const criteria = [...entity.features].sort((x, y) => y.contribution - x.contribution);
+  const band = BAND[entity.band] ?? BAND.low;
+  return (
+    <div className="rounded-xl border border-[#dbe6f7] bg-[#f4f8ff]" data-testid="ai-risk-selected">
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex items-center gap-2 text-left font-semibold text-[#14315E]" data-testid="ai-risk-toggle">
+          <Icon name={open ? "expand_less" : "expand_more"} size={20} />
+          {entity.name}: score {entity.score} ({entity.band})
+        </button>
+        {profileCode ? (
+          <Link href={manufacturerProfileHref(profileCode)} className="inline-flex items-center gap-1 rounded-lg border border-primary bg-white px-3 py-1 text-[13px] font-semibold text-primary" data-testid="ai-risk-open-profile">
+            <Icon name="hub" size={16} /> Open Manufacturer 360 profile
+          </Link>
+        ) : null}
+      </div>
+      {open ? (
+        <div className="px-3 pb-3" data-testid="ai-risk-criteria">
+          <div className="overflow-x-auto rounded-lg border border-[#dbe6f7] bg-white">
+            <table className="w-full text-left text-[13px]">
+              <caption className="sr-only">Scoring criteria for {entity.name}</caption>
+              <thead>
+                <tr className="bg-[#eef3fb] text-[12px] uppercase tracking-wide text-[#475569]">
+                  <th className="px-3 py-2">Criterion</th>
+                  <th className="px-3 py-2">Measured value</th>
+                  <th className="px-3 py-2">Points scored</th>
+                  <th className="px-3 py-2">Maximum points</th>
+                  <th className="px-3 py-2 w-40">Share of maximum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {criteria.map((f) => (
+                  <tr key={f.feature} className="border-t border-[#e7edf6]">
+                    <td className="px-3 py-2 font-semibold text-[#14315E]">{f.feature}</td>
+                    <td className="px-3 py-2">{f.value}</td>
+                    <td className="px-3 py-2">{f.contribution}</td>
+                    <td className="px-3 py-2">{f.weight}</td>
+                    <td className="px-3 py-2"><span className="inline-block h-2 w-28 rounded-full bg-[#e7edf6] overflow-hidden align-middle"><span className={`block h-full ${band.bar}`} style={{ width: `${f.weight ? Math.min(100, (f.contribution / f.weight) * 100) : 0}%` }} /></span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : null}

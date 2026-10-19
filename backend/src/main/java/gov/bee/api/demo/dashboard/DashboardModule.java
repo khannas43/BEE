@@ -282,7 +282,7 @@ public class DashboardModule implements DemoModule {
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("view", view);
-        body.put("title", "director".equals(view) ? "Director's dashboard" : "Auditor's dashboard");
+        body.put("title", "director".equals(view) ? "Programme at a glance" : "Auditor's dashboard");
         body.put("asOf", Instant.now().toString());
         body.put("range", rangeBody(range));
         body.put("tiles", tiles);

@@ -8,7 +8,7 @@ const charts = [
   { kind: "trend", title: "Issued, by month", data: [{ label: "2026-08", value: 1 }, { label: "2026-09", value: 3 }, { label: "2026-10", value: 2 }] },
 ];
 const tile = (key: string, over: Record<string, unknown> = {}) => ({ key, label: `Tile ${key}`, value: 7, unit: "things", hint: "A hint.", tone: "attention", icon: "verified", columns: ["Registration ID", "Ledger"], rows: [["BEE/RAC/2025/90037", "Revoked"], ["BEE/RAC/2026/10101", "Active"]], note: null, href: "/app/demo/ledger", charts, total: 2, shown: 2, ...over });
-const overview = (view: string) => ({ view, title: view === "director" ? "Director's dashboard" : "Auditor's dashboard", asOf: "2026-10-16T10:00:00Z", note: "n", range: { from: null, to: null }, tiles: [tile("a"), tile("b", { value: 0, rows: [], total: 0, shown: 0 })] });
+const overview = (view: string) => ({ view, title: view === "director" ? "Programme at a glance" : "Auditor's dashboard", asOf: "2026-10-16T10:00:00Z", note: "n", range: { from: null, to: null }, tiles: [tile("a"), tile("b", { value: 0, rows: [], total: 0, shown: 0 })] });
 const risk = tile("ai_risk", {
   label: "Highest compliance risk", icon: "warning", tone: "danger", columns: ["Manufacturer", "Score", "Risk band", "Why it is high", "Applications"], total: 1, shown: 1, value: 1,
   rows: [["Northwind Comforts (synthetic)", 99.5, "High", "62% of its applications were sent back", 6]],
@@ -26,7 +26,7 @@ describe("RoleDashboard", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(overview("director"))));
     render(<RoleDashboard view="director" />);
     expect((await screen.findByTestId("dash-value-a")).textContent).toBe("7");
-    expect(screen.getByRole("heading", { name: "Director's dashboard" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Programme at a glance" })).toBeTruthy();
     expect(screen.getByTestId("dash-asof").textContent).toContain("2026-10-16 15:30 IST");
     expect(screen.getByTestId("dash-tile-a").querySelector("svg")).toBeTruthy();
     expect(screen.getByTestId("dash-tile-a").textContent).not.toContain("A hint.");

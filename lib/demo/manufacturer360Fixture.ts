@@ -269,7 +269,7 @@ export const MANUFACTURER_360_WP9_CARDS: readonly Wp9PreviewCard[] = [
 export const MANUFACTURER_360_EXTRA_LINKS = [
   { href: "/app/registrations/reviews", label: "Registration reviews (Programme / Director)" },
   { href: "/app/model-label/label-preview", label: "Label preview" },
-  { href: "/app/demo/executive", label: "Executive dashboard" },
+  { href: "/app/demo/executive", label: "Programme performance" },
   { href: "/app/demo/mis", label: "MIS dashboard" },
   { href: "/verify", label: "Public verify (shopper)" },
 ] as const;

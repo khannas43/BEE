@@ -139,7 +139,7 @@ export function ExecutiveDashboard() {
         <div className="flex flex-wrap items-start justify-between gap-space-md">
           <div>
             <p className="font-label-md uppercase tracking-[0.18em] !text-white/70">Bureau of Energy Efficiency · demonstration</p>
-            <div role="heading" aria-level={1} className="mt-1 text-[30px] leading-9 font-bold tracking-tight text-white">Executive dashboard</div>
+            <div role="heading" aria-level={1} className="mt-1 text-[30px] leading-9 font-bold tracking-tight text-white">Programme performance</div>
             <p className="font-body-md !text-white/85 mt-0.5">The programme at a glance: applications, certificates, fees, ledger, production and risk</p>
             <p className="font-label-md !text-white/70 mt-space-sm" data-testid="exec-asof">{data ? `Calculated live at ${istStamp(data.asOf, false)} IST. Monthly charts show the last 12 months when no dates are set.` : "Loading…"}</p>
           </div>

@@ -79,7 +79,7 @@ describe("navigation definition", () => {
 
   it("5. Admin gets exactly four groups covering every working runtime route", () => {
     const admin = menu(["admin"], ADMIN_CAPS);
-    expect(admin.map((g) => g.title)).toEqual(["Executive Dashboard", "Registration & Applications", "Labels & Consumer Services", "Operations & Intelligence"]);
+    expect(admin.map((g) => g.title)).toEqual(["Dashboards", "Registration & Applications", "Labels & Consumer Services", "Operations & Intelligence"]);
     const reached = new Set(routes(admin));
     const missing = RUNTIME_ROUTES.map((r) => r.href).filter((href) => !reached.has(href) && !(href in NOT_IN_MENU));
     expect(missing).toEqual([]);

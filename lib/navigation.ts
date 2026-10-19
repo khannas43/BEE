@@ -169,9 +169,9 @@ const APPLICATION_STATUS = ["/app/manufacturer/application/"] as const;
 export const NAVIGATION: readonly NavGroup[] = [
   // ---------------------------------------------------------------- Admin (demonstration umbrella)
   {
-    id: "admin.executive", title: "Executive Dashboard", icon: "space_dashboard", profile: "admin",
+    id: "admin.executive", title: "Dashboards", icon: "space_dashboard", profile: "admin",
     children: [
-      adminEntry("admin.executive-overview", "Executive overview", "space_dashboard", live(R.executive)),
+      adminEntry("admin.executive-overview", "Programme performance", "space_dashboard", live(R.executive)),
       adminEntry("admin.m360", "Manufacturer 360", "hub", live(R.m360), { activePrefixes: ["/app/manufacturer/360/"] }),
       adminEntry("admin.mis", "Programme MIS", "monitoring", live(R.mis)),
       parent("admin.work-queue", "Officer work queue", "inbox", [
@@ -181,7 +181,7 @@ export const NAVIGATION: readonly NavGroup[] = [
         adminEntry("admin.sla", "SLA and escalations", "priority_high", live(R.sla)),
       ]),
       adminEntry("admin.messages", "Notifications and messages", "notifications_active", live(R.messages)),
-      adminEntry("admin.director-overview", "BEE Officer overview", "dashboard", live(R.directorDash)),
+      adminEntry("admin.director-overview", "Programme at a glance", "dashboard", live(R.directorDash)),
     ],
   },
   {
@@ -305,8 +305,8 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     id: "dir.dashboard", title: "Dashboard", icon: "dashboard", profile: "officer",
     children: [
-      entry("dir.overview", "BEE Officer overview", "dashboard", live(R.directorDash), BEE_OFFICER),
-      entry("dir.executive", "Executive overview", "space_dashboard", live(R.executive), BEE_OFFICER),
+      entry("dir.overview", "Programme at a glance", "dashboard", live(R.directorDash), BEE_OFFICER),
+      entry("dir.executive", "Programme performance", "space_dashboard", live(R.executive), BEE_OFFICER),
       entry("dir.m360", "Manufacturer 360", "hub", live(R.m360), BEE_OFFICER, { activePrefixes: ["/app/manufacturer/360/"] }),
       entry("dir.messages", "Notifications and messages", "notifications_active", live(R.messages), BEE_OFFICER),
     ],
@@ -351,7 +351,7 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     id: "sec.dashboard", title: "Dashboard", icon: "dashboard", profile: "director",
     children: [
-      entry("sec.overview", "Director overview", "space_dashboard", live(R.executive), DIRECTOR),
+      entry("sec.overview", "Programme performance", "space_dashboard", live(R.executive), DIRECTOR),
       entry("sec.messages", "Notifications and messages", "notifications_active", live(R.messages), DIRECTOR),
     ],
   },
@@ -378,7 +378,7 @@ export const NAVIGATION: readonly NavGroup[] = [
     id: "sec.oversight", title: "Oversight & Reports", icon: "monitoring", profile: "director",
     children: [
       entry("sec.m360", "Manufacturer 360", "hub", live(R.m360), DIRECTOR, { activePrefixes: ["/app/manufacturer/360/"] }),
-      entry("sec.approval-summary", "Approval summary", "dashboard", live(R.directorDash), DIRECTOR),
+      entry("sec.approval-summary", "Programme at a glance", "dashboard", live(R.directorDash), DIRECTOR),
       entry("sec.pending-applications", "Pending applications", "monitoring", live(R.mis), DIRECTOR),
       entry("sec.ai", "AI advisory summary", "psychology", live(R.ai), DIRECTOR, { badge: "Advisory" }),
       entry("sec.evidence", "Secure evidence status", "link", live(R.ledger), DIRECTOR, { badge: "Simulated" }),

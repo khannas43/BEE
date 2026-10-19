@@ -231,7 +231,7 @@ export function RoleDashboard({ view }: { view: "director" | "auditor" }) {
   }, [view, tick, qs, valid]);
 
   const selected = data?.tiles.find((t) => t.key === open) ?? null;
-  const title = data?.title ?? (view === "director" ? "Director's dashboard" : "Auditor's dashboard");
+  const title = data?.title ?? (view === "director" ? "Programme at a glance" : "Auditor's dashboard");
   const subtitle = view === "director" ? "How the programme is doing, right now" : "Can every record be trusted, and who did what";
 
   return (

@@ -81,7 +81,7 @@ Run rights per use case are in `AiDemoModule` (`RUN` and `READ_EXTRA`); every ou
 | `POST ai/{run}/disposition` | record accept, override (own value and reason required) or reject; the model output is never changed |
 
 ### `dashboard` (Director's and Auditor's dashboards)
-Read only; everything is computed from the live tables on each call. Director's dashboard: director, secretary, programme or admin. Auditor's dashboard: auditor or admin. Each role held for all records. Every route takes an optional date range, `from` and `to` (yyyy-mm-dd, India time); a bad date or a start after the end is `validation_failed`.
+Read only; everything is computed from the live tables on each call. Programme at a glance (the Director's dashboard): director, secretary, programme or admin. Auditor's dashboard: auditor or admin. Each role held for all records. Every route takes an optional date range, `from` and `to` (yyyy-mm-dd, India time); a bad date or a start after the end is `validation_failed`.
 | Route | What |
 |---|---|
 | `GET dashboard` | the dashboards the caller may open (`views`) |

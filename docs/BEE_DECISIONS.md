@@ -291,6 +291,7 @@ Each decision below gives what the system does today, the realistic options, a r
 | N3 | **AI is advisory and human-controlled.** AI entries carry an "Advisory" label. The ledger carries "Simulated". | Owner-approved |
 | N4 | **Functions not yet built are shown as Preview (a sample-data prototype screen) or Planned (no screen, not a link).** OCR, MCA/GSTN checks, production AI, Hyperledger, signed QR payloads, Merkle anchoring, e-signing and unavailable official templates are not presented as complete. | Owner-approved |
 | N5 | **The development "All screens" menu link is removed.** The menu follows the Spring sign-in; the browser preview role never opens a screen. | Owner-approved |
+| N6 | **Admin demonstration read-only access (Brief C3A):** when the signed-in identity is umbrella Admin only, Spring widens **read** scope for operational records needed for the menu walkthrough and **denies** workflow and partner mutations (create, submit, approve, fee confirm, onboarding writes, and the like). The browser shows a read-only banner and hides action controls; it does not decide access. Administrative capabilities stay as before. | Owner-approved |
 
 ## References for the engineering team
 

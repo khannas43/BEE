@@ -141,11 +141,11 @@ async function runChecks(run, P) {
       check(`${run}.anonymous.${m}-${routeOf(p).replace(R, "").replace(/[{}\/]+/g, "-") || "list"}`, a.status === 401 && a.body?.error === "no_session", `${a.status} ${a.body?.error}`);
     }
 
-    // 1. A manufacturer names a new brand; an administrator reads nothing here.
+    // 1. A manufacturer names a new brand; the demonstration administrator may read but not file.
     let r = await api(P.nova, "GET", `${WEB}${R}/eligible-brands`, null, null);
     check(`${run}.nova.brands-empty-for-a-manufacturer`, r.status === 200 && r.body?.count === 0, `${r.status} ${r.body?.count}`);
     r = await api(P.admin, "GET", `${WEB}${R}`, null, null);
-    check(`${run}.admin.reads-nothing`, r.status === 403 && r.body?.error === "no_read_scope", `${r.status} ${r.body?.error}`);
+    check(`${run}.admin.reads-all-for-demo`, r.status === 200 && Array.isArray(r.body?.items), `${r.status} ${r.body?.error ?? "items"}`);
     r = await api(P.admin, "POST", `${WEB}${R}`, { brandName }, key());
     check(`${run}.admin.cannot-file`, r.status === 403 && r.body?.error === "no_write_scope", `${r.status} ${r.body?.error}`);
     r = await api(P.nova, "POST", `${WEB}${R}`, { brandName }, null);

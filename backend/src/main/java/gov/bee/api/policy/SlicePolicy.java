@@ -1,5 +1,6 @@
 package gov.bee.api.policy;
 
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.identity.Caller;
 import gov.bee.api.identity.IdentityRepository.RoleGrant;
 import java.util.ArrayList;
@@ -38,18 +39,25 @@ public final class SlicePolicy {
     }
 
     /** What a caller may list and read. Empty means the caller has no model-application read at all. */
-    public record ReadScope(Set<UUID> organisations, boolean assigned, Set<String> stages) {
+    public record ReadScope(Set<UUID> organisations, boolean assigned, Set<String> stages, boolean allRecords) {
+        public ReadScope(Set<UUID> organisations, boolean assigned, Set<String> stages) {
+            this(organisations, assigned, stages, false);
+        }
+
         public ReadScope {
             organisations = Set.copyOf(organisations);
             stages = Set.copyOf(stages);
         }
 
         public boolean isEmpty() {
-            return organisations.isEmpty() && !assigned && stages.isEmpty();
+            return !allRecords && organisations.isEmpty() && !assigned && stages.isEmpty();
         }
     }
 
     public static ReadScope readScope(Caller caller) {
+        if (AdminDemonstrationAccess.mayReadAllOperationalRecords(caller)) {
+            return new ReadScope(Set.of(), false, Set.of(), true);
+        }
         Set<UUID> orgs = new LinkedHashSet<>();
         Set<String> stages = new LinkedHashSet<>();
         boolean assigned = false;
@@ -69,6 +77,9 @@ public final class SlicePolicy {
 
     /** The server's own recheck of a row the repository returned; must agree with the SQL filter. */
     public static boolean canRead(ReadScope scope, ApplicationFacts app) {
+        if (scope.allRecords()) {
+            return true;
+        }
         return scope.organisations().contains(app.organisationId())
             || (scope.assigned() && app.assignedStagesForCaller().contains(app.state()))
             || scope.stages().contains(app.state());
@@ -108,6 +119,9 @@ public final class SlicePolicy {
      * state, the officer's own assignment where the scope is assigned, and nobody who acted at another stage.
      */
     public static Decision checkStage(java.util.Set<String> fromStates, String stage, List<RoleGrant> actors, Caller caller, ApplicationFacts app) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return Decision.deny("role_not_permitted");
+        }
         List<RoleGrant> usable = caller.usable(actors::contains);
         if (usable.isEmpty()) {
             return Decision.deny("role_not_permitted");
@@ -131,6 +145,9 @@ public final class SlicePolicy {
      * decision changes nothing until the owning work package wires the transition.
      */
     public static Decision check(SliceAction action, Caller caller, ApplicationFacts app) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return Decision.deny("role_not_permitted");
+        }
         if (caller.roles().stream().noneMatch(g -> READ_RULES.containsKey(g.role()))) {
             return Decision.deny("not_a_slice_role");
         }

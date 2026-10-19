@@ -10,6 +10,8 @@ export interface SpringIdentity {
   /** The permissions the roles hold; the menu offers a screen by it. Spring still decides every action. */
   capabilities?: string[];
   organisations: { code: string }[];
+  /** Read-only Admin demonstration profile (Brief C3A); set by Spring, not the preview role. */
+  adminDemonstrationReadOnly?: boolean;
 }
 
 export type IdentityState = { status: "loading" } | { status: "signed-out" } | { status: "signed-in"; me: SpringIdentity };

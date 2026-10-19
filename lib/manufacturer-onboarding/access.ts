@@ -19,7 +19,9 @@ export function routeKindForPath(pathname: string): ManufacturerRouteKind | null
 export function canAccessManufacturerRoute(
   kind: ManufacturerRouteKind,
   roles: readonly ManufacturerOnboardingRole[],
+  adminDemonstrationReadOnly = false,
 ): boolean {
+  if (adminDemonstrationReadOnly) return true;
   if (roles.length === 0) return false;
   switch (kind) {
     case "onboarding":

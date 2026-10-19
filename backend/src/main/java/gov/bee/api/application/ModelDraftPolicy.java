@@ -1,5 +1,6 @@
 package gov.bee.api.application;
 
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.brand.BrandAuthRepository;
 import gov.bee.api.brand.BrandAuthService;
 import gov.bee.api.identity.Caller;
@@ -42,6 +43,9 @@ public final class ModelDraftPolicy {
     }
 
     public static boolean canWrite(Caller caller) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return false;
+        }
         return filingOrganisation(caller).isPresent();
     }
 

@@ -264,16 +264,26 @@ class RegistrationDatabaseTest {
     }
 
     @Test
+    void adminDemonstrationListsAndReadsButCannotMutate() {
+        var draft = draftBrand("Echo Cool");
+        UUID id = UUID.fromString((String) draft.get("id"));
+        ok(service.list(ADMIN), 200);
+        ok(service.get(ADMIN, id), 200);
+        refused(service.patch(ADMIN, id, key(), json("{\"version\":0,\"brandName\":\"Hack\"}")), 403, "no_write_scope");
+    }
+
+    @Test
     void whoReadsWhat() {
         var draft = draftBrand("Cirrus Cool");
         UUID id = UUID.fromString((String) draft.get("id"));
         ok(service.get(NOVA, id), 200);
         refused(service.get(PIXEL, id), 404, "not_found");
         refused(service.get(FINANCE, id), 404, "not_found");
-        refused(service.get(ADMIN, id), 403, "no_read_scope");
+        ok(service.get(ADMIN, id), 200);
         addLicence(id);
         ok(service.submit(NOVA, id, key(), json("{\"version\":0,\"expectedFee\":{\"amountInr\":\"5000.00\",\"feeRuleKey\":\"REG:brand_registration\",\"feeRuleVersion\":1}}")), 200);
         ok(service.get(FINANCE, id), 200);
+        ok(service.get(ADMIN, id), 200);
         refused(service.get(PROGRAMME, id), 404, "not_found");
         @SuppressWarnings("unchecked") List<Map<String, Object>> financeItems = (List<Map<String, Object>>) ok(service.list(FINANCE), 200).get("items");
         assertTrue(financeItems.stream().allMatch(m -> "fee_due".equals(m.get("state"))));

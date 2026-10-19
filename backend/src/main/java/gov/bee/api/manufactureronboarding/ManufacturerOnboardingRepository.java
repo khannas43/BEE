@@ -66,6 +66,14 @@ public class ManufacturerOnboardingRepository {
     }
 
     public List<Row> list(java.util.Collection<UUID> orgs, java.util.Collection<String> stages) {
+        return list(orgs, stages, false);
+    }
+
+    public List<Row> list(java.util.Collection<UUID> orgs, java.util.Collection<String> stages, boolean allRecords) {
+        if (allRecords) {
+            return jdbc.query("SELECT id, reference, organisation_id, legal_name, state, version, permittee_number, observation_ends_on, created_at "
+                + "FROM manufacturer_onboarding_application ORDER BY reference", ManufacturerOnboardingRepository::row);
+        }
         if (orgs.isEmpty() && stages.isEmpty()) {
             return List.of();
         }

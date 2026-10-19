@@ -7,6 +7,7 @@ import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
+import { useAdminDemonstrationReadOnly } from "@/lib/adminDemonstration";
 import { readRegistrationList, registrationListHref, registrationNewHref } from "@/lib/client/runtimeRegistrations";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
@@ -20,9 +21,10 @@ const loadList = () => readRegistrationList();
  */
 export function RegistrationList({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
+  const readOnlyAdmin = useAdminDemonstrationReadOnly();
   const revalidation = useRevalidation();
   const read = gateRead(identity.status, useRuntimeRead("list", loadList, revalidation));
-  const newRequest = (
+  const newRequest = readOnlyAdmin ? null : (
     <Link href={registrationNewHref()} className="border border-primary text-primary py-1.5 px-3 rounded-lg font-label-sm" data-testid="reg-new">
       New request
     </Link>

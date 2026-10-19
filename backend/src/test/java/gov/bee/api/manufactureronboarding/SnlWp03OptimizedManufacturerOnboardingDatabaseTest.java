@@ -155,6 +155,11 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         return new Caller(FINANCE, "bee.finance", List.of(new RoleGrant("finance", "all")), Set.of());
     }
 
+    static Caller adminDemonstration() {
+        return new Caller(UUID.fromString("00000000-0000-4000-a000-000000000009"), "bee.admin",
+            List.of(new RoleGrant("admin", "all")), Set.of());
+    }
+
     void addDoc(UUID appId, String kind) {
         if (owner.queryForObject("SELECT count(*) FROM manufacturer_onboarding_document WHERE application_id = ? AND document_kind = ?",
             Integer.class, appId, kind) == 0) {
@@ -712,6 +717,16 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
             today.minusDays(16), today, id);
         assertEquals("not_found", maint.queryForObject("SELECT manufacturer_onboarding_maint_observation_close_as_of(?, ?)", String.class, id, today));
         assertEquals("on_hold", repo.find(id).orElseThrow().state());
+        owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id);
+        owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
+    }
+
+    @Test
+    void adminDemonstrationReadsAllOnboardingApplicationsButCannotMutate() {
+        UUID id = draftApp();
+        assertEquals(200, service.list(adminDemonstration()).getStatusCode().value());
+        assertEquals(200, service.get(adminDemonstration(), id).getStatusCode().value());
+        assertEquals(403, service.create(adminDemonstration(), nextIdempotencyKey(), json.createObjectNode().put("legalName", "Blocked")).getStatusCode().value());
         owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id);
         owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
     }

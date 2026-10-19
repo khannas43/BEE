@@ -3,6 +3,7 @@ package gov.bee.api.registration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gov.bee.api.application.DraftRequestSupport;
 import gov.bee.api.application.IdempotencyRepository;
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.document.DocumentService;
 import gov.bee.api.document.LocalSha256FileStore;
 import gov.bee.api.document.LocalSha256FileStore.FileTooLargeException;
@@ -101,6 +102,9 @@ public class RegistrationDocumentService {
 
     /** Scope and ownership are checked before the file is read, hashed or stored. */
     public ResponseEntity<Map<String, Object>> upload(Caller caller, UUID id, String key, MultipartFile file, String labelRaw) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(org.springframework.http.HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         Optional<UUID> filing = RegistrationPolicy.filingOrganisation(caller);
         if (filing.isEmpty()) {
             return error(HttpStatus.FORBIDDEN, "no_write_scope");

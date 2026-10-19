@@ -1,5 +1,6 @@
 package gov.bee.api.manufactureronboarding;
 
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.application.ModelDraftPolicy;
 import gov.bee.api.identity.Caller;
 import gov.bee.api.identity.IdentityRepository.RoleGrant;
@@ -26,17 +27,27 @@ public final class ManufacturerOnboardingPolicy {
         return ModelDraftPolicy.filingOrganisation(caller);
     }
 
-    public record ReadScope(Set<UUID> organisations, Set<String> stages) {
+    public record ReadScope(Set<UUID> organisations, Set<String> stages, boolean allRecords) {
+        public ReadScope(Set<UUID> organisations, Set<String> stages) {
+            this(organisations, stages, false);
+        }
+
         public boolean isEmpty() {
-            return organisations.isEmpty() && stages.isEmpty();
+            return !allRecords && organisations.isEmpty() && stages.isEmpty();
         }
 
         public boolean canRead(ManufacturerOnboardingRepository.Row row) {
+            if (allRecords) {
+                return true;
+            }
             return organisations.contains(row.organisationId()) || stages.contains(row.state());
         }
     }
 
     public static ReadScope readScope(Caller caller) {
+        if (AdminDemonstrationAccess.mayReadAllOperationalRecords(caller)) {
+            return new ReadScope(Set.of(), Set.of(), true);
+        }
         Set<UUID> orgs = new LinkedHashSet<>();
         Set<String> stages = new LinkedHashSet<>();
         for (RoleGrant g : caller.ownRoles()) {

@@ -2,6 +2,7 @@ package gov.bee.api.registration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.application.DraftRequestSupport;
 import gov.bee.api.application.IdempotencyRepository;
 import gov.bee.api.application.ModelDraftPolicy;
@@ -60,7 +61,7 @@ public class RegistrationService {
             return error(HttpStatus.FORBIDDEN, "no_read_scope");
         }
         List<Map<String, Object>> items = new ArrayList<>();
-        for (var r : registrations.list(scope.organisations(), scope.stages())) {
+        for (var r : registrations.list(scope.organisations(), scope.stages(), scope.allRecords())) {
             if (scope.canRead(r)) {
                 items.add(view(r, registrations.feeSnapshot(r.id()).orElse(null), registrations.documentCount(r.id())));
             }
@@ -160,6 +161,9 @@ public class RegistrationService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> create(Caller caller, String key, JsonNode body) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, "POST", ROUTE_CREATE, NIL, key, body);
         if (replay.isPresent()) {
             return replay.get();
@@ -191,6 +195,9 @@ public class RegistrationService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> patch(Caller caller, UUID id, String key, JsonNode body) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, "PATCH", ROUTE_PATCH, id, key, body);
         if (replay.isPresent()) {
             return replay.get();
@@ -234,6 +241,9 @@ public class RegistrationService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> submit(Caller caller, UUID id, String key, JsonNode body) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         LocalDate today = LocalDate.now(ModelDraftPolicy.IST);
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, "POST", ROUTE_SUBMIT, id, key, body);
         if (replay.isPresent()) {

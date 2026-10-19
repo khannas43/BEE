@@ -2,6 +2,7 @@ package gov.bee.api.registration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.application.DraftRequestSupport;
 import gov.bee.api.application.IdempotencyRepository;
 import gov.bee.api.application.ModelDraftPolicy;
@@ -50,6 +51,9 @@ public class RegistrationFeeService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> confirm(Caller caller, UUID id, String key, JsonNode body) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, id, key, body);
         if (replay.isPresent()) {
             return replay.get();

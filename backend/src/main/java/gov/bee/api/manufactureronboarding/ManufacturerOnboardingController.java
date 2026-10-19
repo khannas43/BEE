@@ -2,6 +2,7 @@ package gov.bee.api.manufactureronboarding;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.identity.CallerResolver;
 import gov.bee.api.web.ApiErrors;
 import java.util.HexFormat;
@@ -150,6 +151,9 @@ public class ManufacturerOnboardingController {
         var resolved = callers.resolve(jwt);
         if (resolved.caller() == null) {
             return denied(resolved.denial());
+        }
+        if (AdminDemonstrationAccess.deniesOperationalMutation(resolved.caller())) {
+            return ApiErrors.response(org.springframework.http.HttpStatus.FORBIDDEN, "role_not_permitted");
         }
         var org = ManufacturerOnboardingPolicy.filingOrganisation(resolved.caller());
         if (org.isEmpty()) {

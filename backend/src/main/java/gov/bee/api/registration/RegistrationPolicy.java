@@ -1,5 +1,6 @@
 package gov.bee.api.registration;
 
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.application.ModelDraftPolicy;
 import gov.bee.api.identity.Caller;
 import gov.bee.api.identity.IdentityRepository.RoleGrant;
@@ -42,17 +43,27 @@ public final class RegistrationPolicy {
     }
 
     /** What a caller reads: their own organisation's requests, and for each reviewing role the stages it works at and the decisions that followed. */
-    public record ReadScope(Set<UUID> organisations, Set<String> stages) {
+    public record ReadScope(Set<UUID> organisations, Set<String> stages, boolean allRecords) {
+        public ReadScope(Set<UUID> organisations, Set<String> stages) {
+            this(organisations, stages, false);
+        }
+
         public boolean isEmpty() {
-            return organisations.isEmpty() && stages.isEmpty();
+            return !allRecords && organisations.isEmpty() && stages.isEmpty();
         }
 
         public boolean canRead(RegistrationRepository.Row r) {
+            if (allRecords) {
+                return true;
+            }
             return organisations.contains(r.organisationId()) || stages.contains(r.state());
         }
     }
 
     public static ReadScope readScope(Caller caller) {
+        if (AdminDemonstrationAccess.mayReadAllOperationalRecords(caller)) {
+            return new ReadScope(Set.of(), Set.of(), true);
+        }
         Set<UUID> orgs = new LinkedHashSet<>();
         Set<String> stages = new LinkedHashSet<>();
         for (RoleGrant g : caller.ownRoles()) {

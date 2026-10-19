@@ -172,5 +172,16 @@ The live check `read-ui-browser-check.cjs` step `read-ui.preview-elsewhere-uncha
 ## 8. Deferred
 
 - BL-265: Hindi labels for the new menu.
-- BL-266: Admin umbrella entries whose runtime screens refuse the Admin role.
 - BL-267: planned entries that need a screen.
+
+## 9. Brief C3A — Admin read-only demonstration access (19 October 2026)
+
+**Goal:** Every non-planned Admin menu link opens in backend-enforced read-only mode; operational roles keep their mutations.
+
+**Access model:** `AdminDemonstrationAccess` (Spring): umbrella `admin`/`all` with no operational own role → `mayReadAllOperationalRecords` on model applications, registrations and manufacturer onboarding; `deniesOperationalMutation` on workflow, filing, fee confirm, onboarding writes and registration review transitions. `/api/me` exposes `adminDemonstrationReadOnly`. Admin capabilities (fee rules, rating schemes, business settings, fee corrections, delegations approval, demo ledger writes) are unchanged.
+
+**Portal:** `AdminDemonstrationBanner`; `ScreenChrome` hides header actions; manufacturer routes use `ManufacturerRouteShell`; registration list and finance queue hide mutation controls when Spring reports read-only Admin.
+
+**Proof:** `AdminDemonstrationAccessTest`, `SlicePolicyTest`, `RegistrationDatabaseTest`, `SnlWp03OptimizedManufacturerOnboardingDatabaseTest`; `AdminDemonstration.test.tsx`, `adminMenuCoverage.test.tsx`; live `npm run local:c3a-five-role`. OpenAPI **0.37.2** adds optional `adminDemonstrationReadOnly` on Me.
+
+**BL-266:** closed when C3A shipped.

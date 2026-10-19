@@ -125,6 +125,8 @@ export interface Me {
   tokenRoles: string[];
   authMethods: string[];
   ignoredTokenClaims?: { organisation: string };
+  /** Read-only Admin demonstration profile (Brief C3A). */
+  adminDemonstrationReadOnly?: boolean;
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -141,7 +143,7 @@ const arrayOf = (v: unknown, item: (x: unknown) => boolean, minItems = 0) => Arr
 const record = (keys: readonly string[]) => (x: unknown) => exactKeys(x, keys) && keys.every((k) => isString(x[k]));
 
 export const ME_REQUIRED = ["subject", "username", "displayName", "authority", "effectiveRoles", "capabilities", "organisations", "activeAssignments", "tokenRoles", "authMethods"] as const;
-export const ME_OPTIONAL = ["ignoredTokenClaims"] as const;
+export const ME_OPTIONAL = ["ignoredTokenClaims", "adminDemonstrationReadOnly"] as const;
 
 /** The contract's Me schema, strictly: a field the contract does not document is a fault. */
 export const validateMe: Validator<Me> = (body) => {
@@ -157,7 +159,8 @@ export const validateMe: Validator<Me> = (body) => {
     Number.isInteger(b.activeAssignments) && (b.activeAssignments as number) >= 0 &&
     arrayOf(b.tokenRoles, isString) &&
     arrayOf(b.authMethods, isString) &&
-    (b.ignoredTokenClaims === undefined || record(["organisation"])(b.ignoredTokenClaims));
+    (b.ignoredTokenClaims === undefined || record(["organisation"])(b.ignoredTokenClaims)) &&
+    (b.adminDemonstrationReadOnly === undefined || typeof b.adminDemonstrationReadOnly === "boolean");
   return ok ? (b as unknown as Me) : null;
 };
 

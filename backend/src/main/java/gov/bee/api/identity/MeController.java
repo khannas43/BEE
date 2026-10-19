@@ -1,5 +1,6 @@
 package gov.bee.api.identity;
 
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.web.ApiErrors;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -57,6 +58,8 @@ public class MeController {
         body.put("effectiveRoles", effective.stream().map(g -> Map.of("role", g.role(), "scope", g.scope())).toList());
         // The permissions this person's roles hold. The menu uses it to offer a screen; Spring still decides every action.
         body.put("capabilities", identity.capabilities(effective.stream().map(g -> g.role()).distinct().toList()));
+        body.put("adminDemonstrationReadOnly", AdminDemonstrationAccess.readOnlyUmbrella(
+            new Caller(account.get().id(), account.get().username(), effective, identity.activeMembershipOrganisationIds(account.get().id()))));
         body.put("organisations", identity.activeMemberships(account.get().id()).stream()
             .map(m -> Map.of("code", m.code(), "kind", m.kind(), "name", m.legalName())).toList());
         body.put("activeAssignments", identity.activeAssignments(account.get().id()));

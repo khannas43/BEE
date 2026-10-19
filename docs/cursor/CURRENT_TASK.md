@@ -1,35 +1,20 @@
 # Current Cursor task
 
-**Holder:** cursor, 19 October 2026. ChatGPT review pending.
+**Holder:** cursor, 19 October 2026. C3A complete; hand-back below.
 
-- Brief: **C3 — Role-based lifecycle navigation** ([BRIEF_C3_ROLE_LIFECYCLE_NAVIGATION.md](BRIEF_C3_ROLE_LIFECYCLE_NAVIGATION.md))
+- Brief: **C3A — Admin read-only demonstration access** (extends [BRIEF_C3_ROLE_LIFECYCLE_NAVIGATION.md](BRIEF_C3_ROLE_LIFECYCLE_NAVIGATION.md) §9)
 - Branch: `cursor/c3-role-navigation`
 - Worktree: `/Users/sameerkhanna/Developer/BEE-c3-role-navigation`
-- Base: `cursor/wp3-auto-activation` @ `6c40482`
 
-## Owner-approved behaviour
-
-1. Each operational role (Manufacturer, Director, Secretary, Finance) has its own lifecycle menu of at most four groups.
-2. Admin is the demonstration umbrella profile: exactly four groups showing every available screen. It is not a workflow actor.
-3. The menu follows the Spring sign-in. The preview role never shows, hides or opens a screen.
-4. AI is advisory and human-controlled. The ledger is simulated. Functions that are not yet built are marked Preview or Planned and are not presented as complete.
-5. The development "All screens" menu link is removed.
-
-## Implementation
-
-- `lib/navigation.ts` is the central typed definition. Its routes are resolved from `RUNTIME_ROUTES`, `lib/screens` and a short standalone-page list.
-- The sidebar (desktop and mobile), the top-bar search, the landing work areas and the client route guard all read that definition.
-- `/app/manufacturer/director` gets a corrected label: "Company registration activation".
-
-## Gates
+## Gates (C3A)
 
 | Gate | Result |
 | --- | --- |
 | TypeScript | pass |
-| ESLint (changed files) | pass |
-| Navigation access audit (`audit:access`) | pass |
-| Focused navigation tests | **24/24** |
-| Web tests | **264/264** |
-| UI tests | **263/263** |
-| Production build | pass |
-| Live browser check (five roles) | see hand-back |
+| ESLint (changed files) | not re-run whole repo (BL-035 baseline) |
+| Backend unit (`AdminDemonstrationAccessTest`, `SlicePolicyTest`) | pass |
+| Backend DB (registration, onboarding admin tests) | not run (needs local PostgreSQL) |
+| `npm run web:test` | pass |
+| `npm run web:test:ui` | **268/268** (includes AdminDemonstration + adminMenuCoverage) |
+| `npm run build` | pass |
+| `npm run local:c3a-five-role` | **Not run** — Keycloak login form did not appear (portal/Spring not up on this machine; postgres/keycloak containers only) |

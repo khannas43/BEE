@@ -64,8 +64,15 @@ class SlicePolicyTest {
         assertThat(SlicePolicy.readScope(caller("secretary", "all")).stages()).containsExactly("secretary_approval");
     }
 
+    @Test
+    void adminDemonstrationReadsAllModelApplications() {
+        var scope = SlicePolicy.readScope(caller("admin", "all"));
+        assertThat(scope.isEmpty()).isFalse();
+        assertThat(scope.allRecords()).isTrue();
+    }
+
     @ParameterizedTest
-    @ValueSource(strings = {"admin", "helpdesk", "auditor", "sda", "laboratory"})
+    @ValueSource(strings = {"helpdesk", "auditor", "sda", "laboratory"})
     void nonSliceRolesReadNothing(String role) {
         assertThat(SlicePolicy.readScope(caller(role, "all")).isEmpty()).isTrue();
         assertThat(SlicePolicy.readScope(caller(role, "assigned")).isEmpty()).isTrue();
@@ -165,8 +172,15 @@ class SlicePolicyTest {
         assertThat(SlicePolicy.check(action, c, app(NOVA, "rejected", action.stage())).reason()).isEqualTo("wrong_stage");
     }
 
+    @Test
+    void n10AdminDemonstrationUmbrellaCannotPerformSliceTransitions() {
+        for (var a : SliceAction.values()) {
+            assertThat(SlicePolicy.check(a, caller("admin", "all", NOVA), app(NOVA, a.stage(), a.stage())).reason()).isEqualTo("role_not_permitted");
+        }
+    }
+
     @ParameterizedTest
-    @ValueSource(strings = {"admin", "helpdesk", "auditor"})
+    @ValueSource(strings = {"helpdesk", "auditor"})
     void n10NonSliceRolesPerformNoTransition(String role) {
         for (var a : SliceAction.values()) {
             assertThat(SlicePolicy.check(a, caller(role, "all", NOVA), app(NOVA, a.stage(), a.stage())).reason()).isEqualTo("not_a_slice_role");

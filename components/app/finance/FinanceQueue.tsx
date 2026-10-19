@@ -10,6 +10,7 @@ import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
+import { useAdminDemonstrationReadOnly } from "@/lib/adminDemonstration";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import {
   type FeeConfirmationReceipt,
@@ -49,6 +50,7 @@ export const FINANCE_COPY = {
 
 export function FinanceQueue({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
+  const readOnlyAdmin = useAdminDemonstrationReadOnly();
   const params = useSearchParams();
   const selectedId = params.get("id");
   const revalidation = useRevalidation();
@@ -125,6 +127,7 @@ export function FinanceQueue({ module, screen }: { module: Module; screen: Scree
                   {(r) => (
                     <DetailAndConfirm
                       application={r.application}
+                      readOnly={readOnlyAdmin}
                       onConfirmed={(done) => {
                         setReceipt(done);
                         revalidation.refresh();
@@ -160,10 +163,12 @@ function ConfirmedNote({ receipt }: { receipt: FeeConfirmationReceipt }) {
 
 function DetailAndConfirm({
   application,
+  readOnly,
   onConfirmed,
   onReload,
 }: {
   application: ModelApplication;
+  readOnly: boolean;
   onConfirmed: (receipt: FeeConfirmationReceipt) => void;
   onReload: () => void;
 }) {
@@ -205,7 +210,12 @@ function DetailAndConfirm({
       />
       <p className="font-label-sm text-label-sm text-on-surface-variant mt-space-md">{FINANCE_COPY.provisional}</p>
       <p className="font-label-sm text-label-sm text-on-surface-variant mt-1">{FINANCE_COPY.separation}</p>
-      <CommandPanel
+      {readOnly ? (
+        <p className="font-body-sm text-body-sm text-on-surface-variant mt-space-md" data-testid="finance-read-only-note">
+          Fee confirmation is available only to Finance staff in the finance work queue role.
+        </p>
+      ) : null}
+      {!readOnly ? <CommandPanel
         className="mt-space-sm space-y-space-sm"
         state={command.state}
         onRun={() => void confirm()}
@@ -229,7 +239,7 @@ function DetailAndConfirm({
           Amount received (₹)
           <input inputMode="decimal" value={amountInr} onChange={(e) => setAmountInr(e.target.value)} className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm" data-testid="fee-confirm-amount" />
         </label>
-      </CommandPanel>
+      </CommandPanel> : null}
       {inputError ? (
         <p className="text-error font-body-sm mt-space-sm" data-testid="fee-confirm-input-error">{inputError}</p>
       ) : null}

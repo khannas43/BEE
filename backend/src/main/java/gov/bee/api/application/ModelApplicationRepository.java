@@ -140,6 +140,9 @@ public class ModelApplicationRepository {
     }
 
     private static String scopePredicate(ReadScope scope, UUID callerId, List<Object> args) {
+        if (scope.allRecords()) {
+            return "TRUE";
+        }
         List<String> any = new ArrayList<>();
         if (!scope.organisations().isEmpty()) {
             any.add("a.organisation_id IN (" + placeholders(scope.organisations().size()) + ")");

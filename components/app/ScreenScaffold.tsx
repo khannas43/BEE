@@ -7,8 +7,11 @@ import { Icon } from "@/components/ui/Icon";
 import { Module, Screen } from "@/lib/screens";
 import { ACCESS_CODES, RoleKey, isExternalRole, splitCodes } from "@/lib/roles";
 import { canRoleAccessPath } from "@/lib/categories";
+import { AdminDemonstrationBanner } from "./AdminDemonstrationBanner";
 import { useRole } from "./RoleContext";
+import { useSpringIdentity } from "./SessionBadge";
 import { useLang } from "@/components/i18n/LangProvider";
+import { adminDemonstrationReadOnly } from "@/lib/adminDemonstration";
 
 /**
  * Effective access codes for a screen. The Annex-A permission tuples cover the
@@ -703,12 +706,15 @@ export function ScreenChrome({
 }) {
   const { role } = useRole();
   const { t } = useLang();
+  const identity = useSpringIdentity();
+  const readOnlyAdmin = identity.status === "signed-in" && adminDemonstrationReadOnly(identity.me);
   const codes = accessCodesFor(role, module, screen);
 
   // Screens backed by the service (implemented is given) carry the shared look and no developer notes under the title.
   const runtime = Boolean(implemented);
   const body = (
     <div className="p-space-md lg:p-space-lg space-y-space-md">
+      {readOnlyAdmin ? <AdminDemonstrationBanner /> : null}
       <div className="flex flex-col gap-space-md">
         <div className="flex items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
           <Link href="/app" className="hover:text-primary">{t("app.console")}</Link>
@@ -740,11 +746,11 @@ export function ScreenChrome({
               </div>
             </div>
           </div>
-          {actions}
+          {readOnlyAdmin ? null : actions}
         </div>
       </div>
 
-      {codes.length === 0 && !implemented ? (
+      {codes.length === 0 && !implemented && !readOnlyAdmin ? (
         <div className="bg-surface-card rounded-xl shadow-sm p-space-2xl text-center">
           <Icon name="lock" size={40} className="text-outline" />
           <p className="font-body-md text-body-md text-on-surface mt-2">{t("app.notAvailable")}</p>

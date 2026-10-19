@@ -2,6 +2,7 @@ package gov.bee.api.manufactureronboarding;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.application.DraftRequestSupport;
 import gov.bee.api.application.IdempotencyRepository;
 import gov.bee.api.identity.Caller;
@@ -58,7 +59,7 @@ public class ManufacturerOnboardingService {
             return error(HttpStatus.FORBIDDEN, "no_read_scope");
         }
         List<Map<String, Object>> items = new ArrayList<>();
-        for (var r : repo.list(scope.organisations(), scope.stages())) {
+        for (var r : repo.list(scope.organisations(), scope.stages(), scope.allRecords())) {
             if (scope.canRead(r)) {
                 items.add(view(r));
             }
@@ -93,6 +94,9 @@ public class ManufacturerOnboardingService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> create(Caller caller, String idempotencyKey, JsonNode body) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, "POST", ROUTE_CREATE, NIL, idempotencyKey, body);
         if (replay.isPresent()) {
             return replay.get();
@@ -121,6 +125,9 @@ public class ManufacturerOnboardingService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> patch(Caller caller, UUID id, JsonNode body) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         if (ManufacturerOnboardingPolicy.readScope(caller).isEmpty()) {
             return error(HttpStatus.FORBIDDEN, "no_read_scope");
         }
@@ -146,11 +153,11 @@ public class ManufacturerOnboardingService {
     }
 
     public ResponseEntity<Map<String, Object>> submitPreview(Caller caller, UUID id) {
-        Optional<UUID> org = ManufacturerOnboardingPolicy.filingOrganisation(caller);
-        if (org.isEmpty()) {
-            return error(HttpStatus.FORBIDDEN, "no_write_scope");
+        var scope = ManufacturerOnboardingPolicy.readScope(caller);
+        if (scope.isEmpty()) {
+            return error(HttpStatus.FORBIDDEN, "no_read_scope");
         }
-        Optional<ManufacturerOnboardingRepository.Row> row = repo.findOwned(id, org.get());
+        Optional<ManufacturerOnboardingRepository.Row> row = repo.find(id).filter(scope::canRead);
         if (row.isEmpty()) {
             return error(HttpStatus.NOT_FOUND, "not_found");
         }
@@ -172,6 +179,9 @@ public class ManufacturerOnboardingService {
 
     @Transactional
     public ResponseEntity<Map<String, Object>> submit(Caller caller, UUID id, String idempotencyKey, JsonNode body) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, "POST", ROUTE_SUBMIT, id, idempotencyKey, body);
         if (replay.isPresent()) {
             return replay.get();
@@ -273,6 +283,9 @@ public class ManufacturerOnboardingService {
 
     private ResponseEntity<Map<String, Object>> orchestratorAction(Caller caller, UUID id, String idempotencyKey, JsonNode body, String route,
                                                                    String purpose, OrchestratorStep step) {
+        if (AdminDemonstrationAccess.deniesOperationalMutation(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
         Optional<ResponseEntity<Map<String, Object>>> replay = replayOrRequireKey(caller, "POST", route, id, idempotencyKey, body);
         if (replay.isPresent()) {
             return replay.get();

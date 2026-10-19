@@ -28,6 +28,7 @@
     "local:access": "bash -c 'source scripts/local/lib.sh && node scripts/local/access-check.cjs'",
     "local:browser": "bash -c 'source scripts/local/lib.sh && node scripts/local/browser-check.cjs'",
     "local:read-ui": "bash -c 'source scripts/local/lib.sh && node scripts/local/read-ui-browser-check.cjs'",
+    "local:c3a-five-role": "bash -c 'source scripts/local/lib.sh && node scripts/local/c3a-five-role-browser-check.cjs'",
     "local:model-drafts": "bash -c 'source scripts/local/lib.sh && node scripts/local/model-drafts-browser-check.cjs'",
     "local:fee-confirmation": "bash -c 'source scripts/local/lib.sh && node scripts/local/fee-confirmation-browser-check.cjs'",
     "local:iame-recommendation": "bash -c 'source scripts/local/lib.sh && node scripts/local/iame-recommendation-browser-check.cjs'",

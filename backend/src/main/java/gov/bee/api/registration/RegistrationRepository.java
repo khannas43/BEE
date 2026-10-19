@@ -74,6 +74,13 @@ public class RegistrationRepository {
 
     /** Requests of the given organisations, plus every request in one of the given states. */
     public List<Row> list(Collection<UUID> organisations, Collection<String> states) {
+        return list(organisations, states, false);
+    }
+
+    public List<Row> list(Collection<UUID> organisations, Collection<String> states, boolean allRecords) {
+        if (allRecords) {
+            return jdbc.query(SELECT + "ORDER BY r.reference DESC", RegistrationRepository::row);
+        }
         if (organisations.isEmpty() && states.isEmpty()) {
             return List.of();
         }

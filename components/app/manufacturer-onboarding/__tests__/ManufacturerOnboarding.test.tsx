@@ -167,7 +167,7 @@ describe("manufacturer onboarding UI", () => {
     await screen.findByTestId("field-legal-name");
     fireEvent.change(screen.getByTestId("field-legal-name"), { target: { value: "Aarav Appliances Pvt Ltd" } });
     fireEvent.change(screen.getByTestId("field-cin"), { target: { value: "U29300MH2018PTC312045" } });
-    fireEvent.click(screen.getByTestId("step-address"));
+    // Company and registered-office details are completed together in step 1.
     for (const key of ["line1", "city", "state", "pincode"] as const) {
       fireEvent.change(screen.getByTestId(`field-address-${key}`), { target: { value: "Demo value" } });
     }

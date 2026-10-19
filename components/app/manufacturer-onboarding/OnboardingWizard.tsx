@@ -21,8 +21,7 @@ import {
 } from "./shared";
 
 const STEPS = [
-  { id: "legal", title: "Legal entity", icon: "corporate_fare" },
-  { id: "address", title: "Registered address", icon: "home_pin" },
+  { id: "company", title: "Company & registered office", icon: "corporate_fare", blurb: "Legal entity identifiers and the registered office address as they should appear on your company registration record." },
   { id: "facilities", title: "Manufacturing facilities", icon: "factory" },
   { id: "contacts", title: "Contacts & signatory", icon: "contacts" },
   { id: "annexure", title: "Annexure 1 documents", icon: "folder_open" },
@@ -135,7 +134,7 @@ export function OnboardingWizard() {
     <OnboardingChrome icon="factory" title="Manufacturer / company registration" showDisclosure={false}>
       <div className="space-y-space-md">
         <section className="rounded-xl border border-border-subtle bg-surface-card p-space-sm" aria-label="Progress">
-          <ol className="grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-8" data-testid="onboarding-stepper">
+          <ol className="grid grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-7" data-testid="onboarding-stepper">
             {STEPS.map((s, i) => (
               <li key={s.id}>
                 <button
@@ -158,7 +157,7 @@ export function OnboardingWizard() {
               <div>
                 <p className="font-label-sm text-primary uppercase tracking-wide">Manufacturer registration application</p>
                 <h2 className="font-headline-sm text-headline-sm mt-1">Step {step + 1} of {STEPS.length}: {STEPS[step].title}</h2>
-                <p className="font-body-sm text-on-surface-variant mt-1">Complete all eight sections, save your progress whenever needed, and submit the completed registration for BEE review.</p>
+                <p className="font-body-sm text-on-surface-variant mt-1">{"blurb" in STEPS[step] ? STEPS[step].blurb : "Complete this section, save your progress whenever needed, and continue through the registration journey."}</p>
               </div>
               <div className="text-right space-y-1">
                 <p className="font-mono text-xs text-on-surface-variant">{appRecord?.reference}</p>
@@ -174,39 +173,45 @@ export function OnboardingWizard() {
             <h2 id="step-heading" className="font-headline-sm text-headline-sm">{STEPS[step].title}</h2>
 
             {step === 0 && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block sm:col-span-2">
-                  <span className="font-label-sm text-label-sm">Legal name</span>
-                  <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.legalName} onChange={(e) => setDraft({ ...draft, legalName: e.target.value })} data-testid="field-legal-name" />
-                </label>
-                <label className="block">
-                  <span className="font-label-sm text-label-sm">CIN</span>
-                  <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.cin} onChange={(e) => setDraft({ ...draft, cin: e.target.value })} data-testid="field-cin" />
-                </label>
-                <label className="block">
-                  <span className="font-label-sm text-label-sm">GSTIN</span>
-                  <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.gstin} onChange={(e) => setDraft({ ...draft, gstin: e.target.value })} data-testid="field-gstin" />
-                </label>
+              <div className="space-y-space-lg">
+                <section>
+                  <h3 className="font-label-lg font-semibold mb-2">Legal entity</h3>
+                  <p className="font-body-sm text-on-surface-variant mb-3">Use the name and identifiers recorded with the Ministry of Corporate Affairs.</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block sm:col-span-2">
+                      <span className="font-label-sm text-label-sm">Legal name</span>
+                      <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.legalName} onChange={(e) => setDraft({ ...draft, legalName: e.target.value })} data-testid="field-legal-name" />
+                    </label>
+                    <label className="block">
+                      <span className="font-label-sm text-label-sm">CIN</span>
+                      <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.cin} onChange={(e) => setDraft({ ...draft, cin: e.target.value })} data-testid="field-cin" />
+                    </label>
+                    <label className="block">
+                      <span className="font-label-sm text-label-sm">GSTIN</span>
+                      <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.gstin} onChange={(e) => setDraft({ ...draft, gstin: e.target.value })} data-testid="field-gstin" />
+                    </label>
+                  </div>
+                </section>
+                <section className="border-t border-border-subtle pt-space-md">
+                  <h3 className="font-label-lg font-semibold mb-2">Registered office address</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(["line1", "line2", "city", "state", "pincode"] as const).map((key) => (
+                      <label key={key} className={`block ${key === "line1" || key === "line2" ? "sm:col-span-2" : ""}`}>
+                        <span className="font-label-sm text-label-sm capitalize">{key.replace("line", "Line ")}</span>
+                        <input
+                          className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface"
+                          value={draft.registeredAddress[key]}
+                          onChange={(e) => setDraft({ ...draft, registeredAddress: { ...draft.registeredAddress, [key]: e.target.value } })}
+                          data-testid={`field-address-${key}`}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </section>
               </div>
             )}
 
             {step === 1 && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(["line1", "line2", "city", "state", "pincode"] as const).map((key) => (
-                  <label key={key} className={`block ${key === "line1" || key === "line2" ? "sm:col-span-2" : ""}`}>
-                    <span className="font-label-sm text-label-sm capitalize">{key.replace("line", "Line ")}</span>
-                    <input
-                      className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface"
-                      value={draft.registeredAddress[key]}
-                      onChange={(e) => setDraft({ ...draft, registeredAddress: { ...draft.registeredAddress, [key]: e.target.value } })}
-                      data-testid={`field-address-${key}`}
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
-
-            {step === 2 && (
               <div className="space-y-3">
                 {draft.facilities.map((f, idx) => (
                   <div key={f.id} className="border rounded-lg p-space-sm space-y-2" data-testid={`facility-${idx}`}>
@@ -225,7 +230,7 @@ export function OnboardingWizard() {
               </div>
             )}
 
-            {step === 3 && (
+            {step === 2 && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block sm:col-span-2 font-label-md font-semibold">Authorised signatory</label>
                 {(["name", "email", "phone", "role"] as const).map((key) => (
@@ -242,7 +247,7 @@ export function OnboardingWizard() {
               </div>
             )}
 
-            {step === 4 && (
+            {step === 3 && (
               <ul className="space-y-2">
                 {draft.annexureDocuments.map((doc) => (
                   <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 border rounded-lg p-space-sm">
@@ -274,7 +279,7 @@ export function OnboardingWizard() {
               </ul>
             )}
 
-            {step === 5 && (
+            {step === 4 && (
               <div className="space-y-3">
                 <label className="flex items-start gap-2">
                   <input type="checkbox" checked={draft.declarationAccepted} onChange={(e) => setDraft({ ...draft, declarationAccepted: e.target.checked })} data-testid="checkbox-declaration" />
@@ -287,7 +292,7 @@ export function OnboardingWizard() {
               </div>
             )}
 
-            {step === 6 && (
+            {step === 5 && (
               <div className="space-y-3">
                 <p className="font-body-md" data-testid="wizard-fee">
                   Demonstration fee: <strong>₹ {appRecord ? formatFeeInr(appRecord.payment.amountInr) : "—"}</strong> INR
@@ -297,7 +302,7 @@ export function OnboardingWizard() {
               </div>
             )}
 
-            {step === 7 && (
+            {step === 6 && (
               <div className="space-y-3">
                 <p className="font-body-md">Review your entries, then submit. Payment and initial automated checks run immediately; a BEE Officer then reviews the registration before activation.</p>
                 <dl className="grid sm:grid-cols-2 gap-2 font-body-sm">

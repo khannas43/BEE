@@ -107,7 +107,7 @@ export const POST = logged("/api/runtime/public/manufacturer-signup", async (req
       {
         ok: true,
         applicationId: created.applicationId,
-        returnTo: "/app/manufacturer/onboarding",
+        returnTo: "/register/manufacturer/confirmation",
         verification: "simulated",
       },
       201,

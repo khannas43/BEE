@@ -109,7 +109,16 @@ public class DashboardModule implements DemoModule {
         + "WHEN EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id AND t.state = 'pending') THEN 'Waiting for a second signature' "
         + "ELSE 'Active' END";
 
+    /** The stage of a company registration in plain words (alias {@code a} is the onboarding application). */
+    private static final String COMPANY_STAGE = "CASE a.state WHEN 'director_review' THEN 'Awaiting BEE Officer approval' WHEN 'on_hold' THEN 'On hold, anomaly under review' "
+        + "WHEN 'active_observation' THEN 'Under 15-day observation' ELSE a.state END";
+
     private static final List<Spec> DIRECTOR_TILES = List.of(
+        new Spec("company_registrations", "Company registrations", "registrations", "New manufacturer registrations waiting for the BEE Officer, on hold with an anomaly, or in their 15-day observation.", "attention", "domain_add",
+            List.of("Reference", "Company", "Stage", "Filed (IST)"), "/app/manufacturer/director",
+            "a.reference, a.legal_name, " + COMPANY_STAGE + ", a.created_at",
+            "manufacturer_onboarding_application a", "a.state IN ('director_review', 'on_hold', 'active_observation')", "a.created_at",
+            COMPANY_STAGE, "By stage", null, null, "count(*)", "Filed, by month"),
         new Spec("awaiting_approval", "Awaiting approval", "applications", "In director review or waiting for the Secretary's final approval.", "attention", "pending_actions",
             List.of("Reference", "Model", "Manufacturer", "Stage", "Since (IST)"), "/app/model-label/director-approval",
             "a.reference, a.brand_name || ' ' || a.model_number, o.legal_name, a.state, t.at",

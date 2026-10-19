@@ -9,7 +9,10 @@ export function effectiveOnboardingRoles(me: SpringIdentityLike): ManufacturerOn
   const out = new Set<ManufacturerOnboardingRole>();
   for (const g of me.effectiveRoles) {
     if (g.role === "manufacturer") out.add("applicant");
-    if (g.role === "director") out.add("director");
+    // Brief C3: the operational decision (activate, hold, clear, revoke) belongs to the BEE Officer; the Director (final
+    // authority) reads the queue and monitoring and may raise an anomaly, which is the Programme capability set here.
+    if (g.role === "officer") out.add("director");
+    if (g.role === "director") out.add("programme");
     if (g.role === "finance") out.add("finance");
     if (g.role === "programme") out.add("programme");
   }

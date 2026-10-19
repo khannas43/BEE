@@ -27,8 +27,17 @@ const DOC_KINDS = [
 ];
 
 const LEGAL = "Aarav Appliances Pvt Ltd — Demo";
-const CIN = "U12345AB6789XYZ123456";
-const GSTIN = "22AAAAA0000A1Z5";
+// A live application may not reuse another's CIN or GSTIN (automated duplicate checks), so every run and every application gets its own.
+const RUN_SEED = Number(`${Date.now()}`.slice(-6));
+let applicationCounter = 0;
+function nextIdentifiers() {
+  const n = RUN_SEED * 10 + ++applicationCounter;
+  const four = String(n % 10000).padStart(4, "0");
+  const six = String(n % 1000000).padStart(6, "0");
+  return { cin: `U12345AB${four}XYZ${six}`, gstin: `22AAAAA${four}A1Z5` };
+}
+let CIN = "";
+let GSTIN = "";
 
 let pass = 0;
 let fail = 0;
@@ -220,6 +229,7 @@ async function patchDraftViaBff(page, appId, draftBody) {
 }
 
 async function fillWizardCore(page, tag) {
+  ({ cin: CIN, gstin: GSTIN } = nextIdentifiers());
   await page.goto(`${WEB}/app/manufacturer/onboarding`);
   await page.waitFor(`!!document.querySelector('[data-testid=field-legal-name]')`, 60000);
 
@@ -227,7 +237,7 @@ async function fillWizardCore(page, tag) {
   await setReactField(page, "field-cin", CIN);
   await setReactField(page, "field-gstin", GSTIN);
 
-  await clickStep(page, "address");
+  await clickStep(page, "company");
   for (const key of ["line1", "line2", "city", "state", "pincode"]) {
     const val = key === "line1" ? "1 Industrial Area" : key === "city" ? "Delhi" : key === "state" ? "DL" : key === "pincode" ? "110001" : "";
     await setReactField(page, `field-address-${key}`, val);
@@ -330,6 +340,7 @@ function guestCredentials(tag) {
   const stamp = `${Date.now()}`.slice(-8);
   return {
     fullName: `WP3 D1 ${tag}`,
+    username: `wp3d1.${tag}.${stamp}`.toLowerCase(),
     email: `wp3d1.${tag}.${stamp}@example.invalid`.toLowerCase(),
     mobile: `9${stamp}0`.slice(0, 10),
     password: "SecurePass1",
@@ -339,12 +350,18 @@ function guestCredentials(tag) {
 async function guestRegister(page, creds) {
   await page.goto(`${WEB}/register/manufacturer`);
   if (!(await waitTestId(page, "manufacturer-account-form", 60000))) throw new Error("registration form missing");
+  await sleep(2500); // let the form hydrate before typing, or a click submits it natively and clears it
+  await setReactField(page, "manufacturer-legal-name", creds.legalName || LEGAL);
   await setReactField(page, "manufacturer-full-name", creds.fullName);
   await setReactField(page, "manufacturer-email", creds.email);
   await setReactField(page, "manufacturer-mobile", creds.mobile);
+  await setReactField(page, "manufacturer-username", creds.username);
   await setReactField(page, "manufacturer-password", creds.password);
   await setReactField(page, "manufacturer-confirm-password", creds.password);
-  await page.eval(`document.querySelector('[data-testid=create-demo-applicant]').click(); true`);
+  await page.eval(`document.querySelector('[data-testid=manufacturer-account-form] button[type=submit]').click(); true`);
+  // The simulated e-mail acknowledgement page comes first; its button continues to the application.
+  if (!(await waitTestId(page, "continue-manufacturer-application", 120000))) throw new Error("signup confirmation did not appear: " + (await page.eval(`JSON.stringify([...document.querySelectorAll('[data-testid=manufacturer-account-form] input')].map(i=>i.id+'='+i.value.slice(0,12)).concat([String(document.querySelector('[data-testid=manufacturer-account-form] button[type=submit]').disabled)]))`)));
+  await page.eval(`document.querySelector('[data-testid=continue-manufacturer-application]').click(); true`);
   const ok = await page.waitFor(`location.pathname.startsWith('/app/manufacturer/onboarding')`, 120000);
   if (!ok) throw new Error("guest signup did not open onboarding");
   return true;
@@ -399,7 +416,7 @@ async function verifyNgrokRoutes() {
   const ngrokPath = path.join(RUN_DIR, "ngrok.url");
   const base = fs.existsSync(ngrokPath) ? fs.readFileSync(ngrokPath, "utf8").trim() : "";
   if (!base) {
-    check("c1.ngrok.url", false, "missing .local/run/ngrok.url");
+    console.log("SKIP c1.ngrok.url                                      no tunnel configured (laptop-only demonstration)");
     return "";
   }
   const paths = [
@@ -447,7 +464,7 @@ async function main() {
     };
     await applicant.close();
     const dirActivate = await openPage(chrome.cdp);
-    await demoSignIn(dirActivate, "bee.director");
+    await demoSignIn(dirActivate, "bee.officer");
     const activated = await directorApprove(dirActivate, activationRun.appId, activationRun.detail.reference);
     check("c1.director.approve-activation", activated.state === "active_observation", activated.reference);
     await dirActivate.close();
@@ -459,7 +476,7 @@ async function main() {
     check("c1.applicant.submit-revoke", revokeRun.detail.state === "director_review", revokeRun.detail.reference);
     await applicantRevoke.close();
     const dirRevokeReady = await openPage(chrome.cdp);
-    await demoSignIn(dirRevokeReady, "bee.director");
+    await demoSignIn(dirRevokeReady, "bee.officer");
     await directorApprove(dirRevokeReady, revokeRun.appId, revokeRun.detail.reference);
     await dirRevokeReady.close();
     const finRevoke = await openPage(chrome.cdp);

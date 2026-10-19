@@ -202,7 +202,7 @@ describe("manufacturer onboarding UI", () => {
   });
 
   it("Director screen lists pending manufacturer registrations and can approve", async () => {
-    render(wrap(<DirectorQueue />, "director"));
+    render(wrap(<DirectorQueue />, "officer"));
     expect(await screen.findByTestId("director-pending-queue")).toBeTruthy();
     expect(await screen.findByTestId("director-item-MFG-ONB-2026-0102")).toBeTruthy();
     await screen.findByTestId("director-approve");
@@ -221,7 +221,7 @@ describe("manufacturer onboarding UI", () => {
   });
 
   it("signed-in roles for route access", () => {
-    const director = effectiveOnboardingRoles(springMe("director"));
+    const director = effectiveOnboardingRoles(springMe("officer"));
     expect(canAccessManufacturerRoute("application", director)).toBe(true);
     expect(canAccessManufacturerRoute("director", director)).toBe(true);
     expect(canAccessManufacturerRoute("director", effectiveOnboardingRoles(springMe("finance")))).toBe(false);
@@ -250,7 +250,7 @@ describe("manufacturer onboarding UI", () => {
   });
 
   it("Director revoke from hold", async () => {
-    render(wrap(<MonitoringQueue />, "director"));
+    render(wrap(<MonitoringQueue />, "officer"));
     await screen.findByTestId("monitoring-queue-list");
     fireEvent.click(screen.getByTestId("monitoring-item-MFG-ONB-2026-0104"));
     await screen.findByTestId("director-hold-note");
@@ -306,7 +306,7 @@ describe("manufacturer onboarding UI", () => {
   });
 
   it("displays awaiting-Director decision on the pending queue", async () => {
-    render(wrap(<DirectorQueue />, "director"));
+    render(wrap(<DirectorQueue />, "officer"));
     await screen.findByTestId("director-pending-queue");
     await screen.findByTestId("director-approve");
     expect(screen.getAllByText(/Awaiting Director decision/i).length).toBeGreaterThan(0);

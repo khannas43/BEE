@@ -15,6 +15,7 @@
     "local:health": "bash scripts/local/health.sh",
     "local:seed": "bash scripts/local/seed.sh",
     "demo:seed": "bash scripts/demo/seed-demo.sh",
+    "demo:reset": "bash scripts/demo/reset-demo.sh",
     "demo:wp3-wp9-check": "node scripts/demo/wp3-wp9-reliability-check.cjs",
     "demo:ngrok": "bash scripts/local/ngrok-demo.sh",
     "local:reset": "bash scripts/local/reset.sh",

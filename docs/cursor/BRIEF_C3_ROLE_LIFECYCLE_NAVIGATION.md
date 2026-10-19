@@ -184,4 +184,4 @@ The live check `read-ui-browser-check.cjs` step `read-ui.preview-elsewhere-uncha
 
 **Proof:** `AdminDemonstrationAccessTest`, `SlicePolicyTest`, `RegistrationDatabaseTest`, `RevocationDatabaseTest.adminDemonstrationReadsRegisterButCannotMutate`, `SnlWp03OptimizedManufacturerOnboardingDatabaseTest`; `AdminDemonstration.test.tsx`, `RegisterRevocations.test.tsx` (read-only Admin hides mutation controls), `adminMenuCoverage.test.tsx` (every menu route names real backend/UI tests); live `npm run local:c3a-five-role` (Admin opens all four menu groups plus register). OpenAPI **0.37.2** adds optional `adminDemonstrationReadOnly` on Me.
 
-**BL-266:** open until register/revocation read-only access and the named-test coverage gate pass; close only after full C3A verification.
+**BL-266:** **done** (19 October 2026). Contract pin SHA256 `fc06669a…` matches OpenAPI **0.37.2**; `npm run local:c3a-five-role` **17/17** (five roles, Admin register read-only + POST `role_not_permitted`); full `@Tag("db")` suite, `web:test` **264/264**, `web:test:ui` **270/270**, `build`, `contract-artifact.test.mjs` **7/7**, `git diff --check` green.

@@ -100,23 +100,6 @@ export default function RegisterManufacturerPage() {
                 <PasswordField id="manufacturer-confirm-password" label="Confirm password" value={confirmPassword} onChange={setConfirmPassword} show={showPassword} toggle={() => setShowPassword((value) => !value)} />
               </div>
 
-              <div className="rounded-xl border border-primary/25 bg-primary/5 p-space-md" data-testid="demo-verification-process">
-                <p className="font-label-md text-on-surface">Identity verification process</p>
-                <p className="font-body-sm text-on-surface-variant mt-1">
-                  Email and mobile OTP verification are part of the standard registration process. For this demonstration, both checks are simulated automatically because no SMS or email gateway is connected.
-                </p>
-                <div className="grid sm:grid-cols-2 gap-2 mt-3">
-                  <div className="rounded-lg bg-surface-card border border-border-subtle p-3 flex items-center gap-2">
-                    <Icon name="mark_email_read" size={20} className="text-primary" />
-                    <span className="font-body-sm"><strong>Email OTP</strong><br />Simulated verification</span>
-                  </div>
-                  <div className="rounded-lg bg-surface-card border border-border-subtle p-3 flex items-center gap-2">
-                    <Icon name="sms" size={20} className="text-primary" />
-                    <span className="font-body-sm"><strong>Mobile OTP</strong><br />Simulated verification</span>
-                  </div>
-                </div>
-              </div>
-
               <button type="submit" disabled={busy} className="w-full rounded-lg bg-primary text-on-primary py-2.5 px-space-md font-label-lg text-label-lg inline-flex justify-center items-center gap-2 disabled:opacity-50" data-testid="create-demo-applicant">
                 <Icon name={busy ? "progress_activity" : "how_to_reg"} size={18} className={busy ? "animate-spin" : ""} />
                 {busy ? "Creating applicant account…" : "Create applicant account and continue"}

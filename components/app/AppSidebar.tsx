@@ -25,11 +25,11 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light" aria-label="Console menu">
-      <Link href="/app" className="flex flex-row items-center justify-start gap-space-sm px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={`BEE S&L ${t("app.officerConsole")}`}>
+      <Link href="/app" className="flex flex-row items-center justify-start gap-space-sm px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={t("app.portal")}>
         <span className="flex items-center justify-center bg-white rounded-md px-3 h-[36px] shrink-0">
           <Image src="/images/bee-logo.png" alt="Bureau of Energy Efficiency" width={1260} height={308} priority className="h-[28px] w-auto object-contain" />
         </span>
-        <span className="font-label-sm text-label-sm uppercase tracking-[0.14em] text-forest-light/90 leading-[14px] text-left">{t("app.officerConsole")}</span>
+        <span className="font-label-sm text-label-sm uppercase tracking-[0.14em] text-forest-light/90 leading-[14px] text-left">{t("app.portal")}</span>
       </Link>
 
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">

@@ -132,7 +132,7 @@ export const DICT: Record<string, Entry> = {
   "module.mis-ai": { en: "MIS & AI", hi: "एमआईएस एवं एआई" },
   "module.audit": { en: "Audit", hi: "अंकेक्षण" },
 
-  "app.officerConsole": { en: "Officer Console", hi: "अधिकारी कंसोल" },
+  "app.portal": { en: "BEE S&L Portal", hi: "बीईई एस एंड एल पोर्टल" },
   "app.overview": { en: "Overview", hi: "अवलोकन" },
   "app.allScreens": { en: "All screens", hi: "सभी स्क्रीन" },
   "app.publicPortal": { en: "Public portal", hi: "सार्वजनिक पोर्टल" },

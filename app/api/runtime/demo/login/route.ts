@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 /** Where each role lands: a live screen that suits it, not the generic prototype dashboard. */
 const LANDING: Record<string, string> = {
-  manufacturer: "/app/model-label/model-dashboard",
+  manufacturer: "/app/manufacturer/onboarding",
   agency: "/app/model-label/model-dashboard",
   finance: "/app/finance/finance-queue",
   iame: "/app/model-label/iame-scrutiny",

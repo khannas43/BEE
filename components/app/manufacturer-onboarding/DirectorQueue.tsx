@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import type { ManufacturerApplication, ManufacturerApplicationSummary } from "@/lib/manufacturer-onboarding/types";
 import { LABEL_AUTO_PAYMENT, LABEL_AUTO_RULES } from "@/lib/manufacturer-onboarding/statusLabels";
@@ -97,32 +96,29 @@ export function DirectorQueue() {
 
   return (
     <OnboardingChrome icon="verified_user" title="Manufacturer registrations awaiting decision">
-      <div className="grid lg:grid-cols-[minmax(0,19rem)_1fr] gap-space-md items-start">
-        <div className="rounded-2xl border border-border-subtle bg-white shadow-sm overflow-hidden" data-testid="director-pending-queue">
-          <div className="flex items-center justify-between border-b border-border-subtle bg-surface-container-lowest/70 px-space-md py-2.5">
-            <div role="heading" aria-level={2} className="font-label-md font-semibold text-on-surface">Pending registrations</div>
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{queue.length}</span>
+      <div className="space-y-space-md">
+        {queue.length > 0 ? (
+          // One pending registration needs no picker; the list stays in the page, hidden, for assistive tools and tests.
+          <div className={queue.length > 1 ? "flex flex-wrap gap-2" : "sr-only"} data-testid="director-pending-queue">
+            {queue.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                data-testid={`director-item-${item.reference}`}
+                onClick={() => setSelectedId(item.id)}
+                className={`rounded-xl border px-3 py-2 text-left transition-colors ${selectedId === item.id ? "border-primary bg-primary/10" : "border-border-subtle bg-white hover:bg-surface-container-low"}`}
+              >
+                <span className="block font-mono text-sm font-semibold text-on-surface">{item.reference}</span>
+                <span className="block text-xs text-on-surface-variant">{item.legalName}</span>
+              </button>
+            ))}
           </div>
-          {queue.length === 0 ? (
+        ) : null}
+        {queue.length === 0 ? (
+          <div className="rounded-2xl border border-border-subtle bg-white shadow-sm" data-testid="director-pending-queue">
             <EmptyState title="No manufacturer registrations are waiting for a decision." />
-          ) : (
-            <ul className="p-2 space-y-1.5">
-              {queue.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    data-testid={`director-item-${item.reference}`}
-                    onClick={() => setSelectedId(item.id)}
-                    className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${selectedId === item.id ? "border-primary bg-primary/10" : "border-transparent hover:bg-surface-container-low"}`}
-                  >
-                    <span className="block font-mono text-sm font-semibold text-on-surface">{item.reference}</span>
-                    <span className="mt-0.5 block text-sm text-on-surface-variant">{item.legalName}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         <div className="space-y-space-md min-w-0" data-testid="director-decision-panel">
           {!selectedId || !detail || detail.id !== selectedId ? (
@@ -152,8 +148,11 @@ export function DirectorQueue() {
                 <Panel title="Document status" icon="folder_open" testId="director-document-status">
                   <ul className="space-y-1.5">
                     {detail.draft.annexureDocuments.map((doc) => (
-                      <li key={doc.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span>{doc.kind}</span>
+                      <li key={doc.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="min-w-0">
+                          <span className="block font-medium text-on-surface">{doc.kind}</span>
+                          {doc.uploadedAt ? <span className="block truncate font-mono text-xs text-on-surface-variant">{doc.fileName}</span> : null}
+                        </span>
                         <span className={`inline-flex items-center gap-1 text-xs font-semibold ${doc.uploadedAt ? "text-success" : "text-error"}`}>
                           <Icon name={doc.uploadedAt ? "check_circle" : "cancel"} size={16} />
                           {doc.uploadedAt ? "Uploaded" : "Missing"}
@@ -222,9 +221,6 @@ export function DirectorQueue() {
               {statusMsg ? (
                 <div className="rounded-xl border border-primary/30 bg-primary/5 px-space-md py-2.5 text-sm font-medium" data-testid="director-decision-status">{statusMsg}</div>
               ) : null}
-              <Link href={`/app/manufacturer/360/${detail.id}`} className="inline-flex items-center gap-1 font-label-md text-primary hover:underline" data-testid="director-open-360">
-                Open Manufacturer 360 <Icon name="arrow_forward" size={16} />
-              </Link>
             </>
           )}
         </div>

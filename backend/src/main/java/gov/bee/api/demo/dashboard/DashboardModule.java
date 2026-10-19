@@ -119,7 +119,7 @@ public class DashboardModule implements DemoModule {
             "a.reference, a.legal_name, " + COMPANY_STAGE + ", a.created_at",
             "manufacturer_onboarding_application a", "a.state IN ('director_review', 'on_hold', 'active_observation')", "a.created_at",
             COMPANY_STAGE, "By stage", null, null, "count(*)", "Filed, by month"),
-        new Spec("awaiting_approval", "Awaiting approval", "applications", "In director review or waiting for the Secretary's final approval.", "attention", "pending_actions",
+        new Spec("awaiting_approval", "Model applications awaiting approval", "applications", "In director review or waiting for the Secretary's final approval.", "attention", "pending_actions",
             List.of("Reference", "Model", "Manufacturer", "Stage", "Since (IST)"), "/app/model-label/director-approval",
             "a.reference, a.brand_name || ' ' || a.model_number, o.legal_name, a.state, t.at",
             "model_application a JOIN organisation o ON o.id = a.organisation_id LEFT JOIN LATERAL (SELECT max(e.occurred_at) AS at FROM model_application_transition_event e WHERE e.application_id = a.id) t ON true",

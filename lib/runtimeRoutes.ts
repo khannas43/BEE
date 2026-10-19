@@ -100,7 +100,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
   },
   {
     href: "/app/demo/notifications",
-    en: "Notifications (email and SMS)",
+    en: "Messages (email and SMS)",
     hi: "सूचनाएँ (ईमेल और एसएमएस)",
     icon: "notifications_active",
     navRoles: ["manufacturer", "agency", "finance", "programme", "reviewer", "officer", "director", "admin", "auditor", "helpdesk", "iame"],

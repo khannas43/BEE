@@ -38,6 +38,8 @@ export interface NavEntry {
   activePrefixes?: readonly string[];
   /** Query string that picks a view of the route (several entries may share one screen), e.g. "tab=rating-trends". */
   query?: string;
+  /** Shown in the menu only to an organisation still going through company registration; the route itself stays open for the access check. */
+  registrationOnly?: boolean;
   /** Short qualifier shown beside the title, e.g. "Advisory". */
   badge?: string;
   children?: readonly NavEntry[];
@@ -101,13 +103,13 @@ function entry(
   icon: string,
   target: Target,
   roles: readonly RoleKey[],
-  extra: Pick<NavEntry, "activePrefixes" | "badge" | "query"> = {},
+  extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "registrationOnly"> = {},
 ): NavEntry {
   return { id, title, icon, roles, ...target, ...extra };
 }
 
 /** An Admin-hierarchy entry: Admin, plus the officer roles the runtime registry already gives the screen. */
-function adminEntry(id: string, title: string, icon: string, target: Target, extra: Pick<NavEntry, "activePrefixes" | "badge" | "query"> = {}): NavEntry {
+function adminEntry(id: string, title: string, icon: string, target: Target, extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "registrationOnly"> = {}): NavEntry {
   const runtime = target.state === "available" ? RUNTIME_ROUTES.find((r) => r.href === target.route) : undefined;
   const officers = runtime ? OFFICER_ROLES.filter((r) => runtime.navRoles.includes(r)) : [];
   return entry(id, title, icon, target, [...ADMIN, ...officers], extra);
@@ -268,15 +270,15 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     id: "mfr.registration", title: "Registration & Applications", icon: "how_to_reg", profile: "manufacturer",
     children: [
-      entry("mfr.company", "Company registration", "factory", live(R.onboarding), ["manufacturer"]),
-      entry("mfr.status", "Registration status and observation", "pending_actions", live(R.onboarding), ["manufacturer"], { activePrefixes: APPLICATION_STATUS }),
+      entry("mfr.company", "Company registration", "factory", live(R.onboarding), ["manufacturer"], { registrationOnly: true }),
+      entry("mfr.status", "Registration status and observation", "pending_actions", live(R.onboarding), ["manufacturer"], { activePrefixes: APPLICATION_STATUS, registrationOnly: true }),
       entry("mfr.brand", "Brand and category registration", "sell", live(R.regRequests), MFR),
       parent("mfr.models", "Model applications", "view_list", [
         entry("mfr.my-models", "My model applications", "view_list", live(R.myModels), MFR),
         entry("mfr.new-model", "New model application", "note_add", live(R.newModel), MFR),
       ]),
-      entry("mfr.documents", "Document uploads", "upload_file", proto("agency-brand", "company-documents"), MFR),
-      entry("mfr.returned", "Returned applications", "assignment_return", live(R.myWork), MFR),
+      // hidden (documents on file are on the Manufacturer 360 profile): entry("mfr.documents", "Document uploads", "upload_file", proto("agency-brand", "company-documents"), MFR),
+      entry("mfr.returned", "Personal inbox", "assignment_return", live(R.myWork), MFR),
       entry("mfr.certificates", "Certificates", "verified_user", live(R.certificate), MFR),
     ],
   },
@@ -285,9 +287,9 @@ export const NAVIGATION: readonly NavGroup[] = [
     children: [
       entry("mfr.qr", "QR batches and serials", "qr_code_2", live(R.qr), MFR),
       entry("mfr.payments", "Payments and receipts", "payments", live(R.payments), MFR),
-      entry("mfr.production", "Production reporting", "factory", live(R.production), MFR),
-      entry("mfr.annual-reconciliation", "Annual QR reconciliation", "balance", proto("production", "reconciliation"), MFR),
-      entry("mfr.forms", "Generated forms and letters", "description", proto("model-label", "approval-letter"), MFR),
+      entry("mfr.production", "Quarterly submission", "factory", live(R.production), MFR),
+      // hidden (merged into the quarterly submission screen): entry("mfr.annual-reconciliation", "Annual QR reconciliation", "balance", proto("production", "reconciliation"), MFR),
+      // hidden (not shown in the demonstration): entry("mfr.forms", "Generated forms and letters", "description", proto("model-label", "approval-letter"), MFR),
     ],
   },
   {
@@ -295,10 +297,10 @@ export const NAVIGATION: readonly NavGroup[] = [
     children: [
       entry("mfr.renewals", "Renewals", "autorenew", proto("model-label", "renewal-or-degradation"), MFR),
       entry("mfr.withdrawals", "Withdrawals", "cancel", proto("withdrawal", "brand-withdrawal"), MFR),
-      entry("mfr.holds", "Anomalies and holds", "pause_circle", PLANNED, MFR),
-      entry("mfr.messages", "Messages and queries", "notifications_active", live(R.messages), MFR),
+      // hidden (not shown in the demonstration): entry("mfr.holds", "Anomalies and holds", "pause_circle", PLANNED, MFR),
+      entry("mfr.messages", "Messages", "notifications_active", live(R.messages), MFR),
       entry("mfr.notices", "Application notifications", "notifications", live(R.modelNotices), MFR),
-      entry("mfr.templates", "Official templates", "article", PLANNED, MFR),
+      // hidden (not shown in the demonstration): entry("mfr.templates", "Official templates", "article", PLANNED, MFR),
       entry("mfr.helpdesk", "Helpdesk", "support_agent", proto("helpdesk", "raise-ticket"), MFR),
       grantedSettings("mfr"),
     ],
@@ -454,12 +456,14 @@ function narrow(entries: readonly NavEntry[], roles: readonly string[], capabili
 }
 
 /** The menu for a Spring identity: at most four groups, each holding only the entries its roles or permissions are given. Empty when signed out. */
-export function navigationFor(roles: readonly { role: string }[] | null | undefined, capabilities: readonly string[] = []): NavGroup[] {
+export function navigationFor(roles: readonly { role: string }[] | null | undefined, capabilities: readonly string[] = [], display?: { registering: boolean }): NavGroup[] {
   const names = (roles ?? []).map((g) => g.role);
   const profile = navProfileFor(names);
   if (!profile) return [];
+  // Only the displayed menu is trimmed (the access check calls this without `display`): the company-registration entries are for an organisation still registering.
+  const trim = (entries: readonly NavEntry[]): NavEntry[] => (display?.registering === false ? entries.filter((e) => !e.registrationOnly) : [...entries]);
   return NAVIGATION.filter((g) => g.profile === profile)
-    .map((g) => ({ ...g, children: narrow(g.children, names, capabilities) }))
+    .map((g) => ({ ...g, children: narrow(trim(g.children), names, capabilities) }))
     .filter((g) => g.children.length > 0);
 }
 

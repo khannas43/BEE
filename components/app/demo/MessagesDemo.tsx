@@ -61,7 +61,7 @@ export function MessagesDemo() {
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-messages">
       <div>
-        <h1 className="font-headline-md text-headline-md text-on-surface">Notifications (email and SMS)</h1>
+        <h1 className="font-headline-md text-headline-md text-on-surface">Messages (email and SMS)</h1>
         <p role="note" className="font-body-sm text-on-surface-variant mt-1">
           Simulated: no email or text message is sent anywhere. These are the messages the system would send to you for the steps you and your colleagues take.
         </p>

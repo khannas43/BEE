@@ -217,7 +217,9 @@ describe("sidebar", () => {
     expect(document.querySelector('[data-nav-id="admin.models"]')?.getAttribute("aria-expanded")).toBe("true");
     cleanup();
     renderSidebar(["manufacturer"], "/app/manufacturer/application/abc");
-    expect(document.querySelector('[aria-current="page"]')?.getAttribute("data-nav-id")).toBe("mfr.status");
+    // A registered manufacturer's menu has no company-registration entries (only an organisation still registering sees them).
+    expect(document.querySelector('[data-nav-id="mfr.status"]')).toBeNull();
+    expect(document.querySelector('[data-nav-id="mfr.company"]')).toBeNull();
   });
 
   it("Admin sidebar shows the Admin profile label only (no demonstration note)", () => {

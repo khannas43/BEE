@@ -1,5 +1,6 @@
 "use client";
 
+import { isManufacturerRegistrationDemoIdentity } from "@/lib/manufacturer-onboarding/manufacturerNavPolicy";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
@@ -14,7 +15,7 @@ export function TopbarSearch() {
   const id = useSpringIdentity();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const groups = id.status === "signed-in" ? navigationFor(id.me.effectiveRoles, id.me.capabilities ?? []) : [];
+  const groups = id.status === "signed-in" ? navigationFor(id.me.effectiveRoles, id.me.capabilities ?? [], { registering: isManufacturerRegistrationDemoIdentity(id.me.effectiveRoles, id.me.organisations) }) : [];
   const entries = groups.flatMap((g) => leaves(g.children).filter((e) => e.route && e.state !== "planned").map((e) => ({ ...e, route: e.route!, group: g.title })));
   const term = q.trim().toLowerCase();
   const hits = term ? entries.filter((e) => `${e.title} ${e.group}`.toLowerCase().includes(term)) : [];

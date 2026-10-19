@@ -14,7 +14,7 @@ export function isManufacturerRegistrationDemoIdentity(
   if (!effectiveRoles?.some((g) => g.role === "manufacturer")) return false;
   const orgs = organisations ?? [];
   if (orgs.length === 0) return false;
-  return orgs.every((o) => (MANUFACTURER_REGISTRATION_DEMO_ORG_CODES as readonly string[]).includes(o.code));
+  return orgs.every((o) => (MANUFACTURER_REGISTRATION_DEMO_ORG_CODES as readonly string[]).includes(o.code) || o.code.startsWith("GUEST-"));
 }
 
 /** Runtime menu entries while company registration is still in progress. */

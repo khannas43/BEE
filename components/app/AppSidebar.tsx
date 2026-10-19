@@ -1,5 +1,6 @@
 "use client";
 
+import { isManufacturerRegistrationDemoIdentity } from "@/lib/manufacturer-onboarding/manufacturerNavPolicy";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -20,7 +21,8 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const identity = useSpringIdentity();
   const signedIn = identity.status === "signed-in";
   const roles = signedIn ? identity.me.effectiveRoles : null;
-  const groups = navigationFor(roles, signedIn ? identity.me.capabilities ?? [] : []);
+  const registering = signedIn && isManufacturerRegistrationDemoIdentity(identity.me.effectiveRoles, identity.me.organisations);
+  const groups = navigationFor(roles, signedIn ? identity.me.capabilities ?? [] : [], { registering });
   const profile = navProfileFor((roles ?? []).map((g) => g.role));
   const active = activeEntry(groups, pathname, search);
 

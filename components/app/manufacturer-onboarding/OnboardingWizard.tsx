@@ -1,42 +1,106 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { DOCUMENT_KIND_LABELS, MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "@/lib/manufacturer-onboarding/documentKinds";
+import { annexureDisplayTitle } from "@/lib/manufacturer-onboarding/documentPresentation";
+import { createEmptyFacility, normalizeDraftFacilities } from "@/lib/manufacturer-onboarding/facilityDefaults";
 import { formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
-import type { ManufacturerApplication, ManufacturerDraft } from "@/lib/manufacturer-onboarding/types";
+import type { AuthorisedSignatory, ManufacturerApplication, ManufacturerContact, ManufacturerDraft } from "@/lib/manufacturer-onboarding/types";
 import {
   LABEL_AUTO_PAYMENT,
   LABEL_AUTO_RULES,
 } from "@/lib/manufacturer-onboarding/statusLabels";
+import { defaultCityForState, citiesForState } from "@/lib/manufacturer-onboarding/indiaLocations";
+import { AnnexureDocumentsPanel } from "./AnnexureDocumentsPanel";
+import { StateCitySelect } from "./StateCitySelect";
+import { RegistrationReviewSummary } from "./RegistrationReviewSummary";
 import { useManufacturerOnboardingClient } from "./ManufacturerOnboardingProvider";
+import { RegistrationWizardLayout } from "./RegistrationWizardLayout";
+import { ErrorState, LoadingState, SimulatedPaymentNote } from "./shared";
 import {
-  ErrorState,
-  LoadingState,
-  OnboardingChrome,
-  PhaseStatus,
-  SimulatedPaymentNote,
-} from "./shared";
+  WizardFieldLabel,
+  WizardNavFooter,
+  WizardPanel,
+  WizardReadinessAside,
+  WizardSection,
+  WizardStepHero,
+  wizardInputClass,
+} from "./wizardChrome";
+import {
+  MANUFACTURER_REGISTRATION_STEPS as STEPS,
+  stepIndexForId,
+  type ManufacturerRegistrationStepId,
+} from "./wizardSteps";
 
-const STEPS = [
-  { id: "company", title: "Company & registered office", icon: "corporate_fare", blurb: "Legal entity identifiers and the registered office address as they should appear on your company registration record." },
-  { id: "facilities", title: "Manufacturing facilities", icon: "factory" },
-  { id: "contacts", title: "Contacts & signatory", icon: "contacts" },
-  { id: "annexure", title: "Annexure 1 documents", icon: "folder_open" },
-  { id: "declaration", title: "Declaration & agreement", icon: "gavel" },
-  { id: "fee", title: "Fee summary", icon: "receipt_long" },
-  { id: "review", title: "Review & submit", icon: "fact_check" },
-] as const;
+function normalizeLoadedDraft(draft: ManufacturerDraft): ManufacturerDraft {
+  const withFacilities = normalizeDraftFacilities(draft);
+  const notes = withFacilities.annexureNotes ?? {};
+  return {
+    ...withFacilities,
+    annexureNotes: notes,
+    annexureDocuments: withFacilities.annexureDocuments.map((d) => ({
+      ...d,
+      customLabel: notes[d.id] ?? "",
+      kind: annexureDisplayTitle(d.id, notes),
+    })),
+  };
+}
+
+function primaryCompanyContact(draft: ManufacturerDraft): ManufacturerContact {
+  return draft.contacts[0] ?? { name: "", email: "", phone: "", role: "" };
+}
+
+function withPrimaryCompanyContact(draft: ManufacturerDraft, contact: ManufacturerContact): ManufacturerDraft {
+  const contacts = draft.contacts.length ? [...draft.contacts] : [contact];
+  contacts[0] = contact;
+  return { ...draft, contacts };
+}
+
+function patchSignatory(draft: ManufacturerDraft, patch: Partial<AuthorisedSignatory>): ManufacturerDraft {
+  return { ...draft, authorisedSignatory: { ...draft.authorisedSignatory, ...patch } };
+}
+
+function patchSignatoryAddress(
+  draft: ManufacturerDraft,
+  key: keyof AuthorisedSignatory["residentialAddress"],
+  value: string,
+): ManufacturerDraft {
+  return patchSignatory(draft, {
+    residentialAddress: { ...draft.authorisedSignatory.residentialAddress, [key]: value },
+  });
+}
+
+function withAnnexureNote(draft: ManufacturerDraft, documentKind: string, value: string): ManufacturerDraft {
+  const annexureNotes = { ...draft.annexureNotes, [documentKind]: value };
+  return {
+    ...draft,
+    annexureNotes,
+    annexureDocuments: draft.annexureDocuments.map((d) =>
+      d.id === documentKind
+        ? { ...d, customLabel: value, kind: annexureDisplayTitle(documentKind, annexureNotes) }
+        : d,
+    ),
+  };
+}
 
 function validationIssues(draft: ManufacturerDraft): string[] {
   const issues: string[] = [];
   if (!draft.legalName.trim()) issues.push("Legal entity name is required.");
   if (!draft.cin.trim()) issues.push("CIN is required.");
   if (!draft.registeredAddress.line1.trim()) issues.push("Registered address line 1 is required.");
-  if (!draft.facilities.length) issues.push("At least one manufacturing facility is required.");
-  if (!draft.authorisedSignatory.name.trim()) issues.push("Authorised signatory name is required.");
+  if (!draft.facilities.length) {
+    issues.push("At least one manufacturing facility is required.");
+  } else if (draft.facilities.some((f) => !f.name.trim())) {
+    issues.push("Each facility must have a name.");
+  }
+  const sig = draft.authorisedSignatory;
+  if (!sig.name.trim()) issues.push("Authorised signatory name is required.");
+  if (!sig.role.trim()) issues.push("Authorised signatory designation is required.");
+  if (!sig.pan.trim()) issues.push("Authorised signatory PAN is required.");
+  if (!sig.aadhaar.trim()) issues.push("Authorised signatory Aadhaar number is required.");
+  if (!sig.residentialAddress.line1.trim()) issues.push("Authorised signatory residential address is required.");
   if (draft.annexureDocuments.some((d) => !d.uploadedAt)) issues.push("All Annexure 1 documents must be uploaded.");
   if (!draft.declarationAccepted) issues.push("Declaration must be accepted.");
   if (!draft.agreementAccepted) issues.push("Agreement must be accepted.");
@@ -46,6 +110,8 @@ function validationIssues(draft: ManufacturerDraft): string[] {
 export function OnboardingWizard() {
   const client = useManufacturerOnboardingClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedApplicationId = searchParams.get("applicationId");
   const [appId, setAppId] = useState<string | null>(null);
   const [appRecord, setAppRecord] = useState<ManufacturerApplication | null>(null);
   const [draft, setDraft] = useState<ManufacturerDraft | null>(null);
@@ -58,22 +124,37 @@ export function OnboardingWizard() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const id = await client.defaultDraftId();
+      const id = requestedApplicationId || (await client.defaultDraftId());
       const app = await client.getApplication(id);
       setAppId(id);
       setAppRecord(app);
-      setDraft(app.draft);
+      setDraft(normalizeLoadedDraft(app.draft));
     } catch {
       setLoadError("Could not load the onboarding draft.");
     }
-  }, [client]);
+  }, [client, requestedApplicationId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fixture client fetch on mount
     void load();
   }, [load]);
 
+  const reviewPersistedRef = useRef(false);
+  useEffect(() => {
+    if (step !== STEPS.length - 1) {
+      reviewPersistedRef.current = false;
+      return;
+    }
+    if (reviewPersistedRef.current || !appId || !draft || !appRecord) return;
+    reviewPersistedRef.current = true;
+    void client
+      .saveDraft({ id: appId, version: appRecord.version, draft })
+      .then((updated) => setAppRecord(updated))
+      .catch(() => undefined);
+  }, [step, appId, draft, appRecord, client]);
+
   const issues = useMemo(() => (draft ? validationIssues(draft) : []), [draft]);
+  const stepMeta = STEPS[step];
 
   async function saveProgress() {
     if (!appId || !draft || !appRecord) return;
@@ -91,21 +172,39 @@ export function OnboardingWizard() {
   }
 
   async function uploadKind(documentKind: (typeof MANUFACTURER_ONBOARDING_DOCUMENT_KINDS)[number], file: File) {
-    if (!appId || !appRecord) return;
+    if (!appId || !appRecord || !draft) return;
     setBusy(true);
     setSaveNote(null);
+    const custom = draft.annexureNotes[documentKind]?.trim();
     try {
       const updated = await client.uploadDocument({
         applicationId: appId,
         documentKind,
-        label: DOCUMENT_KIND_LABELS[documentKind],
+        label: custom || DOCUMENT_KIND_LABELS[documentKind],
         file,
       });
       setAppRecord(updated);
-      setDraft(updated.draft);
+      setDraft(normalizeLoadedDraft(updated.draft));
       setSaveNote(`${DOCUMENT_KIND_LABELS[documentKind]} uploaded.`);
     } catch {
       setSaveNote("Upload failed — check the file and retry.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeKind(documentKind: (typeof MANUFACTURER_ONBOARDING_DOCUMENT_KINDS)[number]) {
+    if (!appId || !appRecord) return;
+    setBusy(true);
+    setSaveNote(null);
+    try {
+      const updated = await client.removeDocument({ applicationId: appId, documentKind });
+      setAppRecord(updated);
+      setDraft(normalizeLoadedDraft(updated.draft));
+      setSaveNote("Document removed.");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Could not remove this document.";
+      setSaveNote(message);
     } finally {
       setBusy(false);
     }
@@ -127,247 +226,302 @@ export function OnboardingWizard() {
     }
   }
 
-  if (loadError) return <ErrorState message={loadError} onRetry={() => void load()} />;
-  if (!draft || !appId) return <LoadingState label="Loading company registration wizard…" />;
+  function goToStepId(id: ManufacturerRegistrationStepId) {
+    const index = stepIndexForId(id);
+    if (index >= 0) setStep(index);
+  }
+
+  if (loadError) {
+    return (
+      <RegistrationWizardLayout appRecord={appRecord} step={step} onStepChange={setStep}>
+        <ErrorState message={loadError} onRetry={() => void load()} />
+      </RegistrationWizardLayout>
+    );
+  }
+  if (!draft || !appId || !stepMeta) {
+    return (
+      <RegistrationWizardLayout appRecord={null} step={0} onStepChange={() => {}}>
+        <LoadingState label="Loading company registration wizard…" />
+      </RegistrationWizardLayout>
+    );
+  }
 
   return (
-    <OnboardingChrome icon="factory" title="Manufacturer / company registration" showDisclosure={false}>
-      <div className="space-y-space-md">
-        <section className="rounded-xl border border-border-subtle bg-surface-card p-space-sm" aria-label="Progress">
-          <ol className="grid grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-7" data-testid="onboarding-stepper">
-            {STEPS.map((s, i) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  onClick={() => setStep(i)}
-                  className={`h-full w-full text-left flex items-center gap-1.5 rounded-lg px-2 py-2 text-label-sm leading-tight ${i === step ? "bg-primary/10 text-primary font-semibold" : "text-on-surface-variant hover:bg-surface-container-low"}`}
-                  data-testid={`step-${s.id}`}
-                >
-                  <Icon name={s.icon} size={16} className="shrink-0" />
-                  <span className="break-words">{i + 1}. {s.title}</span>
-                </button>
-              </li>
-            ))}
-          </ol>
-        </section>
+    <RegistrationWizardLayout appRecord={appRecord} step={step} onStepChange={setStep}>
+      <div className="space-y-space-md w-full">
+        <WizardStepHero stepIndex={step} stepCount={STEPS.length} title={stepMeta.title} blurb={stepMeta.blurb} />
 
-        <div className="space-y-space-md min-w-0">
-          <section className="rounded-2xl border border-border-subtle bg-gradient-to-r from-primary/10 via-surface-card to-surface-card p-space-md" data-testid="wizard-application-overview">
-            <div className="flex flex-wrap items-start justify-between gap-space-sm">
-              <div>
-                <p className="font-label-sm text-primary uppercase tracking-wide">Manufacturer registration application</p>
-                <h2 className="font-headline-sm text-headline-sm mt-1">Step {step + 1} of {STEPS.length}: {STEPS[step].title}</h2>
-                <p className="font-body-sm text-on-surface-variant mt-1">{"blurb" in STEPS[step] ? STEPS[step].blurb : "Complete this section, save your progress whenever needed, and continue through the registration journey."}</p>
-              </div>
-              <div className="text-right space-y-1">
-                <p className="font-mono text-xs text-on-surface-variant">{appRecord?.reference}</p>
-                {appRecord && <PhaseStatus phase={appRecord.phase} />}
-              </div>
-            </div>
-            <div className="mt-space-md h-2 rounded-full bg-surface-container-high overflow-hidden" aria-label={`${Math.round(((step + 1) / STEPS.length) * 100)} percent complete`}>
-              <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${Math.round(((step + 1) / STEPS.length) * 100)}%` }} />
-            </div>
-          </section>
-
-          <section className="bg-surface-card rounded-xl shadow-sm p-space-md space-y-space-md" aria-labelledby="step-heading">
-            <h2 id="step-heading" className="font-headline-sm text-headline-sm">{STEPS[step].title}</h2>
-
-            {step === 0 && (
-              <div className="space-y-space-lg">
-                <section>
-                  <h3 className="font-label-lg font-semibold mb-2">Legal entity</h3>
-                  <p className="font-body-sm text-on-surface-variant mb-3">Use the name and identifiers recorded with the Ministry of Corporate Affairs.</p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="block sm:col-span-2">
-                      <span className="font-label-sm text-label-sm">Legal name</span>
-                      <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.legalName} onChange={(e) => setDraft({ ...draft, legalName: e.target.value })} data-testid="field-legal-name" />
-                    </label>
-                    <label className="block">
-                      <span className="font-label-sm text-label-sm">CIN</span>
-                      <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.cin} onChange={(e) => setDraft({ ...draft, cin: e.target.value })} data-testid="field-cin" />
-                    </label>
-                    <label className="block">
-                      <span className="font-label-sm text-label-sm">GSTIN</span>
-                      <input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={draft.gstin} onChange={(e) => setDraft({ ...draft, gstin: e.target.value })} data-testid="field-gstin" />
-                    </label>
-                  </div>
-                </section>
-                <section className="border-t border-border-subtle pt-space-md">
-                  <h3 className="font-label-lg font-semibold mb-2">Registered office address</h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {(["line1", "line2", "city", "state", "pincode"] as const).map((key) => (
-                      <label key={key} className={`block ${key === "line1" || key === "line2" ? "sm:col-span-2" : ""}`}>
-                        <span className="font-label-sm text-label-sm capitalize">{key.replace("line", "Line ")}</span>
-                        <input
-                          className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface"
-                          value={draft.registeredAddress[key]}
-                          onChange={(e) => setDraft({ ...draft, registeredAddress: { ...draft.registeredAddress, [key]: e.target.value } })}
-                          data-testid={`field-address-${key}`}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </section>
-              </div>
-            )}
-
-            {step === 1 && (
-              <div className="space-y-space-md">
-                {draft.facilities.map((f, idx) => (
-                  <div key={f.id} className="rounded-2xl border border-border-subtle bg-surface-container-lowest/60 p-space-md space-y-3" data-testid={`facility-${idx}`}>
-                    <div className="flex items-center justify-between">
-                      <p className="font-label-lg font-semibold flex items-center gap-2"><Icon name="factory" size={20} className="text-primary" /> Facility {idx + 1}</p>
-                      {draft.facilities.length > 1 && <button type="button" onClick={() => setDraft({ ...draft, facilities: draft.facilities.filter((_, i) => i !== idx) })} className="font-label-sm text-error hover:underline">Remove</button>}
-                    </div>
-                    <label className="block"><span className="font-label-sm text-label-sm">Facility name</span><input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={f.name} onChange={(e) => { const facilities = [...draft.facilities]; facilities[idx] = { ...f, name: e.target.value }; setDraft({ ...draft, facilities }); }} data-testid={`field-facility-name-${idx}`} /></label>
-                    <label className="block"><span className="font-label-sm text-label-sm">Street address</span><input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={f.addressLine} onChange={(e) => { const facilities = [...draft.facilities]; facilities[idx] = { ...f, addressLine: e.target.value }; setDraft({ ...draft, facilities }); }} data-testid={`field-facility-address-${idx}`} /></label>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {(["state", "city", "pincode"] as const).map((key) => <label key={key} className="block"><span className="font-label-sm text-label-sm capitalize">{key === "pincode" ? "PIN code" : key}</span><input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={f[key]} onChange={(e) => { const facilities = [...draft.facilities]; facilities[idx] = { ...f, [key]: e.target.value }; setDraft({ ...draft, facilities }); }} data-testid={`field-facility-${key}-${idx}`} /></label>)}
-                    </div>
-                  </div>
-                ))}
-                <button type="button" onClick={() => setDraft({ ...draft, facilities: [...draft.facilities, { id: crypto.randomUUID(), name: "", addressLine: "", city: "", state: "", pincode: "" }] })} className="inline-flex items-center gap-1 rounded-xl border border-dashed border-primary/50 px-4 py-2.5 font-label-md text-primary hover:bg-primary/5"><Icon name="add" size={18} /> Add another facility</button>
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="space-y-space-md">
-                <div><h3 className="font-label-lg font-semibold">Authorised signatory</h3><p className="font-body-sm text-on-surface-variant mt-1">Enter the person authorised to submit and respond on behalf of the company.</p></div>
+        <WizardPanel>
+          {step === 0 && (
+            <div className="space-y-space-lg">
+              <WizardSection title="Legal entity" description="As registered with the Ministry of Corporate Affairs." icon="corporate_fare">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {(["name", "role", "email", "phone"] as const).map((key) => (
-                    <label key={key} className={`block ${key === "name" ? "sm:col-span-2" : ""}`}>
-                      <span className="font-label-sm text-label-sm">{key === "role" ? "Designation" : key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                  <label className="block sm:col-span-2">
+                    <WizardFieldLabel required>Legal name</WizardFieldLabel>
                     <input
-                      className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface"
-                      value={draft.authorisedSignatory[key]}
-                      onChange={(e) => setDraft({ ...draft, authorisedSignatory: { ...draft.authorisedSignatory, [key]: e.target.value } })}
-                      data-testid={`field-signatory-${key}`}
+                      className={wizardInputClass}
+                      value={draft.legalName}
+                      onChange={(e) => setDraft({ ...draft, legalName: e.target.value })}
+                      data-testid="field-legal-name"
                     />
                   </label>
-                  ))}
+                  <label className="block">
+                    <WizardFieldLabel required>CIN</WizardFieldLabel>
+                    <input className={wizardInputClass} value={draft.cin} onChange={(e) => setDraft({ ...draft, cin: e.target.value })} data-testid="field-cin" />
+                  </label>
+                  <label className="block">
+                    <WizardFieldLabel>GSTIN</WizardFieldLabel>
+                    <input className={wizardInputClass} value={draft.gstin} onChange={(e) => setDraft({ ...draft, gstin: e.target.value })} data-testid="field-gstin" />
+                  </label>
                 </div>
-                <div className="rounded-xl border border-primary/15 bg-primary/5 p-space-sm font-body-sm text-on-surface-variant"><Icon name="badge" size={17} className="inline mr-1 text-primary" /> PAN, identity proof and authorisation evidence are uploaded in the Annexure 1 documents step.</div>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="space-y-3"><p className="font-body-sm text-on-surface-variant">Upload clear PDF or image copies of every required Annexure 1 document.</p><ul className="space-y-2">
-                {draft.annexureDocuments.map((doc) => (
-                  <li key={doc.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-space-sm ${doc.uploadedAt ? "border-success/30 bg-success-container/10" : "border-border-subtle bg-surface-container-lowest"}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`grid place-items-center h-9 w-9 rounded-lg ${doc.uploadedAt ? "bg-success/15 text-success" : "bg-primary/10 text-primary"}`}><Icon name={doc.uploadedAt ? "task" : "attach_file"} size={20} /></span>
-                      <div>
-                      <p className="font-label-md">{doc.kind}</p>
-                      <p className="font-body-sm text-on-surface-variant">{doc.fileName}</p>
-                      {doc.uploadedAt ? (
-                        <p className="font-body-sm text-success" data-testid={`upload-status-${doc.id}`}>Uploaded</p>
-                      ) : (
-                        <p className="font-body-sm text-on-surface-variant" data-testid={`upload-status-${doc.id}`}>Required</p>
-                      )}
-                      </div>
-                    </div>
-                    <label className="rounded-lg border border-dashed border-primary/50 bg-primary/5 px-3 py-2 text-primary font-semibold text-label-sm cursor-pointer">
+              </WizardSection>
+              <WizardSection title="Registered office address" icon="home_pin">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(["line1", "line2"] as const).map((key) => (
+                    <label key={key} className="block sm:col-span-2">
+                      <WizardFieldLabel required={key === "line1"}>
+                        {key === "line1" ? "Address line 1" : "Address line 2"}
+                      </WizardFieldLabel>
                       <input
-                        type="file"
-                        className="sr-only"
-                        accept=".pdf,image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) void uploadKind(doc.id as (typeof MANUFACTURER_ONBOARDING_DOCUMENT_KINDS)[number], file);
-                          e.target.value = "";
-                        }}
-                        data-testid={`upload-${doc.id}`}
+                        className={wizardInputClass}
+                        value={draft.registeredAddress[key]}
+                        onChange={(e) => setDraft({ ...draft, registeredAddress: { ...draft.registeredAddress, [key]: e.target.value } })}
+                        data-testid={`field-address-${key}`}
                       />
-                      {doc.uploadedAt ? "Replace file" : "Upload file"}
                     </label>
-                  </li>
-                ))}
-              </ul></div>
-            )}
+                  ))}
+                  <StateCitySelect
+                    state={draft.registeredAddress.state}
+                    city={draft.registeredAddress.city}
+                    onStateChange={(state) => {
+                      const options = citiesForState(state);
+                      const city = options.includes(draft.registeredAddress.city) ? draft.registeredAddress.city : defaultCityForState(state);
+                      setDraft({ ...draft, registeredAddress: { ...draft.registeredAddress, state, city } });
+                    }}
+                    onCityChange={(city) => setDraft({ ...draft, registeredAddress: { ...draft.registeredAddress, city } })}
+                  />
+                  <label className="block">
+                    <WizardFieldLabel>PIN code</WizardFieldLabel>
+                    <input
+                      className={wizardInputClass}
+                      value={draft.registeredAddress.pincode}
+                      onChange={(e) => setDraft({ ...draft, registeredAddress: { ...draft.registeredAddress, pincode: e.target.value } })}
+                      data-testid="field-address-pincode"
+                    />
+                  </label>
+                </div>
+              </WizardSection>
+            </div>
+          )}
 
-            {step === 4 && (
-              <div className="space-y-3">
-                <label className={`flex items-start gap-3 rounded-xl border p-space-md cursor-pointer ${draft.declarationAccepted ? "border-primary/40 bg-primary/5" : "border-border-subtle"}`}>
-                  <input type="checkbox" checked={draft.declarationAccepted} onChange={(e) => setDraft({ ...draft, declarationAccepted: e.target.checked })} data-testid="checkbox-declaration" />
-                  <span className="font-body-sm">I declare that the information supplied is accurate for this demonstration submission.</span>
-                </label>
-                <label className={`flex items-start gap-3 rounded-xl border p-space-md cursor-pointer ${draft.agreementAccepted ? "border-primary/40 bg-primary/5" : "border-border-subtle"}`}>
-                  <input type="checkbox" checked={draft.agreementAccepted} onChange={(e) => setDraft({ ...draft, agreementAccepted: e.target.checked })} data-testid="checkbox-agreement" />
-                  <span className="font-body-sm">I accept the demonstration terms and S&L registration agreement placeholder.</span>
-                </label>
-              </div>
-            )}
-
-            {step === 5 && (
-              <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-surface p-space-lg space-y-space-md">
-                <p className="font-body-lg font-semibold" data-testid="wizard-fee">
-                  Registration fee: <strong>₹ {appRecord ? formatFeeInr(appRecord.payment.amountInr) : "—"}</strong> INR
-                </p>
-                <SimulatedPaymentNote />
-                <p className="font-body-sm text-on-surface-variant">On submit, payment will be recorded as {LABEL_AUTO_PAYMENT.toLowerCase()} and {LABEL_AUTO_RULES.toLowerCase()} will run automatically.</p>
-              </div>
-            )}
-
-            {step === 6 && (
-              <div className="space-y-space-md">
-                <p className="font-body-md">Review your details below. Payment and automated eligibility checks run after submission; a BEE Officer then reviews the registration before activation.</p>
-                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl border border-border-subtle bg-surface-container-lowest p-space-md font-body-sm">
-                  <div className="sm:col-span-2"><dt className="text-on-surface-variant">Legal entity</dt><dd>{draft.legalName || "—"}</dd></div>
-                  <div><dt className="text-on-surface-variant">CIN</dt><dd>{draft.cin || "—"}</dd></div>
-                  <div><dt className="text-on-surface-variant">GSTIN</dt><dd>{draft.gstin || "—"}</dd></div>
-                  <div className="sm:col-span-2"><dt className="text-on-surface-variant">Registered office</dt><dd>{[draft.registeredAddress.line1, draft.registeredAddress.city, draft.registeredAddress.state].filter(Boolean).join(", ") || "—"}</dd></div>
-                  <div><dt className="text-on-surface-variant">Facilities</dt><dd>{draft.facilities.length}</dd></div>
-                  <div><dt className="text-on-surface-variant">Authorised signatory</dt><dd>{draft.authorisedSignatory.name || "—"}</dd></div>
-                  <div><dt className="text-on-surface-variant">Documents uploaded</dt><dd>{draft.annexureDocuments.filter((document) => document.uploadedAt).length} of {draft.annexureDocuments.length}</dd></div>
-                </dl>
-                {submitError && <p className="text-error font-body-sm" role="alert">{submitError}</p>}
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2 pt-2 border-t">
-              <button type="button" disabled={step === 0} onClick={() => setStep((s) => Math.max(0, s - 1))} className="rounded-lg border px-3 py-2 font-label-md disabled:opacity-40" data-testid="wizard-back">
-                Back
-              </button>
-              {step < STEPS.length - 1 ? (
-                <button type="button" onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))} className="rounded-lg bg-primary text-on-primary px-3 py-2 font-label-md font-semibold" data-testid="wizard-next">
-                  Continue
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy || issues.length > 0}
-                  onClick={() => void submitApplication()}
-                  className="rounded-lg bg-primary text-on-primary px-3 py-2 font-label-md font-semibold disabled:opacity-40"
-                  data-testid="wizard-submit"
-                >
-                  Submit registration
-                </button>
-              )}
-              <button type="button" disabled={busy} onClick={() => void saveProgress()} className="rounded-lg border px-3 py-2 font-label-md" data-testid="wizard-save">
-                Save & resume later
+          {step === 1 && (
+            <div className="space-y-space-md">
+              {draft.facilities.map((f, idx) => (
+                <div key={f.id} className="border border-border-subtle rounded-2xl p-space-md space-y-3 bg-surface-container-lowest/60" data-testid={`facility-${idx}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-label-md font-semibold flex items-center gap-2">
+                      <Icon name="factory" size={20} className="text-primary" />
+                      Facility {idx + 1}
+                    </p>
+                    {draft.facilities.length > 1 && (
+                      <button type="button" className="font-label-sm text-error hover:underline" onClick={() => setDraft({ ...draft, facilities: draft.facilities.filter((_, i) => i !== idx) })} data-testid={`facility-remove-${idx}`}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <label className="block">
+                    <WizardFieldLabel required>Facility name</WizardFieldLabel>
+                    <input className={wizardInputClass} value={f.name} onChange={(e) => { const facilities = [...draft.facilities]; facilities[idx] = { ...f, name: e.target.value }; setDraft({ ...draft, facilities }); }} data-testid={`field-facility-name-${idx}`} />
+                  </label>
+                  <label className="block">
+                    <WizardFieldLabel>Street address</WizardFieldLabel>
+                    <input className={wizardInputClass} value={f.addressLine} onChange={(e) => { const facilities = [...draft.facilities]; facilities[idx] = { ...f, addressLine: e.target.value }; setDraft({ ...draft, facilities }); }} data-testid={`field-facility-address-${idx}`} />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <StateCitySelect
+                      state={f.state}
+                      city={f.city}
+                      stateTestId={`field-facility-state-${idx}`}
+                      cityTestId={`field-facility-city-${idx}`}
+                      onStateChange={(state) => {
+                        const facilities = [...draft.facilities];
+                        const options = citiesForState(state);
+                        const city = options.includes(f.city) ? f.city : defaultCityForState(state);
+                        facilities[idx] = { ...f, state, city };
+                        setDraft({ ...draft, facilities });
+                      }}
+                      onCityChange={(city) => {
+                        const facilities = [...draft.facilities];
+                        facilities[idx] = { ...f, city };
+                        setDraft({ ...draft, facilities });
+                      }}
+                    />
+                    <label className="block">
+                      <WizardFieldLabel>PIN code</WizardFieldLabel>
+                      <input
+                        className={wizardInputClass}
+                        value={f.pincode}
+                        onChange={(e) => {
+                          const facilities = [...draft.facilities];
+                          facilities[idx] = { ...f, pincode: e.target.value };
+                          setDraft({ ...draft, facilities });
+                        }}
+                        data-testid={`field-facility-pincode-${idx}`}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="inline-flex items-center gap-1 rounded-xl border border-dashed border-outline-variant px-4 py-2.5 font-label-md text-primary hover:bg-primary/5" onClick={() => setDraft({ ...draft, facilities: [...draft.facilities, createEmptyFacility()] })} data-testid="facility-add">
+                <Icon name="add" size={18} />
+                Add another facility
               </button>
             </div>
-            {saveNote && <p className="font-body-sm text-on-surface-variant" role="status">{saveNote}</p>}
-          </section>
+          )}
 
-          <aside className="bg-surface-container-low rounded-xl p-space-sm" data-testid="validation-summary">
-            <h3 className="font-label-md font-semibold mb-2">Validation summary</h3>
-            {issues.length === 0 ? (
-              <p className="font-body-sm text-success">All required checks pass for submit.</p>
-            ) : (
-              <ul className="list-disc pl-5 font-body-sm text-on-surface-variant space-y-1">
-                {issues.map((x) => (
-                  <li key={x}>{x}</li>
-                ))}
-              </ul>
-            )}
-          </aside>
+          {step === 2 && (
+            <div className="space-y-space-lg">
+              <WizardSection title="Authorised signatory" description="Must match PAN and photo ID in Annexure 1." icon="draw">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block sm:col-span-2">
+                    <WizardFieldLabel required>Full name</WizardFieldLabel>
+                    <input className={wizardInputClass} value={draft.authorisedSignatory.name} onChange={(e) => setDraft(patchSignatory(draft, { name: e.target.value }))} data-testid="field-signatory-name" />
+                  </label>
+                  <label className="block">
+                    <WizardFieldLabel required>Designation</WizardFieldLabel>
+                    <input className={wizardInputClass} value={draft.authorisedSignatory.role} onChange={(e) => setDraft(patchSignatory(draft, { role: e.target.value }))} data-testid="field-signatory-role" />
+                  </label>
+                  <label className="block">
+                    <WizardFieldLabel>DIN (if director)</WizardFieldLabel>
+                    <input className={wizardInputClass} value={draft.authorisedSignatory.din} onChange={(e) => setDraft(patchSignatory(draft, { din: e.target.value }))} data-testid="field-signatory-din" />
+                  </label>
+                  <label className="block">
+                    <WizardFieldLabel>Email</WizardFieldLabel>
+                    <input className={wizardInputClass} type="email" value={draft.authorisedSignatory.email} onChange={(e) => setDraft(patchSignatory(draft, { email: e.target.value }))} data-testid="field-signatory-email" />
+                  </label>
+                  <label className="block">
+                    <WizardFieldLabel>Mobile</WizardFieldLabel>
+                    <input className={wizardInputClass} type="tel" value={draft.authorisedSignatory.phone} onChange={(e) => setDraft(patchSignatory(draft, { phone: e.target.value }))} data-testid="field-signatory-phone" />
+                  </label>
+                </div>
+              </WizardSection>
+              <WizardSection title="Identity (KYC)" icon="badge">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <WizardFieldLabel required>PAN</WizardFieldLabel>
+                    <input className={wizardInputClass} value={draft.authorisedSignatory.pan} onChange={(e) => setDraft(patchSignatory(draft, { pan: e.target.value.toUpperCase() }))} data-testid="field-signatory-pan" />
+                  </label>
+                  <label className="block">
+                    <WizardFieldLabel required>Aadhaar number</WizardFieldLabel>
+                    <input className={wizardInputClass} value={draft.authorisedSignatory.aadhaar} onChange={(e) => setDraft(patchSignatory(draft, { aadhaar: e.target.value }))} data-testid="field-signatory-aadhaar" />
+                  </label>
+                  <label className="block sm:col-span-2">
+                    <WizardFieldLabel>Father&apos;s / guardian&apos;s name</WizardFieldLabel>
+                    <input className={wizardInputClass} value={draft.authorisedSignatory.fatherName} onChange={(e) => setDraft(patchSignatory(draft, { fatherName: e.target.value }))} data-testid="field-signatory-father-name" />
+                  </label>
+                </div>
+              </WizardSection>
+              <WizardSection title="Residential address" icon="home">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(["line1", "line2"] as const).map((key) => (
+                    <label key={key} className="block sm:col-span-2">
+                      <WizardFieldLabel required={key === "line1"}>{key === "line1" ? "Address line 1" : "Address line 2"}</WizardFieldLabel>
+                      <input className={wizardInputClass} value={draft.authorisedSignatory.residentialAddress[key]} onChange={(e) => setDraft(patchSignatoryAddress(draft, key, e.target.value))} data-testid={`field-signatory-address-${key}`} />
+                    </label>
+                  ))}
+                  <StateCitySelect
+                    state={draft.authorisedSignatory.residentialAddress.state}
+                    city={draft.authorisedSignatory.residentialAddress.city}
+                    stateTestId="field-signatory-address-state"
+                    cityTestId="field-signatory-address-city"
+                    onStateChange={(state) => {
+                      const addr = draft.authorisedSignatory.residentialAddress;
+                      const options = citiesForState(state);
+                      const city = options.includes(addr.city) ? addr.city : defaultCityForState(state);
+                      setDraft(patchSignatory(draft, { residentialAddress: { ...addr, state, city } }));
+                    }}
+                    onCityChange={(city) => setDraft(patchSignatoryAddress(draft, "city", city))}
+                  />
+                  <label className="block">
+                    <WizardFieldLabel>PIN code</WizardFieldLabel>
+                    <input
+                      className={wizardInputClass}
+                      value={draft.authorisedSignatory.residentialAddress.pincode}
+                      onChange={(e) => setDraft(patchSignatoryAddress(draft, "pincode", e.target.value))}
+                      data-testid="field-signatory-address-pincode"
+                    />
+                  </label>
+                </div>
+              </WizardSection>
+              <WizardSection title="Company contact (optional)" icon="support_agent">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(["name", "email", "phone", "role"] as const).map((key) => (
+                    <label key={key} className={`block ${key === "name" ? "sm:col-span-2" : ""}`}>
+                      <WizardFieldLabel>{key === "role" ? "Role / department" : key.charAt(0).toUpperCase() + key.slice(1)}</WizardFieldLabel>
+                      <input className={wizardInputClass} value={primaryCompanyContact(draft)[key]} onChange={(e) => setDraft(withPrimaryCompanyContact(draft, { ...primaryCompanyContact(draft), [key]: e.target.value }))} data-testid={`field-company-contact-${key}`} />
+                    </label>
+                  ))}
+                </div>
+              </WizardSection>
+            </div>
+          )}
 
-          <p className="font-body-sm">
-            <Link href="/register/manufacturer" className="text-primary font-semibold">Applicant login introduction</Link>
-          </p>
-        </div>
+          {step === 3 && (
+            <AnnexureDocumentsPanel
+              draft={draft}
+              busy={busy}
+              onNotesChange={(kind, value) => setDraft(withAnnexureNote(draft, kind, value))}
+              onUpload={(kind, file) => void uploadKind(kind, file)}
+              onRemove={(kind) => void removeKind(kind)}
+            />
+          )}
+
+          {step === 4 && (
+            <div className="space-y-space-md">
+              {[
+                { id: "declaration" as const, label: "I declare that the information supplied is accurate for this demonstration submission.", testId: "checkbox-declaration", checked: draft.declarationAccepted, field: "declarationAccepted" as const },
+                { id: "agreement" as const, label: "I accept the demonstration terms and S&L registration agreement placeholder.", testId: "checkbox-agreement", checked: draft.agreementAccepted, field: "agreementAccepted" as const },
+              ].map((item) => (
+                <label key={item.id} className={`flex items-start gap-3 rounded-xl border p-space-md cursor-pointer transition-colors ${item.checked ? "border-primary/40 bg-primary/5" : "border-border-subtle hover:bg-surface-container-lowest"}`}>
+                  <input type="checkbox" className="mt-1 h-4 w-4" checked={item.checked} onChange={(e) => setDraft({ ...draft, [item.field]: e.target.checked })} data-testid={item.testId} />
+                  <span className="text-sm text-on-surface">{item.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-surface p-space-lg space-y-space-md">
+              <p className="text-base font-semibold text-on-surface" data-testid="wizard-fee">
+                Registration fee: <strong>₹ {appRecord ? formatFeeInr(appRecord.payment.amountInr) : "—"}</strong> INR
+              </p>
+              <SimulatedPaymentNote />
+              <p className="font-body-sm text-on-surface-variant">
+                On submit, payment will be recorded as {LABEL_AUTO_PAYMENT.toLowerCase()} and {LABEL_AUTO_RULES.toLowerCase()} will run automatically.
+              </p>
+            </div>
+          )}
+
+          {step === 6 && (
+            <RegistrationReviewSummary draft={draft} appRecord={appRecord} onEditStep={goToStepId} />
+          )}
+
+          <WizardNavFooter
+            step={step}
+            stepCount={STEPS.length}
+            busy={busy}
+            issuesCount={issues.length}
+            saveNote={saveNote}
+            submitError={submitError}
+            onBack={() => setStep((s) => Math.max(0, s - 1))}
+            onNext={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+            onSave={() => void saveProgress()}
+            onSubmit={() => void submitApplication()}
+          />
+        </WizardPanel>
+
+        <WizardReadinessAside issues={issues} />
       </div>
-    </OnboardingChrome>
+    </RegistrationWizardLayout>
   );
 }

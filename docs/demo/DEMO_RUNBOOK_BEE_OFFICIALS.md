@@ -23,9 +23,9 @@ Use a private window per person or sign out between people (icon at the top righ
 
 1. **Create applicant login** (not signed in): http://127.0.0.1:3100/register/manufacturer . Company `Ravik Appliances Pvt Ltd`, name `Ravi Kumar`, email `ravik24@example.invalid`, mobile `9876543210`, username `ravik24`, password `demo123` twice, Submit. Thank-you page (simulated e-mail), then "Continue to manufacturer application".
 2. **Submit company registration** (as `ravik24`), seven steps:
-   1. Company: legal name (it opens showing the applicant's name; type `Ravik Appliances Pvt Ltd`), CIN `U27100DL2015PTC123456`, GSTIN `07AABCR1234A1Z5`, registered address (line 1 `12 Okhla Industrial Area`, city `New Delhi`, state `DL`, pincode `110020`).
+   1. Company: legal name (it opens showing the applicant's name; type `Ravik Appliances Pvt Ltd`), CIN `U27100DL2015PTC123456`, GSTIN `07AABCR1234A1Z5`, registered address (line 1 `12 Okhla Industrial Area`, state Delhi, city New Delhi, pincode `110020`; state and city are drop-downs, pick the state first).
    2. Facilities: one plant (`Okhla Plant 1`, same address).
-   3. Contacts and signatory: `Ravi Kumar`, `ravik24@example.invalid`, `9876543210`, `Director`.
+   3. Contacts and signatory (KYC): `Ravi Kumar`, designation `Director`, DIN `01234567`, email `ravik24@example.invalid`, phone `9876543210`, PAN `ABCDE1234F`, Aadhaar `123412341234`, father's name `R. Kumar`, residential address `5 Residency Road`, state Delhi, city New Delhi, pincode `110001`. All of these are required before Submit is enabled.
    4. Annexure 1: upload `docs/demo/assets/demo-document.pdf` against all eight document kinds.
    5. Declaration and agreement: tick both.
    6. Fee summary: INR 5,000 shown.

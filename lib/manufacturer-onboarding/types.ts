@@ -39,11 +39,40 @@ export type ManufacturerContact = {
   role: string;
 };
 
+/** Demo registration: stored in `draft_payload` for the presenter (Keycloak still uses seeded users). */
+export type ApplicantAccountRecord = {
+  username: string;
+  password: string;
+};
+
+/** Authorised signatory on Form I / Annexure 1 — persisted in draft JSON. */
+export type AuthorisedSignatory = {
+  name: string;
+  email: string;
+  phone: string;
+  /** Designation in the company (stored as `designation` in Spring draft JSON). */
+  role: string;
+  pan: string;
+  aadhaar: string;
+  fatherName: string;
+  /** Director Identification Number, if applicable. */
+  din: string;
+  residentialAddress: {
+    line1: string;
+    line2: string;
+    city: string;
+    state: string;
+    pincode: string;
+  };
+};
+
 export type AnnexureDocument = {
   id: string;
   kind: string;
   fileName: string;
   uploadedAt: string | null;
+  /** Applicant-provided label (also stored in draft `annexureNotes`). */
+  customLabel?: string;
 };
 
 export type ManufacturerDraft = {
@@ -59,8 +88,11 @@ export type ManufacturerDraft = {
   };
   facilities: ManufacturerFacility[];
   contacts: ManufacturerContact[];
-  authorisedSignatory: ManufacturerContact;
+  authorisedSignatory: AuthorisedSignatory;
   annexureDocuments: AnnexureDocument[];
+  /** Optional display names per document kind (Spring draft `annexureNotes`). */
+  annexureNotes: Record<string, string>;
+  applicantAccount: ApplicantAccountRecord | null;
   declarationAccepted: boolean;
   agreementAccepted: boolean;
 };
@@ -146,6 +178,11 @@ export type UploadDocumentInput = CommandIdempotency & {
   file: File;
   issueOn?: string;
   expiresOn?: string;
+};
+
+export type RemoveDocumentInput = {
+  applicationId: string;
+  documentKind: string;
 };
 
 export type SubmitApplicationInput = CommandIdempotency & { id: string; version: number };

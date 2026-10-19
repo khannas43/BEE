@@ -51,6 +51,7 @@ const springIdentity = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: nav.push }),
   usePathname: () => "/app/manufacturer/onboarding",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@/components/app/RoleContext", () => ({

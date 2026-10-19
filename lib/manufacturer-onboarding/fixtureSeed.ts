@@ -39,6 +39,17 @@ const baseDraft = {
     email: "rahul.aarav@aarav-demo.invalid",
     phone: "+91 98190 44556",
     role: "Managing Director",
+    pan: "AABCA1234F",
+    aadhaar: "1234 5678 9012",
+    fatherName: "Vikram Aarav",
+    din: "01234567",
+    residentialAddress: {
+      line1: "Flat 12, Oberoi Springs",
+      line2: "Goregaon East",
+      city: "Mumbai",
+      state: "Maharashtra",
+      pincode: "400063",
+    },
   },
   annexureDocuments: annexureDocumentsFromHeads(
     MANUFACTURER_ONBOARDING_DOCUMENT_KINDS.map((documentKind, i) => ({
@@ -47,6 +58,8 @@ const baseDraft = {
       status: i < 3 ? "uploaded" : "missing",
     })),
   ),
+  annexureNotes: {},
+  applicantAccount: null,
   declarationAccepted: true,
   agreementAccepted: true,
 };

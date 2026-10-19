@@ -21,6 +21,7 @@ import type {
   SaveDraftInput,
   SubmitApplicationInput,
   UploadDocumentInput,
+  RemoveDocumentInput,
 } from "./types";
 import { mapBackendDetail, mapBackendSummary, toBackendDraft, type BackendDetail } from "./mapBackend";
 
@@ -149,6 +150,13 @@ export function createManufacturerOnboardingHttpClient(fetchImpl: FetchLike = fe
       if (input.expiresOn) form.append("expiresOn", input.expiresOn);
       const key = input.idempotencyKey ?? newIdempotencyKey();
       return commandApp(fetchImpl, MANUFACTURER_ONBOARDING_BFF.documents(input.applicationId), form, key);
+    },
+    removeDocument: async (input: RemoveDocumentInput) => {
+      void input;
+      throw new ManufacturerOnboardingHttpError(
+        "validation",
+        "Removing an uploaded document is not supported here. Use Replace file to upload a new version.",
+      );
     },
     submit: async (input: SubmitApplicationInput) =>
       commandApp(

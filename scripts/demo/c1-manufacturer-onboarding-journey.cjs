@@ -161,7 +161,8 @@ async function setReactField(page, testId, value, kind = "HTMLInputElement") {
   await page.eval(`(() => {
     const el = document.querySelector('[data-testid=${JSON.stringify(testId)}]');
     if (!el) throw new Error('missing ' + ${JSON.stringify(testId)});
-    const s = Object.getOwnPropertyDescriptor(window.${kind}.prototype, 'value').set;
+    const proto = el.tagName === 'SELECT' ? window.HTMLSelectElement : ${kind === 'HTMLTextAreaElement' ? 'window.HTMLTextAreaElement' : 'window.HTMLInputElement'};
+    const s = Object.getOwnPropertyDescriptor(proto.prototype, 'value').set;
     s.call(el, ${JSON.stringify(value)});
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -238,8 +239,8 @@ async function fillWizardCore(page, tag) {
   await setReactField(page, "field-gstin", GSTIN);
 
   await clickStep(page, "company");
-  for (const key of ["line1", "line2", "city", "state", "pincode"]) {
-    const val = key === "line1" ? "1 Industrial Area" : key === "city" ? "Delhi" : key === "state" ? "DL" : key === "pincode" ? "110001" : "";
+  for (const key of ["line1", "line2", "state", "city", "pincode"]) {
+    const val = key === "line1" ? "1 Industrial Area" : key === "city" ? "New Delhi" : key === "state" ? "Delhi" : key === "pincode" ? "110001" : "";
     await setReactField(page, `field-address-${key}`, val);
   }
 
@@ -258,7 +259,11 @@ async function fillWizardCore(page, tag) {
     gstin: GSTIN,
     registeredAddress: { line1: "1 Industrial Area", line2: "", city: "Delhi", state: "DL", pincode: "110001" },
     facilities: [{ name: "Demo Plant 1", addressLine: "Sector 5, Delhi", city: "Delhi", state: "DL", pincode: "110001" }],
-    authorisedSignatory: { name: "A. Signatory", email: "signatory@demo.invalid", phone: "9876543210", designation: "Director" },
+    authorisedSignatory: {
+      name: "A. Signatory", email: "signatory@demo.invalid", phone: "9876543210", designation: "Director",
+      pan: "ABCDE1234F", aadhaar: "123412341234", fatherName: "R. Signatory", din: "01234567",
+      residentialAddress: { line1: "5 Residency Road", line2: "", city: "New Delhi", state: "Delhi", pincode: "110001" },
+    },
     contacts: [],
     declarationAccepted: false,
     agreementAccepted: false,

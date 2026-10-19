@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "../documentKinds";
 import { mapBackendDetail } from "../mapBackend";
 import { createManufacturerOnboardingHttpClient, MANUFACTURER_ONBOARDING_BFF } from "../httpClient";
+import { emptyAuthorisedSignatory } from "../signatoryDefaults";
 
 const DETAIL_FIXTURE = {
   id: "00000000-0000-4000-f000-000000000001",
@@ -117,8 +118,10 @@ describe("manufacturer onboarding HTTP adapter", () => {
         registeredAddress: { line1: "1", line2: "", city: "Mumbai", state: "MH", pincode: "400001" },
         facilities: [],
         contacts: [],
-        authorisedSignatory: { name: "A", email: "", phone: "", role: "" },
+        authorisedSignatory: { ...emptyAuthorisedSignatory(), name: "A" },
         annexureDocuments: [],
+        annexureNotes: {},
+        applicantAccount: null,
         declarationAccepted: true,
         agreementAccepted: false,
       },

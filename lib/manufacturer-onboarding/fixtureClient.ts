@@ -13,6 +13,7 @@ import type {
   SaveDraftInput,
   SubmitApplicationInput,
   UploadDocumentInput,
+  RemoveDocumentInput,
 } from "./types";
 import { DOCUMENT_KIND_LABELS, type ManufacturerOnboardingDocumentKind } from "./documentKinds";
 import { observationWindowFromApproval, phaseAfterHoldResolved } from "./observation";
@@ -104,6 +105,17 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
         doc.uploadedAt = now;
         doc.fileName = input.file.name;
         doc.kind = label;
+      }
+      bumpVersion(a);
+      return structuredClone(a);
+    },
+    async removeDocument(input: RemoveDocumentInput): Promise<ManufacturerApplication> {
+      const a = find(input.applicationId);
+      if (a.phase !== "draft" && a.phase !== "automatic_checks_failed") throw new Error("not_editable");
+      const doc = a.draft.annexureDocuments.find((d) => d.id === input.documentKind);
+      if (doc) {
+        doc.uploadedAt = null;
+        doc.fileName = `${input.documentKind}.pdf`;
       }
       bumpVersion(a);
       return structuredClone(a);

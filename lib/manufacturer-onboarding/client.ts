@@ -12,6 +12,7 @@ export type {
   DirectorResolveInput,
   DirectorRevokeInput,
   UploadDocumentInput,
+  RemoveDocumentInput,
 } from "./types";
 
 import type { FetchLike } from "@/lib/client/runtimeHttp";
@@ -27,6 +28,7 @@ import type {
   SaveDraftInput,
   SubmitApplicationInput,
   UploadDocumentInput,
+  RemoveDocumentInput,
 } from "./types";
 import { createFixtureManufacturerOnboardingClient, type FixtureClientDeps } from "./fixtureClient";
 import { createManufacturerOnboardingHttpClient } from "./httpClient";
@@ -39,6 +41,7 @@ export interface ManufacturerOnboardingClient {
   getApplication(id: string): Promise<ManufacturerApplication>;
   saveDraft(input: SaveDraftInput): Promise<ManufacturerApplication>;
   uploadDocument(input: UploadDocumentInput): Promise<ManufacturerApplication>;
+  removeDocument(input: RemoveDocumentInput): Promise<ManufacturerApplication>;
   submit(input: SubmitApplicationInput): Promise<ManufacturerApplication>;
   directorApprove(input: DirectorDecisionInput): Promise<ManufacturerApplication>;
   directorReject(input: DirectorRejectInput): Promise<ManufacturerApplication>;

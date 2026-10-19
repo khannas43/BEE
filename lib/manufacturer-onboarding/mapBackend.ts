@@ -1,9 +1,13 @@
 import { PROVISIONAL_COMPANY_REGISTRATION_FEE_INR, PROVISIONAL_COMPANY_REGISTRATION_FEE_LABEL } from "./fees";
 import { annexureDocumentsFromHeads } from "./documentKinds";
+import { annexureDisplayTitle, readAnnexureNotes } from "./documentPresentation";
 import { normalizeManufacturerPhase } from "./phaseMapping";
+import { emptyAuthorisedSignatory } from "./signatoryDefaults";
 import type {
   AnomalyRecord,
   AutomatedCheck,
+  ApplicantAccountRecord,
+  AuthorisedSignatory,
   ManufacturerApplication,
   ManufacturerApplicationSummary,
   ManufacturerContact,
@@ -97,18 +101,63 @@ function readContact(raw: unknown): ManufacturerContact {
   };
 }
 
+function readApplicantAccount(raw: unknown): ApplicantAccountRecord | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const username = typeof row.username === "string" ? row.username : "";
+  const password = typeof row.password === "string" ? row.password : "";
+  if (!username && !password) return null;
+  return { username, password };
+}
+
+function readSignatory(raw: unknown): AuthorisedSignatory {
+  const base = emptyAuthorisedSignatory();
+  if (!raw || typeof raw !== "object") return base;
+  const c = raw as Record<string, unknown>;
+  const addrRaw = c.residentialAddress;
+  let residentialAddress = base.residentialAddress;
+  if (addrRaw && typeof addrRaw === "object") {
+    const a = addrRaw as Record<string, string>;
+    residentialAddress = {
+      line1: a.line1 ?? "",
+      line2: a.line2 ?? "",
+      city: a.city ?? "",
+      state: a.state ?? "",
+      pincode: a.pincode ?? "",
+    };
+  }
+  return {
+    name: typeof c.name === "string" ? c.name : "",
+    email: typeof c.email === "string" ? c.email : "",
+    phone: typeof c.phone === "string" ? c.phone : "",
+    role: typeof c.role === "string" ? c.role : typeof c.designation === "string" ? c.designation : "",
+    pan: typeof c.pan === "string" ? c.pan : "",
+    aadhaar: typeof c.aadhaar === "string" ? c.aadhaar : "",
+    fatherName: typeof c.fatherName === "string" ? c.fatherName : typeof c.fathersName === "string" ? c.fathersName : "",
+    din: typeof c.din === "string" ? c.din : "",
+    residentialAddress,
+  };
+}
+
 function mapDraft(body: BackendDetail): ManufacturerDraft {
   const draft = body.draft;
-  const documents = annexureDocumentsFromHeads(body.documents);
+  const notes = readAnnexureNotes(draft?.annexureNotes);
+  const documents = annexureDocumentsFromHeads(body.documents).map((d) => ({
+    ...d,
+    kind: annexureDisplayTitle(d.id, notes),
+    customLabel: notes[d.id] ?? "",
+  }));
   return {
     legalName: body.legalName ?? "",
     cin: typeof draft?.cin === "string" ? draft.cin : "",
     gstin: typeof draft?.gstin === "string" ? draft.gstin : "",
     registeredAddress: readAddress(draft),
     facilities: readFacilities(draft),
-    contacts: Array.isArray(draft?.contacts) ? (draft!.contacts as ManufacturerContact[]) : [],
-    authorisedSignatory: readContact(draft?.authorisedSignatory),
+    contacts: Array.isArray(draft?.contacts) ? draft.contacts.map((c) => readContact(c)) : [],
+    authorisedSignatory: readSignatory(draft?.authorisedSignatory),
     annexureDocuments: documents,
+    annexureNotes: notes,
+    applicantAccount: readApplicantAccount(draft?.applicantAccount),
     declarationAccepted: draft?.declarationAccepted === true,
     agreementAccepted: draft?.agreementAccepted === true,
   };
@@ -252,6 +301,17 @@ export function toBackendDraft(draft: ManufacturerDraft): Record<string, unknown
       email: draft.authorisedSignatory.email,
       phone: draft.authorisedSignatory.phone,
       designation: draft.authorisedSignatory.role,
+      pan: draft.authorisedSignatory.pan,
+      aadhaar: draft.authorisedSignatory.aadhaar,
+      fatherName: draft.authorisedSignatory.fatherName,
+      din: draft.authorisedSignatory.din,
+      residentialAddress: {
+        line1: draft.authorisedSignatory.residentialAddress.line1,
+        line2: draft.authorisedSignatory.residentialAddress.line2,
+        city: draft.authorisedSignatory.residentialAddress.city,
+        state: draft.authorisedSignatory.residentialAddress.state,
+        pincode: draft.authorisedSignatory.residentialAddress.pincode,
+      },
     },
     facilities: draft.facilities.map(({ name, addressLine, city, state, pincode }) => ({
       name,
@@ -261,5 +321,14 @@ export function toBackendDraft(draft: ManufacturerDraft): Record<string, unknown
       pincode,
     })),
     contacts: draft.contacts,
+    annexureNotes: draft.annexureNotes,
+    ...(draft.applicantAccount
+      ? {
+          applicantAccount: {
+            username: draft.applicantAccount.username,
+            password: draft.applicantAccount.password,
+          },
+        }
+      : {}),
   };
 }

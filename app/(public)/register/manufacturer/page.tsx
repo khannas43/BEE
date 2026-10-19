@@ -18,12 +18,12 @@ export default function RegisterManufacturerPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const detailsValid = useMemo(() => legalName.trim().length >= 2
-    && fullName.trim().length >= 2
-    && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-    && /^[6-9]\d{9}$/.test(mobile.trim())
-    && /^[a-z0-9._-]{3,64}$/.test(username.trim().toLowerCase())
-    && password.length >= 8
+  const detailsValid = useMemo(() => legalName.trim().length > 0
+    && fullName.trim().length > 0
+    && email.trim().length > 0
+    && mobile.trim().length > 0
+    && username.trim().length > 0
+    && password.length > 0
     && password === confirmPassword,
   [confirmPassword, email, fullName, legalName, mobile, password, username]);
 
@@ -32,7 +32,7 @@ export default function RegisterManufacturerPage() {
     if (busy) return;
     setError(null);
     if (!detailsValid) {
-      setError("Enter the manufacturer name, applicant name, email, 10-digit Indian mobile number, username and matching password.");
+      setError("Complete all registration fields and ensure the passwords match.");
       return;
     }
     setBusy(true);
@@ -43,7 +43,7 @@ export default function RegisterManufacturerPage() {
         credentials: "include",
         cache: "no-store",
         headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-        body: JSON.stringify({ legalName: legalName.trim(), fullName: fullName.trim(), email: email.trim(), mobile: mobile.trim(), username: username.trim().toLowerCase(), password }),
+        body: JSON.stringify({ legalName: legalName.trim(), fullName: fullName.trim(), email: email.trim(), mobile: mobile.trim(), username: username.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-"), password }),
       });
       const body = (await response.json().catch(() => ({}))) as { ok?: boolean; returnTo?: string; error?: string };
       if (!response.ok || !body.ok) {
@@ -91,7 +91,10 @@ export default function RegisterManufacturerPage() {
               </div>
               <div className="grid sm:grid-cols-2 gap-space-md">
                 <Field id="manufacturer-email" label="Email address" icon="mail" value={email} onChange={setEmail} type="email" autoComplete="email" />
-                <Field id="manufacturer-mobile" label="Mobile number" icon="phone" value={mobile} onChange={(value) => setMobile(value.replace(/\D/g, "").slice(0, 10))} type="tel" autoComplete="tel" placeholder="10-digit Indian mobile number" />
+                <Field id="manufacturer-mobile" label="Mobile number" icon="phone" value={mobile} onChange={(value) => {
+                  const digits = value.replace(/\D/g, "");
+                  setMobile(digits.length > 10 && digits.startsWith("91") ? digits.slice(2, 12) : digits.slice(0, 10));
+                }} type="tel" autoComplete="tel" placeholder="10-digit Indian mobile number" />
               </div>
 
               <div className="grid sm:grid-cols-3 gap-space-md">

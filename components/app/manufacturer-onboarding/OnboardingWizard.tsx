@@ -17,6 +17,7 @@ import {
   LoadingState,
   NavLinks,
   OnboardingChrome,
+  PhaseStatus,
   SimulatedPaymentNote,
 } from "./shared";
 
@@ -159,6 +160,22 @@ export function OnboardingWizard() {
         </section>
 
         <div className="space-y-space-md min-w-0">
+          <section className="rounded-2xl border border-border-subtle bg-gradient-to-r from-primary/10 via-surface-card to-surface-card p-space-md" data-testid="wizard-application-overview">
+            <div className="flex flex-wrap items-start justify-between gap-space-sm">
+              <div>
+                <p className="font-label-sm text-primary uppercase tracking-wide">Manufacturer registration application</p>
+                <h2 className="font-headline-sm text-headline-sm mt-1">Step {step + 1} of {STEPS.length}: {STEPS[step].title}</h2>
+                <p className="font-body-sm text-on-surface-variant mt-1">Complete this section, then continue through the guided registration journey.</p>
+              </div>
+              <div className="text-right space-y-1">
+                <p className="font-mono text-xs text-on-surface-variant">{appRecord?.reference}</p>
+                {appRecord && <PhaseStatus phase={appRecord.phase} />}
+              </div>
+            </div>
+            <div className="mt-space-md h-2 rounded-full bg-surface-container-high overflow-hidden" aria-label={`${Math.round(((step + 1) / STEPS.length) * 100)} percent complete`}>
+              <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${Math.round(((step + 1) / STEPS.length) * 100)}%` }} />
+            </div>
+          </section>
 
           <section className="bg-surface-card rounded-xl shadow-sm p-space-md space-y-space-md" aria-labelledby="step-heading">
             <h2 id="step-heading" className="font-headline-sm text-headline-sm">{STEPS[step].title}</h2>

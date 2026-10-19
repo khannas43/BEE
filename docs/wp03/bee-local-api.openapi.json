@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.38.1",
+    "version": "0.38.2",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
     "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. Every route listed here is operational, including the draft, submit, stage, history, document, notification, fee-administration, registration, register-revocation and delegation routes; anything not listed is denied.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). The routes added since 0.5.0 are not itemised here: each minor version added operations and codes, recorded in docs/wp03 and in the evidence notes of the work package that added them (for example 0.28.0 registration, 0.29.0 registration review, 0.30.0 register revocation, 0.31.0 the register audit trail, 0.32.0 delegation). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. 0.38.0 added public guest manufacturer signup and restored Director-gated activation for new manufacturer applications (historic V77 automatic-activation evidence is retained). Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
@@ -43753,7 +43753,7 @@
           },
           "role": {
             "enum": [
-              "director",
+              "officer",
               "finance",
               "programme"
             ]
@@ -43887,7 +43887,7 @@
             "type": "array",
             "items": {
               "enum": [
-                "director",
+                "officer",
                 "finance",
                 "programme"
               ]
@@ -43937,7 +43937,7 @@
           },
           "role": {
             "enum": [
-              "director",
+              "officer",
               "finance",
               "programme"
             ]

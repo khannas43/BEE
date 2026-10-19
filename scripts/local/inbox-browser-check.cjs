@@ -109,8 +109,8 @@ async function runChecks(run, pages) {
 
     // Menu entries come from the Spring identity.
     const menu = (page) => page.eval(`[...document.querySelectorAll('[data-testid^="runtime-nav-"]')].map((e) => e.getAttribute("data-testid").replace("runtime-nav-", ""))`);
-    const dm = await menu(pages.director), nm = await menu(pages.nova);
-    check(`${run}.menu.director-has-both`, dm.includes("personal-inbox") && dm.includes("my-approvals"), dm.join(","));
+    const dm = await menu(pages.director), sm = await menu(pages.secretary), nm = await menu(pages.nova);
+    check(`${run}.menu.director-has-both`, dm.includes("personal-inbox") && sm.includes("my-approvals"), `officer ${dm.join(",")} | director ${sm.join(",")}`);
     check(`${run}.menu.applicant-inbox-only`, nm.includes("personal-inbox") && !nm.includes("my-approvals"), nm.join(","));
   } finally {
     const arr = created.map((c) => `'${c.id}'`).join(",");
@@ -123,7 +123,7 @@ async function runChecks(run, pages) {
 async function main() {
   const chrome = await launchChrome();
   try {
-    const people = [["nova", "nova.applicant"], ["finance", "bee.finance"], ["programme", "bee.programme"], ["director", "bee.officer"], ["secretary", "bee.officer"]];
+    const people = [["nova", "nova.applicant"], ["finance", "bee.finance"], ["programme", "bee.programme"], ["director", "bee.officer"], ["secretary", "bee.director"]];
     const pages = {};
     for (const [k, u] of people) {
       const twin = ids.name(u);

@@ -104,3 +104,57 @@ BEGIN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.app_disposable_model_cleanup(uuid[]) TO bee_local_maint', home_schema);
   END IF;
 END $$;
+
+-- A returned application whose rating inputs changed resumes at `rating`, a stage that has no assignment row, so the
+-- officer lookup raised model_return_officer_ambiguous and the applicant's resubmission was refused with
+-- assignee_unavailable. At `rating` the Programme officer who computed the earlier rating is the one told.
+CREATE OR REPLACE FUNCTION model_return_response_resolve_officer(
+  p_application_id uuid,
+  p_return_id uuid,
+  p_resumed_stage text
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT AS $$
+DECLARE
+  v_recipient uuid;
+  v_count integer;
+BEGIN
+  PERFORM workflow_validate_subject('model_application', p_application_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM model_application_return r
+     WHERE r.id = p_return_id AND r.application_id = p_application_id
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'model_return_response_return_mismatch';
+  END IF;
+  IF p_resumed_stage IN ('director_review', 'secretary_approval') THEN
+    SELECT returned_by_account_id INTO v_recipient FROM model_application_return WHERE id = p_return_id;
+  ELSIF p_resumed_stage = 'rating' THEN
+    SELECT computed_by_account_id INTO v_recipient
+      FROM model_application_rating
+     WHERE application_id = p_application_id
+     ORDER BY rating_version DESC LIMIT 1;
+  ELSE
+    SELECT count(*)::int INTO v_count
+      FROM assignment
+     WHERE subject_type = 'model_application' AND subject_id = p_application_id
+       AND stage = p_resumed_stage AND active;
+    IF v_count <> 1 THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_return_officer_ambiguous';
+    END IF;
+    SELECT user_id INTO v_recipient
+      FROM assignment
+     WHERE subject_type = 'model_application' AND subject_id = p_application_id
+       AND stage = p_resumed_stage AND active;
+  END IF;
+  IF v_recipient IS NULL OR NOT EXISTS (
+    SELECT 1 FROM user_account u WHERE u.id = v_recipient AND u.status = 'active'
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'notification_recipient_inactive';
+  END IF;
+  RETURN v_recipient;
+END $$;
+
+DO $$
+DECLARE
+  home_schema text := current_schema();
+BEGIN
+  EXECUTE format('ALTER FUNCTION %I.model_return_response_resolve_officer(uuid, uuid, text) SET search_path = %I, pg_temp', home_schema, home_schema);
+END $$;

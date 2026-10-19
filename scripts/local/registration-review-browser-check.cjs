@@ -120,7 +120,11 @@ function cleanup(refs, twinIds, brandNames, probeBrand, modelIds = [], probeBran
   }
   if (refs.length) {
     const apps = `SELECT id FROM app.registration_application WHERE reference IN (${refs.map((x) => `'${x}'`).join(",")})`;
-    sqlMaint(`DELETE FROM app.register_status_event WHERE registration_id IN (${apps});
+    sqlMaint(`DELETE FROM app.register_status_event WHERE registration_id IN (${apps})`);
+    // The disposable-registration cleanup (V73) also removes the return/resubmission/response-cycle rows a returned request leaves.
+    sqlMaint(`SELECT set_config('bee.cleanup_schema', 'app', true); INSERT INTO app.local_disposable_registration (application_id) SELECT id FROM (${apps}) a ON CONFLICT DO NOTHING`);
+    sqlMaint(`SELECT set_config('bee.cleanup_schema', 'app', true); SELECT app.app_disposable_registration_cleanup(ARRAY(${apps})::uuid[])`);
+    sqlMaint(`SELECT 1;
       DELETE FROM app.registration_fee_confirmation WHERE application_id IN (${apps});
       DELETE FROM app.registration_transition_event WHERE application_id IN (${apps});
       DELETE FROM app.registration_fee_snapshot WHERE application_id IN (${apps});

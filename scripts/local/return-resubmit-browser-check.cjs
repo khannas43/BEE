@@ -253,8 +253,8 @@ async function runReworkChecks(runLabel, P) {
     r = await api(P.nova, "GET", `${WEB}/api/runtime/model-applications/${A.id}`, null, null);
     check(`${runLabel}.A.nova.sees-why`, r.status === 200 && r.body?.state === "returned" && r.body?.returnNote?.fromState === "iame_scrutiny" && r.body?.returnNote?.reason === REASON, `${r.body?.state}, from ${r.body?.returnNote?.fromState}`);
     const returnedN = (await notificationsOf(P.nova)).filter((i) => i.applicationId === A.id && i.kind === "returned");
-    check(`${runLabel}.A.nova.is-notified-of-the-return`, returnedN.length >= 1 && returnedN[0].read === false && returnedN[0].message === `${A.reference} (Nova Cool ${A.model}) was returned to you: ${REASON} Edit it and send it again.`,
-      returnedN[0]?.message?.slice(0, 120) ?? "no notification");
+    check(`${runLabel}.A.nova.is-notified-of-the-return`, returnedN.length >= 1 && returnedN[0].read === false && returnedN[0].message.replace(/ Respond by \d{1,2} \w+ \d{4}\./, "") === `${A.reference} (Nova Cool ${A.model}) was returned to you: ${REASON} Edit it and send it again.`,
+      returnedN[0]?.message ?? "no notification");
     check(`${runLabel}.A.notification-names-no-officer-or-role`, returnedN.length >= 1 && !/@|iame|reviewer|programme|director|secretary|finance/i.test(returnedN[0].message.replace(REASON, "")), "only the reason, the reference and the instruction");
     const novaList = await api(P.nova, "GET", `${WEB}/api/runtime/model-applications`, null, null);
     check(`${runLabel}.A.list-carries-no-return-note`, (novaList.body?.items ?? []).some((x) => x.id === A.id && x.state === "returned") && (novaList.body?.items ?? []).every((x) => x.returnNote === undefined), "the reason is on the detail read only");
@@ -379,7 +379,7 @@ async function main() {
   const chrome = await launchChrome();
   try {
     const twins = {};
-    for (const [k, u] of [["nova", "nova.applicant"], ["finance", "bee.finance"], ["iame", "iame.officer"], ["reviewer", "bee.reviewer"], ["programme", "bee.programme"], ["director", "bee.officer"], ["secretary", "bee.officer"]]) {
+    for (const [k, u] of [["nova", "nova.applicant"], ["finance", "bee.finance"], ["iame", "iame.officer"], ["reviewer", "bee.reviewer"], ["programme", "bee.programme"], ["director", "bee.officer"], ["secretary", "bee.director"]]) {
       twins[k] = ids.name(u);
       await totp.ensureEnrolled(twins[k]);
     }

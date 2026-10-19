@@ -36,6 +36,8 @@ let CASE_ADDRESS = "";
 let CASE_SIGNATORY = "";
 let CASE_EMAIL = "";
 let CASE_PLANT = "";
+let CASE_STATE = "Delhi";
+let CASE_CITY = "New Delhi";
 let CASE_GSTIN = "";
 let CIN = "";
 let GSTIN = "";
@@ -241,7 +243,7 @@ async function fillWizardCore(page, tag) {
 
   await clickStep(page, "company");
   for (const key of ["line1", "line2", "state", "city", "pincode"]) {
-    const val = key === "line1" ? CASE_ADDRESS : key === "city" ? "New Delhi" : key === "state" ? "Delhi" : key === "pincode" ? "110001" : "";
+    const val = key === "line1" ? CASE_ADDRESS : key === "city" ? CASE_CITY : key === "state" ? CASE_STATE : key === "pincode" ? "110001" : "";
     await setReactField(page, `field-address-${key}`, val);
   }
 
@@ -448,17 +450,17 @@ async function verifyNgrokRoutes() {
 const CASES = [
   {
     legal: "Kestrel Cooling Systems Pvt Ltd", username: "kestrel.mfg", email: "accounts@kestrelcooling.example", mobile: "9822011144", person: "Sunil Patwardhan",
-    cin: "U29190MH2021PTC356712", gstin: "27AAECK4471J1ZB", address: "Gat 412, Hinjewadi Phase 3, Pune", plant: "Hinjewadi Plant",
+    cin: "U29190MH2021PTC356712", gstin: "27AAECK4471J1ZB", address: "Gat 412, Hinjewadi Phase 3", plant: "Hinjewadi Plant", state: "Maharashtra", city: "Pune",
     reason: "GSTIN mismatch found on the first supplier invoice batch: invoices INV-2026-0917 to 0921 carry GSTIN 27AAECK4471J2ZA, which differs from the registered GSTIN 27AAECK4471J1ZB. Registration placed on hold until the applicant explains the second GSTIN and supplies its certificate.",
   },
   {
     legal: "Brightwave Appliances Pvt Ltd", username: "brightwave.mfg", email: "finance@brightwave.example", mobile: "9879033021", person: "Nisha Doshi",
-    cin: "U29300GJ2018PTC104377", gstin: "24AAFCB2290M1ZR", address: "Plot 63, GIDC Sachin, Surat", plant: "Sachin Plant",
+    cin: "U29300GJ2018PTC104377", gstin: "24AAFCB2290M1ZR", address: "Plot 63, GIDC Sachin", plant: "Sachin Plant", state: "Gujarat", city: "Surat",
     reason: "Registration fee payment reversed after activation: the gateway reports receipt SIMRCPT-REV-0412 as charged back, so the Rs 5,000 fee is no longer verified. Hold applied until Finance confirms a fresh payment or the reversal is withdrawn.",
   },
   {
     legal: "Zephyr Climate Appliances Pvt Ltd", username: "zephyr.mfg", email: "admin@zephyrclimate.example", mobile: "9890044512", person: "Aditya Joshi",
-    cin: "U29190MH2022PTC391045", gstin: "27AAGCZ6638Q1ZH", address: "Plot 21, MIDC Butibori, Nagpur", plant: "Butibori Plant",
+    cin: "U29190MH2022PTC391045", gstin: "27AAGCZ6638Q1ZH", address: "Plot 21, MIDC Butibori", plant: "Butibori Plant", state: "Maharashtra", city: "Nagpur",
     reason: null,
   },
 ];
@@ -474,6 +476,8 @@ async function main() {
       CASE_SIGNATORY = c.person;
       CASE_EMAIL = c.email;
       CASE_PLANT = c.plant;
+      CASE_STATE = c.state;
+      CASE_CITY = c.city;
       const applicant = await openPage(chrome.cdp);
       await guestRegister(applicant, { legalName: c.legal, fullName: c.person, email: c.email, mobile: c.mobile, username: c.username, password: "demo123" });
       const run = await fillWizardCore(applicant, c.username);

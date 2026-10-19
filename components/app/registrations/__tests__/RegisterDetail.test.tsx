@@ -9,6 +9,21 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/lib/client/runtimeManufacturers", async (orig) => ({
+  ...(await orig<typeof import("@/lib/client/runtimeManufacturers")>()),
+  useManufacturers: () => ({
+    phase: "ready",
+    list: [{
+      id: "o1", code: "NOVA", name: "Nova Cool Appliances Pvt Ltd", status: "Suspended", state: "Delhi", city: "New Delhi", categories: ["RAC"], since: "12 Mar 2024",
+      permitteeNumber: "PT-1", applicationId: null, applicationReference: null, cin: null, gstin: null, address: null,
+      signatory: { name: null, designation: null, email: null, phone: null }, facilities: [],
+      brands: [{ id: "b1", name: "Nova Cool", status: "suspended", reason: "Label fee notices unanswered for 60 days.", changedOn: null, authorisations: 1 }],
+      models: [], fees: { paid: 0, outstanding: 0, payments: [] }, qr: { issued: 0, bound: 0, unused: 0 }, production: [], documents: [], observation: null,
+      anomalies: [], flags: [], timeline: [],
+    }],
+  }),
+}));
+
 afterEach(() => cleanup());
 
 const proposal = {
@@ -18,7 +33,7 @@ const proposal = {
 };
 const register: RegisterRevocations = {
   today: "2026-10-19", canPropose: true, canDecide: true,
-  brands: [{ id: "b1", name: "Nova Cool", owner: "NOVA", status: "active", source: "Register demonstration data" }],
+  brands: [{ id: "b1", name: "Nova Cool", owner: "NOVA", status: "suspended", source: "Register demonstration data" }],
   authorisations: [{ id: "a1", brandId: "b1", brandName: "Nova Cool", agency: "PixelCert", principal: "NOVA", validFrom: "2026-01-01", validTo: "2026-12-31", status: "active", source: "Register demonstration data" }],
   pending: [],
   decided: [proposal],
@@ -28,7 +43,8 @@ describe("RegisterDetail", () => {
   it("shows a brand with its owner profile link, authorisations and proposals", () => {
     render(<RegisterDetail register={register} view="brand" id="b1" />);
     expect(screen.getByTestId("rvk-detail-brand").textContent).toContain("Nova Cool");
-    expect(document.querySelector('a[href="/app/demo/manufacturer-360?m=nova-cool"]')).toBeTruthy();
+    expect(document.querySelector('a[href="/app/demo/manufacturer-360?m=NOVA"]')).toBeTruthy();
+    expect(screen.getByTestId("rvk-status-reason").textContent).toContain("Label fee notices unanswered");
     expect(document.querySelector('a[href*="view=authorisation&id=a1"]')).toBeTruthy();
     expect(document.querySelector('a[href*="view=proposal&id=p1"]')).toBeTruthy();
   });

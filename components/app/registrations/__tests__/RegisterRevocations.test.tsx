@@ -8,6 +8,10 @@ import { runtimeNavFor } from "@/lib/runtimeRoutes";
 
 const search = vi.hoisted(() => ({ value: "" }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(search.value) }));
+vi.mock("@/lib/client/runtimeManufacturers", async (orig) => ({
+  ...(await orig<typeof import("@/lib/client/runtimeManufacturers")>()),
+  useManufacturers: () => ({ phase: "loading" }),
+}));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => <a href={href} {...rest}>{children}</a>,
 }));

@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import { RegisterDetail, registerDetailHref, type RegisterView } from "@/components/app/registrations/RegisterDetail";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
@@ -186,13 +187,23 @@ function RegisterBody({
 
 type PanelProps = { register: RegisterRevocations; openId: string | null; onOpen: (id: string | null) => void; onChanged: () => void; onRefresh: () => void };
 
+/** Owner code to the manufacturer's name, and brand id to the reason for its status, both from the Manufacturer 360 list. */
+function useOwnerLookups(): { names: Map<string, string>; reasons: Map<string, string | null>; all: ManufacturerProfile[] } {
+  const read = useManufacturers();
+  const all = read.phase === "ready" ? read.list : [];
+  const names = new Map(all.map((m) => [m.code, m.name]));
+  const reasons = new Map(all.flatMap((m) => m.brands.map((b) => [b.id, b.reason] as [string, string | null])));
+  return { names, reasons, all };
+}
+
 function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelProps) {
   const [status, setStatus] = useState("");
   const [owner, setOwner] = useState("");
+  const { names, reasons, all } = useOwnerLookups();
   const rows = register.brands.filter((b) => (!status || b.status === status) && (!owner || b.owner === owner));
   const tools = useListTools({
     rows,
-    text: (b) => `${b.name} ${b.owner} ${b.source} ${words(BRAND_STATUS, b.status)}`,
+    text: (b) => `${b.name} ${b.owner} ${names.get(b.owner) ?? ""} ${b.source} ${words(BRAND_STATUS, b.status)}`,
     sortValue: (b, k) => (k === "name" ? b.name : k === "owner" ? b.owner : k === "status" ? b.status : b.source),
     pageSize: 8,
   });
@@ -206,7 +217,7 @@ function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPr
       </div>
       <div className="flex flex-wrap items-end gap-space-md" data-testid="rvk-filters">
         <FilterSelect label="Status" value={status} onChange={(v) => { setStatus(v); tools.setPage(1); }} testId="rvk-brand-status" options={[["", "All"], ["active", "Active"], ["suspended", "Suspended"], ["revoked", "Revoked"]]} />
-        <FilterSelect label="Owner" value={owner} onChange={(v) => { setOwner(v); tools.setPage(1); }} testId="rvk-brand-owner" options={distinct(register.brands.map((b) => b.owner))} />
+        <FilterSelect label="Owner" value={owner} onChange={(v) => { setOwner(v); tools.setPage(1); }} testId="rvk-brand-owner" options={all.length > 0 ? [["", "All"], ...all.map((m) => [m.code, m.name] as [string, string])] : distinct(register.brands.map((b) => b.owner))} />
         {(status || owner) ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={clear} data-testid="rvk-brand-clear">Clear filters</button> : null}
       </div>
       {register.brands.length === 0 ? <p className="font-body-sm text-on-surface-variant">No brand is on the register.</p> : (
@@ -224,8 +235,11 @@ function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPr
               {tools.paged.pageRows.map((brand) => (
                 <tr key={brand.id} className="border-t border-outline-variant" data-testid={`rvk-brand-${brand.id}`} data-status={brand.status}>
                   <td className={`${TD} font-semibold`}><Link href={registerDetailHref("brand", brand.id)} className="text-primary hover:underline" data-testid={`rvk-brand-open-${brand.id}`}>{brand.name}</Link></td>
-                  <td className={TD}>{brand.owner}</td>
-                  <td className={TD}><StatusPill code={brand.status} label={words(BRAND_STATUS, brand.status)} /></td>
+                  <td className={TD}><Link href={manufacturerProfileHref(brand.owner)} className="text-primary hover:underline" data-testid={`rvk-brand-owner-link-${brand.id}`}>{names.get(brand.owner) ?? brand.owner}</Link></td>
+                  <td className={TD}>
+                    <StatusPill code={brand.status} label={words(BRAND_STATUS, brand.status)} />
+                    {brand.status !== "active" ? <div className="mt-1 max-w-xs text-xs text-on-surface-variant" data-testid={`rvk-brand-reason-${brand.id}`}>{reasons.get(brand.id) ?? "No reason recorded."}</div> : null}
+                  </td>
                   <td className={TD}>{brand.source}</td>
                   <td className={TD}>{proposeButton(register.canPropose, brand.status === "active", brand.id, openId, onOpen)}</td>
                 </tr>
@@ -242,6 +256,7 @@ function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPr
 }
 
 function AuthsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelProps) {
+  const { names } = useOwnerLookups();
   const [status, setStatus] = useState("");
   const [agency, setAgency] = useState("");
   const [principal, setPrincipal] = useState("");
@@ -287,7 +302,7 @@ function AuthsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPro
                 <tr key={auth.id} className="border-t border-outline-variant" data-testid={`rvk-auth-${auth.id}`} data-status={auth.status}>
                   <td className={`${TD} font-semibold`}><Link href={registerDetailHref("authorisation", auth.id)} className="text-primary hover:underline" data-testid={`rvk-auth-open-${auth.id}`}>{auth.brandName}</Link></td>
                   <td className={TD}>{auth.agency}</td>
-                  <td className={TD}>{auth.principal}</td>
+                  <td className={TD}><Link href={manufacturerProfileHref(auth.principal)} className="text-primary hover:underline">{names.get(auth.principal) ?? auth.principal}</Link></td>
                   <td className={TD}>{auth.validFrom}</td>
                   <td className={TD}>{auth.validTo ?? "—"}</td>
                   <td className={TD}><StatusPill code={auth.status} label={words(AUTH_STATUS, auth.status)} /></td>

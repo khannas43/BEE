@@ -1,87 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Pill } from "./DemoShell";
-import { useSpringIdentity } from "@/components/app/SessionBadge";
-import { createManufacturerOnboardingClient } from "@/lib/manufacturer-onboarding/client";
-import { readCompanyRegistrationsAwaitingApproval } from "@/lib/client/runtimeCompanyRegistrations";
-import type { ManufacturerApplication } from "@/lib/manufacturer-onboarding/types";
 import {
-  ALL_MANUFACTURERS,
   STATUS_FILTERS,
+  findManufacturer,
+  inr,
+  useManufacturers,
   type ComplianceStatus,
-  type DirectoryManufacturer,
-} from "@/lib/demo/manufacturerDirectory";
+  type ManufacturerProfile,
+} from "@/lib/client/runtimeManufacturers";
 
 const STATUS_STYLE: Record<ComplianceStatus, string> = {
   Compliant: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]",
   "Under observation": "bg-[#e7effb] text-[#14315E] border-[#c9d9f7]",
   "On hold": "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
   "Registration pending": "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]",
+  Suspended: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]",
+  Revoked: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
 };
 
 function StatusChip({ status }: { status: ComplianceStatus }) {
   return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLE[status]}`}>{status}</span>;
 }
 
-const inr = (n: number) => n.toLocaleString("en-IN");
-const dash = (v: string | undefined | null) => (v && v.trim() ? v : "-");
-
-/** A live company registration from the onboarding service, shaped like a directory entry so one profile page serves both. */
-function liveToManufacturer(app: ManufacturerApplication): DirectoryManufacturer {
-  const d = app.draft;
-  const status: ComplianceStatus =
-    app.phase === "active_observation" ? "Under observation" : app.phase === "active" ? "Compliant" : app.phase === "on_hold" ? "On hold" : "Registration pending";
-  const date = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-");
-  const a = d.registeredAddress;
-  const sig = d.authorisedSignatory;
-  const obsEnd = app.observationEndsAt ? new Date(app.observationEndsAt) : null;
-  return {
-    id: `live-${app.id}`,
-    orgCode: "",
-    name: d.legalName || app.reference,
-    status,
-    state: a.state || "-",
-    city: a.city || "-",
-    categories: ["Company registration"],
-    since: date(app.activatedAt ?? app.timeline[0]?.at),
-    permitteeNumber: app.registrationNumber ?? "Awaiting BEE Officer approval",
-    cin: dash(d.cin),
-    gstin: dash(d.gstin),
-    address: [a.line1, a.line2, a.city, a.state, a.pincode].filter(Boolean).join(", ") || "-",
-    signatory: { name: dash(sig.name), designation: dash(sig.role), email: dash(sig.email), phone: dash(sig.phone) },
-    facilities: d.facilities.map((f) => ({ name: f.name || "Facility", location: [f.city, f.state].filter(Boolean).join(", ") || "-", capacity: "-" })),
-    brands: [],
-    models: [],
-    fees: {
-      paid: app.payment.verifiedAt ? `₹${app.payment.amountInr}` : "₹0",
-      outstanding: app.payment.verifiedAt ? "₹0" : `₹${app.payment.amountInr}`,
-      payments: app.payment.verifiedAt
-        ? [{ receipt: app.payment.receiptNumber ?? "-", date: date(app.payment.verifiedAt), purpose: "Company registration fee", amountInr: `₹${app.payment.amountInr}`, status: "Verified" }]
-        : [],
-    },
-    qr: { issued: 0, bound: 0, unused: 0 },
-    production: [],
-    documents: d.annexureDocuments.map((x) => ({ name: x.kind, status: x.uploadedAt ? "Verified" : "Missing", date: x.uploadedAt ? date(x.uploadedAt) : "-" })),
-    observation:
-      app.observationStartedAt && obsEnd
-        ? { start: date(app.observationStartedAt), end: date(app.observationEndsAt), daysLeft: Math.max(0, Math.ceil((obsEnd.getTime() - Date.now()) / 86_400_000)) }
-        : null,
-    anomalies: app.anomalies.map((x) => ({
-      date: date(x.raisedAt),
-      raisedBy: x.raisedByRole,
-      summary: x.summary,
-      status: x.revokedAt ? "Revoked" : x.resolvedAt ? "Cleared" : "Open",
-    })),
-    flags: app.automatedChecks.some((c) => c.outcome === "fail")
-      ? [{ level: "Attention", label: "Automated checks need attention", detail: app.automatedChecks.filter((c) => c.outcome === "fail").map((c) => c.label).join(", ") }]
-      : [{ level: "Info", label: "Automated checks passed", detail: `${app.automatedChecks.filter((c) => c.outcome === "pass").length} of ${app.automatedChecks.length} checks passed.` }],
-    timeline: [...app.timeline].reverse().map((t) => ({ date: date(t.at), title: t.title, detail: t.detail })),
-  };
-}
+type DirectoryManufacturer = ManufacturerProfile;
+const dash = (v: string | null | undefined) => (v && v.trim() ? v : "-");
 
 function Collapsible({
   title,
@@ -156,6 +103,15 @@ function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[][]; emp
   );
 }
 
+const BRAND_TONE: Record<string, string> = {
+  active: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]",
+  suspended: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]",
+  revoked: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
+};
+function BrandChip({ status }: { status: string }) {
+  return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${BRAND_TONE[status] ?? ""}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
+}
+
 function Stars({ n }: { n: number }) {
   return <span className="whitespace-nowrap text-[#b7791f]" aria-label={`${n} stars`}>{"★".repeat(n)}<span className="text-outline-variant">{"★".repeat(5 - n)}</span></span>;
 }
@@ -182,10 +138,11 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
   const kpis: { key: string; label: string; value: string | number }[] = [
     { key: "brands", label: "Brands", value: m.brands.length },
     { key: "models", label: "Approved models", value: approved },
-    { key: "qr", label: "QR issued / used", value: `${inr(m.qr.issued)} / ${inr(m.qr.bound)}` },
-    { key: "fees-paid", label: "Fees paid", value: m.fees.paid },
-    { key: "fees-out", label: "Fees outstanding", value: m.fees.outstanding },
+    { key: "qr", label: "QR issued / used", value: `${m.qr.issued.toLocaleString("en-IN")} / ${m.qr.bound.toLocaleString("en-IN")}` },
+    { key: "fees-paid", label: "Fees paid", value: inr(m.fees.paid) },
+    { key: "fees-out", label: "Fees outstanding", value: inr(m.fees.outstanding) },
     { key: "anomalies", label: "Open anomalies", value: openAnomalies },
+    { key: "brand-holds", label: "Brands suspended or revoked", value: m.brands.filter((b) => b.status !== "active").length },
   ];
 
   return (
@@ -200,15 +157,15 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
             <p className="text-xs uppercase tracking-[0.14em] text-on-primary/70">Manufacturer 360 profile</p>
             <div role="heading" aria-level={2} className="mt-1 text-2xl font-bold">{m.name}</div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-white/15 px-2.5 py-1">{m.city}, {m.state}</span>
-              <span className="rounded-full bg-white/15 px-2.5 py-1">{m.categories.join(" · ")}</span>
-              <span className="rounded-full bg-white/15 px-2.5 py-1">Permittee {m.permitteeNumber}</span>
-              <span className="rounded-full bg-white/15 px-2.5 py-1">Since {m.since}</span>
+              {m.city || m.state ? <span className="rounded-full bg-white/15 px-2.5 py-1">{[m.city, m.state].filter(Boolean).join(", ")}</span> : null}
+              {m.categories.length ? <span className="rounded-full bg-white/15 px-2.5 py-1">{m.categories.join(" · ")}</span> : null}
+              <span className="rounded-full bg-white/15 px-2.5 py-1">Permittee {dash(m.permitteeNumber)}</span>
+              <span className="rounded-full bg-white/15 px-2.5 py-1">Since {dash(m.since)}</span>
             </div>
           </div>
           <div className="rounded-xl bg-white/95 px-3 py-2 shadow-sm"><StatusChip status={m.status} /></div>
         </div>
-        <div className="mt-space-md grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mt-space-md grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
           {kpis.map((k) => (
             <div key={k.key} className="rounded-xl bg-white/10 px-3 py-2" data-testid={`m360-kpi-${k.key}`}>
               <div className="text-[11px] uppercase tracking-wide text-on-primary/70">{k.label}</div>
@@ -230,22 +187,22 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
         <div className="space-y-space-md">
           <div className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-3">
             <Fact label="Legal name">{m.name}</Fact>
-            <Fact label="CIN">{m.cin}</Fact>
-            <Fact label="GSTIN">{m.gstin}</Fact>
-            <div className="sm:col-span-2 lg:col-span-3"><Fact label="Registered office">{m.address}</Fact></div>
+            <Fact label="CIN">{dash(m.cin)}</Fact>
+            <Fact label="GSTIN">{dash(m.gstin)}</Fact>
+            <div className="sm:col-span-2 lg:col-span-3"><Fact label="Registered office">{dash(m.address)}</Fact></div>
           </div>
           <div>
             <div role="heading" aria-level={3} className="mb-2 text-sm font-semibold text-on-surface">Authorised signatory</div>
             <div className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-4">
-              <Fact label="Name">{m.signatory.name}</Fact>
-              <Fact label="Designation">{m.signatory.designation}</Fact>
-              <Fact label="Email">{m.signatory.email}</Fact>
-              <Fact label="Phone">{m.signatory.phone}</Fact>
+              <Fact label="Name">{dash(m.signatory.name)}</Fact>
+              <Fact label="Designation">{dash(m.signatory.designation)}</Fact>
+              <Fact label="Email">{dash(m.signatory.email)}</Fact>
+              <Fact label="Phone">{dash(m.signatory.phone)}</Fact>
             </div>
           </div>
           <div>
             <div role="heading" aria-level={3} className="mb-2 text-sm font-semibold text-on-surface">Manufacturing facilities</div>
-            <Table head={["Facility", "Location", "Capacity"]} rows={m.facilities.map((f) => [f.name, f.location, f.capacity])} empty="No facility recorded." />
+            <Table head={["Facility", "Location", "Capacity"]} rows={m.facilities.map((f) => [f.name, f.location || "-", f.capacity])} empty="No facility recorded." />
           </div>
         </div>,
       )}
@@ -253,22 +210,31 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
       {sec("registration", "Registration and activation", "verified",
         <div className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-4">
           <Fact label="Status"><StatusChip status={m.status} /></Fact>
-          <Fact label="Permittee number">{m.permitteeNumber}</Fact>
-          <Fact label="Registered since">{m.since}</Fact>
-          <Fact label="Observation window">{m.observation ? `${m.observation.start} to ${m.observation.end}` : "Completed"}</Fact>
+          <Fact label="Permittee number">{dash(m.permitteeNumber)}</Fact>
+          <Fact label="Registered since">{dash(m.since)}</Fact>
+          <Fact label="Observation window">{m.observation ? `${m.observation.start} to ${m.observation.end}` : m.applicationReference ? "Completed" : "Not applicable"}</Fact>
           {m.observation ? <Fact label="Days remaining">{m.observation.daysLeft}</Fact> : null}
         </div>,
       )}
 
       {sec("brands", "Brands and categories", "sell",
-        <Table head={["Brand", "Status", "Categories"]} rows={m.brands.map((b) => [b.name, <Pill key="s">{b.status}</Pill>, b.categories])} empty="No brand registered yet." />,
+        <Table
+          head={["Brand", "Register status", "Reason", "Agencies"]}
+          rows={m.brands.map((b) => [
+            <span key="n" className="font-semibold">{b.name}</span>,
+            <BrandChip key="s" status={b.status} />,
+            b.status === "active" ? <span key="r" className="text-on-surface-variant">-</span> : <span key="r" data-testid={`m360-brand-reason-${b.id}`}>{b.reason ?? "No reason was recorded."}{b.changedOn ? ` (${b.changedOn})` : ""}</span>,
+            b.authorisations,
+          ])}
+          empty="No brand registered yet."
+        />,
         count(m.brands.length, "brands"),
       )}
 
       {sec("models", "Models and certificates", "workspace_premium",
         <Table
           head={["Reference", "Model", "Category", "Rating", "Status", "Certificate", "Valid to"]}
-          rows={m.models.map((x) => [<span key="r" className="font-mono">{x.reference}</span>, x.model, x.category, <Stars key="s" n={x.stars} />, <Pill key="p">{x.status}</Pill>, x.certificate, x.validTo])}
+          rows={m.models.map((x) => [<span key="r" className="font-mono">{x.reference}</span>, x.model, x.category, <Stars key="s" n={x.stars} />, <Pill key="p">{x.status}</Pill>, x.certificate, x.validTo ?? "-"])}
           empty="No model application yet."
         />,
         count(m.models.length, "models"),
@@ -277,13 +243,13 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
       {sec("fees", "Fees and payments", "payments",
         <div className="space-y-space-md">
           <div className="grid gap-space-md sm:grid-cols-3">
-            <Fact label="Paid">{m.fees.paid}</Fact>
-            <Fact label="Outstanding">{m.fees.outstanding}</Fact>
+            <Fact label="Paid">{inr(m.fees.paid)}</Fact>
+            <Fact label="Outstanding">{inr(m.fees.outstanding)}</Fact>
             <Fact label="Gateway">Simulated, no live transaction</Fact>
           </div>
           <Table
             head={["Receipt", "Date", "Purpose", "Amount", "Status"]}
-            rows={m.fees.payments.map((p) => [<span key="r" className="font-mono">{p.receipt}</span>, p.date, p.purpose, p.amountInr, <Pill key="s">{p.status}</Pill>])}
+            rows={m.fees.payments.map((p) => [<span key="r" className="font-mono">{p.receipt}</span>, p.date ?? "-", p.purpose, p.amount === null ? "-" : inr(p.amount), <Pill key="s">{p.status}</Pill>])}
             empty="No payment recorded."
           />
         </div>,
@@ -292,31 +258,31 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
       {sec("qr", "QR serials and production", "qr_code_2",
         <div className="space-y-space-md">
           <div className="grid gap-space-md sm:grid-cols-4">
-            <Fact label="Serials issued">{inr(m.qr.issued)}</Fact>
-            <Fact label="Bound to products">{inr(m.qr.bound)}</Fact>
-            <Fact label="Unused">{inr(m.qr.unused)}</Fact>
+            <Fact label="Serials issued">{m.qr.issued.toLocaleString("en-IN")}</Fact>
+            <Fact label="Bound to products">{m.qr.bound.toLocaleString("en-IN")}</Fact>
+            <Fact label="Unused">{m.qr.unused.toLocaleString("en-IN")}</Fact>
             <Fact label="Use of issued serials">{qrPct}%</Fact>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-high" aria-hidden="true">
             <div className="h-full rounded-full bg-primary" style={{ width: `${qrPct}%` }} />
           </div>
           <Table
-            head={["Quarter", "Units declared", "Serials bound", "Variance"]}
-            rows={m.production.map((p) => [p.period, inr(p.declared), inr(p.bound), <span key="v" className={Math.abs(p.declared - p.bound) > 20 ? "font-semibold text-error" : ""}>{p.declared - p.bound}</span>])}
+            head={["Quarter", "Units declared", "Review"]}
+            rows={m.production.map((p) => [p.period, p.declared.toLocaleString("en-IN"), <Pill key="s">{p.state}</Pill>])}
             empty="No production declared yet."
           />
         </div>,
       )}
 
       {sec("documents", "Documents on file", "folder_open",
-        <Table head={["Document", "Status", "Date"]} rows={m.documents.map((d) => [d.name, <Pill key="s">{d.status === "Verified" ? "Verified" : d.status === "Missing" ? "Missing (failed)" : "Pending: " + d.status}</Pill>, d.date])} empty="No document on file." />,
+        <Table head={["Document", "Status", "Date"]} rows={m.documents.map((d) => [d.name, <Pill key="s">{d.status === "Verified" ? "Verified" : d.status === "Missing" ? "Missing (failed)" : "Pending: " + d.status}</Pill>, d.date ?? "-"])} empty="No document on file." />,
         count(m.documents.length, "documents"),
       )}
 
       {sec("compliance", "Compliance, observation and anomalies", "policy",
         <Table
           head={["Date", "Raised by", "Anomaly", "Outcome"]}
-          rows={m.anomalies.map((a) => [a.date, a.raisedBy, a.summary, <Pill key="s">{a.status === "Open" ? "Open (pending)" : a.status === "Revoked" ? "Revoked" : "Cleared (accepted)"}</Pill>])}
+          rows={m.anomalies.map((a) => [a.date ?? "-", a.raisedBy, a.summary, <Pill key="s">{a.status === "Open" ? "Open (pending)" : a.status === "Revoked" ? "Revoked" : "Cleared (accepted)"}</Pill>])}
           empty="No anomaly has been raised."
         />,
         openAnomalies ? <span className="rounded-full bg-[#fdecea] px-2 py-0.5 text-xs font-semibold text-[#93000a]">{openAnomalies} open</span> : count(0, "open"),
@@ -344,7 +310,7 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
               <div>
                 <div className="text-sm font-semibold text-on-surface">{t.title}</div>
                 <div className="text-sm text-on-surface-variant">{t.detail}</div>
-                <div className="text-xs text-on-surface-variant">{t.date}</div>
+                <div className="text-xs text-on-surface-variant">{t.date ?? "-"}</div>
               </div>
             </li>
           ))}
@@ -380,13 +346,13 @@ function Directory({ list, onOpen, restricted }: { list: DirectoryManufacturer[]
   const [category, setCategory] = useState("");
   const [state, setState] = useState("");
   const categories = useMemo(() => [...new Set(list.flatMap((m) => m.categories))].sort(), [list]);
-  const states = useMemo(() => [...new Set(list.map((m) => m.state))].sort(), [list]);
+  const states = useMemo(() => [...new Set(list.map((m) => m.state).filter((x): x is string => !!x))].sort(), [list]);
   const needle = q.trim().toLowerCase();
   const shown = list
     .filter((m) => !status || m.status === status)
     .filter((m) => !category || m.categories.includes(category))
     .filter((m) => !state || m.state === state)
-    .filter((m) => !needle || [m.name, m.city, m.state, m.cin, m.gstin, m.permitteeNumber, ...m.categories].join(" ").toLowerCase().includes(needle))
+    .filter((m) => !needle || [m.name, m.code, m.city, m.state, m.cin, m.gstin, m.permitteeNumber, ...m.categories].filter(Boolean).join(" ").toLowerCase().includes(needle))
     .sort((a, b) => a.name.localeCompare(b.name));
   const tiles: { label: string; value: number; filter: string }[] = [
     { label: "All manufacturers", value: list.length, filter: "" },
@@ -397,7 +363,7 @@ function Directory({ list, onOpen, restricted }: { list: DirectoryManufacturer[]
   return (
     <div className="space-y-space-md" data-testid="m360-directory">
       {!restricted ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
           {tiles.map((t) => (
             <button
               key={t.label}
@@ -465,16 +431,16 @@ function Directory({ list, onOpen, restricted }: { list: DirectoryManufacturer[]
             </thead>
             <tbody>
               {shown.map((m) => (
-                <tr key={m.id} className="cursor-pointer" onClick={() => onOpen(m.id)} data-testid={`m360-row-${m.id}`}>
+                <tr key={m.id} className="cursor-pointer" onClick={() => onOpen(m.code)} data-testid={`m360-row-${m.code}`}>
                   <td className="px-4 py-3">
                     <div className="font-semibold text-on-surface">{m.name}</div>
-                    <div className="text-xs text-on-surface-variant">{m.city}, {m.state}</div>
+                    <div className="text-xs text-on-surface-variant">{[m.city, m.state].filter(Boolean).join(", ") || "-"}</div>
                   </td>
                   <td className="px-4 py-3"><StatusChip status={m.status} /></td>
                   <td className="px-4 py-3">{m.categories.join(", ")}</td>
                   <td className="px-4 py-3 tabular-nums">{m.models.length}</td>
-                  <td className="px-4 py-3"><span className="font-mono text-xs">{m.permitteeNumber}</span></td>
-                  <td className="px-4 py-3">{m.since}</td>
+                  <td className="px-4 py-3"><span className="font-mono text-xs">{dash(m.permitteeNumber)}</span></td>
+                  <td className="px-4 py-3">{dash(m.since)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-primary">View 360 <Icon name="arrow_forward" size={16} /></span>
                   </td>
@@ -497,47 +463,19 @@ export function Manufacturer360Demo() {
   const pathname = usePathname();
   const params = useSearchParams();
   const selected = params.get("m");
-  const identity = useSpringIdentity();
-  const roles = identity.status === "signed-in" ? identity.me.effectiveRoles.map((r) => r.role) : [];
-  const ownOrgs = identity.status === "signed-in" ? identity.me.organisations.map((o) => o.code) : [];
-  const ownOrgKey = ownOrgs.join("|");
-  const applicantOnly = roles.length > 0 && roles.every((r) => r === "manufacturer" || r === "agency");
-  const [live, setLive] = useState<DirectoryManufacturer[]>([]);
-
-  useEffect(() => {
-    if (identity.status !== "signed-in") return;
-    let cancelled = false;
-    (async () => {
-      const read = await readCompanyRegistrationsAwaitingApproval();
-      if (!read.ok) return;
-      const client = createManufacturerOnboardingClient({});
-      const out: DirectoryManufacturer[] = [];
-      for (const item of read.items.filter((i) => i.state !== "draft")) {
-        try {
-          out.push(liveToManufacturer(await client.getApplication(item.id)));
-        } catch {
-          // a registration that cannot be read is left out of the directory
-        }
-      }
-      if (!cancelled) setLive(out);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [identity.status]);
-
-  const list = useMemo(() => {
-    const fixtures = applicantOnly ? ALL_MANUFACTURERS.filter((m) => ownOrgKey.split("|").includes(m.orgCode)) : [...ALL_MANUFACTURERS];
-    return [...live, ...fixtures];
-  }, [applicantOnly, ownOrgKey, live]);
+  const read = useManufacturers();
+  const list = read.phase === "ready" ? read.list : [];
+  const applicantOnly = false;
 
   const open = (id: string | null) => router.push(id ? `${pathname}?m=${encodeURIComponent(id)}` : pathname);
-  const chosen = selected ? list.find((m) => m.id === selected) : undefined;
+  const chosen = selected ? findManufacturer(list, selected) : undefined;
 
   return (
     <div className="space-y-space-md max-w-6xl">
       <div role="heading" aria-level={1} className="font-headline-md text-headline-md font-bold text-on-surface">Manufacturer 360</div>
-      {chosen ? <Profile m={chosen} back={() => open(null)} key={chosen.id} /> : <Directory list={list} onOpen={(id) => open(id)} restricted={applicantOnly} />}
+      {read.phase === "loading" ? <p className="text-sm text-on-surface-variant" data-testid="m360-loading">Loading manufacturers…</p> : null}
+      {read.phase === "failed" ? <p className="text-sm text-error" data-testid="m360-error">{read.message}</p> : null}
+      {read.phase === "ready" ? (chosen ? <Profile m={chosen} back={() => open(null)} key={chosen.id} /> : <Directory list={list} onOpen={(id) => open(id)} restricted={applicantOnly || list.length === 1} />) : null}
     </div>
   );
 }

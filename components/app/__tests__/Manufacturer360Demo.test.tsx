@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Manufacturer360Demo } from "@/components/app/demo/Manufacturer360Demo";
-import { ALL_MANUFACTURERS as DIRECTORY } from "@/lib/demo/manufacturerDirectory";
+import type { ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import { runtimeNavFor, runtimeRouteFor } from "@/lib/runtimeRoutes";
 
 const search = vi.hoisted(() => ({ value: "" }));
@@ -13,36 +13,46 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/app/demo/manufacturer-360",
   useSearchParams: () => new URLSearchParams(search.value),
 }));
-vi.mock("@/components/app/SessionBadge", () => ({
-  useSpringIdentity: () => ({ status: "signed-in", me: { effectiveRoles: [{ role: "officer", scope: "all" }], organisations: [] } }),
-}));
-vi.mock("@/lib/client/runtimeCompanyRegistrations", () => ({
-  readCompanyRegistrationsAwaitingApproval: async () => ({ ok: true, items: [] }),
+const profile = (over: Partial<ManufacturerProfile>): ManufacturerProfile => ({
+  id: "o1", code: "NOVA", name: "Nova Cool Appliances Pvt Ltd", status: "Compliant", state: "Delhi", city: "New Delhi", categories: ["RAC"], since: "12 Mar 2024",
+  permitteeNumber: "PT-2024-00117", applicationId: null, applicationReference: null, cin: "U29300DL2012PLC231045", gstin: "07AABCN4410K1ZP", address: "Okhla, New Delhi",
+  signatory: { name: "Meera Sethi", designation: "MD", email: "m@x.example", phone: "98101 22034" }, facilities: [], brands: [], models: [],
+  fees: { paid: 177000, outstanding: 11800, payments: [] }, qr: { issued: 1240, bound: 892, unused: 348 }, production: [], documents: [], observation: null,
+  anomalies: [], flags: [], timeline: [], ...over,
+});
+const LIST = [
+  profile({}),
+  profile({ id: "o2", code: "SYNTH-MFG-4", name: "Harbor Breeze Cooling Pvt Ltd", status: "Suspended", city: "Chennai", state: "Tamil Nadu",
+    brands: [{ id: "b1", name: "Breezo Home (synthetic)", status: "suspended", reason: "Ownership of the brand name is disputed.", changedOn: null, authorisations: 0 }] }),
+  profile({ id: "o3", code: "SYNTH-MFG-6", name: "Cinder Peak Cooling Pvt Ltd", status: "On hold", city: "Hyderabad", state: "Telangana" }),
+];
+vi.mock("@/lib/client/runtimeManufacturers", async (orig) => ({
+  ...(await orig<typeof import("@/lib/client/runtimeManufacturers")>()),
+  useManufacturers: () => ({ phase: "ready", list: LIST }),
 }));
 
 describe("Manufacturer360Demo", () => {
   it("lists every manufacturer and filters by search and status", () => {
     search.value = "";
     render(<Manufacturer360Demo />);
-    expect(screen.getByTestId("m360-count").textContent).toContain(`${DIRECTORY.length} of ${DIRECTORY.length}`);
-    fireEvent.change(screen.getByTestId("m360-search"), { target: { value: "pune" } });
-    expect(screen.getByTestId("m360-count").textContent).toContain("2 of");
+    expect(screen.getByTestId("m360-count").textContent).toContain("3 of 3");
+    fireEvent.change(screen.getByTestId("m360-search"), { target: { value: "chennai" } });
+    expect(screen.getByTestId("m360-count").textContent).toContain("1 of 3");
     fireEvent.change(screen.getByTestId("m360-search"), { target: { value: "" } });
-    fireEvent.change(screen.getByTestId("m360-filter-status"), { target: { value: "On hold" } });
-    expect(screen.getByTestId("m360-row-cinder-peak")).toBeTruthy();
-    expect(screen.queryByTestId("m360-row-nova-cool")).toBeNull();
+    fireEvent.change(screen.getByTestId("m360-filter-status"), { target: { value: "Suspended" } });
+    expect(screen.getByTestId("m360-row-SYNTH-MFG-4")).toBeTruthy();
+    expect(screen.queryByTestId("m360-row-NOVA")).toBeNull();
   });
 
-  it("shows a profile with collapsible sections for the chosen manufacturer", () => {
-    search.value = "m=nova-cool";
+  it("shows a profile with collapsible sections and the reason for a suspended brand", () => {
+    search.value = "m=SYNTH-MFG-4";
     render(<Manufacturer360Demo />);
-    expect(screen.getByTestId("m360-header").textContent).toContain("Nova Cool Appliances Ltd.");
-    expect(screen.getByTestId("m360-kpi-qr").textContent).toContain("1,240");
-    const toggle = screen.getByTestId("m360-section-models-toggle");
+    expect(screen.getByTestId("m360-header").textContent).toContain("Harbor Breeze Cooling Pvt Ltd");
+    const toggle = screen.getByTestId("m360-section-brands-toggle");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByTestId("m360-section-models").textContent).toContain("BEE/RAC/2026/10101");
+    expect(screen.getByTestId("m360-brand-reason-b1").textContent).toContain("Ownership of the brand name is disputed.");
     fireEvent.click(screen.getByTestId("m360-collapse-all"));
     expect(screen.getByTestId("m360-section-company-toggle").getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(screen.getByTestId("m360-expand-all"));

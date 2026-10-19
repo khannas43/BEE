@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { istStamp } from "@/lib/client/istTime";
-import { ALL_MANUFACTURERS, manufacturerProfileHref } from "@/lib/demo/manufacturerDirectory";
+import { manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import type {
   RegisterAuthorisationEntry,
   RegisterBrandEntry,
@@ -90,15 +90,15 @@ const sourceLabel = (s: string) => (/seed|demo/i.test(s) ? "BEE register (demons
 const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : "-");
 
 /** The manufacturer behind an organisation code, when the Manufacturer 360 directory knows it. */
-function ownerOf(code: string) {
-  return ALL_MANUFACTURERS.find((m) => m.orgCode === code);
+function ownerOf(list: readonly ManufacturerProfile[], code: string) {
+  return list.find((m) => m.code === code);
 }
 
-function OwnerFact({ code }: { code: string }) {
-  const m = ownerOf(code);
+function OwnerFact({ code, list }: { code: string; list: readonly ManufacturerProfile[] }) {
+  const m = ownerOf(list, code);
   return (
     <Link href={manufacturerProfileHref(code)} className={link}>
-      {m ? `${m.name} (${m.city})` : code}
+      {m ? m.name : code}
     </Link>
   );
 }
@@ -164,21 +164,33 @@ function NotFound() {
   );
 }
 
-function BrandDetail({ b, r }: { b: RegisterBrandEntry; r: RegisterRevocations }) {
-  const owner = ownerOf(b.owner);
+function BrandDetail({ b, r, list }: { b: RegisterBrandEntry; r: RegisterRevocations; list: readonly ManufacturerProfile[] }) {
+  const owner = ownerOf(list, b.owner);
+  const entry = owner?.brands.find((x) => x.id === b.id);
+  const held = b.status === "suspended" || b.status === "revoked";
   const auths = r.authorisations.filter((a) => a.brandId === b.id);
   const ps = [...r.pending, ...r.decided].filter((p) => p.targetKind === "brand" && p.targetId === b.id);
-  const models = owner ? owner.models.filter((m) => m.status !== "Withdrawn") : [];
+  const models = owner ? owner.models.slice(0, 12) : [];
   return (
     <div className="space-y-space-md" data-testid="rvk-detail-brand">
       <Back />
       <Hero kicker="Registered brand" title={b.name} subtitle={owner ? `Owned by ${owner.name}` : `Owner ${b.owner}`} chips={[`Owner code ${b.owner}`, ...(owner ? owner.categories : [])]} status={b.status} />
+      {held ? (
+        <div className="rounded-2xl border border-[#f5c2c0] bg-[#fdecea] p-space-md" data-testid="rvk-status-reason">
+          <div className="flex items-center gap-2 text-[#93000a]">
+            <Icon name="report" size={20} />
+            <div role="heading" aria-level={3} className="font-semibold">{b.status === "suspended" ? "Why this brand is suspended" : "Why this brand was revoked"}</div>
+          </div>
+          <p className="mt-2 text-sm text-on-surface">{entry?.reason ?? "No reason was recorded for this status."}</p>
+          {entry?.changedOn ? <p className="mt-1 text-xs text-on-surface-variant">Recorded {entry.changedOn}</p> : null}
+        </div>
+      ) : null}
       <div className="grid gap-space-md lg:grid-cols-2">
         <Card title="Brand record" icon="sell">
           <div className="grid gap-space-md sm:grid-cols-2">
             <Fact label="Brand name">{b.name}</Fact>
             <Fact label="Register status"><Chip code={b.status} /></Fact>
-            <Fact label="Owner"><OwnerFact code={b.owner} /></Fact>
+            <Fact label="Owner"><OwnerFact code={b.owner} list={list} /></Fact>
             <Fact label="Permittee number">{owner?.permitteeNumber ?? "-"}</Fact>
             <Fact label="Entered on the register by">{sourceLabel(b.source)}</Fact>
             <Fact label="Agency authorisations">{auths.length}</Fact>
@@ -188,9 +200,9 @@ function BrandDetail({ b, r }: { b: RegisterBrandEntry; r: RegisterRevocations }
           {owner ? (
             <div className="grid gap-space-md sm:grid-cols-2">
               <Fact label="Manufacturer">{owner.name}</Fact>
-              <Fact label="Location">{owner.city}, {owner.state}</Fact>
+              <Fact label="Location">{[owner.city, owner.state].filter(Boolean).join(", ") || "-"}</Fact>
               <Fact label="Compliance status">{owner.status}</Fact>
-              <Fact label="Registered since">{owner.since}</Fact>
+              <Fact label="Registered since">{owner.since ?? "-"}</Fact>
               <div className="sm:col-span-2"><Link href={manufacturerProfileHref(b.owner)} className={link}>Open the Manufacturer 360 profile</Link></div>
             </div>
           ) : (
@@ -218,7 +230,7 @@ function BrandDetail({ b, r }: { b: RegisterBrandEntry; r: RegisterRevocations }
   );
 }
 
-function AuthorisationDetail({ a, r }: { a: RegisterAuthorisationEntry; r: RegisterRevocations }) {
+function AuthorisationDetail({ a, r, list }: { a: RegisterAuthorisationEntry; r: RegisterRevocations; list: readonly ManufacturerProfile[] }) {
   const brand = r.brands.find((x) => x.id === a.brandId);
   const ps = [...r.pending, ...r.decided].filter((p) => p.targetKind === "authorisation" && p.targetId === a.id);
   const daysLeft = a.validTo ? Math.ceil((Date.parse(a.validTo) - Date.parse(r.today)) / 86_400_000) : null;
@@ -232,7 +244,7 @@ function AuthorisationDetail({ a, r }: { a: RegisterAuthorisationEntry; r: Regis
             <Fact label="Agency">{a.agency}</Fact>
             <Fact label="Status"><Chip code={a.status} /></Fact>
             <Fact label="Brand">{brand ? <Link href={registerDetailHref("brand", brand.id)} className={link}>{a.brandName}</Link> : a.brandName}</Fact>
-            <Fact label="Principal (brand owner)"><OwnerFact code={a.principal} /></Fact>
+            <Fact label="Principal (brand owner)"><OwnerFact code={a.principal} list={list} /></Fact>
             <Fact label="Valid from">{day(a.validFrom)}</Fact>
             <Fact label="Valid to">{a.validTo ? day(a.validTo) : "Open-ended"}</Fact>
             <Fact label="Entered on the register by">{sourceLabel(a.source)}</Fact>
@@ -295,13 +307,15 @@ function ProposalDetail({ p, r }: { p: RegisterRevocationProposal; r: RegisterRe
 
 /** The follow-up page for one row of the register: a brand, an agency authorisation or a closure/revocation proposal. */
 export function RegisterDetail({ register, view, id }: { register: RegisterRevocations; view: RegisterView; id: string }) {
+  const read = useManufacturers();
+  const list = read.phase === "ready" ? read.list : [];
   if (view === "brand") {
     const b = register.brands.find((x) => x.id === id);
-    return b ? <BrandDetail b={b} r={register} /> : <NotFound />;
+    return b ? <BrandDetail b={b} r={register} list={list} /> : <NotFound />;
   }
   if (view === "authorisation") {
     const a = register.authorisations.find((x) => x.id === id);
-    return a ? <AuthorisationDetail a={a} r={register} /> : <NotFound />;
+    return a ? <AuthorisationDetail a={a} r={register} list={list} /> : <NotFound />;
   }
   const p = [...register.pending, ...register.decided].find((x) => x.id === id);
   return p ? <ProposalDetail p={p} r={register} /> : <NotFound />;

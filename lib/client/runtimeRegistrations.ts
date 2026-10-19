@@ -53,6 +53,8 @@ export type Registration = {
   registeredAuthorisationId?: string;
   /** Steps after filing, oldest first. A single read sends the steps the caller may see. */
   trail?: RegistrationTrailItem[];
+  /** Set only on the review list for a company registration (from the onboarding service); the row opens its own approval screen. */
+  companyId?: string;
 };
 
 export type RegistrationTrailItem = {

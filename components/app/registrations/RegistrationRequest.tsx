@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
+import { Icon } from "@/components/ui/Icon";
+import { manufacturerProfileHref } from "@/lib/demo/manufacturerDirectory";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { CommandPanel, useCommand, type CommandState } from "@/components/app/kit/CommandPanel";
 import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
@@ -133,39 +135,71 @@ function RequestBody({
 
   return (
     <div className="space-y-space-md">
-      <p data-testid="reg-state" data-state={registration.state}>
+      <p className="sr-only" data-testid="reg-state" data-state={registration.state}>
         {registration.reference} · {REGISTRATION_KIND_LABEL[registration.kind]} · {registration.brandName} · {REGISTRATION_STATE_LABEL[registration.state]}
       </p>
-      <p className="font-body-sm text-on-surface-variant">
-        {registration.organisation}
-        {registration.validFrom ? ` · from ${registration.validFrom}` : ""}
-        {registration.validTo ? ` to ${registration.validTo}` : ""}
-        {` · ${REGISTRATION_FEE_STATE[registration.state]}`}
-      </p>
+      <div className="rounded-2xl bg-gradient-to-r from-forest-dark to-primary p-space-md text-on-primary shadow-md lg:p-space-lg" data-testid="reg-hero">
+        <div className="flex flex-wrap items-start justify-between gap-space-md">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.14em] text-on-primary/70">{REGISTRATION_KIND_LABEL[registration.kind]} registration request</p>
+            <p className="mt-1 font-mono text-2xl font-bold tracking-wide">{registration.reference}</p>
+            <p className="mt-1 text-base font-medium">{registration.brandName}</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-white/15 px-2.5 py-1">{registration.organisation}</span>
+              {registration.validFrom ? <span className="rounded-full bg-white/15 px-2.5 py-1">From {registration.validFrom}{registration.validTo ? ` to ${registration.validTo}` : ""}</span> : null}
+              <span className="rounded-full bg-white/15 px-2.5 py-1">Version {registration.version}</span>
+            </div>
+          </div>
+          <span className="rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-on-surface shadow-sm">{REGISTRATION_STATE_LABEL[registration.state]}</span>
+        </div>
+      </div>
+      <RequestProgress state={registration.state} />
+      <div className="grid gap-space-md lg:grid-cols-2">
+        <div className="rounded-2xl border border-border-subtle bg-white p-space-md shadow-sm" data-testid="reg-facts">
+          <div role="heading" aria-level={2} className="mb-2 font-title-md font-semibold text-on-surface">Request details</div>
+          <div className="grid gap-3 sm:grid-cols-2 text-sm">
+            <Fact label="Kind">{REGISTRATION_KIND_LABEL[registration.kind]} registration</Fact>
+            <Fact label="Brand">{registration.brandName}</Fact>
+            <Fact label="Applicant"><Link href={manufacturerProfileHref(registration.organisation)} className="font-semibold text-primary hover:underline">{registration.organisation}</Link></Fact>
+            <Fact label="Stage">{REGISTRATION_STATE_LABEL[registration.state]}</Fact>
+            {registration.kind === "agency" ? <Fact label="Authorisation period">{registration.validFrom ?? "-"}{registration.validTo ? ` to ${registration.validTo}` : " (open-ended)"}</Fact> : null}
+            <Fact label="Trade licence">{registration.tradeLicenceUploaded ? "Uploaded" : "Not uploaded"}</Fact>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border-subtle bg-white p-space-md shadow-sm" data-testid="reg-fee-card">
+          <div role="heading" aria-level={2} className="mb-2 font-title-md font-semibold text-on-surface">Fee</div>
+          <div className="grid gap-3 sm:grid-cols-2 text-sm">
+            <Fact label="Status">{REGISTRATION_FEE_STATE[registration.state]}</Fact>
+            <Fact label="Amount">{registration.submissionFee ? `INR ${registration.submissionFee.totalInr}` : "-"}</Fact>
+            <div className="sm:col-span-2"><Fact label="Basis">{registration.submissionFee ? registration.submissionFee.label : "No fee has been recorded yet."}</Fact></div>
+          </div>
+          <p className="mt-2 text-xs text-on-surface-variant">Provisional local rules, not BEE rules.</p>
+        </div>
+      </div>
       {registration.state === "fee_due" && registration.submissionFee ? (
-        <p data-testid="reg-fee-due">Fee due: INR {registration.submissionFee.totalInr}. Finance confirms it when it is received. {registration.submissionFee.label}</p>
+        <p className="rounded-xl border border-[#f3dc9c] bg-[#fff4d6] px-space-md py-2.5 text-sm" data-testid="reg-fee-due">Fee due: INR {registration.submissionFee.totalInr}. Finance confirms it when it is received. {registration.submissionFee.label}</p>
       ) : null}
       {registration.state === "programme_review" ? (
-        <p data-testid="reg-fee-confirmed">Fee confirmed. Waiting for Programme review.</p>
+        <p className="rounded-xl border border-[#c9d9f7] bg-[#e7effb] px-space-md py-2.5 text-sm" data-testid="reg-fee-confirmed">Fee confirmed. Waiting for Programme review.</p>
       ) : null}
       {registration.state === "returned" ? (
-        <p data-testid="reg-returned">
+        <p className="rounded-xl border border-[#f3dc9c] bg-[#fff4d6] px-space-md py-2.5 text-sm" data-testid="reg-returned">
           {returned
             ? <>Returned by {REGISTRATION_ACTOR_LABEL[returned.actorRole] ?? returned.actorRole}: <span data-testid="reg-returned-reason">{returned.note ?? "No reason was recorded."}</span></>
             : "Returned for changes. No reason is shown; ask the reviewer."}
         </p>
       ) : null}
       {registration.state === "approved" ? (
-        <p data-testid="reg-registered">
+        <p className="rounded-xl border border-[#b7e0c6] bg-[#e2f3e8] px-space-md py-2.5 text-sm" data-testid="reg-registered">
           Registered. {registration.kind === "brand" ? registration.brandName : `${registration.brandName}${registration.validFrom ? ` from ${registration.validFrom}` : ""}${registration.validTo ? ` to ${registration.validTo}` : ""}`}
           {registration.registeredBrandId || registration.registeredAuthorisationId ? " It is on the register." : ""}
         </p>
       ) : null}
       {registration.state === "rejected" ? (
-        <p data-testid="reg-rejected">Rejected. {rejected?.note ?? ""}</p>
+        <p className="rounded-xl border border-[#f5c2c0] bg-[#fdecea] px-space-md py-2.5 text-sm" data-testid="reg-rejected">Rejected. {rejected?.note ?? ""}</p>
       ) : null}
       {result ? (
-        <p data-testid="rev-result">
+        <p className="rounded-xl border border-primary/30 bg-primary/5 px-space-md py-2.5 text-sm font-medium" data-testid="rev-result">
           {REGISTRATION_STATE_LABEL[result.toState]}
           {" · "}
           <Link href={registrationReviewsHref()} className="text-primary">Back to the queue</Link>
@@ -225,8 +259,8 @@ function LicenceCard({
   }
 
   return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="reg-licence">
-      <h2 className="font-title-md text-title-md text-on-surface">Trade licence</h2>
+    <div className="rounded-2xl border border-border-subtle bg-white shadow-sm p-space-md" data-testid="reg-licence">
+      <div role="heading" aria-level={2} className="font-title-md font-semibold text-on-surface">Trade licence</div>
       {documents && documents.ok ? (
         <p className="font-body-sm text-on-surface-variant mt-1" data-testid="reg-licence-note">{documents.documents.verificationNote}</p>
       ) : null}
@@ -261,7 +295,7 @@ function LicenceCard({
           </li>
         ))}
       </ul>
-    </section>
+    </div>
   );
 }
 
@@ -283,8 +317,8 @@ function SubmitReview({ registration, preview, onDone }: { registration: Registr
   }
 
   return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="reg-submit-review">
-      <h2 className="font-title-md text-title-md text-on-surface">Submit review</h2>
+    <div className="rounded-2xl border border-border-subtle bg-white shadow-sm p-space-md" data-testid="reg-submit-review">
+      <div role="heading" aria-level={2} className="font-title-md font-semibold text-on-surface">Submit review</div>
       <p className="font-body-sm text-on-surface-variant mt-1">{preview.intakeNote}</p>
       <ul className="mt-space-sm space-y-1">
         {preview.gates.map((gate) => (
@@ -314,7 +348,7 @@ function SubmitReview({ registration, preview, onDone }: { registration: Registr
         disabled={!gatesMet || !fee}
         signInReturnTo={registrationRequestHref(registration.id)}
       />
-    </section>
+    </div>
   );
 }
 
@@ -327,20 +361,22 @@ const ACTION_BUTTON: Record<"recommend" | "return" | "approve" | "reject", { lab
 
 function Trail({ steps }: { steps: NonNullable<Registration["trail"]> }) {
   return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="rev-trail">
-      <h2 className="font-title-md text-title-md text-on-surface">Trail</h2>
-      <ul className="mt-space-sm space-y-1 font-body-sm">
+    <div className="rounded-2xl border border-border-subtle bg-white shadow-sm p-space-md" data-testid="rev-trail">
+      <div role="heading" aria-level={2} className="font-title-md font-semibold text-on-surface">Trail</div>
+      <ol className="mt-space-sm space-y-4 font-body-sm">
         {steps.map((step, index) => (
-          <li key={`${step.action}-${step.at}-${index}`} data-testid={`rev-trail-${index}`}>
-            {REGISTRATION_ACTION_LABEL[step.action] ?? step.action}
-            {" · "}
-            {REGISTRATION_ACTOR_LABEL[step.actorRole] ?? step.actorRole}
-            {step.note ? ` · ${step.note}` : ""}
-            {` · ${istStamp(step.at, false)} IST`}
+          <li key={`${step.action}-${step.at}-${index}`} data-testid={`rev-trail-${index}`} className="relative flex gap-3">
+            {index < steps.length - 1 ? <span className="absolute left-[7px] top-5 bottom-[-16px] w-px bg-outline-variant" aria-hidden="true" /> : null}
+            <span className="relative z-10 mt-1.5 h-4 w-4 shrink-0 rounded-full bg-primary/15 ring-4 ring-white"><span className="absolute inset-1 rounded-full bg-primary" /></span>
+            <span>
+              <span className="block font-semibold text-on-surface">{REGISTRATION_ACTION_LABEL[step.action] ?? step.action}{" · "}{REGISTRATION_ACTOR_LABEL[step.actorRole] ?? step.actorRole}</span>
+              {step.note ? <span className="block text-on-surface-variant">{step.note}</span> : null}
+              <span className="block text-xs text-on-surface-variant">{istStamp(step.at, false)} IST</span>
+            </span>
           </li>
         ))}
-      </ul>
-    </section>
+      </ol>
+    </div>
   );
 }
 
@@ -369,8 +405,8 @@ function DecisionPanel({
   }
 
   return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="rev-decision">
-      <h2 className="font-title-md text-title-md text-on-surface">Decision</h2>
+    <div className="rounded-2xl border border-border-subtle bg-white shadow-sm p-space-md" data-testid="rev-decision">
+      <div role="heading" aria-level={2} className="font-title-md font-semibold text-on-surface">Decision</div>
       <p className="font-body-sm text-on-surface-variant mt-1">Provisional local rules, not BEE rules.</p>
       <label className="block font-label-sm text-label-sm text-on-surface-variant mt-space-sm">
         Reason or note
@@ -392,14 +428,14 @@ function DecisionPanel({
             type="button"
             disabled={command.state.phase === "busy" || !withinLimit || (REASON_ACTIONS.has(action) && text.length < 1)}
             onClick={() => void act(action)}
-            className="border border-primary text-primary py-2.5 px-4 rounded-lg font-label-md disabled:opacity-50"
+            className={`rounded-xl px-4 py-2.5 font-semibold disabled:opacity-50 ${action === "approve" || action === "recommend" ? "bg-primary text-on-primary" : action === "reject" ? "border border-error bg-white text-error" : "border border-outline-variant bg-white text-on-surface"}`}
             data-testid={ACTION_BUTTON[action].testId}
           >
             {command.state.phase === "busy" ? "Sending…" : ACTION_BUTTON[action].label}
           </button>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -413,8 +449,8 @@ function Resubmit({ registration, dirty, onDone, onReload }: { registration: Reg
   }
 
   return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="reg-resubmit-panel">
-      <h2 className="font-title-md text-title-md text-on-surface">Resubmit</h2>
+    <div className="rounded-2xl border border-border-subtle bg-white shadow-sm p-space-md" data-testid="reg-resubmit-panel">
+      <div role="heading" aria-level={2} className="font-title-md font-semibold text-on-surface">Resubmit</div>
       <p className="font-body-sm text-on-surface-variant mt-1">The fee already confirmed is not charged again. Provisional local rules, not BEE rules.</p>
       {dirty ? <p className="font-body-sm text-on-surface-variant mt-1" id="reg-resubmit-help" data-testid="reg-resubmit-help">Save or discard your edits before resubmitting.</p> : null}
       <CommandOutcome state={command.state} errorTestId="reg-resubmit-error" reloadTestId="reg-resubmit-reload" onReload={() => { command.reset(); onReload(); }} signInReturnTo={registrationRequestHref(registration.id)} />
@@ -428,7 +464,7 @@ function Resubmit({ registration, dirty, onDone, onReload }: { registration: Reg
       >
         {command.state.phase === "busy" ? "Resubmitting…" : "Resubmit"}
       </button>
-    </section>
+    </div>
   );
 }
 
@@ -451,6 +487,50 @@ function CommandOutcome<T>({ state, errorTestId, reloadTestId, onReload, signInR
       {advice.signIn ? (
         <Link href={`/api/auth/login?returnTo=${signInReturnTo}`} className="mt-1 inline-block text-primary font-label-md hover:underline">Sign in</Link>
       ) : null}
+    </div>
+  );
+}
+
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs uppercase tracking-wide text-on-surface-variant">{label}</div>
+      <div className="mt-0.5 font-medium text-on-surface break-words">{children}</div>
+    </div>
+  );
+}
+
+const PROGRESS = [
+  { key: "fee", label: "Fee", detail: "Filed and fee confirmed" },
+  { key: "programme", label: "Programme review", detail: "Recommendation" },
+  { key: "officer", label: "BEE Officer approval", detail: "Decision" },
+  { key: "register", label: "On the register", detail: "Brand or authorisation entered" },
+] as const;
+
+/** Where the request stands on the four-step path; a returned or rejected request marks the step it stopped at. */
+function RequestProgress({ state }: { state: Registration["state"] }) {
+  const at = state === "draft" || state === "fee_due" ? 0 : state === "programme_review" ? 1 : state === "director_approval" ? 2 : state === "approved" ? 4 : state === "returned" ? 1 : 2;
+  const stopped = state === "returned" || state === "rejected";
+  return (
+    <div className="rounded-2xl border border-border-subtle bg-white px-space-md py-space-md shadow-sm" aria-label="Progress" data-testid="reg-progress">
+      <ol className="grid grid-cols-4 gap-2">
+        {PROGRESS.map((st, i) => {
+          const done = i < at;
+          const current = i === at && !stopped;
+          const failed = i === at && stopped;
+          const dot = done ? "bg-success text-on-success" : failed ? "bg-error text-on-error" : current ? "bg-primary text-on-primary ring-4 ring-primary/20" : "bg-surface-container-high text-on-surface-variant";
+          return (
+            <li key={st.key} className="relative flex flex-col items-center text-center">
+              {i > 0 ? <span className={`absolute right-1/2 top-4 h-0.5 w-full -translate-y-1/2 ${i <= at ? "bg-success" : "bg-outline-variant"}`} aria-hidden="true" /> : null}
+              <span className={`relative z-10 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${dot}`}>
+                {done ? <Icon name="check" size={16} /> : failed ? <Icon name="priority_high" size={16} /> : current ? <Icon name="more_horiz" size={16} /> : i + 1}
+              </span>
+              <span className={`mt-2 text-xs leading-tight ${current ? "font-semibold text-primary" : failed ? "font-semibold text-error" : "text-on-surface"}`}>{st.label}</span>
+              <span className="mt-0.5 hidden text-[11px] leading-tight text-on-surface-variant sm:block">{st.detail}</span>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

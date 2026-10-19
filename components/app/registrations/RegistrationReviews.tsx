@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RegistrationsTable } from "@/components/app/registrations/RegistrationsTable";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
@@ -8,12 +8,25 @@ import { ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { DECIDED_STATES, waitingStatesFor } from "@/components/app/registrations/labels";
-import { type RegistrationState, readRegistrationList, registrationReviewsHref } from "@/lib/client/runtimeRegistrations";
+import { type Registration, type RegistrationState, readRegistrationList, registrationReviewsHref } from "@/lib/client/runtimeRegistrations";
+import { readCompanyRegistrationsAwaitingApproval, type CompanyRegistrationItem } from "@/lib/client/runtimeCompanyRegistrations";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
 const loadList = () => readRegistrationList();
+
+/** Company registrations (e.g. a new manufacturer's) shown beside the registration requests for the BEE Officer, in one review list. */
+function companyRows(items: readonly CompanyRegistrationItem[]): Registration[] {
+  const rows: Registration[] = [];
+  for (const c of items) {
+    const state: RegistrationState | null =
+      c.state === "director_review" ? "director_approval" : ["active_observation", "active", "on_hold"].includes(c.state) ? "approved" : c.state === "rejected" ? "rejected" : null;
+    if (!state) continue;
+    rows.push({ id: c.id, reference: c.reference, kind: "brand", organisation: c.legalName, brandName: c.legalName, state, version: 0, tradeLicenceUploaded: true, companyId: c.id });
+  }
+  return rows;
+}
 
 type Tab = "waiting" | "decided" | "all";
 
@@ -27,6 +40,18 @@ export function RegistrationReviews({ module, screen }: { module: Module; screen
   const read = gateRead(identity.status, useRuntimeRead("reviews", loadList, revalidation));
   const roles = identity.status === "signed-in" ? identity.me.effectiveRoles.map((r) => r.role) : [];
   const [tab, setTab] = useState<Tab>("waiting");
+  const [companies, setCompanies] = useState<CompanyRegistrationItem[]>([]);
+  const isOfficer = roles.includes("officer");
+  useEffect(() => {
+    if (!isOfficer) return;
+    let cancelled = false;
+    void readCompanyRegistrationsAwaitingApproval().then((c) => {
+      if (!cancelled && c.ok) setCompanies(c.items);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOfficer]);
   const waiting = waitingStatesFor(roles);
 
   return (
@@ -40,19 +65,20 @@ export function RegistrationReviews({ module, screen }: { module: Module; screen
           loadingTestId="rev-queue-loading"
           errorTestId="rev-queue-error"
           signInReturnTo={registrationReviewsHref()}
-          isEmpty={(r) => r.list.items.length === 0}
+          isEmpty={(r) => r.list.items.length === 0 && (!isOfficer || companies.length === 0)}
           emptyText="No registration request is here."
           emptyTestId="rev-queue-empty"
         >
           {(r) => {
-            const rows = r.list.items.filter((item) => matches(tab, item.state, waiting));
+            const all = [...(isOfficer ? companyRows(companies) : []), ...r.list.items];
+            const rows = all.filter((item) => matches(tab, item.state, waiting));
             return (
               <div className="space-y-space-sm">
                 <p className="text-sm text-on-surface-variant">Brand and agency registration requests that reached review. Open one to read the trail and take the next step.</p>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <Tile id="rev-tab-waiting" selected={tab === "waiting"} onSelect={() => setTab("waiting")} count={r.list.items.filter((i) => matches("waiting", i.state, waiting)).length} label="Waiting for me" tone="warn" />
-                  <Tile id="rev-tab-decided" selected={tab === "decided"} onSelect={() => setTab("decided")} count={r.list.items.filter((i) => matches("decided", i.state, waiting)).length} label="Decided" tone="ok" />
-                  <Tile id="rev-tab-all" selected={tab === "all"} onSelect={() => setTab("all")} count={r.list.items.length} label="All requests" tone="info" />
+                  <Tile id="rev-tab-waiting" selected={tab === "waiting"} onSelect={() => setTab("waiting")} count={all.filter((i) => matches("waiting", i.state, waiting)).length} label="Waiting for me" tone="warn" />
+                  <Tile id="rev-tab-decided" selected={tab === "decided"} onSelect={() => setTab("decided")} count={all.filter((i) => matches("decided", i.state, waiting)).length} label="Decided" tone="ok" />
+                  <Tile id="rev-tab-all" selected={tab === "all"} onSelect={() => setTab("all")} count={all.length} label="All requests" tone="info" />
                 </div>
                 {rows.length === 0 ? <p className="font-body-sm text-on-surface-variant" data-testid="rev-tab-empty">Nothing in this tab.</p> : (
                   <RegistrationsTable items={rows} variant="review" />

@@ -57,21 +57,21 @@ export function RegistrationsTable({ items, variant }: { items: Registration[]; 
                         <td className={cell}><span className="font-mono text-xs font-semibold">{item.reference}</span></td>
                         <td className={cell}>
                           <div className="font-semibold text-on-surface">{item.brandName}</div>
-                          <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{REGISTRATION_KIND_LABEL[item.kind]} registration</span>
+                          <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{item.companyId ? "Company" : REGISTRATION_KIND_LABEL[item.kind]} registration</span>
                         </td>
                         <td className={cell}>
-                          <Link href={manufacturerProfileHref(item.organisation)} className="font-semibold text-primary hover:underline" title="Open the Manufacturer 360 profile">{item.organisation}</Link>
+                          <Link href={item.companyId ? `/app/demo/manufacturer-360?m=live-${encodeURIComponent(item.companyId)}` : manufacturerProfileHref(item.organisation)} className="font-semibold text-primary hover:underline" title="Open the Manufacturer 360 profile">{item.organisation}</Link>
                         </td>
                         <td className={cell}>
-                          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATE_TONE[item.state]}`}>{REGISTRATION_STATE_LABEL[item.state]}</span>
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATE_TONE[item.state]}`}>{item.companyId && item.state === "approved" ? "Registered, under observation" : REGISTRATION_STATE_LABEL[item.state]}</span>
                         </td>
                         <td className={cell}>
-                          <div>{REGISTRATION_FEE_STATE[item.state]}</div>
-                          {item.submissionFee ? <div className="text-xs text-on-surface-variant">INR {item.submissionFee.totalInr}</div> : null}
+                          <div>{item.companyId ? "Verified automatically" : REGISTRATION_FEE_STATE[item.state]}</div>
+                          {item.submissionFee ? <div className="text-xs text-on-surface-variant">INR {item.submissionFee.totalInr}</div> : item.companyId ? <div className="text-xs text-on-surface-variant">INR 5000.00</div> : null}
                         </td>
                         <td className={cell}>{item.validFrom ? item.validFrom.slice(0, 10) : "-"}</td>
                         <td className={`${cell} text-right`}>
-                          <Link href={registrationRequestHref(item.id)} className="inline-flex items-center gap-1 whitespace-nowrap rounded-xl border border-primary bg-white px-3 py-1.5 font-semibold text-primary hover:bg-primary/5" data-testid={`${prefix}-open-${item.reference}`}>
+                          <Link href={item.companyId ? "/app/manufacturer/director" : registrationRequestHref(item.id)} className="inline-flex items-center gap-1 whitespace-nowrap rounded-xl border border-primary bg-white px-3 py-1.5 font-semibold text-primary hover:bg-primary/5" data-testid={`${prefix}-open-${item.reference}`}>
                             Open <Icon name="arrow_forward" size={14} />
                           </Link>
                         </td>

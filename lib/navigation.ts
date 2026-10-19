@@ -36,6 +36,8 @@ export interface NavEntry {
   state: NavState;
   /** Extra path prefixes that count as this entry for highlighting (detail pages reached from it). */
   activePrefixes?: readonly string[];
+  /** Query string that picks a view of the route (several entries may share one screen), e.g. "tab=rating-trends". */
+  query?: string;
   /** Short qualifier shown beside the title, e.g. "Advisory". */
   badge?: string;
   children?: readonly NavEntry[];
@@ -99,13 +101,13 @@ function entry(
   icon: string,
   target: Target,
   roles: readonly RoleKey[],
-  extra: Pick<NavEntry, "activePrefixes" | "badge"> = {},
+  extra: Pick<NavEntry, "activePrefixes" | "badge" | "query"> = {},
 ): NavEntry {
   return { id, title, icon, roles, ...target, ...extra };
 }
 
 /** An Admin-hierarchy entry: Admin, plus the officer roles the runtime registry already gives the screen. */
-function adminEntry(id: string, title: string, icon: string, target: Target, extra: Pick<NavEntry, "activePrefixes" | "badge"> = {}): NavEntry {
+function adminEntry(id: string, title: string, icon: string, target: Target, extra: Pick<NavEntry, "activePrefixes" | "badge" | "query"> = {}): NavEntry {
   const runtime = target.state === "available" ? RUNTIME_ROUTES.find((r) => r.href === target.route) : undefined;
   const officers = runtime ? OFFICER_ROLES.filter((r) => runtime.navRoles.includes(r)) : [];
   return entry(id, title, icon, target, [...ADMIN, ...officers], extra);
@@ -327,10 +329,10 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     id: "dir.oversight", title: "Oversight & Intelligence", icon: "psychology", profile: "officer",
     children: [
-      entry("dir.ai", "AI advisory use cases", "psychology", live(R.ai), BEE_OFFICER),
-      entry("dir.risk", "Risk-prioritised cases", "priority_high", proto("mis-ai", "risk-scoring"), BEE_OFFICER),
-      entry("dir.documents", "Document verification", "plagiarism", proto("agency-brand", "registration-scrutiny"), BEE_OFFICER),
-      entry("dir.test-reports", "Test-report scrutiny", "science", proto("model-label", "test-reports"), BEE_OFFICER),
+      entry("dir.ai-risk", "Compliance risk", "priority_high", live(R.ai), BEE_OFFICER, { query: "tab=compliance-risk" }),
+      entry("dir.ai-anomaly", "Production anomaly", "query_stats", live(R.ai), BEE_OFFICER, { query: "tab=production-anomaly" }),
+      entry("dir.ai-trends", "Rating trends", "trending_up", live(R.ai), BEE_OFFICER, { query: "tab=rating-trends" }),
+      entry("dir.ai-extraction", "Document extraction", "plagiarism", live(R.ai), BEE_OFFICER, { query: "tab=document-extraction" }),
       // hidden (duplicate of the two dashboards): entry("dir.mis", "Programme MIS", "monitoring", live(R.mis), BEE_OFFICER),
       entry("dir.ledger", "Secure evidence ledger", "link", live(R.ledger), BEE_OFFICER),
     ],
@@ -472,10 +474,13 @@ function matches(e: NavEntry, pathname: string): boolean {
 }
 
 /** The entry for the current page (the first in menu order, exact route before a prefix) and the group holding it. */
-export function activeEntry(groups: readonly NavGroup[], pathname: string): { group: NavGroup; entry: NavEntry } | null {
+export function activeEntry(groups: readonly NavGroup[], pathname: string, search = ""): { group: NavGroup; entry: NavEntry } | null {
+  const params = new URLSearchParams(search);
+  const queryMatches = (e: NavEntry) => Boolean(e.query) && [...new URLSearchParams(e.query).entries()].every(([k, v]) => params.get(k) === v);
   for (const exact of [true, false]) {
     for (const group of groups) {
-      const hit = leaves(group.children).find((e) => (exact ? e.route === pathname && e.state !== "planned" : matches(e, pathname)));
+      const all = leaves(group.children).filter((e) => (exact ? e.route === pathname && e.state !== "planned" : matches(e, pathname)));
+      const hit = all.find(queryMatches) ?? all[0];
       if (hit) return { group, entry: hit };
     }
   }

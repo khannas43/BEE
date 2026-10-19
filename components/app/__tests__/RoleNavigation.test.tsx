@@ -23,7 +23,7 @@ const previewRole = vi.hoisted(() => ({ role: "admin" as string }));
 type Identity = { status: "loading" } | { status: "signed-out" } | { status: "signed-in"; me: { displayName: string; effectiveRoles: { role: string; scope: string }[]; capabilities?: string[]; organisations: { code: string }[] } };
 const identity = vi.hoisted(() => ({ state: { status: "loading" } as Identity }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname, useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname, useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("next/image", () => ({ default: (props: { alt: string }) => <span role="img" aria-label={props.alt} /> }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => <a href={href} {...rest}>{children}</a>,
@@ -178,18 +178,18 @@ describe("sidebar", () => {
 
   it("preview entries carry no status label; runtime links keep their test IDs", () => {
     const { container } = renderSidebar(["officer"]);
-    const risk = container.querySelector('[data-nav-id="dir.risk"]')!;
+    const risk = container.querySelector('[data-nav-id="dir.ai-risk"]')!;
     expect(risk.textContent).not.toContain("Preview");
     expect(risk.textContent).not.toContain("Advisory");
     expect(container.querySelector('[data-testid="runtime-nav"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="runtime-nav-ai"]')?.getAttribute("href")).toBe("/app/demo/ai");
+    expect(container.querySelector('[data-testid="runtime-nav-ai-compliance-risk"]')?.getAttribute("href")).toBe("/app/demo/ai?tab=compliance-risk");
   });
 
   it("13. highlights the current page, keeps its group open and opens one other group at a time", () => {
     renderSidebar(["officer"], "/app/demo/ai");
     const groupButton = (id: string) => document.querySelector(`[data-nav-id="${id}"]`) as HTMLButtonElement;
     const current = document.querySelector('[aria-current="page"]')!;
-    expect(current.getAttribute("data-nav-id")).toBe("dir.ai");
+    expect(current.getAttribute("data-nav-id")).toBe("dir.ai-risk");
     expect(groupButton("dir.oversight").getAttribute("aria-expanded")).toBe("true");
     expect(groupButton("dir.work").getAttribute("aria-expanded")).toBe("false");
     const panel = document.getElementById(groupButton("dir.work").getAttribute("aria-controls")!)!;

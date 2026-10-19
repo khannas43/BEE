@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState, type KeyboardEvent } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { useSpringIdentity } from "./SessionBadge";
@@ -16,12 +16,13 @@ const PROFILE_TITLE = { admin: "Admin", manufacturer: "Manufacturer", officer: "
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useLang();
   const pathname = usePathname();
+  const search = useSearchParams()?.toString() ?? "";
   const identity = useSpringIdentity();
   const signedIn = identity.status === "signed-in";
   const roles = signedIn ? identity.me.effectiveRoles : null;
   const groups = navigationFor(roles, signedIn ? identity.me.capabilities ?? [] : []);
   const profile = navProfileFor((roles ?? []).map((g) => g.role));
-  const active = activeEntry(groups, pathname);
+  const active = activeEntry(groups, pathname, search);
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light" aria-label="Console menu">
@@ -173,11 +174,11 @@ function MenuEntry({ entry, depth, activeId, onNavigate }: { entry: NavEntry; de
   const runtime = entry.state === "available" && runtimeRouteFor(entry.route)?.href === entry.route;
   return (
     <Link
-      href={entry.route}
+      href={entry.query ? `${entry.route}?${entry.query}` : entry.route}
       onClick={onNavigate}
       data-nav-id={entry.id}
       data-nav-state={entry.state}
-      data-testid={runtime ? `runtime-nav-${entry.route.split("/").pop()}` : undefined}
+      data-testid={runtime ? `runtime-nav-${entry.route.split("/").pop()}${entry.query ? `-${entry.query.split("=")[1]}` : ""}` : undefined}
       aria-current={active ? "page" : undefined}
       className={`flex items-center gap-space-sm ${pad} pr-space-md py-1.5 font-body-sm text-body-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-solar-gold ${
         active ? "bg-primary-container text-on-primary font-semibold" : "text-forest-light/80 hover:text-on-primary hover:bg-white/5"

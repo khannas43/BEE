@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ListPager, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { manufacturerProfileHref, useManufacturers } from "@/lib/client/runtimeManufacturers";
 import { demoGet, demoPath, demoPost } from "@/lib/client/runtimeDemo";
@@ -180,7 +181,14 @@ export function AiDemo({ hidden = DEFAULT_HIDDEN_USE_CASES }: { hidden?: readonl
   const SHOWN_USE_CASES = USE_CASES.filter((u) => !hidden.includes(u.id));
   const [models, setModels] = useState<ModelCard[] | null>(null);
   const [denied, setDenied] = useState<string | null>(null);
-  const [tab, setTab] = useState<UseCaseId>("compliance-risk");
+  const fromUrl = useSearchParams()?.get("tab") ?? null;
+  const [picked, setPicked] = useState<UseCaseId>("compliance-risk");
+  const urlTab = SHOWN_USE_CASES.find((u) => u.id === fromUrl)?.id;
+  const tab: UseCaseId = urlTab ?? picked;
+  const setTab = (id: UseCaseId) => {
+    setPicked(id);
+    if (typeof window !== "undefined") window.history.replaceState(null, "", `${window.location.pathname}?tab=${id}`);
+  };
 
   useEffect(() => {
     let live = true;

@@ -887,6 +887,40 @@ const ANOMALY_SORT = (s: SeriesRow, k: string): string | number => {
 const FLAG_WORD: Record<string, string> = { iqr_fence: "Outside the usual range (IQR)", z_score_vs_own_history: "Jump against its own history (z-score)", units_exceed_bound_serials: "More units than QR serials bound" };
 
 /** Production series: filter by search, status and kind of flag; sortable and paged. One row is selected; the evidence below is for it only. */
+/** A card whose header toggles its body; the body is hidden when collapsed. */
+function ToggleCard({ title, aside, className, testId, children }: { title: React.ReactNode; aside?: React.ReactNode; className: string; testId?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className={className} data-testid={testId}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex items-center gap-2 text-left font-semibold text-[#14315E]" data-testid={testId ? `${testId}-toggle` : undefined}>
+          <Icon name={open ? "expand_less" : "expand_more"} size={20} />
+          {title}
+        </button>
+        {aside}
+      </div>
+      {open ? <div className="mt-3">{children}</div> : null}
+    </div>
+  );
+}
+
+/** Criteria shown one under the other: a label column and a value column per row. */
+function CriteriaTable({ head, rows, caption }: { head: string[]; rows: React.ReactNode[][]; caption: string }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-[#dbe6f7] bg-white">
+      <table className="w-full text-left text-[13px]">
+        <caption className="sr-only">{caption}</caption>
+        <thead><tr className="bg-[#eef3fb] text-[12px] uppercase tracking-wide text-[#475569]">{head.map((h) => <th key={h} className="px-3 py-2">{h}</th>)}</tr></thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-t border-[#e7edf6]">{r.map((c, j) => <td key={j} className={`px-3 py-2 ${j === 0 ? "font-semibold text-[#14315E]" : ""}`}>{c}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function AnomalyTable({ series, synthetic, selKey, onSelect }: { series: SeriesRow[]; synthetic: boolean; selKey: string | null; onSelect: (key: string) => void }) {
   const [status, setStatus] = useState("");
   const [flagType, setFlagType] = useState("");
@@ -992,15 +1026,28 @@ function AnomalyTable({ series, synthetic, selKey, onSelect }: { series: SeriesR
       </div>
       <ListPager tools={tools} />
       {sel ? (
-        <div className={`rounded-xl border p-3 ${sel.flags.length ? "border-[#f5c2c0] bg-[#fffafa]" : "border-[#dbe6f7] bg-[#f4f8ff]"}`} data-testid="ai-anomaly-selected">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold text-[#14315E]">{sel.series}</span>
-            {sel.boundSerials !== null ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{sel.boundSerials} serials bound</Chip> : null}
+        <ToggleCard
+          testId="ai-anomaly-selected"
+          className={`rounded-xl border p-3 ${sel.flags.length ? "border-[#f5c2c0] bg-[#fffafa]" : "border-[#dbe6f7] bg-[#f4f8ff]"}`}
+          title={`${sel.series}: ${sel.flags.length ? `${sel.flags.length} flag(s)` : "no flags"}`}
+          aside={sel.boundSerials !== null ? <Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{sel.boundSerials} serials bound</Chip> : null}
+        >
+          <MiniBars values={sel.quarters.map((q) => q.units)} labels={sel.quarters.map((q) => q.quarter)} flagged={flaggedIdx} />
+          <div className="mt-3 space-y-3">
+            <CriteriaTable
+              caption={`Quarter by quarter checks for ${sel.series}`}
+              head={["Quarter", "Units produced", "Distance from the other quarters (z)", "Result"]}
+              rows={sel.quarters.map((q, i) => [q.quarter, q.units, q.zVsOthers, flaggedIdx.includes(i) ? <span key="r" className="font-semibold text-[#93000a]">Flagged</span> : "Within range"])}
+            />
+            {sel.flags.length ? (
+              <CriteriaTable
+                caption={`Flags raised for ${sel.series}`}
+                head={["Flag", "Quarter", "Why it was raised"]}
+                rows={sel.flags.map((f) => [FLAG_WORD[f.type] ?? f.type, f.quarter, f.detail])}
+              />
+            ) : null}
           </div>
-          <div className="mt-2"><MiniBars values={sel.quarters.map((q) => q.units)} labels={sel.quarters.map((q) => q.quarter)} flagged={flaggedIdx} /></div>
-          <div className="mt-1 text-[11px] text-[#64748b]">{sel.quarters.map((q) => `${q.quarter}: z ${q.zVsOthers}`).join(" · ")}</div>
-          {sel.flags.map((f, i) => <p key={i} className="mt-2 flex gap-1.5 text-[13px] text-[#93000a]"><Icon name="flag" size={16} /> Flag {f.type} ({f.quarter}): {f.detail}</p>)}
-        </div>
+        </ToggleCard>
       ) : null}
     </div>
   );
@@ -1054,11 +1101,9 @@ function TrendCards({ cats, realRatings, syntheticRatings }: { cats: TrendCat[];
       <p className="font-body-sm text-on-surface-variant">{tools.paged.total} of {cats.length} categories shown.</p>
       {tools.paged.total === 0 ? <p className="font-body-sm">No categories match these filters.</p> : null}
         {tools.paged.pageRows.map((c) => (
-          <div key={c.category} className="rounded-xl border border-[#e2e8f0] bg-white p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-semibold text-[#14315E]">{c.category}</span>
+          <ToggleCard key={c.category} testId={`ai-trend-card-${c.category}`} className="rounded-xl border border-[#e2e8f0] bg-white p-4" title={c.category} aside={
               <span className="flex flex-wrap gap-1.5"><Chip>{c.ratings} ratings</Chip><Chip tone={c.slopePerMonth >= 0 ? BAND.low.pill : BAND.high.pill}>slope {c.slopePerMonth} per month</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">R² {c.rSquared}</Chip></span>
-            </div>
+          }>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1">Star distribution</div>
@@ -1070,7 +1115,20 @@ function TrendCards({ cats, realRatings, syntheticRatings }: { cats: TrendCat[];
               </div>
             </div>
             <p className="mt-2 text-[13px] text-[#475569]">{c.forecast ? <>Next month: <strong className="text-[#14315E]">{c.forecast.nextMonthMeanIseer}</strong> (95% band {c.forecast.low95} to {c.forecast.high95})</> : "Too few months for a forecast band."} <span className="sr-only">{c.months.map((m) => `${m.month}: ${m.meanIseer}`).join(" · ")}</span></p>
-          </div>
+            <div className="mt-3">
+              <CriteriaTable
+                caption={`Measures behind the trend for ${c.category}`}
+                head={["Measure", "Value", "What it means"]}
+                rows={[
+                  ["Ratings used", c.ratings, "Number of star ratings in this category"],
+                  ["Latest monthly mean", c.months[c.months.length - 1]?.meanIseer ?? "-", "Mean efficiency of the most recent month"],
+                  ["Slope per month", c.slopePerMonth, c.slopePerMonth >= 0 ? "Improving: the mean rises each month" : "Declining: the mean falls each month"],
+                  ["Line fit (R²)", c.rSquared, c.rSquared >= 0.7 ? "Strong: the line follows the months closely" : "Weak: treat the trend with care"],
+                  ["Next month forecast", c.forecast ? c.forecast.nextMonthMeanIseer : "n/a", c.forecast ? `95% band ${c.forecast.low95} to ${c.forecast.high95}` : "Too few months for a forecast band"],
+                ]}
+              />
+            </div>
+          </ToggleCard>
         ))}
       <ListPager tools={tools} />
     </div>

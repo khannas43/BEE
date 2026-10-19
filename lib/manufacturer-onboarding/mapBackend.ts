@@ -168,6 +168,9 @@ const CHECK_LABELS: Record<string, string> = {
   annexure_complete: "Annexure 1 document completeness",
   eligibility_rules: "Eligibility rules (demonstration ruleset)",
   cin_format: "CIN format",
+  gstin_format: "GSTIN format",
+  gstin_duplicate: "GSTIN not used elsewhere",
+  cin_duplicate: "CIN not used elsewhere",
 };
 
 function mapChecks(checks: BackendDetail["automatedChecks"]): AutomatedCheck[] {
@@ -181,6 +184,14 @@ function mapChecks(checks: BackendDetail["automatedChecks"]): AutomatedCheck[] {
 }
 
 const EVENT_TITLES: Record<string, string> = {
+  public_signup: "Applicant account created",
+  checks_passed: "Automated checks passed",
+  checks_failed: "Automated checks need attention",
+  approve: "Approved by BEE Officer",
+  reject: "Registration rejected",
+  hold: "Placed on hold",
+  clear: "Hold cleared",
+  revoke: "Registration revoked",
   create: "Application created",
   submit: "Registration submitted",
   payment: "Payment recorded",
@@ -193,12 +204,42 @@ const EVENT_TITLES: Record<string, string> = {
   patch: "Draft saved",
 };
 
+const STATE_WORDS: Record<string, string> = {
+  draft: "Draft",
+  submitted: "Submitted",
+  director_review: "Awaiting BEE Officer approval",
+  active_observation: "Active, under observation",
+  active: "Active",
+  on_hold: "On hold",
+  rejected: "Rejected",
+  revoked: "Revoked",
+  returned: "Returned",
+  automatic_checks_failed: "Automated checks need attention",
+};
+const ACTOR_WORDS: Record<string, string> = {
+  manufacturer: "Applicant",
+  officer: "BEE Officer",
+  director: "Director",
+  finance: "Finance",
+  programme: "Programme",
+  system: "System",
+};
+
+/** The recorded sentence with the old Director wording shown as the BEE Officer's, or a plain "from → to" line. */
+function timelineDetail(e: NonNullable<BackendDetail["lifecycle"]>[number]): string {
+  if (e.detail) return e.detail.replace(/Director decision/g, "BEE Officer approval").replace(/the Director/g, "the BEE Officer");
+  const from = e.fromState ? STATE_WORDS[e.fromState] ?? e.fromState.replace(/_/g, " ") : null;
+  const to = e.toState ? STATE_WORDS[e.toState] ?? e.toState.replace(/_/g, " ") : null;
+  const by = ACTOR_WORDS[e.actorRole] ?? e.actorRole;
+  return `${from && to ? `${from} to ${to}` : to ?? from ?? ""}${by ? ` (${by})` : ""}`.trim();
+}
+
 function mapTimeline(events: BackendDetail["lifecycle"]): TimelineEvent[] {
   return (events ?? []).map((e, i) => ({
     id: `lc-${i}-${e.eventKind}`,
     at: e.occurredAt,
     title: EVENT_TITLES[e.eventKind] ?? e.eventKind.replace(/_/g, " "),
-    detail: e.detail ?? `${e.fromState ?? "—"} → ${e.toState ?? "—"} (${e.actorRole})`,
+    detail: timelineDetail(e),
     icon: "history",
   }));
 }

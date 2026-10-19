@@ -310,6 +310,6 @@ describe("manufacturer onboarding UI", () => {
     render(wrap(<DirectorQueue />, "officer"));
     await screen.findByTestId("director-pending-queue");
     await screen.findByTestId("director-approve");
-    expect(screen.getAllByText(/Awaiting Director decision/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Awaiting BEE Officer approval/i).length).toBeGreaterThan(0);
   });
 });

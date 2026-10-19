@@ -3,7 +3,7 @@ import type { ManufacturerLifecyclePhase } from "./types";
 /** Owner-approved operational labels — keep wording exact for demo and tests. */
 export const LABEL_AUTO_PAYMENT = "Automatically verified payment";
 export const LABEL_AUTO_RULES = "Automated rules check";
-export const LABEL_AWAITING_DIRECTOR = "Awaiting Director decision";
+export const LABEL_AWAITING_DIRECTOR = "Awaiting BEE Officer approval";
 export const LABEL_ACTIVE_OBSERVATION = "Active — under 15-day observation";
 export const LABEL_HOLD = "On hold — anomaly under review";
 export const LABEL_OBSERVATION_DONE = "Active — observation completed";

@@ -1056,7 +1056,7 @@ async function main() {
     `logout ${out.status} (Keycloak session ended: ${out.json?.keycloakSessionEnded}); then /api/runtime/me ${gone.status} ${gone.json?.error}; ${traced(lt)}${show(le)}`);
   const form = await call(`${WEB}/api/auth/logout`, { method: "POST", correlationId: cid("next-logout-form"), headers: { Origin: WEB, Accept: "text/html" } });
   const fe = contract.conforms(doc, "/api/auth/logout", "POST", form);
-  check("next.logout-form", form.status === 303 && /^\/login\b/.test(new URL(form.location, WEB).pathname) && sameCorr(form) && noStore(form) && fe.length === 0,
+  check("next.logout-form", form.status === 303 && new URL(form.location, WEB).pathname === "/" && sameCorr(form) && noStore(form) && fe.length === 0,
     `POST /api/auth/logout with Accept: text/html and no session -> ${form.status} ${form.location}${show(fe)}`);
 
   /* error bodies and logs must not carry tokens, internals or other records */

@@ -251,7 +251,7 @@ async function main() {
   const again = await startLogin(nova.jar);
   check("auth.logout-ends-sso", Boolean(again.form) && !again.ssoRedirect, `next sign-in shows the Keycloak login form again (no silent SSO)`);
   r = await req(new Jar(), `${WEB}/api/auth/logout`, { method: "POST", headers: { Origin: WEB, Accept: "text/html" } });
-  check("auth.logout-form-redirect", r.status === 303 && r.location?.endsWith("/login?signedOut=1"), `form POST without a session: ${r.status} -> ${r.location}`);
+  check("auth.logout-form-redirect", r.status === 303 && r.location?.endsWith("/"), `form POST without a session: ${r.status} -> ${r.location}`);
   for (const u of ["nova.applicant", "pixel.applicant"]) await kcLogoutUser(u);
 
   /* ---------- no token reaches the browser ---------- */

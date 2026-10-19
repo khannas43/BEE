@@ -6,6 +6,22 @@ import { clearSessionCookie, destroySession, sessionCookieOf } from "@/lib/serve
 
 export const dynamic = "force-dynamic";
 
+function samePortalOrigin(request: NextRequest): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  if (origin === AUTH.webOrigin || origin === request.nextUrl.origin) return true;
+  try {
+    const supplied = new URL(origin);
+    const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+    const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const requestHost = forwardedHost || request.headers.get("host");
+    const requestProto = forwardedProto || request.nextUrl.protocol.replace(":", "");
+    return Boolean(requestHost) && supplied.host === requestHost && supplied.protocol === `${requestProto}:`;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Ends the server session and the Keycloak session behind it. POST only, and only
  * from the portal's own origin: other ports on 127.0.0.1 are same-site, so
@@ -13,12 +29,12 @@ export const dynamic = "force-dynamic";
  */
 export const POST = logged("/api/auth/logout", async (request: NextRequest) => {
   const correlationId = correlationIdOf(request);
-  if (request.headers.get("origin") !== AUTH.webOrigin) return errorResponse("cross_origin", 403, correlationId);
+  if (!samePortalOrigin(request)) return errorResponse("cross_origin", 403, correlationId);
   const session = destroySession(sessionCookieOf(request));
   const keycloakSessionEnded = session ? await endKeycloakSession(session.refreshToken, correlationId) : false;
   const wantsHtml = (request.headers.get("accept") ?? "").includes("text/html");
   const res = wantsHtml
-    ? withContractHeaders(NextResponse.redirect(new URL("/login?signedOut=1", AUTH.webOrigin), 303), correlationId)
+    ? withContractHeaders(NextResponse.redirect(new URL("/", request.headers.get("origin")!), 303), correlationId)
     : jsonResponse({ signedOut: true, hadSession: Boolean(session), keycloakSessionEnded }, 200, correlationId);
   clearSessionCookie(res);
   return res;

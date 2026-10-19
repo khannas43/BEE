@@ -11,12 +11,6 @@ import { runtimeNavFor, runtimeRouteFor } from "@/lib/runtimeRoutes";
 afterEach(() => cleanup());
 
 describe("Manufacturer360Demo", () => {
-  it("shows synthetic-data disclosure", () => {
-    render(<Manufacturer360Demo />);
-    expect(screen.getByTestId("m360-disclosure").textContent).toContain(DEMO_DISCLOSURE);
-    expect(screen.getByTestId("m360-disclosure").textContent).toMatch(/not production-complete/i);
-  });
-
   it("renders seven WP lifecycle stages with working-screen links", () => {
     render(<Manufacturer360Demo />);
     for (const stage of MANUFACTURER_360_STAGES) {

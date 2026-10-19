@@ -18,23 +18,6 @@ import {
 const card = "rounded-2xl bg-white shadow p-space-md border border-[#e6eaf0]";
 const sectionTitle = "font-title-sm text-on-surface mb-space-sm";
 
-function DisclosureBanner() {
-  return (
-    <div
-      className="rounded-xl border border-[#f3dc9c] bg-[#fff8e6] px-space-md py-space-sm font-body-sm text-[#6b4a00]"
-      data-testid="m360-disclosure"
-      role="status"
-    >
-      <strong className="font-semibold">{DEMO_DISCLOSURE}</strong>
-      <span className="block mt-1 text-on-surface-variant">
-        WP3–WP9 are not production-complete on this portal. This page is a demo accelerator aligned to{" "}
-        <code className="text-[12px]">docs/snl/BEE_SNL_IMPLEMENTATION_PLAN.md</code> and{" "}
-        <code className="text-[12px]">docs/snl/SNL_WP01_STATE_MODELS.md</code>.
-      </span>
-    </div>
-  );
-}
-
 function HeaderKpis() {
   const h = MANUFACTURER_360_HEADER;
   const items: { key: string; label: string; value: string | number }[] = [
@@ -89,7 +72,7 @@ function LifecycleRail() {
                 {stage.wp}
               </span>
               <span className="font-title-sm text-on-surface">{stage.title}</span>
-              <Pill>{stage.status}</Pill>
+              {stage.status ? <Pill>{stage.status}</Pill> : null}
             </div>
             <dl className="grid sm:grid-cols-2 gap-x-space-md gap-y-1 font-body-sm break-words">
               <div>
@@ -262,7 +245,6 @@ function ExtraLinks() {
 export function Manufacturer360Demo() {
   return (
     <div className="space-y-space-lg max-w-6xl">
-      <DisclosureBanner />
       <HeaderKpis />
       <LifecycleRail />
       <div className="grid lg:grid-cols-2 gap-space-lg">

@@ -90,7 +90,7 @@ export const MANUFACTURER_360_STAGES: readonly LifecycleStage[] = [
   {
     wp: "WP3",
     title: "Entity, brand and category registration",
-    status: "Brand registered; category RAC enabled",
+    status: "",
     recordReference: "REG-BR-2026-NOVA / CAT-RAC",
     responsiblePersona: "Applicant (manufacturer); Programme scrutiny; Director approval (segregation)",
     lastAction: "Programme recommended; Director approved brand registration (recommender ≠ approver)",

@@ -1,259 +1,543 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Pill } from "./DemoShell";
+import { useSpringIdentity } from "@/components/app/SessionBadge";
+import { createManufacturerOnboardingClient } from "@/lib/manufacturer-onboarding/client";
+import { readCompanyRegistrationsAwaitingApproval } from "@/lib/client/runtimeCompanyRegistrations";
+import type { ManufacturerApplication } from "@/lib/manufacturer-onboarding/types";
 import {
-  DEMO_DISCLOSURE,
-  MANUFACTURER_360_DISCREPANCY,
-  MANUFACTURER_360_EXTRA_LINKS,
-  MANUFACTURER_360_FINANCE,
-  MANUFACTURER_360_HEADER,
-  MANUFACTURER_360_STAGES,
-  MANUFACTURER_360_TIMELINE,
-  MANUFACTURER_360_WP9_CARDS,
-  WP9_PREVIEW_LABEL,
-} from "@/lib/demo/manufacturer360Fixture";
+  DIRECTORY,
+  STATUS_FILTERS,
+  type ComplianceStatus,
+  type DirectoryManufacturer,
+} from "@/lib/demo/manufacturerDirectory";
 
-const card = "rounded-2xl bg-white shadow p-space-md border border-[#e6eaf0]";
-const sectionTitle = "font-title-sm text-on-surface mb-space-sm";
+const STATUS_STYLE: Record<ComplianceStatus, string> = {
+  Compliant: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]",
+  "Under observation": "bg-[#e7effb] text-[#14315E] border-[#c9d9f7]",
+  "On hold": "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
+  "Registration pending": "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]",
+};
 
-function HeaderKpis() {
-  const h = MANUFACTURER_360_HEADER;
-  const items: { key: string; label: string; value: string | number }[] = [
-    { key: "brands", label: "Active brands", value: h.activeBrands },
-    { key: "categories", label: "Registered categories", value: h.registeredCategories },
-    { key: "models", label: "Approved models", value: h.approvedModels },
-    { key: "qr-issued", label: "QR issued", value: h.qrIssued },
-    { key: "qr-used", label: "QR used", value: h.qrUsed },
-    { key: "production", label: "Production units", value: h.productionUnits },
-    { key: "fees-paid", label: "Fees paid", value: h.feesPaidInr },
-    { key: "fees-out", label: "Fees outstanding", value: h.feesOutstandingInr },
-    { key: "renewals", label: "Renewals due", value: h.renewalsDue },
-    { key: "discrepancies", label: "Open discrepancies", value: h.openDiscrepancies },
+function StatusChip({ status }: { status: ComplianceStatus }) {
+  return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLE[status]}`}>{status}</span>;
+}
+
+const inr = (n: number) => n.toLocaleString("en-IN");
+const dash = (v: string | undefined | null) => (v && v.trim() ? v : "-");
+
+/** A live company registration from the onboarding service, shaped like a directory entry so one profile page serves both. */
+function liveToManufacturer(app: ManufacturerApplication): DirectoryManufacturer {
+  const d = app.draft;
+  const status: ComplianceStatus =
+    app.phase === "active_observation" ? "Under observation" : app.phase === "active" ? "Compliant" : app.phase === "on_hold" ? "On hold" : "Registration pending";
+  const date = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-");
+  const a = d.registeredAddress;
+  const sig = d.authorisedSignatory;
+  const obsEnd = app.observationEndsAt ? new Date(app.observationEndsAt) : null;
+  return {
+    id: `live-${app.id}`,
+    orgCode: "",
+    name: d.legalName || app.reference,
+    status,
+    state: a.state || "-",
+    city: a.city || "-",
+    categories: ["Company registration"],
+    since: date(app.activatedAt ?? app.timeline[0]?.at),
+    permitteeNumber: app.registrationNumber ?? "Awaiting BEE Officer approval",
+    cin: dash(d.cin),
+    gstin: dash(d.gstin),
+    address: [a.line1, a.line2, a.city, a.state, a.pincode].filter(Boolean).join(", ") || "-",
+    signatory: { name: dash(sig.name), designation: dash(sig.role), email: dash(sig.email), phone: dash(sig.phone) },
+    facilities: d.facilities.map((f) => ({ name: f.name || "Facility", location: [f.city, f.state].filter(Boolean).join(", ") || "-", capacity: "-" })),
+    brands: [],
+    models: [],
+    fees: {
+      paid: app.payment.verifiedAt ? `₹${app.payment.amountInr}` : "₹0",
+      outstanding: app.payment.verifiedAt ? "₹0" : `₹${app.payment.amountInr}`,
+      payments: app.payment.verifiedAt
+        ? [{ receipt: app.payment.receiptNumber ?? "-", date: date(app.payment.verifiedAt), purpose: "Company registration fee", amountInr: `₹${app.payment.amountInr}`, status: "Verified" }]
+        : [],
+    },
+    qr: { issued: 0, bound: 0, unused: 0 },
+    production: [],
+    documents: d.annexureDocuments.map((x) => ({ name: x.kind, status: x.uploadedAt ? "Verified" : "Missing", date: x.uploadedAt ? date(x.uploadedAt) : "-" })),
+    observation:
+      app.observationStartedAt && obsEnd
+        ? { start: date(app.observationStartedAt), end: date(app.observationEndsAt), daysLeft: Math.max(0, Math.ceil((obsEnd.getTime() - Date.now()) / 86_400_000)) }
+        : null,
+    anomalies: app.anomalies.map((x) => ({
+      date: date(x.raisedAt),
+      raisedBy: x.raisedByRole,
+      summary: x.summary,
+      status: x.revokedAt ? "Revoked" : x.resolvedAt ? "Cleared" : "Open",
+    })),
+    flags: app.automatedChecks.some((c) => c.outcome === "fail")
+      ? [{ level: "Attention", label: "Automated checks need attention", detail: app.automatedChecks.filter((c) => c.outcome === "fail").map((c) => c.label).join(", ") }]
+      : [{ level: "Info", label: "Automated checks passed", detail: `${app.automatedChecks.filter((c) => c.outcome === "pass").length} of ${app.automatedChecks.length} checks passed.` }],
+    timeline: [...app.timeline].reverse().map((t) => ({ date: date(t.at), title: t.title, detail: t.detail })),
+  };
+}
+
+function Collapsible({
+  title,
+  icon,
+  badge,
+  open,
+  onToggle,
+  children,
+  testId,
+}: {
+  title: string;
+  icon: string;
+  badge?: ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+  testId: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border-subtle bg-white shadow-sm overflow-hidden" data-testid={testId}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 bg-white px-space-md py-3 text-left hover:bg-surface-container-lowest"
+        data-testid={`${testId}-toggle`}
+      >
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon name={icon} size={18} />
+        </span>
+        <span role="heading" aria-level={2} className="flex-1 font-title-sm font-semibold text-on-surface">{title}</span>
+        {badge}
+        <Icon name={open ? "expand_less" : "expand_more"} size={22} className="text-on-surface-variant" />
+      </button>
+      {open ? <div className="border-t border-border-subtle p-space-md">{children}</div> : null}
+    </div>
+  );
+}
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs uppercase tracking-wide text-on-surface-variant">{label}</div>
+      <div className="mt-0.5 text-sm font-medium text-on-surface break-words">{children}</div>
+    </div>
+  );
+}
+
+function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[][]; empty: string }) {
+  if (rows.length === 0) return <p className="text-sm text-on-surface-variant">{empty}</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr>
+            {head.map((h) => (
+              <th key={h} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              {r.map((c, j) => (
+                <td key={j} className="px-3 py-2 align-top">{c}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Stars({ n }: { n: number }) {
+  return <span className="whitespace-nowrap text-[#b7791f]" aria-label={`${n} stars`}>{"★".repeat(n)}<span className="text-outline-variant">{"★".repeat(5 - n)}</span></span>;
+}
+
+const SECTION_IDS = ["company", "registration", "brands", "models", "fees", "qr", "documents", "compliance", "advisory", "activity"] as const;
+type SectionId = (typeof SECTION_IDS)[number];
+
+function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
+  const [open, setOpen] = useState<Record<SectionId, boolean>>({
+    company: true, registration: true, brands: false, models: false, fees: false, qr: false, documents: false, compliance: true, advisory: false, activity: false,
+  });
+  const toggle = (id: SectionId) => setOpen((o) => ({ ...o, [id]: !o[id] }));
+  const setAll = (v: boolean) => setOpen(Object.fromEntries(SECTION_IDS.map((s) => [s, v])) as Record<SectionId, boolean>);
+  const sec = (id: SectionId, title: string, icon: string, children: ReactNode, badge?: ReactNode) => (
+    <Collapsible key={id} testId={`m360-section-${id}`} title={title} icon={icon} open={open[id]} onToggle={() => toggle(id)} badge={badge}>
+      {children}
+    </Collapsible>
+  );
+  const approved = m.models.filter((x) => x.status === "Approved").length;
+  const openAnomalies = m.anomalies.filter((a) => a.status === "Open").length;
+  const qrPct = m.qr.issued ? Math.round((m.qr.bound / m.qr.issued) * 100) : 0;
+  const count = (n: number, label: string) => <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{n} {label}</span>;
+
+  const kpis: { key: string; label: string; value: string | number }[] = [
+    { key: "brands", label: "Brands", value: m.brands.length },
+    { key: "models", label: "Approved models", value: approved },
+    { key: "qr", label: "QR issued / used", value: `${inr(m.qr.issued)} / ${inr(m.qr.bound)}` },
+    { key: "fees-paid", label: "Fees paid", value: m.fees.paid },
+    { key: "fees-out", label: "Fees outstanding", value: m.fees.outstanding },
+    { key: "anomalies", label: "Open anomalies", value: openAnomalies },
   ];
+
   return (
-    <header className={card} data-testid="m360-header">
-      <div className="flex flex-wrap items-start justify-between gap-space-md">
-        <div>
-          <p className="font-label-md uppercase tracking-wide text-on-surface-variant">Manufacturer 360</p>
-          <h1 className="font-headline-md text-headline-md text-on-surface mt-1">{h.manufacturerName}</h1>
-          <p className="font-body-sm text-on-surface-variant mt-1">{h.organisationId}</p>
-        </div>
-        <Pill>{h.complianceStatus}</Pill>
-      </div>
-      <dl className="mt-space-md grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-space-sm">
-        {items.map((i) => (
-          <div key={i.key} data-testid={`m360-kpi-${i.key}`}>
-            <dt className="font-label-sm text-on-surface-variant">{i.label}</dt>
-            <dd className="font-title-sm tabular-nums text-on-surface">{i.value}</dd>
+    <div className="space-y-space-md" data-testid="m360-profile">
+      <button type="button" onClick={back} className="inline-flex items-center gap-1 bg-white text-sm font-semibold text-primary hover:underline" data-testid="m360-back">
+        <Icon name="arrow_back" size={16} /> All manufacturers
+      </button>
+
+      <div className="rounded-2xl bg-gradient-to-r from-forest-dark to-primary text-on-primary shadow-md p-space-md lg:p-space-lg" data-testid="m360-header">
+        <div className="flex flex-wrap items-start justify-between gap-space-md">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.14em] text-on-primary/70">Manufacturer 360 profile</p>
+            <div role="heading" aria-level={2} className="mt-1 text-2xl font-bold">{m.name}</div>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-white/15 px-2.5 py-1">{m.city}, {m.state}</span>
+              <span className="rounded-full bg-white/15 px-2.5 py-1">{m.categories.join(" · ")}</span>
+              <span className="rounded-full bg-white/15 px-2.5 py-1">Permittee {m.permitteeNumber}</span>
+              <span className="rounded-full bg-white/15 px-2.5 py-1">Since {m.since}</span>
+            </div>
           </div>
-        ))}
-      </dl>
-    </header>
+          <div className="rounded-xl bg-white/95 px-3 py-2 shadow-sm"><StatusChip status={m.status} /></div>
+        </div>
+        <div className="mt-space-md grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {kpis.map((k) => (
+            <div key={k.key} className="rounded-xl bg-white/10 px-3 py-2" data-testid={`m360-kpi-${k.key}`}>
+              <div className="text-[11px] uppercase tracking-wide text-on-primary/70">{k.label}</div>
+              <div className="mt-0.5 text-lg font-bold tabular-nums">{k.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-on-surface-variant">Open a section to see the detail.</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setAll(true)} className="rounded-lg border border-outline-variant bg-white px-3 py-1.5 text-sm font-semibold hover:bg-surface-container-low" data-testid="m360-expand-all">Expand all</button>
+          <button type="button" onClick={() => setAll(false)} className="rounded-lg border border-outline-variant bg-white px-3 py-1.5 text-sm font-semibold hover:bg-surface-container-low" data-testid="m360-collapse-all">Collapse all</button>
+        </div>
+      </div>
+
+      {sec("company", "Company profile", "corporate_fare",
+        <div className="space-y-space-md">
+          <div className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-3">
+            <Fact label="Legal name">{m.name}</Fact>
+            <Fact label="CIN">{m.cin}</Fact>
+            <Fact label="GSTIN">{m.gstin}</Fact>
+            <div className="sm:col-span-2 lg:col-span-3"><Fact label="Registered office">{m.address}</Fact></div>
+          </div>
+          <div>
+            <div role="heading" aria-level={3} className="mb-2 text-sm font-semibold text-on-surface">Authorised signatory</div>
+            <div className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-4">
+              <Fact label="Name">{m.signatory.name}</Fact>
+              <Fact label="Designation">{m.signatory.designation}</Fact>
+              <Fact label="Email">{m.signatory.email}</Fact>
+              <Fact label="Phone">{m.signatory.phone}</Fact>
+            </div>
+          </div>
+          <div>
+            <div role="heading" aria-level={3} className="mb-2 text-sm font-semibold text-on-surface">Manufacturing facilities</div>
+            <Table head={["Facility", "Location", "Capacity"]} rows={m.facilities.map((f) => [f.name, f.location, f.capacity])} empty="No facility recorded." />
+          </div>
+        </div>,
+      )}
+
+      {sec("registration", "Registration and activation", "verified",
+        <div className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-4">
+          <Fact label="Status"><StatusChip status={m.status} /></Fact>
+          <Fact label="Permittee number">{m.permitteeNumber}</Fact>
+          <Fact label="Registered since">{m.since}</Fact>
+          <Fact label="Observation window">{m.observation ? `${m.observation.start} to ${m.observation.end}` : "Completed"}</Fact>
+          {m.observation ? <Fact label="Days remaining">{m.observation.daysLeft}</Fact> : null}
+        </div>,
+      )}
+
+      {sec("brands", "Brands and categories", "sell",
+        <Table head={["Brand", "Status", "Categories"]} rows={m.brands.map((b) => [b.name, <Pill key="s">{b.status}</Pill>, b.categories])} empty="No brand registered yet." />,
+        count(m.brands.length, "brands"),
+      )}
+
+      {sec("models", "Models and certificates", "workspace_premium",
+        <Table
+          head={["Reference", "Model", "Category", "Rating", "Status", "Certificate", "Valid to"]}
+          rows={m.models.map((x) => [<span key="r" className="font-mono">{x.reference}</span>, x.model, x.category, <Stars key="s" n={x.stars} />, <Pill key="p">{x.status}</Pill>, x.certificate, x.validTo])}
+          empty="No model application yet."
+        />,
+        count(m.models.length, "models"),
+      )}
+
+      {sec("fees", "Fees and payments", "payments",
+        <div className="space-y-space-md">
+          <div className="grid gap-space-md sm:grid-cols-3">
+            <Fact label="Paid">{m.fees.paid}</Fact>
+            <Fact label="Outstanding">{m.fees.outstanding}</Fact>
+            <Fact label="Gateway">Simulated, no live transaction</Fact>
+          </div>
+          <Table
+            head={["Receipt", "Date", "Purpose", "Amount", "Status"]}
+            rows={m.fees.payments.map((p) => [<span key="r" className="font-mono">{p.receipt}</span>, p.date, p.purpose, p.amountInr, <Pill key="s">{p.status}</Pill>])}
+            empty="No payment recorded."
+          />
+        </div>,
+      )}
+
+      {sec("qr", "QR serials and production", "qr_code_2",
+        <div className="space-y-space-md">
+          <div className="grid gap-space-md sm:grid-cols-4">
+            <Fact label="Serials issued">{inr(m.qr.issued)}</Fact>
+            <Fact label="Bound to products">{inr(m.qr.bound)}</Fact>
+            <Fact label="Unused">{inr(m.qr.unused)}</Fact>
+            <Fact label="Use of issued serials">{qrPct}%</Fact>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-high" aria-hidden="true">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${qrPct}%` }} />
+          </div>
+          <Table
+            head={["Quarter", "Units declared", "Serials bound", "Variance"]}
+            rows={m.production.map((p) => [p.period, inr(p.declared), inr(p.bound), <span key="v" className={Math.abs(p.declared - p.bound) > 20 ? "font-semibold text-error" : ""}>{p.declared - p.bound}</span>])}
+            empty="No production declared yet."
+          />
+        </div>,
+      )}
+
+      {sec("documents", "Documents on file", "folder_open",
+        <Table head={["Document", "Status", "Date"]} rows={m.documents.map((d) => [d.name, <Pill key="s">{d.status === "Verified" ? "Verified" : d.status === "Missing" ? "Missing (failed)" : "Pending: " + d.status}</Pill>, d.date])} empty="No document on file." />,
+        count(m.documents.length, "documents"),
+      )}
+
+      {sec("compliance", "Compliance, observation and anomalies", "policy",
+        <Table
+          head={["Date", "Raised by", "Anomaly", "Outcome"]}
+          rows={m.anomalies.map((a) => [a.date, a.raisedBy, a.summary, <Pill key="s">{a.status === "Open" ? "Open (pending)" : a.status === "Revoked" ? "Revoked" : "Cleared (accepted)"}</Pill>])}
+          empty="No anomaly has been raised."
+        />,
+        openAnomalies ? <span className="rounded-full bg-[#fdecea] px-2 py-0.5 text-xs font-semibold text-[#93000a]">{openAnomalies} open</span> : count(0, "open"),
+      )}
+
+      {sec("advisory", "Advisory signals (simulated)", "psychology",
+        <div className="space-y-2">
+          <p className="text-xs text-on-surface-variant">Transparent rules over the data above. Advisory only: a person decides.</p>
+          {m.flags.length === 0 ? <p className="text-sm text-on-surface-variant">No signal raised.</p> : null}
+          {m.flags.map((f) => (
+            <div key={f.label} className={`rounded-xl border px-3 py-2 text-sm ${f.level === "Attention" ? "border-[#f5c2c0] bg-[#fdecea]" : f.level === "Watch" ? "border-[#f3dc9c] bg-[#fff4d6]" : "border-border-subtle bg-surface-container-lowest"}`}>
+              <span className="font-semibold">{f.level}: {f.label}.</span> {f.detail}
+            </div>
+          ))}
+        </div>,
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Advisory</span>,
+      )}
+
+      {sec("activity", "Activity timeline", "timeline",
+        <ol className="space-y-4">
+          {m.timeline.map((t, i) => (
+            <li key={`${t.date}-${t.title}-${i}`} className="relative flex gap-3">
+              {i < m.timeline.length - 1 ? <span className="absolute left-[7px] top-5 bottom-[-16px] w-px bg-outline-variant" aria-hidden="true" /> : null}
+              <span className="relative z-10 mt-1.5 h-4 w-4 shrink-0 rounded-full bg-primary/15 ring-4 ring-white"><span className="absolute inset-1 rounded-full bg-primary" /></span>
+              <div>
+                <div className="text-sm font-semibold text-on-surface">{t.title}</div>
+                <div className="text-sm text-on-surface-variant">{t.detail}</div>
+                <div className="text-xs text-on-surface-variant">{t.date}</div>
+              </div>
+            </li>
+          ))}
+        </ol>,
+      )}
+
+      <div className="rounded-2xl border border-border-subtle bg-white p-space-md shadow-sm" data-testid="m360-extra-links">
+        <div role="heading" aria-level={2} className="mb-2 text-sm font-semibold text-on-surface">Related working screens</div>
+        <ul className="flex flex-wrap gap-x-space-md gap-y-2">
+          {[
+            ["/app/registrations/requests", "Registration requests"],
+            ["/app/registrations/register", "Register and revocation"],
+            ["/app/model-label/model-dashboard", "Model dashboard"],
+            ["/app/demo/payments", "Payments"],
+            ["/app/demo/qr", "QR batches and serials"],
+            ["/app/demo/production", "Quarterly production"],
+            ["/app/demo/ledger", "Secure evidence ledger"],
+            ["/verify", "Public verification"],
+          ].map(([href, label]) => (
+            <li key={href}>
+              <Link href={href} className="text-sm font-semibold text-primary hover:underline">{label}</Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
 
-function LifecycleRail() {
+function Directory({ list, onOpen, restricted }: { list: DirectoryManufacturer[]; onOpen: (id: string) => void; restricted: boolean }) {
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("");
+  const [category, setCategory] = useState("");
+  const [state, setState] = useState("");
+  const categories = useMemo(() => [...new Set(list.flatMap((m) => m.categories))].sort(), [list]);
+  const states = useMemo(() => [...new Set(list.map((m) => m.state))].sort(), [list]);
+  const needle = q.trim().toLowerCase();
+  const shown = list
+    .filter((m) => !status || m.status === status)
+    .filter((m) => !category || m.categories.includes(category))
+    .filter((m) => !state || m.state === state)
+    .filter((m) => !needle || [m.name, m.city, m.state, m.cin, m.gstin, m.permitteeNumber, ...m.categories].join(" ").toLowerCase().includes(needle))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const tiles: { label: string; value: number; filter: string }[] = [
+    { label: "All manufacturers", value: list.length, filter: "" },
+    ...STATUS_FILTERS.map((s) => ({ label: s, value: list.filter((m) => m.status === s).length, filter: s })),
+  ];
+  const field = "rounded-xl border border-border-subtle bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+
   return (
-    <section className={card} aria-labelledby="m360-rail-heading">
-      <h2 id="m360-rail-heading" className={sectionTitle}>
-        WP3–WP9 lifecycle rail
-      </h2>
-      <ol className="space-y-space-md">
-        {MANUFACTURER_360_STAGES.map((stage) => (
-          <li
-            key={stage.wp}
-            className="rounded-xl border border-[#e6eaf0] p-space-md"
-            data-testid={`m360-stage-${stage.wp}`}
-          >
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-container text-on-primary-container font-bold text-sm">
-                {stage.wp}
-              </span>
-              <span className="font-title-sm text-on-surface">{stage.title}</span>
-              {stage.status ? <Pill>{stage.status}</Pill> : null}
-            </div>
-            <dl className="grid sm:grid-cols-2 gap-x-space-md gap-y-1 font-body-sm break-words">
-              <div>
-                <dt className="text-on-surface-variant">Record</dt>
-                <dd>{stage.recordReference}</dd>
-              </div>
-              <div>
-                <dt className="text-on-surface-variant">Persona</dt>
-                <dd>{stage.responsiblePersona}</dd>
-              </div>
-              <div>
-                <dt className="text-on-surface-variant">Last action</dt>
-                <dd>{stage.lastAction}</dd>
-              </div>
-              <div>
-                <dt className="text-on-surface-variant">Next action</dt>
-                <dd>{stage.nextAction}</dd>
-              </div>
-            </dl>
-            <Link
-              href={stage.screenHref}
-              className="inline-flex items-center gap-1 mt-space-sm text-primary font-label-md hover:underline"
-              data-testid={`m360-stage-link-${stage.wp}`}
+    <div className="space-y-space-md" data-testid="m360-directory">
+      {!restricted ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          {tiles.map((t) => (
+            <button
+              key={t.label}
+              type="button"
+              onClick={() => setStatus(t.filter)}
+              className={`rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors ${status === t.filter ? "border-primary bg-primary/10" : "border-border-subtle bg-white hover:bg-surface-container-lowest"}`}
+              data-testid={`m360-tile-${t.label.toLowerCase().replace(/ /g, "-")}`}
             >
-              Open working screen — {stage.screenLabel}
-              <Icon name="open_in_new" size={16} />
-            </Link>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
+              <span className="block text-2xl font-bold tabular-nums text-on-surface">{t.value}</span>
+              <span className="block text-xs text-on-surface-variant">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
-function Timeline() {
-  return (
-    <section className={card} data-testid="m360-timeline">
-      <h2 className={sectionTitle}>Registration-to-production story</h2>
-      <ol className="relative border-s border-[#d8e0ea] ms-3 ps-space-md space-y-3">
-        {MANUFACTURER_360_TIMELINE.map((step, i) => (
-          <li key={step.label} className="font-body-sm">
-            <span className="absolute -start-[7px] mt-1.5 h-3 w-3 rounded-full bg-primary" aria-hidden />
-            <span className="font-semibold text-on-surface">{step.label}</span>
-            <span className="text-on-surface-variant"> — {step.stateOrEvent}</span>
-            {i === 0 ? null : null}
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-function DiscrepancyPanel() {
-  const d = MANUFACTURER_360_DISCREPANCY;
-  return (
-    <section className={card} data-testid="m360-discrepancy">
-      <h2 className={sectionTitle}>Discrepancy panel (return → response → disposition)</h2>
-      <p className="font-label-sm text-on-surface-variant mb-space-sm">{DEMO_DISCLOSURE}</p>
-      <ul className="space-y-2 font-body-sm">
-        <li>
-          <strong>Issue:</strong> {d.issue}
-        </li>
-        <li>
-          <strong>BEE return:</strong> {d.returnAction}
-        </li>
-        <li>
-          <strong>Applicant response:</strong> {d.applicantResponse}
-        </li>
-        <li>
-          <strong>Reviewer disposition:</strong> {d.disposition}
-        </li>
-        <li>
-          <strong>SLA:</strong> {d.slaNote}
-        </li>
-        <li>
-          <strong>Registration continued:</strong> {d.continuation}
-        </li>
-      </ul>
-    </section>
-  );
-}
-
-function FinanceQrPanel() {
-  const f = MANUFACTURER_360_FINANCE;
-  return (
-    <section className={card} data-testid="m360-finance">
-      <h2 className={sectionTitle}>Financial and QR reconciliation</h2>
-      <p className="font-label-sm text-on-surface-variant mb-space-sm">{DEMO_DISCLOSURE}</p>
-      <dl className="grid sm:grid-cols-2 gap-space-sm font-body-sm">
-        <div>
-          <dt className="text-on-surface-variant">Application fees paid</dt>
-          <dd>{f.applicationFeesPaidInr}</dd>
+      <div className="rounded-2xl border border-border-subtle bg-white p-space-md shadow-sm">
+        <div className="grid gap-3 md:grid-cols-4">
+          <label className="relative md:col-span-2">
+            <span className="sr-only">Search manufacturers</span>
+            <Icon name="search" size={18} className="pointer-events-none absolute left-3 top-2.5 text-on-surface-variant" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search name, city, CIN, GSTIN or permittee number"
+              className={`${field} w-full !pl-10`}
+              data-testid="m360-search"
+            />
+          </label>
+          <label>
+            <span className="sr-only">Category</span>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${field} w-full`} data-testid="m360-filter-category">
+              <option value="">All categories</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">State</span>
+            <select value={state} onChange={(e) => setState(e.target.value)} className={`${field} w-full`} data-testid="m360-filter-state">
+              <option value="">All states</option>
+              {states.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
         </div>
-        <div className="sm:col-span-2">
-          <dt className="text-on-surface-variant">QR / label units paid</dt>
-          <dd>{f.qrLabelUnitsPaidInr}</dd>
-          <dd className="text-on-surface-variant mt-1">{f.qrPrepaymentAssumption}</dd>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className={field} data-testid="m360-filter-status" aria-label="Status">
+            <option value="">All statuses</option>
+            {STATUS_FILTERS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <span className="text-sm text-on-surface-variant" data-testid="m360-count">{shown.length} of {list.length} manufacturers</span>
+          {(q || status || category || state) ? (
+            <button type="button" onClick={() => { setQ(""); setStatus(""); setCategory(""); setState(""); }} className="rounded-lg border border-outline-variant bg-white px-3 py-1.5 text-sm font-semibold hover:bg-surface-container-low">Clear filters</button>
+          ) : null}
         </div>
-        <div>
-          <dt className="text-on-surface-variant">Serials issued / bound / unused</dt>
-          <dd>
-            {f.serialsIssued} / {f.serialsBound} / {f.serialsUnused}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-on-surface-variant">Production declared vs variance</dt>
-          <dd>
-            {f.productionDeclaredUnits} units ({f.varianceUnits} variance vs bound QR)
-          </dd>
-        </div>
-        <div className="sm:col-span-2">
-          <dt className="text-on-surface-variant">Annual label-fee reconciliation balance (due / settled)</dt>
-          <dd>
-            {f.labelFeeReconciliationDue} / {f.labelFeeReconciliationSettled}
-          </dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
-function Wp9Preview() {
-  return (
-    <section className={card} data-testid="m360-wp9">
-      <h2 className={sectionTitle}>WP9 lifecycle preview</h2>
-      <div className="grid sm:grid-cols-2 gap-space-md">
-        {MANUFACTURER_360_WP9_CARDS.map((c) => (
-          <article key={c.key} className="rounded-xl border border-[#e6eaf0] p-space-md" data-testid={`m360-wp9-${c.key}`}>
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="font-title-sm text-on-surface">{c.title}</h3>
-              <Pill>{c.status}</Pill>
-            </div>
-            <p className="font-body-sm text-on-surface-variant mt-2">{c.detail}</p>
-            {c.previewOnly ? (
-              <p className="font-label-sm text-[#8a4b00] mt-2" data-testid={`m360-wp9-preview-label-${c.key}`}>
-                {c.key === "revocation-active" ? null : WP9_PREVIEW_LABEL}
-              </p>
-            ) : null}
-            {c.href && c.linkLabel ? (
-              <Link href={c.href} className="inline-flex items-center gap-1 mt-space-sm text-primary font-label-md hover:underline">
-                {c.linkLabel}
-                <Icon name="open_in_new" size={16} />
-              </Link>
-            ) : null}
-          </article>
-        ))}
       </div>
-    </section>
+
+      <div className="overflow-hidden rounded-2xl border border-border-subtle bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="m360-table">
+            <thead>
+              <tr>
+                {["Manufacturer", "Status", "Categories", "Models", "Permittee number", "Registered since", ""].map((h) => (
+                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((m) => (
+                <tr key={m.id} className="cursor-pointer" onClick={() => onOpen(m.id)} data-testid={`m360-row-${m.id}`}>
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-on-surface">{m.name}</div>
+                    <div className="text-xs text-on-surface-variant">{m.city}, {m.state}</div>
+                  </td>
+                  <td className="px-4 py-3"><StatusChip status={m.status} /></td>
+                  <td className="px-4 py-3">{m.categories.join(", ")}</td>
+                  <td className="px-4 py-3 tabular-nums">{m.models.length}</td>
+                  <td className="px-4 py-3"><span className="font-mono text-xs">{m.permitteeNumber}</span></td>
+                  <td className="px-4 py-3">{m.since}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-primary">View 360 <Icon name="arrow_forward" size={16} /></span>
+                  </td>
+                </tr>
+              ))}
+              {shown.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-on-surface-variant">No manufacturer matches the search or filters.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function ExtraLinks() {
-  return (
-    <section className={card} data-testid="m360-extra-links">
-      <h2 className={sectionTitle}>Related working screens</h2>
-      <ul className="flex flex-wrap gap-x-space-md gap-y-2">
-        {MANUFACTURER_360_EXTRA_LINKS.map((l) => (
-          <li key={l.href}>
-            <Link href={l.href} className="text-primary font-label-md hover:underline" data-testid={`m360-link-${l.href.replace(/\//g, "-")}`}>
-              {l.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/** Guided Manufacturer 360 demo across WP3–WP9 (synthetic fixture). */
+/** Manufacturer 360: a searchable directory of manufacturers and, for the one chosen, a collapsible 360-degree profile. */
 export function Manufacturer360Demo() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const selected = params.get("m");
+  const identity = useSpringIdentity();
+  const roles = identity.status === "signed-in" ? identity.me.effectiveRoles.map((r) => r.role) : [];
+  const ownOrgs = identity.status === "signed-in" ? identity.me.organisations.map((o) => o.code) : [];
+  const ownOrgKey = ownOrgs.join("|");
+  const applicantOnly = roles.length > 0 && roles.every((r) => r === "manufacturer" || r === "agency");
+  const [live, setLive] = useState<DirectoryManufacturer[]>([]);
+
+  useEffect(() => {
+    if (identity.status !== "signed-in") return;
+    let cancelled = false;
+    (async () => {
+      const read = await readCompanyRegistrationsAwaitingApproval();
+      if (!read.ok) return;
+      const client = createManufacturerOnboardingClient({});
+      const out: DirectoryManufacturer[] = [];
+      for (const item of read.items.filter((i) => i.state !== "draft")) {
+        try {
+          out.push(liveToManufacturer(await client.getApplication(item.id)));
+        } catch {
+          // a registration that cannot be read is left out of the directory
+        }
+      }
+      if (!cancelled) setLive(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [identity.status]);
+
+  const list = useMemo(() => {
+    const fixtures = applicantOnly ? DIRECTORY.filter((m) => ownOrgKey.split("|").includes(m.orgCode)) : [...DIRECTORY];
+    return [...live, ...fixtures];
+  }, [applicantOnly, ownOrgKey, live]);
+
+  const open = (id: string | null) => router.push(id ? `${pathname}?m=${encodeURIComponent(id)}` : pathname);
+  const chosen = selected ? list.find((m) => m.id === selected) : undefined;
+
   return (
-    <div className="space-y-space-lg max-w-6xl">
-      <HeaderKpis />
-      <LifecycleRail />
-      <div className="grid lg:grid-cols-2 gap-space-lg">
-        <Timeline />
-        <DiscrepancyPanel />
-      </div>
-      <FinanceQrPanel />
-      <Wp9Preview />
-      <ExtraLinks />
+    <div className="space-y-space-md max-w-6xl">
+      <div role="heading" aria-level={1} className="font-headline-md text-headline-md font-bold text-on-surface">Manufacturer 360</div>
+      {chosen ? <Profile m={chosen} back={() => open(null)} key={chosen.id} /> : <Directory list={list} onOpen={(id) => open(id)} restricted={applicantOnly} />}
     </div>
   );
 }

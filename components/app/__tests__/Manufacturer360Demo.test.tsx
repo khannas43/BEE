@@ -1,52 +1,52 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Manufacturer360Demo } from "@/components/app/demo/Manufacturer360Demo";
-import {
-  MANUFACTURER_360_STAGES,
-  WP9_PREVIEW_LABEL,
-} from "@/lib/demo/manufacturer360Fixture";
+import { DIRECTORY } from "@/lib/demo/manufacturerDirectory";
 import { runtimeNavFor, runtimeRouteFor } from "@/lib/runtimeRoutes";
+
+const search = vi.hoisted(() => ({ value: "" }));
 
 afterEach(() => cleanup());
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => "/app/demo/manufacturer-360",
+  useSearchParams: () => new URLSearchParams(search.value),
+}));
+vi.mock("@/components/app/SessionBadge", () => ({
+  useSpringIdentity: () => ({ status: "signed-in", me: { effectiveRoles: [{ role: "officer", scope: "all" }], organisations: [] } }),
+}));
+vi.mock("@/lib/client/runtimeCompanyRegistrations", () => ({
+  readCompanyRegistrationsAwaitingApproval: async () => ({ ok: true, items: [] }),
+}));
+
 describe("Manufacturer360Demo", () => {
-  it("renders seven WP lifecycle stages with working-screen links", () => {
+  it("lists every manufacturer and filters by search and status", () => {
+    search.value = "";
     render(<Manufacturer360Demo />);
-    for (const stage of MANUFACTURER_360_STAGES) {
-      expect(screen.getByTestId(`m360-stage-${stage.wp}`)).toBeTruthy();
-      const link = screen.getByTestId(`m360-stage-link-${stage.wp}`);
-      expect(link.getAttribute("href")).toBe(stage.screenHref);
-    }
+    expect(screen.getByTestId("m360-count").textContent).toContain(`${DIRECTORY.length} of ${DIRECTORY.length}`);
+    fireEvent.change(screen.getByTestId("m360-search"), { target: { value: "pune" } });
+    expect(screen.getByTestId("m360-count").textContent).toContain("2 of");
+    fireEvent.change(screen.getByTestId("m360-search"), { target: { value: "" } });
+    fireEvent.change(screen.getByTestId("m360-filter-status"), { target: { value: "On hold" } });
+    expect(screen.getByTestId("m360-row-cinder-peak")).toBeTruthy();
+    expect(screen.queryByTestId("m360-row-nova-cool")).toBeNull();
   });
 
-  it("includes required working-screen links from the brief", () => {
+  it("shows a profile with collapsible sections for the chosen manufacturer", () => {
+    search.value = "m=nova-cool";
     render(<Manufacturer360Demo />);
-    const hrefs = [
-      "/app/registrations/requests",
-      "/app/registrations/reviews",
-      "/app/registrations/register",
-      "/app/model-label/model-dashboard",
-      "/app/model-label/label-preview",
-      "/app/demo/payments",
-      "/app/demo/qr",
-      "/app/demo/production",
-      "/app/demo/executive",
-      "/app/demo/mis",
-      "/app/model-label/renewal-or-degradation",
-      "/app/withdrawal/brand-withdrawal",
-      "/verify",
-    ];
-    for (const href of hrefs) {
-      const el = document.querySelector(`a[href="${href}"]`);
-      expect(el, `missing link ${href}`).toBeTruthy();
-    }
-  });
-
-  it("labels WP9 preview cards that are not working production flows", () => {
-    render(<Manufacturer360Demo />);
-    expect(screen.getByTestId("m360-wp9-preview-label-renewal-due").textContent).toContain(WP9_PREVIEW_LABEL);
-    expect(screen.getByTestId("m360-wp9-preview-label-voluntary-withdrawal").textContent).toContain(WP9_PREVIEW_LABEL);
-    expect(screen.queryByTestId("m360-wp9-preview-label-revocation-active")).toBeNull();
+    expect(screen.getByTestId("m360-header").textContent).toContain("Nova Cool Appliances Ltd.");
+    expect(screen.getByTestId("m360-kpi-qr").textContent).toContain("1,240");
+    const toggle = screen.getByTestId("m360-section-models-toggle");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("m360-section-models").textContent).toContain("BEE/RAC/2026/10101");
+    fireEvent.click(screen.getByTestId("m360-collapse-all"));
+    expect(screen.getByTestId("m360-section-company-toggle").getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(screen.getByTestId("m360-expand-all"));
+    expect(screen.getByTestId("m360-section-activity-toggle").getAttribute("aria-expanded")).toBe("true");
   });
 });
 

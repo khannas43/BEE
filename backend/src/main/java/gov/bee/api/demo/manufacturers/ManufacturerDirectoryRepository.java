@@ -96,7 +96,7 @@ public class ManufacturerDirectoryRepository {
         Map<UUID, List<Map<String, Object>>> onboardingPay = grouped(
             "SELECT l.application_id, p.receipt_number, p.amount_inr, p.status, p.settled_at, p.created_at FROM manufacturer_onboarding_payment_link l JOIN payment p ON p.id = l.payment_id",
             "application_id", r -> map("receipt", r.get("receipt_number"), "date", day(r.get("settled_at") != null ? r.get("settled_at") : r.get("created_at")),
-                "purpose", "Company registration fee", "amount", r.get("amount_inr"), "status", "paid".equals(r.get("status")) ? "Verified" : "Pending"));
+                "purpose", "Company registration fee", "amount", r.get("amount_inr"), "status", "paid".equals(r.get("status")) ? "Verified" : "failed".equals(r.get("status")) ? "Failed" : "Pending"));
 
         Map<UUID, List<Map<String, Object>>> brands = grouped(
             "SELECT b.id, b.owner_organisation_id AS org, b.name, b.status, b.note, "
@@ -123,7 +123,7 @@ public class ManufacturerDirectoryRepository {
                 + "LEFT JOIN model_application m ON m.id = p.application_id ORDER BY p.created_at DESC",
             "org", r -> map("receipt", r.get("receipt_number") == null ? "-" : r.get("receipt_number"), "date", day(r.get("settled_at") != null ? r.get("settled_at") : r.get("created_at")),
                 "purpose", r.get("reference") == null ? "Fee" : "Model application fee " + r.get("reference"), "amount", r.get("amount_inr"),
-                "status", "paid".equals(r.get("status")) ? "Verified" : "Pending"));
+                "status", "paid".equals(r.get("status")) ? "Verified" : "failed".equals(r.get("status")) ? "Failed" : "Pending"));
         Map<UUID, Map<String, Object>> qr = new LinkedHashMap<>();
         for (Map<String, Object> r : jdbc.queryForList(
             "SELECT b.organisation_id AS org, count(s.serial) AS issued, count(*) FILTER (WHERE s.state = 'bound') AS bound, count(*) FILTER (WHERE s.state = 'allocated') AS unused "
@@ -169,8 +169,8 @@ public class ManufacturerDirectoryRepository {
                 BigDecimal amount = p.get("amount") == null ? BigDecimal.ZERO : (BigDecimal) p.get("amount");
                 if ("Verified".equals(p.get("status"))) {
                     paid = paid.add(amount);
-                } else {
-                    outstanding = outstanding.add(amount);
+                } else if ("Pending".equals(p.get("status"))) {
+                    outstanding = outstanding.add(amount); // a failed attempt is not a fee due
                 }
             }
             Object obsStart = app == null ? null : app.get("started_on");

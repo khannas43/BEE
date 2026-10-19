@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpringIdentity } from "@/components/app/SessionBadge";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -120,6 +121,10 @@ const SECTION_IDS = ["company", "registration", "brands", "models", "fees", "qr"
 type SectionId = (typeof SECTION_IDS)[number];
 
 function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
+  const identity = useSpringIdentity();
+  const roles = identity.status === "signed-in" ? identity.me.effectiveRoles.map((r) => r.role) : [];
+  /** A manufacturer sees only its own organisation: no directory to go back to, and an Edit button that is not yet switched on. */
+  const ownOnly = roles.includes("manufacturer") && roles.every((r) => r === "manufacturer");
   const [open, setOpen] = useState<Record<SectionId, boolean>>({
     company: true, registration: true, brands: false, models: false, fees: false, qr: false, documents: false, compliance: true, advisory: false, activity: false,
   });
@@ -147,9 +152,11 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
 
   return (
     <div className="space-y-space-md" data-testid="m360-profile">
-      <button type="button" onClick={back} className="inline-flex items-center gap-1 bg-white text-sm font-semibold text-primary hover:underline" data-testid="m360-back">
-        <Icon name="arrow_back" size={16} /> All manufacturers
-      </button>
+      {ownOnly ? null : (
+        <button type="button" onClick={back} className="inline-flex items-center gap-1 bg-white text-sm font-semibold text-primary hover:underline" data-testid="m360-back">
+          <Icon name="arrow_back" size={16} /> All manufacturers
+        </button>
+      )}
 
       <div className="rounded-2xl bg-gradient-to-r from-forest-dark to-primary text-on-primary shadow-md p-space-md lg:p-space-lg" data-testid="m360-header">
         <div className="flex flex-wrap items-start justify-between gap-space-md">
@@ -185,6 +192,13 @@ function Profile({ m, back }: { m: DirectoryManufacturer; back: () => void }) {
 
       {sec("company", "Company profile", "corporate_fare",
         <div className="space-y-space-md">
+          {ownOnly ? (
+            <div className="flex justify-end">
+              <button type="button" disabled title="Editing company details will be available soon" aria-disabled="true" className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-white px-3 py-1.5 text-sm font-semibold text-on-surface-variant opacity-60 cursor-not-allowed" data-testid="m360-edit">
+                <Icon name="edit" size={16} /> Edit details
+              </button>
+            </div>
+          ) : null}
           <div className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-3">
             <Fact label="Legal name">{m.name}</Fact>
             <Fact label="CIN">{dash(m.cin)}</Fact>

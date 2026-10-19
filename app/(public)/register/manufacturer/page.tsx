@@ -7,28 +7,32 @@ import { Icon } from "@/components/ui/Icon";
 
 export default function RegisterManufacturerPage() {
   const router = useRouter();
+  const [legalName, setLegalName] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const detailsValid = useMemo(() => fullName.trim().length >= 2
+  const detailsValid = useMemo(() => legalName.trim().length >= 2
+    && fullName.trim().length >= 2
     && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
     && /^[6-9]\d{9}$/.test(mobile.trim())
+    && /^[a-z0-9._-]{3,64}$/.test(username.trim().toLowerCase())
     && password.length >= 8
     && password === confirmPassword,
-  [confirmPassword, email, fullName, mobile, password]);
+  [confirmPassword, email, fullName, legalName, mobile, password, username]);
 
   async function createAccountAndContinue(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
     setError(null);
     if (!detailsValid) {
-      setError("Enter a valid name, email, 10-digit Indian mobile number and matching password of at least 8 characters.");
+      setError("Enter the manufacturer name, applicant name, email, 10-digit Indian mobile number, username and matching password.");
       return;
     }
     setBusy(true);
@@ -39,7 +43,7 @@ export default function RegisterManufacturerPage() {
         credentials: "include",
         cache: "no-store",
         headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-        body: JSON.stringify({ fullName: fullName.trim(), email: email.trim(), mobile: mobile.trim(), password }),
+        body: JSON.stringify({ legalName: legalName.trim(), fullName: fullName.trim(), email: email.trim(), mobile: mobile.trim(), username: username.trim().toLowerCase(), password }),
       });
       const body = (await response.json().catch(() => ({}))) as { ok?: boolean; returnTo?: string; error?: string };
       if (!response.ok || !body.ok) {
@@ -81,9 +85,14 @@ export default function RegisterManufacturerPage() {
           {error && <div role="alert" className="rounded-lg bg-error-container text-on-error-container px-3 py-2 font-body-sm" data-testid="registration-error">{error}</div>}
 
           <form onSubmit={createAccountAndContinue} noValidate className="space-y-space-md" data-testid="manufacturer-account-form">
-              <Field id="manufacturer-full-name" label="Applicant full name" icon="person" value={fullName} onChange={setFullName} autoComplete="name" />
+              <div className="grid sm:grid-cols-2 gap-space-md">
+                <Field id="manufacturer-legal-name" label="Manufacturer / company legal name" icon="corporate_fare" value={legalName} onChange={setLegalName} autoComplete="organization" />
+                <Field id="manufacturer-full-name" label="Applicant full name" icon="person" value={fullName} onChange={setFullName} autoComplete="name" />
+              </div>
               <Field id="manufacturer-email" label="Email address" icon="mail" value={email} onChange={setEmail} type="email" autoComplete="email" />
               <Field id="manufacturer-mobile" label="Mobile number" icon="phone" value={mobile} onChange={(value) => setMobile(value.replace(/\D/g, "").slice(0, 10))} type="tel" autoComplete="tel" placeholder="10-digit Indian mobile number" />
+
+              <Field id="manufacturer-username" label="Username" icon="badge" value={username} onChange={setUsername} autoComplete="username" placeholder="Choose a username" />
 
               <div className="grid sm:grid-cols-2 gap-space-md">
                 <PasswordField id="manufacturer-password" label="Create password" value={password} onChange={setPassword} show={showPassword} toggle={() => setShowPassword((value) => !value)} />

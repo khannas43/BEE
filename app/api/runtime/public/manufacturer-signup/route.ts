@@ -35,7 +35,7 @@ export const POST = logged("/api/runtime/public/manufacturer-signup", async (req
   if (!key || !IDEMPOTENCY.test(key)) {
     return errorResponse("idempotency_key_required", 422, correlationId);
   }
-  let body: { fullName?: unknown; email?: unknown; mobile?: unknown; password?: unknown } = {};
+  let body: { fullName?: unknown; email?: unknown; mobile?: unknown; username?: unknown; password?: unknown } = {};
   try {
     body = await request.json();
   } catch {
@@ -44,14 +44,15 @@ export const POST = logged("/api/runtime/public/manufacturer-signup", async (req
   const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const mobile = typeof body.mobile === "string" ? body.mobile.trim() : "";
+  const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
-  if (fullName.length < 2 || !EMAIL.test(email) || !MOBILE.test(mobile) || password.length < 8 || password.length > 200) {
+  if (fullName.length < 2 || !EMAIL.test(email) || !MOBILE.test(mobile) || !/^[a-z0-9._-]{3,64}$/.test(username) || password.length < 8 || password.length > 200) {
     return errorResponse("validation_failed", 422, correlationId);
   }
 
   let guest: { ok: true; id: string } | { ok: false; conflict: boolean };
   try {
-    guest = await createGuestIdentity({ username: email, email, fullName, password });
+    guest = await createGuestIdentity({ username, email, fullName, password });
   } catch {
     return errorResponse("identity_unavailable", 503, correlationId);
   }
@@ -85,7 +86,7 @@ export const POST = logged("/api/runtime/public/manufacturer-signup", async (req
   const created = out.body as { username: string; applicationId: string };
   let tokens;
   try {
-    tokens = await passwordGrant(created.username, password, correlationId);
+    tokens = await passwordGrant(username, password, correlationId);
   } catch (e) {
     const wrong = e instanceof KeycloakError && e.code === "invalid_grant";
     return json(

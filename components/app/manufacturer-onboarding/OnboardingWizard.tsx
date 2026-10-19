@@ -295,7 +295,7 @@ export function OnboardingWizard() {
 
             {step === 7 && (
               <div className="space-y-3">
-                <p className="font-body-md">Review your entries, then submit. If payment and automated checks pass, the manufacturer is activated immediately under a 15-day observation window.</p>
+                <p className="font-body-md">Review your entries, then submit. Payment and initial automated checks run immediately; a BEE Officer then reviews the registration before activation.</p>
                 <dl className="grid sm:grid-cols-2 gap-2 font-body-sm">
                   <div><dt className="text-on-surface-variant">Entity</dt><dd>{draft.legalName}</dd></div>
                   <div><dt className="text-on-surface-variant">CIN</dt><dd>{draft.cin}</dd></div>

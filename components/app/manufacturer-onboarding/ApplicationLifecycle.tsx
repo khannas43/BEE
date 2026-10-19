@@ -60,6 +60,18 @@ export function ApplicationLifecycle({ id }: { id: string }) {
         <PhaseStatus phase={app.phase} />
       </div>
 
+      {app.phase === "director_review" && (
+        <section className="rounded-xl border border-primary/30 bg-primary/5 p-space-md space-y-2" data-testid="registration-submitted-confirmation">
+          <h2 className="font-headline-sm text-headline-sm">Thank you — your manufacturer registration has been submitted</h2>
+          <p className="font-body-md">
+            Your application reference is <strong>{app.reference}</strong>. The registration acknowledgement has been sent to the email address on your applicant account.
+          </p>
+          <p className="font-body-sm text-on-surface-variant">
+            In this demonstration, payment verification and initial eligibility checks are completed automatically. Your application is now awaiting BEE Officer approval before the manufacturer is activated.
+          </p>
+        </section>
+      )}
+
       <section className="bg-surface-card rounded-xl shadow-sm p-space-md space-y-space-md" data-testid="lifecycle-timeline">
         <h2 className="font-headline-sm text-headline-sm">Lifecycle timeline</h2>
         <ol className="space-y-3 border-l-2 border-outline-variant pl-4">

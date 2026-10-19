@@ -25,7 +25,7 @@ export function RegistrationList({ module, screen }: { module: Module; screen: S
   const revalidation = useRevalidation();
   const read = gateRead(identity.status, useRuntimeRead("list", loadList, revalidation));
   const newRequest = readOnlyAdmin ? null : (
-    <Link href={registrationNewHref()} className="border border-primary text-primary py-1.5 px-3 rounded-lg font-label-sm" data-testid="reg-new">
+    <Link href={registrationNewHref()} className="inline-flex items-center gap-1 rounded-xl bg-primary px-4 py-2 font-semibold text-on-primary shadow-sm hover:opacity-95" data-testid="reg-new">
       New request
     </Link>
   );
@@ -47,9 +47,30 @@ export function RegistrationList({ module, screen }: { module: Module; screen: S
           action={newRequest}
           resultAction={() => newRequest}
         >
-          {(r) => (
-            <RegistrationsTable items={r.list.items} variant="mine" />
-          )}
+          {(r) => {
+            const items = r.list.items;
+            const n = (f: (i: (typeof items)[number]) => boolean) => items.filter(f).length;
+            const tiles = [
+              { label: "All requests", value: items.length, tone: "text-primary" },
+              { label: "In progress", value: n((i) => ["draft", "fee_due", "programme_review", "director_approval"].includes(i.state)), tone: "text-[#8a4b00]" },
+              { label: "Registered", value: n((i) => i.state === "approved"), tone: "text-[#14532d]" },
+              { label: "Returned or rejected", value: n((i) => i.state === "returned" || i.state === "rejected"), tone: "text-[#93000a]" },
+            ];
+            return (
+              <div className="space-y-space-md">
+                <p className="text-sm text-on-surface-variant">Brand registrations and agency authorisations filed by your organisation, with the stage each has reached. Open one to read its trail.</p>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="reg-list-tiles">
+                  {tiles.map((t) => (
+                    <div key={t.label} className="rounded-2xl border border-border-subtle bg-white px-4 py-3 shadow-sm">
+                      <div className={`text-2xl font-bold tabular-nums ${t.tone}`}>{t.value}</div>
+                      <div className="text-sm font-semibold text-on-surface">{t.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <RegistrationsTable items={items} variant="mine" />
+              </div>
+            );
+          }}
         </ReadPanel>
       </div>
     </ScreenChrome>

@@ -43,6 +43,72 @@ function Hash({ value }: { value: string }) {
 
 const certStatusText = (c: Row) => `${STATUS_LABEL[c.ledgerStatus] ?? c.ledgerStatus}${c.pendingKind && c.ledgerStatus !== "pending" ? ` (${c.pendingKind} pending)` : ""}`;
 
+
+type Justification = { tone: "fail" | "revoke"; headline: string; recorded: string; because: string; effect: string; next: string; facts: string[] };
+
+const FAILURE_EXPLAINED: [RegExp, string, string][] = [
+  [/timeout/i, "The peer node did not answer within the allowed time, so the network could not confirm the transaction. Nothing was written to the chain.", "Retry once the peer responds; a second person must then commit it."],
+  [/endorse/i, "The transaction did not collect the endorsements the network policy requires, so the network refused to commit it. Nothing was written to the chain.", "Obtain the missing peer endorsements, then submit again; a second person must commit it."],
+];
+
+/** Why a certificate is Failed or Revoked, from what the ledger recorded. Null for any other status. */
+function justify(status: string, txs: Tx[]): Justification | null {
+  if (status === "failed") {
+    const failed = txs.filter((t) => t.state === "failed");
+    const last = failed[failed.length - 1];
+    if (!last) return null;
+    const recorded = last.failureReason?.replace(/\s*\(seeded\)/i, "") ?? "No failure reason was recorded.";
+    const known = FAILURE_EXPLAINED.find(([re]) => re.test(recorded));
+    const tries = failed.length;
+    return {
+      tone: "fail",
+      headline: `Commit failed${tries > 1 ? ` ${tries} times` : ""}: the certificate is not on the ledger`,
+      recorded,
+      because: known ? known[1] : "The simulated network rejected the transaction.",
+      effect: `${tries > 1 ? `Attempts ${failed.map((t) => t.attempt).join(" and ")} both failed` : `Attempt ${last.attempt} failed`}. The certificate has no committed entry, so public verification cannot confirm it.`,
+      next: known ? known[2] : "Retry the submission; a second person must commit it.",
+      facts: [`Last attempt: block ${last.blockNo}, ${istStamp(last.createdAt)}`, `Submitted by ${last.submittedBy}${last.decidedBy ? `, failed by ${last.decidedBy}` : ""}`],
+    };
+  }
+  if (status === "revoked") {
+    const rev = [...txs].reverse().find((t) => t.kind === "revoke");
+    if (!rev) return null;
+    const issue = txs.find((t) => t.kind === "issue");
+    return {
+      tone: "revoke",
+      headline: "Revoked: the certificate is no longer valid",
+      recorded: rev.reason ?? "No reason was recorded.",
+      because: "A revocation needs a written reason and two different people: one submits it and another commits it. Both are recorded below.",
+      effect: `Public verification shows this registration as revoked${rev.committedAt ? ` from ${istStamp(rev.committedAt)}` : ""}. A revoked certificate cannot be reinstated${issue ? ` (it was issued in block ${issue.blockNo})` : ""}.`,
+      next: "The manufacturer must obtain a new certificate through registration if the model is to be sold with a star label again.",
+      facts: [`Block ${rev.blockNo}`, `Submitted by ${rev.submittedBy}${rev.decidedBy ? `, committed by ${rev.decidedBy}` : ""}`],
+    };
+  }
+  return null;
+}
+
+function shortJustification(c: Row): string {
+  if (c.ledgerStatus === "failed") return c.lastTx?.failureReason ? `Commit failed: ${c.lastTx.failureReason.replace(/\s*\(seeded\)/i, "")}` : "Commit failed";
+  if (c.ledgerStatus === "revoked") return c.lastTx?.reason ? `Revoked: ${c.lastTx.reason}` : "Revoked";
+  return "";
+}
+
+function JustificationBox({ j }: { j: Justification }) {
+  const tone = j.tone === "fail" ? "border-[#f5c2c0] bg-[#fffafa]" : "border-[#f3dc9c] bg-[#fffaf0]";
+  return (
+    <div className={`rounded-xl border p-5 ${tone}`} data-testid="ledger-justification">
+      <div className="flex items-center gap-2 text-[16px] font-bold text-[#93000a]"><Icon name={j.tone === "fail" ? "error" : "block"} size={20} />{j.headline}</div>
+      <div className="mt-3 grid gap-4 md:grid-cols-2">
+        <Fact label="Recorded reason" value={<span className="font-normal">{j.recorded}</span>} />
+        <Fact label="What it means" value={<span className="font-normal">{j.because}</span>} />
+        <Fact label="Effect" value={<span className="font-normal">{j.effect}</span>} />
+        <Fact label="What happens next" value={<span className="font-normal">{j.next}</span>} />
+      </div>
+      <ul className="mt-3 text-[12px] text-[#64748b]">{j.facts.map((f) => <li key={f}>{f}</li>)}</ul>
+    </div>
+  );
+}
+
 const card = "rounded-xl border border-[#dbe6f7] bg-white";
 const th = "px-3 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-[#475569]";
 const td = "px-3 py-2 align-top";
@@ -73,8 +139,8 @@ function CertsTable({ rows, onOpen }: { rows: Row[]; onOpen: (c: Row) => void })
   return (
     <div className="space-y-space-sm">
       <ListToolbar tools={tools} searchLabel="Search by registration or model" placeholder="Registration, model or manufacturer" dateLabel="Valid to"
-        exportCsv={{ filename: "ledger-certificates", header: ["Registration ID", "Brand", "Model", "Manufacturer", "Ledger status", "Valid to", "Last transaction"],
-          rows: tools.visible.map((c) => [c.registrationId, c.brandName, c.modelNumber, c.manufacturer, certStatusText(c), c.validTo?.slice(0, 10), c.lastTx ? `${c.lastTx.kind} ${c.lastTx.state}` : "none"]) }} />
+        exportCsv={{ filename: "ledger-certificates", header: ["Registration ID", "Brand", "Model", "Manufacturer", "Ledger status", "Valid to", "Last transaction", "Justification"],
+          rows: tools.visible.map((c) => [c.registrationId, c.brandName, c.modelNumber, c.manufacturer, certStatusText(c), c.validTo?.slice(0, 10), c.lastTx ? `${c.lastTx.kind} ${c.lastTx.state}` : "none", shortJustification(c)]) }} />
       {tools.visible.length === 0 ? <p className="font-body-sm text-on-surface-variant">No certificates match.</p> : (
         <>
           <div className={`${card} overflow-x-auto`}>
@@ -84,6 +150,7 @@ function CertsTable({ rows, onOpen }: { rows: Row[]; onOpen: (c: Row) => void })
                 <SortableTh tools={tools} k="reg" className={th}>Registration ID</SortableTh><SortableTh tools={tools} k="model" className={th}>Model</SortableTh>
                 <SortableTh tools={tools} k="mfr" className={th}>Manufacturer</SortableTh><SortableTh tools={tools} k="status" className={th}>Ledger status</SortableTh>
                 <SortableTh tools={tools} k="valid" className={th}>Valid to</SortableTh><SortableTh tools={tools} k="last" className={th}>Last transaction</SortableTh>
+                <th className={th}>Justification</th>
                 <th className={th}><span className="sr-only">Open</span></th>
               </tr></thead>
               <tbody>
@@ -95,6 +162,7 @@ function CertsTable({ rows, onOpen }: { rows: Row[]; onOpen: (c: Row) => void })
                     <td className={td} data-testid={`ledger-status-${c.registrationId}`}><Pill>{certStatusText(c)}</Pill></td>
                     <td className={td}>{c.validTo?.slice(0, 10)}</td>
                     <td className={td}>{c.lastTx ? `${c.lastTx.kind} · ${c.lastTx.state}` : "none"}</td>
+                    <td className={`${td} max-w-[260px] text-[12px] text-[#475569]`} data-testid={`ledger-why-${c.registrationId}`}>{shortJustification(c)}</td>
                     <td className={td}><button type="button" onClick={(e) => { e.stopPropagation(); onOpen(c); }} className="inline-flex items-center gap-1 font-semibold text-primary" aria-label={`Open ledger panel for ${c.registrationId}`}>Open <Icon name="arrow_forward" size={14} /></button></td>
                   </tr>
                 ))}
@@ -314,6 +382,8 @@ export function LedgerDemo() {
                 <button type="button" className="font-semibold underline" onClick={() => void loadDetail(detail.certificateId)}>Verify again</button>
               </div>
             </div>
+
+            {(() => { const j = justify(detail.ledgerStatus, detail.transactions); return j ? <JustificationBox j={j} /> : null; })()}
 
             <div className={`${card} p-5`}>
               <div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Transaction chain</div>

@@ -33,8 +33,8 @@ export const DIRECTOR_COPY = {
   loadingDetail: "Loading application…",
   empty: "No application is waiting for your decision.",
   provisional: "Provisional local rules, not BEE rules. The rating shown is a local demonstration, not a BEE rating.",
-  separation: "Only the Director who took no other part in this application can recommend, and never someone from its own organisation.",
-  finalNote: "For some categories the Director's recommendation is final and the application is approved without the Secretary (an owner assumption on decision D1, not a BEE rule). The receipt says which applied.",
+  separation: "Only the BEE Officer who took no other part in this application can recommend, and never someone from its own organisation.",
+  finalNote: "For some categories the BEE Officer's recommendation is final and the application is approved without the Director (an owner assumption on decision D1, not a BEE rule). The receipt says which applied.",
   noteLabel: "Note for the record",
   inputRequired: "Write a note of up to 500 characters.",
   noRating: "No rating has been recorded for this application.",
@@ -58,6 +58,7 @@ export function DirectorApproval({ module, screen }: { module: Module; screen: S
       route={ROUTE}
       subtitle="Review the rating and recommend approval"
       screenTestId="approval-scrutiny"
+      caseLayout
       testIdPrefix="approval"
       copy={DIRECTOR_COPY}
       detailFieldsTestId="approval-detail-fields"
@@ -252,11 +253,10 @@ function SecretaryPrimaryCommand({
 function RatingBlock({ application }: { application: ModelApplication }) {
   const rating = application.rating;
   return (
-    <div className="mt-space-md" data-testid="approval-rating">
-      <h3 className="font-label-md text-label-md text-on-surface">Rating</h3>
+    <div data-testid="approval-rating">
       {rating ? (
         <>
-          <p className="font-body-md text-body-md" data-testid="approval-rating-stars">
+          <p className="text-xl font-semibold text-on-surface" data-testid="approval-rating-stars">
             {"★".repeat(rating.stars)}{"☆".repeat(5 - rating.stars)} {rating.stars} {rating.stars === 1 ? "star" : "stars"}
           </p>
           <p className="font-body-sm text-body-sm text-on-surface-variant">

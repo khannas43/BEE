@@ -2,7 +2,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { Manufacturer360Demo } from "@/components/app/demo/Manufacturer360Demo";
 import {
-  DEMO_DISCLOSURE,
   MANUFACTURER_360_STAGES,
   WP9_PREVIEW_LABEL,
 } from "@/lib/demo/manufacturer360Fixture";

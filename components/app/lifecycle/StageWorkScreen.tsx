@@ -10,6 +10,7 @@ import { IdentityStrip } from "@/components/app/kit/IdentityStrip";
 import { DescriptionList, ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { ApplicationDocuments } from "@/components/app/lifecycle/ApplicationDocuments";
+import { CaseView } from "@/components/app/lifecycle/CaseView";
 import { ApplicationHistory } from "@/components/app/lifecycle/ApplicationHistory";
 import { ReturnToApplicant, ReturnedNote } from "@/components/app/lifecycle/ReturnToApplicant";
 import { RejectApplication, RejectedNote } from "@/components/app/lifecycle/RejectApplication";
@@ -56,6 +57,8 @@ export type StageWorkScreenProps = {
   detailFieldsTestId: string;
   historyTestIdPrefix: string;
   showReturnPanel?: boolean;
+  /** Show a selected application as a full-width review page instead of beside the queue. */
+  caseLayout?: boolean;
   returnRejectTestIdPrefix?: string | ((application: ModelApplication) => string);
   detailRows: (application: ModelApplication) => Parameters<typeof DescriptionList>[0]["rows"];
   renderExtraDetail?: (application: ModelApplication) => ReactNode;
@@ -87,6 +90,7 @@ export function StageWorkScreen({
   detailFieldsTestId,
   historyTestIdPrefix,
   showReturnPanel = true,
+  caseLayout = false,
   returnRejectTestIdPrefix: returnRejectPrefixProp,
   detailRows,
   renderExtraDetail,
@@ -127,6 +131,47 @@ export function StageWorkScreen({
   const helpers: StageWorkHelpers = { reload: revalidation.refresh };
 
   const customAside = selectedId && renderDetailAside ? renderDetailAside(selectedId) : undefined;
+
+  if (caseLayout && selectedId) {
+    const application = detail?.ok ? detail.application : null;
+    const panelPrefix = application ? resolvePrefix(application, returnRejectTestIdPrefix) : testIdPrefix;
+    return (
+      <ScreenChrome module={module} screen={screen} subtitle={subtitle} implemented={runtimeRouteFor(route)?.implemented}>
+        <div className="space-y-space-md" data-testid={screenTestId}>
+          <IdentityStrip identity={identity} testId={`${testIdPrefix}-identity`} />
+          <div data-testid={`${testIdPrefix}-detail`} data-selected-id={selectedId}>
+            {customAside !== undefined && customAside !== null ? (
+              customAside
+            ) : !application ? (
+              <ReadPanel title="Application and evidence" read={detail} loadingText={copy.loadingDetail} errorTestId={`${testIdPrefix}-detail-error`} signInReturnTo={route}>
+                {() => null}
+              </ReadPanel>
+            ) : (
+              <CaseView
+                application={application}
+                backHref={route}
+                testIdPrefix={testIdPrefix}
+                detailFieldsTestId={detailFieldsTestId}
+                historyTestIdPrefix={historyTestIdPrefix}
+                rows={detailRows(application)}
+                rating={renderExtraDetail?.(application)}
+                provisional={copy.provisional}
+                decision={
+                  <>
+                    {renderPrimary(application, helpers)}
+                    {showReturnPanel ? (
+                      <ReturnToApplicant application={application} testIdPrefix={panelPrefix} signInReturnTo={route} onReturned={onReturned} onReload={helpers.reload} />
+                    ) : null}
+                    <RejectApplication application={application} testIdPrefix={panelPrefix} signInReturnTo={route} onRejected={onRejected} onReload={helpers.reload} />
+                  </>
+                }
+              />
+            )}
+          </div>
+        </div>
+      </ScreenChrome>
+    );
+  }
 
   return (
     <ScreenChrome module={module} screen={screen} subtitle={subtitle} implemented={runtimeRouteFor(route)?.implemented}>

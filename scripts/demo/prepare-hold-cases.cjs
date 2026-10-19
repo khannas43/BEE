@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /* eslint-disable */
 /**
- * Prepares two registrations that are ON HOLD with an anomaly, through the real screens: sign-up, wizard, BEE Officer approval, then
- * Finance raises the anomaly. Run on a freshly reset demo after prepare-ravik24-submission.cjs (npm run demo:prepare-approval does all).
+ * Prepares three registrations through the real screens: sign-up, wizard, BEE Officer approval, and for two of them Finance then
+ * raises an anomaly (ON HOLD). The third is left under normal observation. ONLY=<username> prepares just that one. Run on a freshly reset demo after prepare-ravik24-submission.cjs (npm run demo:prepare-approval does all).
  *   node scripts/demo/prepare-hold-cases.cjs
  */
 const fs = require("fs");
@@ -456,12 +456,17 @@ const CASES = [
     cin: "U29300GJ2018PTC104377", gstin: "24AAFCB2290M1ZR", address: "Plot 63, GIDC Sachin, Surat", plant: "Sachin Plant",
     reason: "Registration fee payment reversed after activation: the gateway reports receipt SIMRCPT-REV-0412 as charged back, so the Rs 5,000 fee is no longer verified. Hold applied until Finance confirms a fresh payment or the reversal is withdrawn.",
   },
+  {
+    legal: "Zephyr Climate Appliances Pvt Ltd", username: "zephyr.mfg", email: "admin@zephyrclimate.example", mobile: "9890044512", person: "Aditya Joshi",
+    cin: "U29190MH2022PTC391045", gstin: "27AAGCZ6638Q1ZH", address: "Plot 21, MIDC Butibori, Nagpur", plant: "Butibori Plant",
+    reason: null,
+  },
 ];
 
 async function main() {
   const chrome = await launchChrome();
   try {
-    for (const c of CASES) {
+    for (const c of CASES.filter((x) => !process.env.ONLY || x.username === process.env.ONLY)) {
       LEGAL = c.legal;
       CASE_CIN = c.cin;
       CASE_GSTIN = c.gstin;
@@ -479,13 +484,14 @@ async function main() {
       const activated = await directorApprove(officer, run.appId, run.detail.reference);
       check(`hold.${c.username}.activated`, activated.state === "active_observation", activated.reference);
       await officer.close();
+      if (!c.reason) continue; // left under normal observation
       const finance = await openPage(chrome.cdp);
       await demoSignIn(finance, "bee.finance");
       const held = await financeRaiseAnomaly(finance, run.appId, run.detail.reference, c.reason);
       check(`hold.${c.username}.on-hold`, held.state === "on_hold", `${held.reference} ${held.state}`);
       await finance.close();
     }
-    console.log("\nReady: two registrations are on hold with an anomaly (BEE Officer: Anomalies and holds).");
+    console.log("\nReady: two registrations on hold with an anomaly and one under normal observation (BEE Officer: Anomalies and holds).");
   } finally {
     await chrome.close();
   }

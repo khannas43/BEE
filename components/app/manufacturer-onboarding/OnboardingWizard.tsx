@@ -276,9 +276,9 @@ export function OnboardingWizard() {
                 </div>
               </WizardSection>
               <WizardSection title="Registered office address" icon="home_pin">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   {(["line1", "line2"] as const).map((key) => (
-                    <label key={key} className="block sm:col-span-2">
+                    <label key={key} className="block sm:col-span-3">
                       <WizardFieldLabel required={key === "line1"}>
                         {key === "line1" ? "Address line 1" : "Address line 2"}
                       </WizardFieldLabel>

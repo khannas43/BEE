@@ -11,6 +11,7 @@ import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { type WorkTask, workTasks } from "@/components/app/workflow/workTasks";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { readModelApplicationList, stateLabel } from "@/lib/client/runtimeModelApplications";
+import { manufacturerProfileHref } from "@/lib/demo/manufacturerDirectory";
 import { readCompanyRegistrationsAwaitingApproval, type CompanyRegistrationItem } from "@/lib/client/runtimeCompanyRegistrations";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
@@ -96,6 +97,8 @@ interface InboxRow {
   action: string;
   submittedAt: string | null;
   href: string;
+  /** The Manufacturer 360 profile the brand and model text links to. */
+  profileHref: string;
 }
 
 /** The company registrations awaiting approval are the BEE Officer's decision, so they appear for that role only. */
@@ -109,6 +112,7 @@ function rowsFor(kind: MyWorkKind, roles: readonly string[], items: Parameters<t
     action: t.action,
     submittedAt: t.application.submittedAt ?? null,
     href: t.href,
+    profileHref: manufacturerProfileHref(t.application.organisation),
   }));
   const company: InboxRow[] = roles.includes("officer")
     ? companies
@@ -122,6 +126,7 @@ function rowsFor(kind: MyWorkKind, roles: readonly string[], items: Parameters<t
           action: "Review and approve the company registration",
           submittedAt: c.createdAt,
           href: "/app/manufacturer/director",
+          profileHref: `/app/demo/manufacturer-360?m=live-${encodeURIComponent(c.id)}`,
         }))
     : [];
   return [...company, ...models];
@@ -144,10 +149,10 @@ function TaskTable({ prefix, rows }: { prefix: string; rows: InboxRow[] }) {
       header: "Brand / Model",
       sortValue: (t) => `${t.title} ${t.subtitle}`,
       render: (t) => (
-        <div>
-          <div className="font-semibold text-on-surface">{t.title}</div>
-          <div className="font-label-sm text-label-sm text-on-surface-variant">{t.subtitle}</div>
-        </div>
+        <Link href={t.profileHref} className="block hover:underline" title="Open the Manufacturer 360 profile" data-testid={`${prefix}-profile-${t.reference}`}>
+          <div className="font-semibold text-primary">{t.title}</div>
+          <div className="font-label-sm text-label-sm text-primary/80">{t.subtitle}</div>
+        </Link>
       ),
     },
     { key: "state", header: "Stage", sortValue: (t) => t.stage, render: (t) => t.stage },

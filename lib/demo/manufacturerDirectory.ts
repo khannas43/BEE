@@ -369,4 +369,41 @@ export const DIRECTORY: readonly DirectoryManufacturer[] = [
   },
 ];
 
+/** Three more synthetic manufacturers (the organisations behind "Synthetic Brand 1, 2, 3" in the work queues), derived from one template. */
+const harbor = DIRECTORY.find((m) => m.id === "harbor-breeze")!;
+const syntheticManufacturer = (n: number, city: string, state: string, brand: string, status: ComplianceStatus): DirectoryManufacturer => ({
+  ...harbor,
+  id: `synthetic-mfg-${n}`,
+  orgCode: `SYNTH-MFG-${n}`,
+  name: `Synthetic Manufacturer ${n} Pvt Ltd`,
+  status,
+  city,
+  state,
+  since: `0${n} Mar 202${2 + n}`,
+  permitteeNumber: `PT-202${2 + n}-0030${n}`,
+  cin: `U29190XX201${n}PTC00${n}${n}00`,
+  gstin: `0${n}AAACS${n}${n}01K1Z${n}`,
+  address: `Unit ${n}0, Industrial Estate, ${city}`,
+  signatory: { name: `Authorised Signatory ${n}`, designation: "Director", email: `signatory${n}@synthetic${n}.example`, phone: `9800${n}0000${n}` },
+  facilities: [{ name: `${city} Plant`, location: `${city}, ${state}`, capacity: "50,000 units / year" }],
+  brands: [{ name: brand, status: "Active", categories: "RAC" }],
+  models: [],
+  fees: { paid: "₹27,500", outstanding: "₹0", payments: [] },
+  flags: [],
+  anomalies: [],
+  timeline: [{ date: `0${n} Mar 202${2 + n}`, title: "Registered and activated", detail: `Permittee PT-202${2 + n}-0030${n}.` }],
+});
+export const ALL_MANUFACTURERS: readonly DirectoryManufacturer[] = [
+  ...DIRECTORY,
+  syntheticManufacturer(1, "Jaipur", "Rajasthan", "Synthetic Brand 1", "Compliant"),
+  syntheticManufacturer(2, "Coimbatore", "Tamil Nadu", "Synthetic Brand 2", "Compliant"),
+  syntheticManufacturer(3, "Kolkata", "West Bengal", "Synthetic Brand 3", "Compliant"),
+];
+
+/** Where the Manufacturer 360 profile of a signed-in organisation code lives; the directory when there is no profile. */
+export function manufacturerProfileHref(orgCode: string | undefined | null): string {
+  const m = ALL_MANUFACTURERS.find((x) => x.orgCode === orgCode);
+  return m ? `/app/demo/manufacturer-360?m=${encodeURIComponent(m.id)}` : "/app/demo/manufacturer-360";
+}
+
 export const STATUS_FILTERS: readonly ComplianceStatus[] = ["Compliant", "Under observation", "On hold", "Registration pending"];

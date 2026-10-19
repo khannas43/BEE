@@ -10,7 +10,7 @@ import { createManufacturerOnboardingClient } from "@/lib/manufacturer-onboardin
 import { readCompanyRegistrationsAwaitingApproval } from "@/lib/client/runtimeCompanyRegistrations";
 import type { ManufacturerApplication } from "@/lib/manufacturer-onboarding/types";
 import {
-  DIRECTORY,
+  ALL_MANUFACTURERS,
   STATUS_FILTERS,
   type ComplianceStatus,
   type DirectoryManufacturer,
@@ -527,7 +527,7 @@ export function Manufacturer360Demo() {
   }, [identity.status]);
 
   const list = useMemo(() => {
-    const fixtures = applicantOnly ? DIRECTORY.filter((m) => ownOrgKey.split("|").includes(m.orgCode)) : [...DIRECTORY];
+    const fixtures = applicantOnly ? ALL_MANUFACTURERS.filter((m) => ownOrgKey.split("|").includes(m.orgCode)) : [...ALL_MANUFACTURERS];
     return [...live, ...fixtures];
   }, [applicantOnly, ownOrgKey, live]);
 

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Manufacturer360Demo } from "@/components/app/demo/Manufacturer360Demo";
-import { DIRECTORY } from "@/lib/demo/manufacturerDirectory";
+import { ALL_MANUFACTURERS as DIRECTORY } from "@/lib/demo/manufacturerDirectory";
 import { runtimeNavFor, runtimeRouteFor } from "@/lib/runtimeRoutes";
 
 const search = vi.hoisted(() => ({ value: "" }));

@@ -164,6 +164,21 @@ class RevocationDatabaseTest {
     }
 
     @Test
+    void adminDemonstrationReadsRegisterButCannotMutate() {
+        var f = fixture();
+        var read = ok(service.read(ADMIN), 200);
+        assertEquals(false, read.get("canPropose"));
+        assertEquals(false, read.get("canDecide"));
+        assertTrue(read.get("brands") instanceof List<?>);
+        refused(service.propose(ADMIN, key(), json(propose("brand", f.brand(), "revoke", ""))), 403, "role_not_permitted");
+        var p = ok(service.propose(PROGRAMME, key(), json(propose("brand", f.brand(), "revoke", ""))), 201);
+        refused(decide(ADMIN, p.get("id"), "approve", "No"), 403, "role_not_permitted");
+        refused(decide(ADMIN, p.get("id"), "reject", "No"), 403, "role_not_permitted");
+        refused(decide(ADMIN, p.get("id"), "withdraw", null), 403, "role_not_permitted");
+        ok(decide(PROGRAMME, p.get("id"), "withdraw", null), 200);
+    }
+
+    @Test
     void programmeProposesTheDirectorRevokesABrandAndItsAuthorisationsGoWithIt() {
         var f = fixture();
         refused(service.propose(NOVA, key(), json(propose("brand", f.brand(), "revoke", ""))), 403, "role_not_permitted");

@@ -179,7 +179,7 @@ class RegistrationDatabaseTest {
         refused(service.create(NOVA, key(), json("{\"brandName\":\"Bad<script>\"}")), 422, "validation_failed");
         refused(service.create(NOVA, key(), json("{\"brandName\":\"X\",\"validFrom\":\"2030-01-01\"}")), 422, "validation_failed");
         refused(service.create(NOVA, null, json("{\"brandName\":\"No Key\"}")), 422, "idempotency_key_required");
-        refused(service.create(ADMIN, key(), json("{\"brandName\":\"Admin Brand\"}")), 403, "no_write_scope");
+        refused(service.create(ADMIN, key(), json("{\"brandName\":\"Admin Brand\"}")), 403, "role_not_permitted");
 
         String id = (String) created.get("id");
         var edited = ok(service.patch(NOVA, UUID.fromString(id), key(), json("{\"version\":0,\"brandName\":\"Zephyr Air\"}")), 200);
@@ -269,7 +269,7 @@ class RegistrationDatabaseTest {
         UUID id = UUID.fromString((String) draft.get("id"));
         ok(service.list(ADMIN), 200);
         ok(service.get(ADMIN, id), 200);
-        refused(service.patch(ADMIN, id, key(), json("{\"version\":0,\"brandName\":\"Hack\"}")), 403, "no_write_scope");
+        refused(service.patch(ADMIN, id, key(), json("{\"version\":0,\"brandName\":\"Hack\"}")), 403, "role_not_permitted");
     }
 
     @Test

@@ -893,7 +893,7 @@ Accepted by and date:
 ### 7.1 Portal role navigation and Admin read-only demo (Brief C3 / C3A, 19 October 2026)
 
 - **C3:** `lib/navigation.ts` drives the Spring-backed menu (five profiles, four groups max). Admin is the demonstration umbrella; operational roles keep distinct menus. See [BEE_DECISIONS.md](../BEE_DECISIONS.md) N1–N5.
-- **C3A:** Umbrella Admin without an operational own role receives widened **read** scope for operational records (model applications, registrations, manufacturer onboarding) and explicit **mutation denial** via `AdminDemonstrationAccess`. `/api/me.adminDemonstrationReadOnly` feeds the read-only banner and disabled actions. Administrative capabilities are unchanged. Contract **0.37.2**. Live proof: `npm run local:c3a-five-role`.
+- **C3A:** Umbrella Admin without an operational own role receives widened **read** scope for operational records (model applications, registrations, manufacturer onboarding, **register revocations**) and explicit **mutation denial** via `AdminDemonstrationAccess` (including `GET /api/register-revocations` and denied propose/decide). `/api/me.adminDemonstrationReadOnly` feeds the read-only banner; operational screens **hide** mutation controls (register screen included). `lib/adminMenuCoverage.ts` maps every Admin menu runtime route to named backend/UI tests. Contract **0.37.2**. Live proof: `npm run local:c3a-five-role` (Admin expands all four menu groups and opens the register read-only). **BL-266** closes only after this evidence passes.
 
 The following demonstrated modules should be promoted into the formal API rather than rebuilt:
 

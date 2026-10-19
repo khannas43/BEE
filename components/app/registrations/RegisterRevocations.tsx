@@ -10,6 +10,7 @@ import { useCommand, type CommandState } from "@/components/app/kit/CommandPanel
 import { ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
+import { useAdminDemonstrationReadOnly } from "@/lib/adminDemonstration";
 import { commandAdvice, type CommandFailure, gateRead } from "@/lib/client/runtimeHttp";
 import {
   type RegisterAuthorisationEntry,
@@ -44,6 +45,7 @@ function words(table: Record<string, string>, code: string): string {
  */
 export function RegisterRevocations({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
+  const readOnlyAdmin = useAdminDemonstrationReadOnly();
   const revalidation = useRevalidation();
   const read = gateRead(identity.status, useRuntimeRead("register", loadRegister, revalidation));
   const [openId, setOpenId] = useState<string | null>(null);
@@ -61,7 +63,14 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
           signInReturnTo={registerHref()}
         >
           {(r) => (
-            <RegisterBody register={r.register} openId={openId} onOpen={setOpenId} onChanged={() => { setOpenId(null); revalidation.refresh(); }} onRefresh={() => revalidation.refresh()} />
+            <RegisterBody
+              register={r.register}
+              readOnlyAdmin={readOnlyAdmin}
+              openId={openId}
+              onOpen={setOpenId}
+              onChanged={() => { setOpenId(null); revalidation.refresh(); }}
+              onRefresh={() => revalidation.refresh()}
+            />
           )}
         </ReadPanel>
       </div>
@@ -108,17 +117,22 @@ function SummaryCard({ label, value, hint, tone, tab, current, onPick }: { label
 
 function RegisterBody({
   register,
+  readOnlyAdmin,
   openId,
   onOpen,
   onChanged,
   onRefresh,
 }: {
   register: RegisterRevocations;
+  readOnlyAdmin: boolean;
   openId: string | null;
   onOpen: (id: string | null) => void;
   onChanged: () => void;
   onRefresh: () => void;
 }) {
+  const view: RegisterRevocations = readOnlyAdmin
+    ? { ...register, canPropose: false, canDecide: false }
+    : register;
   const [tab, setTab] = useState<TabKey>("brands");
   const count = (xs: { status: string }[], st: string) => xs.filter((x) => x.status === st).length;
   const brandsActive = count(register.brands, "active");
@@ -147,16 +161,16 @@ function RegisterBody({
       </div>
 
       <section role="tabpanel" aria-labelledby="rvk-tab-brands" hidden={tab !== "brands"}>
-        <BrandsPanel register={register} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />
+        <BrandsPanel register={view} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />
       </section>
       <section role="tabpanel" aria-labelledby="rvk-tab-auths" hidden={tab !== "auths"}>
-        <AuthsPanel register={register} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />
+        <AuthsPanel register={view} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />
       </section>
       <section role="tabpanel" aria-labelledby="rvk-tab-pending" hidden={tab !== "pending"} data-testid="rvk-pending">
-        <PendingPanel register={register} onChanged={onChanged} onRefresh={onRefresh} />
+        <PendingPanel register={view} onChanged={onChanged} onRefresh={onRefresh} />
       </section>
       <section role="tabpanel" aria-labelledby="rvk-tab-history" hidden={tab !== "history"} data-testid="rvk-history">
-        <HistoryPanel decided={register.decided} />
+        <HistoryPanel decided={view.decided} />
       </section>
     </div>
   );

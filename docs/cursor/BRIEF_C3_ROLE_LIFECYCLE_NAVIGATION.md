@@ -182,6 +182,6 @@ The live check `read-ui-browser-check.cjs` step `read-ui.preview-elsewhere-uncha
 
 **Portal:** `AdminDemonstrationBanner`; `ScreenChrome` hides header actions; manufacturer routes use `ManufacturerRouteShell`; registration list and finance queue hide mutation controls when Spring reports read-only Admin.
 
-**Proof:** `AdminDemonstrationAccessTest`, `SlicePolicyTest`, `RegistrationDatabaseTest`, `SnlWp03OptimizedManufacturerOnboardingDatabaseTest`; `AdminDemonstration.test.tsx`, `adminMenuCoverage.test.tsx`; live `npm run local:c3a-five-role`. OpenAPI **0.37.2** adds optional `adminDemonstrationReadOnly` on Me.
+**Proof:** `AdminDemonstrationAccessTest`, `SlicePolicyTest`, `RegistrationDatabaseTest`, `RevocationDatabaseTest.adminDemonstrationReadsRegisterButCannotMutate`, `SnlWp03OptimizedManufacturerOnboardingDatabaseTest`; `AdminDemonstration.test.tsx`, `RegisterRevocations.test.tsx` (read-only Admin hides mutation controls), `adminMenuCoverage.test.tsx` (every menu route names real backend/UI tests); live `npm run local:c3a-five-role` (Admin opens all four menu groups plus register). OpenAPI **0.37.2** adds optional `adminDemonstrationReadOnly` on Me.
 
-**BL-266:** closed when C3A shipped.
+**BL-266:** open until register/revocation read-only access and the named-test coverage gate pass; close only after full C3A verification.

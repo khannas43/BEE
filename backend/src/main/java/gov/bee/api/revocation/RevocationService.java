@@ -2,6 +2,7 @@ package gov.bee.api.revocation;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gov.bee.api.administration.AdminDemonstrationAccess;
 import gov.bee.api.application.DraftRequestSupport;
 import gov.bee.api.application.IdempotencyRepository;
 import gov.bee.api.identity.Caller;
@@ -64,7 +65,11 @@ public class RevocationService {
     }
 
     private boolean mayRead(Caller caller) {
-        return mayPropose(caller) || mayDecide(caller);
+        return mayPropose(caller) || mayDecide(caller) || AdminDemonstrationAccess.mayReadAllOperationalRecords(caller);
+    }
+
+    private boolean mayMutate(Caller caller) {
+        return !AdminDemonstrationAccess.deniesOperationalMutation(caller);
     }
 
     public ResponseEntity<Map<String, Object>> read(Caller caller) {
@@ -120,8 +125,8 @@ public class RevocationService {
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("today", LocalDate.now(INDIA).toString());
-        out.put("canPropose", mayPropose(caller));
-        out.put("canDecide", mayDecide(caller));
+        out.put("canPropose", mayPropose(caller) && mayMutate(caller));
+        out.put("canDecide", mayDecide(caller) && mayMutate(caller));
         out.put("brands", brands);
         out.put("authorisations", authorisations);
         out.put("pending", pending);
@@ -136,7 +141,7 @@ public class RevocationService {
         if (replay.isPresent()) {
             return replay.get();
         }
-        if (!mayPropose(caller)) {
+        if (!mayMutate(caller) || !mayPropose(caller)) {
             return error(HttpStatus.FORBIDDEN, "role_not_permitted");
         }
         Optional<Parsed> parsed = parsePropose(body, LocalDate.now(INDIA));
@@ -178,6 +183,9 @@ public class RevocationService {
             return replay.get();
         }
         if (!mayRead(caller)) {
+            return error(HttpStatus.FORBIDDEN, "role_not_permitted");
+        }
+        if (!mayMutate(caller)) {
             return error(HttpStatus.FORBIDDEN, "role_not_permitted");
         }
         if (repository.proposal(proposalId).isEmpty()) {

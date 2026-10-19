@@ -163,7 +163,7 @@ async function main() {
     { m: "GET", path: "/api/fee-corrections", who: ["bee.finance"] },
     { m: "GET", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant", "bee.finance", "bee.programme", "bee.director"] },
     { m: "GET", path: "/api/registrations/eligible-brands", who: ["nova.applicant", "pixel.applicant"] },
-    { m: "GET", path: "/api/register-revocations", who: ["bee.programme", "bee.director"] },
+    { m: "GET", path: "/api/register-revocations", who: ["bee.programme", "bee.director", "bee.admin"] },
     { m: "POST", path: "/api/fee-rules/proposals", who: ["bee.admin"] },
     { m: "POST", path: "/api/rating-schemes/proposals", who: ["bee.admin"] },
     { m: "POST", path: "/api/business-settings/proposals", who: ["bee.admin"] },

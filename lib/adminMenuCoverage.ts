@@ -7,45 +7,165 @@ import { RUNTIME_ROUTES } from "./runtimeRoutes";
 
 export const ADMIN_DEMO_CAPS = ["fee_rule_manage", "rating_scheme_manage", "business_setting_manage", "fee_confirmation_correct"] as const;
 
-/** Runtime routes the Admin demonstration menu opens; each maps to the test that proves read-only access. */
-export const ADMIN_RUNTIME_READ_ONLY_PROVEN: Readonly<Record<string, string>> = {
-  "/app/manufacturer/onboarding": "SnlWp03OptimizedManufacturerOnboardingDatabaseTest + AdminDemonstration.test.tsx",
-  "/app/manufacturer/monitoring": "ManufacturerOnboardingPolicy read scope + AdminDemonstration.test.tsx",
-  "/app/registrations/requests": "RegistrationDatabaseTest.whoReadsWhat + AdminDemonstration.test.tsx",
-  "/app/registrations/reviews": "RegistrationReviewDatabaseTest + AdminDemonstration.test.tsx",
-  "/app/registrations/register": "Register revocation read scope + AdminDemonstration.test.tsx",
-  "/app/registrations/fees": "RegistrationDatabaseTest + AdminDemonstration.test.tsx",
-  "/app/finance/finance-queue": "SlicePolicy admin allRecords + FinanceQueue read-only UI",
-  "/app/workflow/personal-inbox": "SlicePolicy read scope + MyWork ScreenChrome",
-  "/app/workflow/my-approvals": "SlicePolicy stage reads + ScreenChrome",
-  "/app/workflow/application-review": "WorkflowViews read + ScreenChrome",
-  "/app/workflow/escalation-dashboard": "WorkflowViews read + ScreenChrome",
-  "/app/workflow/workflow-history": "HistoryService read scope + ScreenChrome",
-  "/app/model-label/model-dashboard": "Model dashboard runtime list (SlicePolicy)",
-  "/app/model-label/new-model-application": "Model draft read; mutations denied (ModelDraftPolicy)",
-  "/app/model-label/notifications": "Notifications read API",
-  "/app/model-label/label-preview": "Certificate read route",
-  "/app/model-label/iame-scrutiny": "Stage work read (assigned/allRecords)",
-  "/app/model-label/bee-scrutiny": "Stage work read",
-  "/app/model-label/rating-calculation": "Rating read stage",
-  "/app/model-label/director-approval": "Director stage read",
-  "/app/delegations": "DelegationDatabaseTest (admin approve unchanged)",
-  "/app/administration/fee-rules": "FeeRuleDatabaseTest admin read + propose own",
-  "/app/administration/rating-formula": "RatingSchemeDatabaseTest admin read",
-  "/app/administration/business-settings": "BusinessSettingDatabaseTest admin read",
-  "/app/finance/receipt": "Fee correction admin capability (not operational mutation)",
-  "/app/demo/mis": "Demo MIS read module",
-  "/app/demo/payments": "Demo payments read",
-  "/app/demo/ai": "AiDemoModule read roles include admin",
-  "/app/demo/ledger": "LedgerDatabaseTest admin read/write (demo ledger, not slice workflow)",
-  "/app/demo/qr": "QrModule admin reader",
-  "/app/demo/executive": "DashboardDatabaseTest executive view",
-  "/app/demo/manufacturer-360": "Demo manufacturer 360 read",
-  "/app/demo/notifications": "Messages read API",
-  "/app/demo/director": "Demo director dashboard read",
-  "/app/demo/production": "Demo production read",
-  "/app/demo/auditor": "DashboardDatabaseTest auditor view",
-  "/app/verify": "Public verify page (standalone)",
+/** Named test identifiers that prove read-only Admin access for a runtime menu route. */
+export type AdminRouteProof = {
+  backend?: readonly string[];
+  ui: readonly string[];
+};
+
+const UI_BANNER = "AdminDemonstration.test.tsx: shows the banner copy from the brief";
+const UI_CHROME = "AdminDemonstration.test.tsx: ScreenChrome hides header actions for read-only Admin";
+const UI_REG_LIST = "AdminDemonstration.test.tsx: Registration list hides New request for read-only Admin";
+
+/** Runtime routes the Admin demonstration menu opens; each maps to named tests that prove read-only access. */
+export const ADMIN_RUNTIME_READ_ONLY_PROVEN: Readonly<Record<string, AdminRouteProof>> = {
+  "/app/manufacturer/onboarding": {
+    backend: ["SnlWp03OptimizedManufacturerOnboardingDatabaseTest.adminDemonstrationReadsAllOnboardingApplicationsButCannotMutate"],
+    ui: [UI_CHROME],
+  },
+  "/app/manufacturer/monitoring": {
+    backend: ["SnlWp03OptimizedManufacturerOnboardingDatabaseTest.adminDemonstrationReadsAllOnboardingApplicationsButCannotMutate"],
+    ui: [UI_CHROME],
+  },
+  "/app/registrations/requests": {
+    backend: ["RegistrationDatabaseTest.adminDemonstrationListsAndReadsButCannotMutate"],
+    ui: [UI_REG_LIST],
+  },
+  "/app/registrations/reviews": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/registrations/register": {
+    backend: ["RevocationDatabaseTest.adminDemonstrationReadsRegisterButCannotMutate"],
+    ui: ["RegisterRevocations.test.tsx: read-only Admin hides revocation mutation controls"],
+  },
+  "/app/registrations/fees": {
+    backend: ["RegistrationDatabaseTest.adminDemonstrationListsAndReadsButCannotMutate"],
+    ui: [UI_CHROME],
+  },
+  "/app/finance/finance-queue": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/workflow/personal-inbox": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/workflow/my-approvals": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/workflow/application-review": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/workflow/escalation-dashboard": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/workflow/workflow-history": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/model-label/model-dashboard": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/model-label/new-model-application": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/model-label/notifications": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/model-label/label-preview": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/model-label/iame-scrutiny": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/model-label/bee-scrutiny": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/model-label/rating-calculation": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/model-label/director-approval": {
+    backend: ["SlicePolicyTest.adminDemonstrationReadsAllModelApplications"],
+    ui: [UI_CHROME],
+  },
+  "/app/delegations": {
+    backend: ["DelegationDatabaseTest.anAdministratorApprovesThirdPersonOnlyAndTheDelegateThenHoldsTheRoleButNotMoreThanThat"],
+    ui: [UI_CHROME],
+  },
+  "/app/administration/fee-rules": {
+    backend: ["FeeRuleDatabaseTest.theAdministratorHoldsTheCapabilityAndNobodyElseDoes"],
+    ui: [UI_CHROME],
+  },
+  "/app/administration/rating-formula": {
+    backend: ["RatingSchemeDatabaseTest.onlyTheAdministratorHoldsThePermissionAndNothingElseDoes"],
+    ui: [UI_CHROME],
+  },
+  "/app/administration/business-settings": {
+    backend: ["BusinessSettingDatabaseTest.onlyTheAdministratorHoldsThePermissionAndTheFiveSettingsHaveTheirOwnersAssumptionAsDefault"],
+    ui: [UI_CHROME],
+  },
+  "/app/finance/receipt": {
+    backend: ["FeeCorrectionDatabaseTest.financeHoldsThePermissionAndTheConfirmationIsListedWithItsEffectiveValues"],
+    ui: [UI_CHROME],
+  },
+  "/app/demo/mis": {
+    backend: ["MisModuleDatabaseTest.rolesAndMethodsAreEnforced"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/payments": {
+    backend: ["PaymentsDatabaseTest.listsAreScopedAndReconciliationIsForFinanceAdminAuditor"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/ai": {
+    backend: ["AiDemoDatabaseTest.otherRolesAreDeniedAndTheAuditorOnlyReads"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/ledger": {
+    backend: ["LedgerDatabaseTest.readScopeAndRoleDenials"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/qr": {
+    backend: ["QrDatabaseTest.readScopeAndPaging"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/executive": {
+    backend: ["DashboardDatabaseTest.whoMayOpenWhichDashboard"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/manufacturer-360": {
+    backend: ["DashboardDatabaseTest.theExecutiveDashboardCountsWhatIsInTheTablesAndFollowsTheFilters"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/notifications": {
+    backend: ["MessagesDatabaseTest.aPaymentWritesMessagesToThePayerAndFinanceOnlyAndReadsAreOwnOnly"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/director": {
+    backend: ["DashboardDatabaseTest.theDirectorsTilesCountWhatIsInTheTablesAndDrillDownToTheFullList"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/production": {
+    backend: ["ProductionDatabaseTest.seedHasFourQuartersAndScopeFollowsTheOrganisation"],
+    ui: [UI_BANNER],
+  },
+  "/app/demo/auditor": {
+    backend: ["DashboardDatabaseTest.theAuditorSeesTheBrokenChainFirstAndTheTwoPersonProof"],
+    ui: [UI_BANNER],
+  },
+  "/app/verify": {
+    ui: ["verifyPage.test.tsx: asks nothing until a registration ID is given"],
+  },
 };
 
 /** Admin `available` menu routes that are runtime screens must appear here or in NOT_IN_MENU. */

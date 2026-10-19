@@ -145,13 +145,18 @@ async function runChecks(run, P) {
       const a = await anonymous(m, p, b);
       check(`${run}.anonymous.${m}-${routeOf(p) === R ? "list" : "decision"}`, a.status === 401 && a.body?.error === "no_session", `${a.status} ${a.body?.error}`);
     }
-    for (const who of ["nova", "pixel", "admin"]) {
+    for (const who of ["nova", "pixel"]) {
       const r = await api(P[who], "GET", `${WEB}${R}`, null, null);
       check(`${run}.${who}.cannot-read-the-register-view`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
     }
-
     // 1. Programme proposes revoking a brand; the Director decides.
     const x = newBrand(`Rvk ${tag}`);
+    {
+      const r = await api(P.admin, "GET", `${WEB}${R}`, null, null);
+      check(`${run}.admin.reads-the-register-read-only`, r.status === 200 && r.body?.canPropose === false && r.body?.canDecide === false, `${r.status} propose=${r.body?.canPropose}`);
+      const bad = await propose("admin", "brand", x.brand, "revoke");
+      check(`${run}.admin.cannot-propose`, bad.status === 403 && bad.body?.error === "role_not_permitted", `${bad.status} ${bad.body?.error}`);
+    }
     let r = await api(P.programme, "GET", `${WEB}${R}`, null, null);
     check(`${run}.programme.reads-the-register`, r.status === 200 && r.body?.canPropose === true && r.body?.canDecide === false && r.body?.brands?.some((b) => b.id === x.brand && b.status === "active") && r.body?.authorisations?.some((a) => a.id === x.auth), `${r.status}`);
     r = await api(P.director, "GET", `${WEB}${R}`, null, null);

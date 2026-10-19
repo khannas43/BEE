@@ -15,12 +15,28 @@ vi.mock("@/components/app/ScreenScaffold", () => ({
   Card: ({ children, action }: { children?: ReactNode; action?: ReactNode }) => <div>{action}{children}</div>,
 }));
 
+const identity = vi.hoisted(() => ({
+  state: {
+    status: "signed-in" as const,
+    me: { displayName: "Officer", effectiveRoles: [{ role: "programme", scope: "all" }], organisations: [], adminDemonstrationReadOnly: false as boolean | undefined },
+  },
+}));
+
 vi.mock("@/components/app/SessionBadge", () => ({
-  useSpringIdentity: () => ({ status: "signed-in" as const, me: { displayName: "Officer", effectiveRoles: [{ role: "programme", scope: "all" }], organisations: [] } }),
+  useSpringIdentity: () => identity.state,
   rolesText: () => "programme",
   orgsText: () => "",
   refreshIdentity: () => Promise.resolve({ status: "signed-out" as const }),
 }));
+
+vi.mock("@/lib/adminDemonstration", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/lib/adminDemonstration")>();
+  return {
+    ...mod,
+    useAdminDemonstrationReadOnly: () =>
+      identity.state.status === "signed-in" && identity.state.me.adminDemonstrationReadOnly === true,
+  };
+});
 
 const frame = { module: "model-label" as never, screen: "model-dashboard" as never };
 
@@ -78,6 +94,10 @@ const decided = (c: DeferredFetch) => c.init?.method === "POST" && c.url.include
 
 describe("register revocations", () => {
   beforeEach(() => {
+    identity.state = {
+      status: "signed-in",
+      me: { displayName: "Officer", effectiveRoles: [{ role: "programme", scope: "all" }], organisations: [], adminDemonstrationReadOnly: false },
+    };
     installDeferredFetch();
   });
 
@@ -319,5 +339,26 @@ describe("register revocations", () => {
       fireEvent.click(screen.getByTestId("rvk-reject-prop-8"));
     });
     expect(bodyOf(lastCall(decided))).toEqual({ decision: "reject", note: "Typed for a rejection" });
+  });
+
+  it("read-only Admin hides revocation mutation controls", async () => {
+    identity.state = {
+      status: "signed-in",
+      me: { displayName: "Admin", effectiveRoles: [{ role: "admin", scope: "all" }], organisations: [], adminDemonstrationReadOnly: true },
+    };
+    mount();
+    await resolveAt(
+      0,
+      register({
+        canPropose: true,
+        canDecide: true,
+        pending: [proposal({ id: "prop-admin", proposedByYou: false }), proposal({ id: "prop-yours", proposedByYou: true })],
+      }),
+    );
+    expect(screen.queryByTestId("rvk-propose-brand-active")).toBeNull();
+    expect(screen.queryByTestId("rvk-propose-auth-active")).toBeNull();
+    expect(screen.queryByTestId("rvk-approve-prop-admin")).toBeNull();
+    expect(screen.queryByTestId("rvk-reject-prop-admin")).toBeNull();
+    expect(screen.queryByTestId("rvk-withdraw-prop-yours")).toBeNull();
   });
 });

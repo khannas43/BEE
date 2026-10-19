@@ -577,7 +577,7 @@ class SnlWp02bModelReturnWiringDatabaseTest {
     @Test
     void ratingSupersededResubmitReturnsToRatingAndNotifiesProgrammeAssignee() {
         UUID id = atDirector("WP02B2-RATING-" + TAG);
-        wiredReturn(id, "director_review", DIRECTOR_USER, "director", UUID.randomUUID().toString());
+        wiredReturn(id, "director_review", DIRECTOR_USER, "officer", UUID.randomUUID().toString());
         applications.setEvidence(id, NOVA, new ModelApplicationRepository.EvidenceUpdate(true, "LAB", true, LocalDate.of(2026, 9, 1), true, new BigDecimal("4.80")));
         wiredResubmit(id, idemKey("0000000000000008"), "Updated rating input.");
         assertEquals("rating", owner.queryForObject("SELECT state FROM model_application WHERE id = ?", String.class, id));

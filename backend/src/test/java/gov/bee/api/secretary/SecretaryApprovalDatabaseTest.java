@@ -144,12 +144,12 @@ class SecretaryApprovalDatabaseTest {
         assertEquals(RatingRepository.Outcome.COMPUTED,
             ratingRepo.compute(id, 4, PROGRAMME_USER, "programme", "RAC-ISEER-DEMO-1", new BigDecimal("4.50"), new BigDecimal("4.62"), 4).outcome());
         assertEquals(DirectorRecommendationRepository.Outcome.RECOMMENDED,
-            directorRepo.recommend(id, 5, DIRECTOR_USER, "director", "Rating reviewed; recommend approval.", false).outcome());
+            directorRepo.recommend(id, 5, DIRECTOR_USER, "officer", "Rating reviewed; recommend approval.", false).outcome());
         return id;
     }
 
     static SecretaryApprovalRepository.Result approve(UUID appId, int version) {
-        return repo.approve(appId, version, SECRETARY_USER, "secretary", "Rating reviewed; approved.");
+        return repo.approve(appId, version, SECRETARY_USER, "director", "Rating reviewed; approved.");
     }
 
     static int count(String table, UUID appId) {
@@ -169,7 +169,7 @@ class SecretaryApprovalDatabaseTest {
         iameRepo.recommend(id, 2, IAME_USER, "iame", "verified", "n");
         reviewerRepo.forward(id, 3, REVIEWER_USER, "reviewer", "n");
         ratingRepo.compute(id, 4, PROGRAMME_USER, "programme", "RAC-ISEER-DEMO-1", new BigDecimal("4.50"), new BigDecimal("4.62"), 4);
-        assertEquals("approved", directorRepo.recommend(id, 5, DIRECTOR_USER, "director", "final", true).toState());
+        assertEquals("approved", directorRepo.recommend(id, 5, DIRECTOR_USER, "officer", "final", true).toState());
         return id;
     }
 
@@ -338,7 +338,7 @@ class SecretaryApprovalDatabaseTest {
         assertEquals("secretary_approval", ev.get("from_state"));
         assertEquals("approved", ev.get("to_state"));
         assertEquals(SECRETARY_USER, ev.get("actor_account_id"));
-        assertEquals("secretary", ev.get("actor_role"));
+        assertEquals("director", ev.get("actor_role"));
         assertEquals(7, ev.get("version_after"));
         var rec = owner.queryForMap("SELECT note, approved_by_account_id FROM model_application_secretary_approval WHERE application_id = ?", id);
         assertEquals("Rating reviewed; approved.", rec.get("note"));
@@ -368,7 +368,7 @@ class SecretaryApprovalDatabaseTest {
         iameRepo.recommend(id, 2, IAME_USER, "iame", "verified", "n");
         reviewerRepo.forward(id, 3, REVIEWER_USER, "reviewer", "n");
         ratingRepo.compute(id, 4, PROGRAMME_USER, "programme", "RAC-ISEER-DEMO-1", new BigDecimal("4.50"), new BigDecimal("4.62"), 4);
-        assertEquals("approved", directorRepo.recommend(id, 5, DIRECTOR_USER, "director", "final", true).toState());
+        assertEquals("approved", directorRepo.recommend(id, 5, DIRECTOR_USER, "officer", "final", true).toState());
         assertEquals(Outcome.STALE, approve(id, 6).outcome(), "the Director's final recommendation already approved it; the Secretary has nothing to do");
         assertEquals(0, count("model_application_secretary_approval", id));
     }

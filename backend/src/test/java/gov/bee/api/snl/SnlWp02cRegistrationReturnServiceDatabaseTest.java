@@ -40,7 +40,7 @@ class SnlWp02cRegistrationReturnServiceDatabaseTest extends SnlWp02cRegistration
     static RegistrationService regService;
     static IdempotencyRepository idempotency;
     static final Caller PROGRAMME_CALLER = new Caller(PROGRAMME_USER, "prog", List.of(new RoleGrant("programme", "all")), Set.of());
-    static final Caller DIRECTOR_CALLER = new Caller(DIRECTOR_USER, "dir", List.of(new RoleGrant("director", "all")), Set.of());
+    static final Caller DIRECTOR_CALLER = new Caller(DIRECTOR_USER, "dir", List.of(new RoleGrant("officer", "all")), Set.of());
     static final Caller NOVA_CALLER = new Caller(NOVA_USER, "nova", List.of(new RoleGrant("manufacturer", "own-org")), Set.of(NOVA_ORG));
 
     @SuppressWarnings("unchecked")

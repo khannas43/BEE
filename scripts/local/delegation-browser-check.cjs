@@ -120,7 +120,7 @@ function cleanup(twinIds, appIds) {
 
 async function runChecks(run, P) {
   const tag = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  const PERSONA = ["nova.applicant", "bee.programme", "bee.director", "bee.finance", "bee.admin", "bee.secretary"];
+  const PERSONA = ["nova.applicant", "bee.programme", "bee.officer", "bee.finance", "bee.admin", "bee.officer"];
   const twinIds = PERSONA.map((u) => `'${ids.accountId(u)}'`).join(",");
   const before = sqlApp(`SELECT count(*) FROM app.model_application`) + "|" + sqlApp(`SELECT count(*) FROM app.role_assignment`);
   const appIds = [];
@@ -130,7 +130,7 @@ async function runChecks(run, P) {
     sqlApp(`INSERT INTO app.model_application (id, reference, organisation_id, brand_name, category, model_number, state, version) VALUES ('${id}', 'LOCAL-MA-D${tag.toUpperCase()}${n}', '${NOVA_ORG_ID}', 'Nova Cool', 'RAC', 'DEL-${tag}-${n}', '${state}', 0)`);
     return id;
   };
-  const financeId = ids.accountId("bee.finance"), directorId = ids.accountId("bee.director"), programmeId = ids.accountId("bee.programme");
+  const financeId = ids.accountId("bee.finance"), directorId = ids.accountId("bee.officer"), programmeId = ids.accountId("bee.programme");
   const today = await sqlApp(`SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date::text`);
   const ask = (who, delegateId, role, from, to, reason = "Away on leave") => api(P[who], "POST", `${WEB}${R}`, { delegateId, role, validFrom: from, validTo: to, reason }, key());
   const decide = (who, id, decision, note, k = key()) => api(P[who], "POST", `${WEB}${R}/${id}/decision`, { decision, ...(note ? { note } : {}) }, k);
@@ -144,14 +144,14 @@ async function runChecks(run, P) {
     }
     let r = await api(P.nova, "GET", `${WEB}${R}`, null, null);
     check(`${run}.nova.has-nothing-to-delegate`, r.status === 200 && r.body?.delegableRoles?.length === 0 && r.body?.colleagues?.length === 0 && r.body?.canApprove === false, `${r.status} ${JSON.stringify(r.body?.delegableRoles)}`);
-    r = await ask("nova", financeId, "director", today, await plusDays(today, 5));
+    r = await ask("nova", financeId, "officer", today, await plusDays(today, 5));
     check(`${run}.nova.cannot-delegate`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
     for (const who of ["secretary", "admin"]) {
-      r = await ask(who, financeId, "director", today, await plusDays(today, 5));
+      r = await ask(who, financeId, "officer", today, await plusDays(today, 5));
       check(`${run}.${who}.cannot-delegate`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
     }
     r = await api(P.director, "GET", `${WEB}${R}`, null, null);
-    check(`${run}.director.may-delegate-the-director-role`, r.status === 200 && r.body?.delegableRoles?.join() === "director" && r.body?.colleagues?.some((c) => c.id === financeId) && !r.body?.colleagues?.some((c) => c.id === ids.accountId("nova.applicant")), `${r.status} ${JSON.stringify(r.body?.delegableRoles)}`);
+    check(`${run}.director.may-delegate-the-director-role`, r.status === 200 && r.body?.delegableRoles?.join() === "officer" && r.body?.colleagues?.some((c) => c.id === financeId) && !r.body?.colleagues?.some((c) => c.id === ids.accountId("nova.applicant")), `${r.status} ${JSON.stringify(r.body?.delegableRoles)}`);
 
     // 1. Requests are checked.
     const to5 = await plusDays(today, 5);
@@ -159,17 +159,17 @@ async function runChecks(run, P) {
     check(`${run}.director.cannot-delegate-the-secretary-role`, r.status === 422 && r.body?.error === "validation_failed", `${r.status} ${r.body?.error}`);
     r = await ask("director", financeId, "programme", today, to5);
     check(`${run}.director.cannot-delegate-a-role-they-do-not-hold`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
-    r = await ask("director", directorId, "director", today, to5);
+    r = await ask("director", directorId, "officer", today, to5);
     check(`${run}.director.cannot-delegate-to-themselves`, r.status === 422 && r.body?.error === "validation_failed", `${r.status} ${r.body?.error}`);
-    r = await ask("director", financeId, "director", await plusDays(today, -1), to5);
+    r = await ask("director", financeId, "officer", await plusDays(today, -1), to5);
     check(`${run}.director.start-in-the-past-refused`, r.status === 422, `${r.status} ${r.body?.error}`);
-    r = await ask("director", financeId, "director", today, await plusDays(today, 31));
+    r = await ask("director", financeId, "officer", today, await plusDays(today, 31));
     check(`${run}.director.more-than-thirty-days-refused`, r.status === 422, `${r.status} ${r.body?.error}`);
-    r = await ask("director", ids.accountId("nova.applicant"), "director", today, to5);
+    r = await ask("director", ids.accountId("nova.applicant"), "officer", today, to5);
     check(`${run}.director.other-organisation-not-eligible`, r.status === 409 && r.body?.error === "delegate_not_eligible", `${r.status} ${r.body?.error}`);
-    r = await ask("director", crypto.randomUUID(), "director", today, to5);
+    r = await ask("director", crypto.randomUUID(), "officer", today, to5);
     check(`${run}.director.unknown-person-404`, r.status === 404 && r.body?.error === "not_found", `${r.status} ${r.body?.error}`);
-    r = await api(P.director, "POST", `${WEB}${R}`, { delegateId: financeId, role: "director", validFrom: today, validTo: to5, reason: "x" }, null);
+    r = await api(P.director, "POST", `${WEB}${R}`, { delegateId: financeId, role: "officer", validFrom: today, validTo: to5, reason: "x" }, null);
     check(`${run}.director.key-required`, r.status === 422 && r.body?.error === "idempotency_key_required", `${r.status} ${r.body?.error}`);
 
     // 2. Before approval the delegate has nothing.
@@ -177,12 +177,12 @@ async function runChecks(run, P) {
     r = await ret("finance", app1);
     check(`${run}.finance.cannot-act-at-the-director-stage-yet`, r.status === 404 || r.status === 403, `${r.status} ${r.body?.error}`);
     const k1 = key();
-    r = await api(P.director, "POST", `${WEB}${R}`, { delegateId: financeId, role: "director", validFrom: today, validTo: to5, reason: "Away on leave" }, k1);
+    r = await api(P.director, "POST", `${WEB}${R}`, { delegateId: financeId, role: "officer", validFrom: today, validTo: to5, reason: "Away on leave" }, k1);
     const d1 = r.body;
-    check(`${run}.director.request-201`, r.status === 201 && d1?.state === "pending" && d1?.role === "director" && d1?.inForce === false && d1?.asDelegator === true, `${r.status} ${d1?.state}`);
-    r = await api(P.director, "POST", `${WEB}${R}`, { delegateId: financeId, role: "director", validFrom: today, validTo: to5, reason: "Away on leave" }, k1);
+    check(`${run}.director.request-201`, r.status === 201 && d1?.state === "pending" && d1?.role === "officer" && d1?.inForce === false && d1?.asDelegator === true, `${r.status} ${d1?.state}`);
+    r = await api(P.director, "POST", `${WEB}${R}`, { delegateId: financeId, role: "officer", validFrom: today, validTo: to5, reason: "Away on leave" }, k1);
     check(`${run}.director.request-replay`, r.status === 201 && r.replay === "true" && r.body?.id === d1.id, `replay=${r.replay}`);
-    r = await ask("director", financeId, "director", today, to5);
+    r = await ask("director", financeId, "officer", today, to5);
     check(`${run}.director.second-open-request-refused`, r.status === 409 && r.body?.error === "delegation_exists", `${r.status} ${r.body?.error}`);
     r = await ret("finance", app1);
     check(`${run}.finance.still-cannot-act-while-pending`, r.status === 404 || r.status === 403, `${r.status} ${r.body?.error}`);
@@ -217,7 +217,7 @@ async function runChecks(run, P) {
     r = await ret("finance", app1);
     check(`${run}.finance.acts-as-the-director-200`, r.status === 200 && r.body?.fromState === "director_review" && r.body?.toState === "returned", `${r.status} ${r.body?.toState ?? r.body?.error}`);
     const use = sqlApp(`SELECT acting_account_id || '|' || delegator_id || '|' || role || '|' || method || '|' || status FROM app.delegation_use WHERE delegation_id = '${d1.id}' ORDER BY occurred_at DESC LIMIT 1`);
-    check(`${run}.db.the-use-is-logged`, usesBefore === "0" && use === `${financeId}|${directorId}|director|POST|200`, use);
+    check(`${run}.db.the-use-is-logged`, usesBefore === "0" && use === `${financeId}|${directorId}|officer|POST|200`, use);
     const hist = sqlApp(`SELECT actor_account_id || '|' || actor_role FROM app.model_application_transition_event WHERE application_id = '${app1}' AND action = 'return' LIMIT 1`);
     check(`${run}.db.the-history-names-the-person-who-acted`, hist.startsWith(financeId), hist);
     r = await api(P.finance, "GET", `${WEB}${R}`, null, null);
@@ -251,17 +251,17 @@ async function runChecks(run, P) {
     check(`${run}.director.cannot-revoke-twice`, r.status === 409 && r.body?.error === "delegation_not_active", `${r.status} ${r.body?.error}`);
 
     // 7. Withdraw and reject; the Administrator can revoke too.
-    r = await ask("director", financeId, "director", today, to5);
+    r = await ask("director", financeId, "officer", today, to5);
     const d2 = r.body;
     r = await decide("finance", d2.id, "withdraw");
     check(`${run}.finance.only-the-delegator-withdraws`, r.status === 403 && r.body?.error === "role_not_permitted", `${r.status} ${r.body?.error}`);
     r = await decide("director", d2.id, "withdraw", "Changed my mind");
     check(`${run}.director.withdraw-200`, r.status === 200 && r.body?.state === "withdrawn", `${r.status} ${r.body?.state}`);
-    r = await ask("director", financeId, "director", today, to5);
+    r = await ask("director", financeId, "officer", today, to5);
     const d3 = r.body;
     r = await decide("admin", d3.id, "reject", "Not needed");
     check(`${run}.admin.reject-200`, r.status === 200 && r.body?.state === "rejected" && r.body?.decisionNote === "Not needed", `${r.status} ${r.body?.state}`);
-    r = await ask("director", financeId, "director", today, to5);
+    r = await ask("director", financeId, "officer", today, to5);
     const d4 = r.body;
     await decide("admin", d4.id, "approve");
     r = await decide("admin", d4.id, "revoke", "Policy");
@@ -277,7 +277,7 @@ async function runChecks(run, P) {
 async function main() {
   const chrome = await launchChrome();
   try {
-    const who = { nova: ids.name("nova.applicant"), programme: ids.name("bee.programme"), director: ids.name("bee.director"), finance: ids.name("bee.finance"), admin: ids.name("bee.admin"), secretary: ids.name("bee.secretary") };
+    const who = { nova: ids.name("nova.applicant"), programme: ids.name("bee.programme"), director: ids.name("bee.officer"), finance: ids.name("bee.finance"), admin: ids.name("bee.admin"), director: ids.name("bee.director") };
     const P = {};
     for (const [k, u] of Object.entries(who)) {
       await totp.ensureEnrolled(u);

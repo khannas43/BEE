@@ -11,7 +11,7 @@ const path = require("path");
 const DEV_PASSWORD = "bee-local-dev";
 const REALM = "bee-local";
 const WEB_PORT = 3100;
-const ROLES = ["admin", "programme", "reviewer", "director", "secretary", "finance", "helpdesk", "auditor", "manufacturer", "agency", "iame", "sda", "laboratory"];
+const ROLES = ["admin", "programme", "reviewer", "officer", "director", "finance", "helpdesk", "auditor", "manufacturer", "agency", "iame", "sda", "laboratory"];
 
 const org = (n) => `00000000-0000-4000-b000-${String(n).padStart(12, "0")}`;
 const usr = (n) => `00000000-0000-4000-a000-${String(n).padStart(12, "0")}`;
@@ -40,8 +40,8 @@ const USERS = [
   { n: 4, username: "iame.officer", first: "IAME", last: "Officer", kc: "iame", org: "IAME", db: { role: "iame", scope: "assigned", active: true } },
   { n: 5, username: "bee.reviewer", first: "BEE", last: "Reviewer", kc: "reviewer", org: "BEE", db: { role: "reviewer", scope: "assigned", active: true } },
   { n: 6, username: "bee.programme", first: "BEE", last: "Programme", kc: "programme", org: "BEE", db: { role: "programme", scope: "all", active: true } },
-  { n: 7, username: "bee.director", first: "BEE", last: "Director", kc: "director", org: "BEE", db: { role: "director", scope: "all", active: true } },
-  { n: 8, username: "bee.secretary", first: "BEE", last: "Secretary", kc: "secretary", org: "BEE", db: { role: "secretary", scope: "all", active: true } },
+  { n: 7, username: "bee.officer", first: "BEE", last: "Officer", kc: "officer", org: "BEE", db: { role: "officer", scope: "all", active: true } },
+  { n: 8, username: "bee.director", first: "BEE", last: "Director", kc: "director", org: "BEE", db: { role: "director", scope: "all", active: true } },
   { n: 9, username: "bee.admin", first: "BEE", last: "Admin", kc: "admin", org: "BEE", db: { role: "admin", scope: "all", active: true } },
   { n: 10, username: "bee.helpdesk", first: "BEE", last: "Helpdesk", kc: "helpdesk", org: "BEE", db: { role: "helpdesk", scope: "all", active: true } },
   { n: 11, username: "bee.auditor", first: "BEE", last: "Auditor", kc: "auditor", org: "BEE", db: { role: "auditor", scope: "all", active: true } },

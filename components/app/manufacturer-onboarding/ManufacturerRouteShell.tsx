@@ -7,7 +7,6 @@ import { useSpringIdentity } from "@/components/app/SessionBadge";
 import type { SpringIdentity } from "@/components/app/SessionBadge";
 import { adminDemonstrationReadOnly } from "@/lib/adminDemonstration";
 import { canAccessManufacturerRoute, routeKindForPath } from "@/lib/manufacturer-onboarding/access";
-import { AdminDemonstrationBanner } from "@/components/app/AdminDemonstrationBanner";
 import { effectiveOnboardingRoles } from "@/lib/manufacturer-onboarding/identity";
 import { ManufacturerOnboardingProvider } from "./ManufacturerOnboardingProvider";
 import { AccessDeniedPanel, LoadingState } from "./shared";
@@ -39,12 +38,7 @@ function Gate({ children, me }: { children: ReactNode; me: SpringIdentity }) {
   const roles = effectiveOnboardingRoles(me);
   const readOnlyAdmin = adminDemonstrationReadOnly(me);
   if (!canAccessManufacturerRoute(kind, roles, readOnlyAdmin)) return <AccessDeniedPanel />;
-  return (
-    <>
-      {readOnlyAdmin ? <AdminDemonstrationBanner /> : null}
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }
 
 export function ManufacturerRouteShell({ children }: { children: ReactNode }) {

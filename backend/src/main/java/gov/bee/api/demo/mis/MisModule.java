@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class MisModule implements DemoModule {
 
-    static final Set<String> FULL_ROLES = Set.of("programme", "director", "secretary", "admin", "auditor");
+    static final Set<String> FULL_ROLES = Set.of("programme", "officer", "director", "admin", "auditor");
     static final List<String> PANELS = List.of("summary", "applications", "finance", "production", "certificates");
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 

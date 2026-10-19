@@ -10,7 +10,7 @@ import { activeEntry, navigationFor, navProfileFor, type NavEntry, type NavGroup
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { useLang } from "@/components/i18n/LangProvider";
 
-const PROFILE_TITLE = { admin: "Admin demonstration", manufacturer: "Manufacturer", director: "Director", secretary: "Secretary", finance: "Finance" } as const;
+const PROFILE_TITLE = { admin: "Admin", manufacturer: "Manufacturer", officer: "Officer", director: "Director", finance: "Finance" } as const;
 
 /** The console menu: the signed-in person's role hierarchy from lib/navigation, used by the desktop sidebar and the mobile drawer alike. */
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -25,11 +25,11 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-col h-full bg-forest-dark text-forest-light" aria-label="Console menu">
-      <Link href="/app" className="flex flex-row items-center justify-start gap-space-sm px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={`BEE S&L ${t("app.officerConsole")}`}>
+      <Link href="/app" className="flex flex-row items-center justify-start gap-space-sm px-space-md h-[60px] shrink-0 border-b border-white/10" onClick={onNavigate} aria-label={t("app.portal")}>
         <span className="flex items-center justify-center bg-white rounded-md px-3 h-[36px] shrink-0">
           <Image src="/images/bee-logo.png" alt="Bureau of Energy Efficiency" width={1260} height={308} priority className="h-[28px] w-auto object-contain" />
         </span>
-        <span className="font-label-sm text-label-sm uppercase tracking-[0.14em] text-forest-light/90 leading-[14px] text-left">{t("app.officerConsole")}</span>
+        <span className="font-label-sm text-label-sm uppercase tracking-[0.14em] text-forest-light/90 leading-[14px] text-left">{t("app.portal")}</span>
       </Link>
 
       <div className="flex-1 overflow-y-auto app-scroll py-space-sm">
@@ -51,11 +51,6 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
             {profile && (
               <p className="px-space-md pb-1 font-label-sm text-label-sm uppercase tracking-[0.12em] text-forest-light/60" data-testid="nav-profile">
                 {PROFILE_TITLE[profile]}
-              </p>
-            )}
-            {profile === "admin" && roles?.some((g) => g.role === "admin") && (
-              <p className="mx-space-md mb-space-xs rounded-md bg-white/5 px-space-sm py-1.5 font-body-sm text-body-sm text-forest-light/80" data-testid="nav-admin-note">
-                Consolidated view of every screen for the demonstration. In normal operation each user sees only the menus and records permitted for their role.
               </p>
             )}
             <MenuGroups key={active?.group.id ?? "none"} groups={groups} activeGroup={active?.group.id ?? null} activeId={active?.entry.id ?? null} onNavigate={onNavigate} />

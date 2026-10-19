@@ -10,9 +10,9 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after, occurred_at) VALUES
   ('00000000-0000-4000-c000-0000000009b1', '00000000-0000-4000-c000-0000000009a1', 'rate', 'rating', 'director_review', '00000000-0000-4000-a000-000000000005', 'reviewer', 2, '2026-10-01 09:00+05:30'),
-  ('00000000-0000-4000-c000-0000000009b2', '00000000-0000-4000-c000-0000000009a1', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'secretary', 3, '2026-10-01 11:00+05:30'),
+  ('00000000-0000-4000-c000-0000000009b2', '00000000-0000-4000-c000-0000000009a1', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'director', 3, '2026-10-01 11:00+05:30'),
   ('00000000-0000-4000-c000-0000000009b3', '00000000-0000-4000-c000-0000000009a2', 'rate', 'rating', 'director_review', '00000000-0000-4000-a000-000000000005', 'reviewer', 2, '2026-10-02 09:00+05:30'),
-  ('00000000-0000-4000-c000-0000000009b4', '00000000-0000-4000-c000-0000000009a2', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'secretary', 3, '2026-10-02 11:00+05:30')
+  ('00000000-0000-4000-c000-0000000009b4', '00000000-0000-4000-c000-0000000009a2', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'director', 3, '2026-10-02 11:00+05:30')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO model_application_rating (id, application_id, transition_event_id, rating_version, basis, scheme_key, declared_iseer, verified_iseer, stars, computed_by_account_id) VALUES

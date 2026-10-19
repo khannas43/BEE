@@ -16,8 +16,8 @@ public enum StageReject {
     IAME("iame_scrutiny", new RoleGrant("iame", SlicePolicy.ASSIGNED)),
     REVIEWER("bee_scrutiny", new RoleGrant("reviewer", SlicePolicy.ASSIGNED)),
     PROGRAMME("rating", new RoleGrant("programme", SlicePolicy.ALL)),
-    DIRECTOR("director_review", new RoleGrant("director", SlicePolicy.ALL)),
-    SECRETARY("secretary_approval", new RoleGrant("secretary", SlicePolicy.ALL));
+    DIRECTOR("director_review", new RoleGrant("officer", SlicePolicy.ALL)),
+    SECRETARY("secretary_approval", new RoleGrant("director", SlicePolicy.ALL));
 
     private final String stage;
     private final RoleGrant actor;

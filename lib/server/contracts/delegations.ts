@@ -7,7 +7,7 @@ import { exactKeys, isString, RESOLVER_DENIALS, type UpstreamErrors, UUID, type 
 
 export const DELEGATION_STATES = ["pending", "approved", "rejected", "withdrawn", "revoked"] as const;
 export type DelegationState = (typeof DELEGATION_STATES)[number];
-export const DELEGABLE_ROLES = ["director", "finance", "programme"] as const;
+export const DELEGABLE_ROLES = ["officer", "finance", "programme"] as const;
 export type DelegableRole = (typeof DELEGABLE_ROLES)[number];
 
 export interface Delegation {

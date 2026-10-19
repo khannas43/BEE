@@ -21,9 +21,9 @@ public enum SliceAction {
     COMPUTE_RATING(5, "X", Set.of("rating"), "rating", "director_review", "WP05.2",
         List.of(new RoleGrant("programme", SlicePolicy.ALL))),
     DIRECTOR_RECOMMEND(6, "A", Set.of("director_review"), "director_review", "secretary_approval", "WP05.2",
-        List.of(new RoleGrant("director", SlicePolicy.ALL))),
+        List.of(new RoleGrant("officer", SlicePolicy.ALL))),
     SECRETARY_APPROVE(7, "A", Set.of("secretary_approval"), "secretary_approval", "approved", "WP05.2",
-        List.of(new RoleGrant("secretary", SlicePolicy.ALL)));
+        List.of(new RoleGrant("director", SlicePolicy.ALL)));
 
     private final int step;
     private final String capacity;

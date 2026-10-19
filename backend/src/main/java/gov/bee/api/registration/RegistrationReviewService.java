@@ -86,8 +86,8 @@ public class RegistrationReviewService {
     private static Optional<String> roleFor(String action, String state) {
         return switch (action) {
             case "recommend" -> "programme_review".equals(state) ? Optional.of("programme") : Optional.empty();
-            case "return" -> "programme_review".equals(state) ? Optional.of("programme") : "director_approval".equals(state) ? Optional.of("director") : Optional.empty();
-            case "approve", "reject" -> "director_approval".equals(state) ? Optional.of("director") : Optional.empty();
+            case "return" -> "programme_review".equals(state) ? Optional.of("programme") : "director_approval".equals(state) ? Optional.of("officer") : Optional.empty();
+            case "approve", "reject" -> "director_approval".equals(state) ? Optional.of("officer") : Optional.empty();
             default -> "returned".equals(state) ? Optional.of("applicant") : Optional.empty();
         };
     }
@@ -116,7 +116,7 @@ public class RegistrationReviewService {
             return replay.get();
         }
         Optional<Input> parsed = parse(body);
-        boolean anyRole = caller.holdsOwn("programme", "all") || caller.holdsOwn("director", "all") || RegistrationPolicy.filingOrganisation(caller).isPresent();
+        boolean anyRole = caller.holdsOwn("programme", "all") || caller.holdsOwn("officer", "all") || RegistrationPolicy.filingOrganisation(caller).isPresent();
         if (!anyRole) {
             return error(HttpStatus.FORBIDDEN, "role_not_permitted");
         }
@@ -131,7 +131,7 @@ public class RegistrationReviewService {
         var row = found.get();
         Optional<String> role = roleFor(in.action(), row.state());
         if (role.isEmpty()) {
-            boolean involved = holdsRole(caller, "programme") || holdsRole(caller, "director") || isApplicant(caller, row);
+            boolean involved = holdsRole(caller, "programme") || holdsRole(caller, "officer") || isApplicant(caller, row);
             return error(involved ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN, involved ? "not_found" : "role_not_permitted");
         }
         if (!holdsRole(caller, role.get())) {
@@ -279,7 +279,7 @@ public class RegistrationReviewService {
             return Optional.of(error(HttpStatus.CONFLICT, "idempotency_key_conflict"));
         }
         var row = registrations.find(id);
-        boolean mayReplay = row.isPresent() && (caller.holdsOwn("programme", "all") || caller.holdsOwn("director", "all") || isApplicant(caller, row.get()));
+        boolean mayReplay = row.isPresent() && (caller.holdsOwn("programme", "all") || caller.holdsOwn("officer", "all") || isApplicant(caller, row.get()));
         if (!mayReplay) {
             return Optional.of(error(HttpStatus.FORBIDDEN, "role_not_permitted"));
         }

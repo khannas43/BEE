@@ -149,7 +149,7 @@ class MessagesDatabaseTest {
         String step = "INSERT INTO registration_transition_event (application_id, action, from_state, to_state, actor_account_id, actor_role, version_after, occurred_at, note) VALUES (?::uuid, ?, ?, ?, ?::uuid, ?, ?, now(), 'a note')";
         owner.update(step, reg, "confirm_fee", "fee_due", "programme_review", FINANCE.accountId().toString(), "finance", 2);
         owner.update(step, reg, "recommend", "programme_review", "director_approval", PROG, "programme", 3);
-        owner.update(step, reg, "approve", "director_approval", "approved", DIRECTOR_ID, "director", 4);
+        owner.update(step, reg, "approve", "director_approval", "approved", DIRECTOR_ID, "officer", 4);
         List<String> kinds = owner.queryForList("SELECT recipient_account_id::text || ':' || channel || ':' || event_kind FROM demo_message WHERE reference = 'REG-2026-9990'", String.class);
         String nova = NOVA.accountId().toString();
         assertTrue(kinds.contains(nova + ":email:registration_filed") && kinds.contains(nova + ":sms:registration_filed"), "the applicant is told when the request is filed");

@@ -82,7 +82,7 @@ export type PlannedEntry =
   | { kind: "task"; source: string; task: string }
   | { kind: "contextual"; parent: string; action: string };
 
-const INTERNAL: RoleKey[] = ["admin", "programme", "reviewer", "director", "secretary", "finance", "helpdesk", "auditor"];
+const INTERNAL: RoleKey[] = ["admin", "programme", "reviewer", "officer", "director", "finance", "helpdesk", "auditor"];
 const NONE = "—";
 
 type Caps = Partial<Record<RoleKey, string>>;
@@ -197,29 +197,29 @@ const fromMis = (action: string, roles: RoleKey[]): Entries => ({
   ...(roles.includes("helpdesk") ? ctx(HD, `Linked record on ticket › ${action}`, ["helpdesk"]) : {}),
 });
 
-const GOV: RoleKey[] = ["admin", "director", "secretary"];
+const GOV: RoleKey[] = ["admin", "officer", "director"];
 
 const ENTRY_PATHS: Record<string, Entries> = {
   [HOME]: {},
   [ADMIN_DASH]: {
     ...ctx(HOME, "Admin home: Open admin dashboard (admin only tile)", ["admin"]),
-    ...ctx(HOME, "Home: Administration summary tile", ["programme", "reviewer", "director", "secretary"]),
+    ...ctx(HOME, "Home: Administration summary tile", ["programme", "reviewer", "officer", "director"]),
   },
   "/app/identity/organisation-users": {
     ...ctx(ACCESS, "Organisation users tab", ["admin"]),
-    ...ctx(RECORD, "Organisation profile › Users", ["director", "secretary"]),
+    ...ctx(RECORD, "Organisation profile › Users", ["officer", "director"]),
     ...menu("My organisation › Users", ["manufacturer", "agency", "iame", "sda", "laboratory"]),
   },
-  "/app/administration/appliance-master": fromRecord("Category details › Appliance master", ["programme", "reviewer", "director", "secretary"]),
-  "/app/administration/rating-formula": ctx(RATE, "Formula version › Open rating formula", ["programme", "reviewer", "director", "secretary"]),
-  "/app/administration/fee-rules": fromRecord("Payment tab › Fee rule", ["programme", "reviewer", "director", "secretary"]),
-  "/app/administration/workflow-configuration": ctx("/app/workflow/escalation-dashboard", "Stage SLA › Workflow configuration", ["programme", "reviewer", "director", "secretary"]),
-  "/app/administration/notification-templates": ctx(INBOX, "Notification preview › Template", ["programme", "reviewer", "director", "secretary"]),
-  "/app/administration/reference-publication": ctx("/app/mis-ai/data-quality", "Reference data › Publication status", ["programme", "reviewer", "director", "secretary"]),
+  "/app/administration/appliance-master": fromRecord("Category details › Appliance master", ["programme", "reviewer", "officer", "director"]),
+  "/app/administration/rating-formula": ctx(RATE, "Formula version › Open rating formula", ["programme", "reviewer", "officer", "director"]),
+  "/app/administration/fee-rules": fromRecord("Payment tab › Fee rule", ["programme", "reviewer", "officer", "director"]),
+  "/app/administration/workflow-configuration": ctx("/app/workflow/escalation-dashboard", "Stage SLA › Workflow configuration", ["programme", "reviewer", "officer", "director"]),
+  "/app/administration/notification-templates": ctx(INBOX, "Notification preview › Template", ["programme", "reviewer", "officer", "director"]),
+  "/app/administration/reference-publication": ctx("/app/mis-ai/data-quality", "Reference data › Publication status", ["programme", "reviewer", "officer", "director"]),
   "/app/agency-brand/brand-registration": fromRecord("Brand tab", [...GOV, "helpdesk"]),
   "/app/model-label/model-dashboard": {
     ...ctx(ADMIN_DASH, "Model registrations tile", ["admin"]),
-    ...ctx(REG_DASH, "Model registrations › Open model dashboard", ["director", "secretary"]),
+    ...ctx(REG_DASH, "Model registrations › Open model dashboard", ["officer", "director"]),
     ...ctx(HD, "Linked record on ticket › Model dashboard", ["helpdesk"]),
   },
   "/app/model-label/new-model-application": fromRecord("Application tab (read-only form)", [...GOV, "helpdesk"]),
@@ -230,13 +230,13 @@ const ENTRY_PATHS: Record<string, Entries> = {
   },
   "/app/model-label/bee-scrutiny": task(INBOX, "BEE scrutiny task (slice step 4)", ["programme", "reviewer"]),
   "/app/model-label/director-approval": {
-    ...task(APPROVALS, "Model approval decision (slice steps 6 and 7)", ["director", "secretary"]),
+    ...task(APPROVALS, "Model approval decision (slice steps 6 and 7)", ["officer", "director"]),
     ...ctx(RECORD, "Approval tab", ["programme", "reviewer"]),
   },
   [RATE]: {
     ...task(INBOX, "Rating task (slice step 5)", ["programme"]),
     ...ctx(RECORD, "Rating tab", ["reviewer"]),
-    ...ctx("/app/model-label/director-approval", "Rating panel › Open rating calculation", ["director", "secretary"]),
+    ...ctx("/app/model-label/director-approval", "Rating panel › Open rating calculation", ["officer", "director"]),
   },
   "/app/model-label/label-preview": fromRecord("Label tab", [...GOV, "finance", "helpdesk"]),
   "/app/model-label/renewal-or-degradation": fromRecord("Renewal tab", [...GOV, "helpdesk"]),
@@ -256,30 +256,30 @@ const ENTRY_PATHS: Record<string, Entries> = {
   "/app/enforcement/laboratory-assignment": ctx(CASE, "Case › Laboratory assignment", GOV),
   "/app/enforcement/challenge-test": ctx(CASE, "Case › Challenge test", GOV),
   "/app/enforcement/enforcement-decision": ctx(CASE, "Case › Decision", GOV),
-  "/app/helpdesk/raise-ticket": ctx(HOME, "Home: Help and support › Raise ticket", ["admin", "programme", "reviewer", "director", "secretary"]),
-  "/app/helpdesk/sla-dashboard": fromMis("Service levels › Helpdesk SLA", ["admin", "programme", "reviewer", "director", "secretary"]),
-  "/app/helpdesk/knowledge-base": ctx(HOME, "Home: Help and support › Knowledge base", ["admin", "programme", "reviewer", "director", "secretary"]),
+  "/app/helpdesk/raise-ticket": ctx(HOME, "Home: Help and support › Raise ticket", ["admin", "programme", "reviewer", "officer", "director"]),
+  "/app/helpdesk/sla-dashboard": fromMis("Service levels › Helpdesk SLA", ["admin", "programme", "reviewer", "officer", "director"]),
+  "/app/helpdesk/knowledge-base": ctx(HOME, "Home: Help and support › Knowledge base", ["admin", "programme", "reviewer", "officer", "director"]),
   [REPOSITORY]: {
     ...menu("Administration › Documents", ["admin"]),
-    ...ctx(RECORD, "Documents tab › Open document repository", ["programme", "reviewer", "director", "secretary"]),
+    ...ctx(RECORD, "Documents tab › Open document repository", ["programme", "reviewer", "officer", "director"]),
     ...ctx(AUDIT_SEARCH, "Evidence › Open document repository", ["auditor"]),
   },
-  "/app/documents/malware-quarantine": ctx(REPOSITORY, "Quarantined files (authorised document roles only)", ["admin", "programme", "reviewer", "director", "secretary", "auditor"]),
+  "/app/documents/malware-quarantine": ctx(REPOSITORY, "Quarantined files (authorised document roles only)", ["admin", "programme", "reviewer", "officer", "director", "auditor"]),
   "/app/mis-ai/enforcement-dashboard": fromMis("Enforcement tile", [...GOV, "finance", "auditor"]),
-  "/app/audit/business-audit-search": fromMis("Audit and assurance › Business audit search", ["programme", "reviewer", "director", "secretary", "finance"]),
-  "/app/audit/configuration-history": fromMis("Audit and assurance › Configuration history", ["programme", "reviewer", "director", "secretary", "finance"]),
-  "/app/audit/security-event-review": fromMis("Audit and assurance › Security events", ["programme", "reviewer", "director", "secretary", "finance"]),
-  "/app/audit/integration-correlation": fromMis("Audit and assurance › Integration correlation", ["programme", "reviewer", "director", "secretary", "finance"]),
+  "/app/audit/business-audit-search": fromMis("Audit and assurance › Business audit search", ["programme", "reviewer", "officer", "director", "finance"]),
+  "/app/audit/configuration-history": fromMis("Audit and assurance › Configuration history", ["programme", "reviewer", "officer", "director", "finance"]),
+  "/app/audit/security-event-review": fromMis("Audit and assurance › Security events", ["programme", "reviewer", "officer", "director", "finance"]),
+  "/app/audit/integration-correlation": fromMis("Audit and assurance › Integration correlation", ["programme", "reviewer", "officer", "director", "finance"]),
   [RECORD]: {
     ...ctx(ADMIN_DASH, "Registrations tile › Open record", ["admin"]),
-    ...ctx(REG_DASH, "Drill-down › Open registration record", ["director", "secretary"]),
+    ...ctx(REG_DASH, "Drill-down › Open registration record", ["officer", "director"]),
     ...ctx(AUDIT_SEARCH, "Audited record › Open record", ["auditor"]),
     ...menu("Registrations › My model records (provisional decision D4)", ["manufacturer"]),
     ...task(INBOX, "Assigned application › Open record", ["iame"]),
   },
   [QR]: fromMis("QR issuance tile › Open batch workspace", ["admin", "auditor"]),
   [CASE]: {
-    ...task(APPROVALS, "Enforcement closure decision", ["director", "secretary"]),
+    ...task(APPROVALS, "Enforcement closure decision", ["officer", "director"]),
     ...fromMis("Enforcement summary › Open case", ["admin", "auditor"]),
     ...task(INBOX, "Show-cause notice: respond (G23)", ["manufacturer", "agency"]),
     ...task(INBOX, "Assigned test: submit report", ["laboratory"]),
@@ -288,7 +288,7 @@ const ENTRY_PATHS: Record<string, Entries> = {
     ...ctx(ADMIN_DASH, "Helpdesk summary › Open workspace", ["admin"]),
     ...ctx(AUDIT_SEARCH, "Ticket audit › Open workspace", ["auditor"]),
   },
-  [ACCESS]: ctx(HOME, "Profile menu › My access and delegations", ["programme", "reviewer", "director", "secretary", "auditor"]),
+  [ACCESS]: ctx(HOME, "Profile menu › My access and delegations", ["programme", "reviewer", "officer", "director", "auditor"]),
   [APPROVALS]: {},
   [AI]: {},
 };
@@ -374,20 +374,20 @@ const CATALOGUE: Record<string, Spec> = {
   "model-label/approval-note": { ws: "work", d: "contextual", target: DIRECTOR, via: "Approval note panel", state: "lifecycle-store", replacedBy: "WP05", slice: true },
   "model-label/director-approval": {
     ws: "work", d: "retain", state: "lifecycle-store", replacedBy: "WP05", slice: true,
-    iOnly: { programme: "V", reviewer: "V", director: "V/A", secretary: "V/A" },
+    iOnly: { programme: "V", reviewer: "V", officer: "V/A", director: "V/A" },
     why: "RFP Vol 2 §1.3: Program Director recommends and approves, Secretary gives final approval; DDD 4.3: Finance has no technical approval. Annex A.1 grants A to Admin, Finance and Helpdesk as well.",
     note: "Slice steps 6 and 7. One approval view with two sequential decisions (Director, then Secretary); it shows the computed rating and its formula version.",
   },
   "model-label/secretary-approval": {
     ws: "work", d: "merge", target: DIRECTOR, via: "Secretary decision on the approval view", state: "lifecycle-store", replacedBy: "WP05", slice: true,
-    iOnly: { programme: "V", reviewer: "V", director: "V/A", secretary: "V/A" },
+    iOnly: { programme: "V", reviewer: "V", officer: "V/A", director: "V/A" },
     why: "Same decision rule as director-approval; Annex A.1 grants A to Admin, Finance and Helpdesk as well.",
     note: "Renders the same StageScreen variant as director-approval and has no inbound link.",
   },
   "model-label/approval-letter": { ws: "registrations", d: "contextual", target: RECORD, via: "Model record: Approval tab (download)", state: "lifecycle-store", replacedBy: "WP05", p: both("V/D") },
   "model-label/rating-calculation": {
     ws: "work", d: "retain", state: "lifecycle-store", replacedBy: "WP05", slice: true,
-    iOnly: { programme: "V/X", reviewer: "V", director: "V", secretary: "V" },
+    iOnly: { programme: "V/X", reviewer: "V", officer: "V", director: "V" },
     why: "Stage owner is programme (STAGE_OWNERS); the portal computes the rating from the effective formula, so only the owner executes it. Director and Secretary read the computed, versioned rating before deciding. Other roles read the result on the model record.",
     note: "Slice step 5, before both approvals. Stores formula ID and version, inputs and result. Annex A.2 grants partners C/E/S; the applicant declares inputs in the application and reads the rating on its model record after approval.",
   },
@@ -528,7 +528,7 @@ interface StandaloneSpec extends Spec {
 const STANDALONE: Record<string, StandaloneSpec> = {
   "/app": {
     name: "Console home", ws: "home", d: "retain", state: "lifecycle-store", replacedBy: "WP05",
-    iOnly: { admin: "V", programme: "V", reviewer: "V", director: "V", secretary: "V", finance: "V", helpdesk: "V", auditor: "V" },
+    iOnly: { admin: "V", programme: "V", reviewer: "V", officer: "V", director: "V", finance: "V", helpdesk: "V", auditor: "V" },
     p: allPartners("V"),
   },
   "/app/screens": {
@@ -538,7 +538,7 @@ const STANDALONE: Record<string, StandaloneSpec> = {
   },
   [RECORD]: {
     name: "Registration record workspace", ws: "registrations", d: "retain", state: "static-fixture", replacedBy: "WP04", slice: true,
-    iOnly: { admin: "V", programme: "V/R", reviewer: "V/R", director: "V", secretary: "V", finance: "V", auditor: "V" },
+    iOnly: { admin: "V", programme: "V/R", reviewer: "V/R", officer: "V", director: "V", finance: "V", auditor: "V" },
     p: { ...both("V/C/E/S"), iame: "V" },
     note: "Target model record for the slice; model approval decisions stay on the approval view. Today it reads its own RECORDS fixture, its Approve/Reject/Return buttons do nothing, and only the agency role has a menu entry.",
   },
@@ -549,7 +549,7 @@ const STANDALONE: Record<string, StandaloneSpec> = {
   },
   [CASE]: {
     name: "Enforcement case workspace", ws: "enforcement", d: "retain", replacedBy: "WP10",
-    iOnly: { admin: "V", programme: "V/R/X", reviewer: "V/R/X", director: "V/A", secretary: "V/A", auditor: "V" },
+    iOnly: { admin: "V", programme: "V/R/X", reviewer: "V/R/X", officer: "V/A", director: "V/A", auditor: "V" },
     p: { ...both("V/S"), iame: "V/R", sda: "V/R", laboratory: "V/S" },
     note: "Manufacturer and agency need this route for show-cause and response; the current menu does not give it to them.",
   },
@@ -559,17 +559,17 @@ const STANDALONE: Record<string, StandaloneSpec> = {
   },
   [ACCESS]: {
     name: "Users, roles and delegation", ws: "insights-admin", d: "retain", replacedBy: "WP02",
-    iOnly: { admin: "G/A", programme: "V", reviewer: "V", director: "V", secretary: "V", auditor: "V" },
+    iOnly: { admin: "G/A", programme: "V", reviewer: "V", officer: "V", director: "V", auditor: "V" },
     note: "DDD 4.3: maker-checker for privileged role grants; an administrator cannot self-approve a grant.",
   },
   [APPROVALS]: {
     name: "My approvals", ws: "work", d: "retain", replacedBy: "WP05",
-    iOnly: { programme: "V/R", reviewer: "V/R", director: "V/A", secretary: "V/A", finance: "V/A" },
+    iOnly: { programme: "V/R", reviewer: "V/R", officer: "V/A", director: "V/A", finance: "V/A" },
     note: "Static ITEMS list, not the lifecycle store, so slice approvals do not appear here; one item is dated \"18 Oct\" while the others are dated 23–24 Sep 2026.",
   },
   [AI]: {
     name: "AI insights", ws: "insights-admin", d: "retain", replacedBy: "WP11",
-    iOnly: { admin: "V", programme: "V/R", reviewer: "V/R", director: "V", secretary: "V", finance: "V", auditor: "V" },
+    iOnly: { admin: "V", programme: "V/R", reviewer: "V/R", officer: "V", director: "V", finance: "V", auditor: "V" },
   },
 };
 
@@ -660,8 +660,8 @@ export const SLICE_STEPS: SliceStep[] = [
   { n: 3, actor: "iame", action: "IAME scrutiny: recommend (or return a shortfall)", code: "R", row: "/app/model-label/iame-scrutiny", from: "iame_scrutiny", to: "bee_scrutiny" },
   { n: 4, actor: "reviewer", action: "BEE scrutiny by Project Engineer: forward (or return)", code: "R", row: "/app/model-label/bee-scrutiny", from: "bee_scrutiny", to: "rating" },
   { n: 5, actor: "programme", action: "Compute star rating from the effective formula", code: "X", row: RATING, from: "rating", to: "director_review", records: "rating result (formula ID and version, inputs, result, computed by and at)" },
-  { n: 6, actor: "director", action: "Program Director reviews the rating and recommends approval", code: "A", row: DIRECTOR, from: "director_review", to: "secretary_approval" },
-  { n: 7, actor: "secretary", action: "Secretary reviews the rating and gives final approval", code: "A", row: DIRECTOR, from: "secretary_approval", to: "approved" },
+  { n: 6, actor: "officer", action: "Program Director reviews the rating and recommends approval", code: "A", row: DIRECTOR, from: "director_review", to: "secretary_approval" },
+  { n: 7, actor: "director", action: "Secretary reviews the rating and gives final approval", code: "A", row: DIRECTOR, from: "secretary_approval", to: "approved" },
 ];
 
 /** Final state of the slice. Label, QR and certificate follow in later work packages. */

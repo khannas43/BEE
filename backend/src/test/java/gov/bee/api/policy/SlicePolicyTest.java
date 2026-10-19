@@ -60,8 +60,8 @@ class SlicePolicyTest {
         assertThat(SlicePolicy.canRead(finance, app(NOVA, "draft"))).isFalse();
         assertThat(SlicePolicy.canRead(finance, app(NOVA, "director_review"))).isFalse();
         assertThat(SlicePolicy.readScope(caller("programme", "all")).stages()).containsExactly("rating");
-        assertThat(SlicePolicy.readScope(caller("director", "all")).stages()).containsExactly("director_review");
-        assertThat(SlicePolicy.readScope(caller("secretary", "all")).stages()).containsExactly("secretary_approval");
+        assertThat(SlicePolicy.readScope(caller("officer", "all")).stages()).containsExactly("director_review");
+        assertThat(SlicePolicy.readScope(caller("director", "all")).stages()).containsExactly("secretary_approval");
     }
 
     @Test
@@ -97,8 +97,8 @@ class SlicePolicyTest {
         assertThat(SlicePolicy.check(SliceAction.IAME_RECOMMEND, caller("iame", "assigned"), app(NOVA, "iame_scrutiny", "iame_scrutiny")).allowed()).isTrue();
         assertThat(SlicePolicy.check(SliceAction.REVIEWER_FORWARD, caller("reviewer", "assigned"), app(NOVA, "bee_scrutiny", "bee_scrutiny")).allowed()).isTrue();
         assertThat(SlicePolicy.check(SliceAction.COMPUTE_RATING, caller("programme", "all"), app(NOVA, "rating")).allowed()).isTrue();
-        assertThat(SlicePolicy.check(SliceAction.DIRECTOR_RECOMMEND, caller("director", "all"), app(NOVA, "director_review")).allowed()).isTrue();
-        assertThat(SlicePolicy.check(SliceAction.SECRETARY_APPROVE, caller("secretary", "all"), app(NOVA, "secretary_approval")).allowed()).isTrue();
+        assertThat(SlicePolicy.check(SliceAction.DIRECTOR_RECOMMEND, caller("officer", "all"), app(NOVA, "director_review")).allowed()).isTrue();
+        assertThat(SlicePolicy.check(SliceAction.SECRETARY_APPROVE, caller("director", "all"), app(NOVA, "secretary_approval")).allowed()).isTrue();
     }
 
     @Test
@@ -129,7 +129,7 @@ class SlicePolicyTest {
 
     @Test
     void n3OnlyFinanceConfirmsTheFee() {
-        for (var c : List.of(caller("manufacturer", "own-org", NOVA), caller("iame", "assigned"), caller("director", "all"), caller("secretary", "all"))) {
+        for (var c : List.of(caller("manufacturer", "own-org", NOVA), caller("iame", "assigned"), caller("officer", "all"), caller("director", "all"))) {
             assertThat(SlicePolicy.check(SliceAction.CONFIRM_FEE, c, app(NOVA, "fee_due", "fee_due")).reason()).isEqualTo("role_not_permitted");
         }
     }
@@ -152,8 +152,8 @@ class SlicePolicyTest {
 
     @Test
     void n7DirectorCannotGiveFinalApprovalAndSecretaryCannotActFirst() {
-        assertThat(SlicePolicy.check(SliceAction.SECRETARY_APPROVE, caller("director", "all"), app(NOVA, "secretary_approval")).reason()).isEqualTo("role_not_permitted");
-        assertThat(SlicePolicy.check(SliceAction.SECRETARY_APPROVE, caller("secretary", "all"), app(NOVA, "director_review")).reason()).isEqualTo("wrong_stage");
+        assertThat(SlicePolicy.check(SliceAction.SECRETARY_APPROVE, caller("officer", "all"), app(NOVA, "secretary_approval")).reason()).isEqualTo("role_not_permitted");
+        assertThat(SlicePolicy.check(SliceAction.SECRETARY_APPROVE, caller("director", "all"), app(NOVA, "director_review")).reason()).isEqualTo("wrong_stage");
     }
 
     @Test
@@ -194,7 +194,7 @@ class SlicePolicyTest {
         record Owner(String role, String scope, String state) {
         }
         var owners = List.of(new Owner("iame", "assigned", "iame_scrutiny"), new Owner("reviewer", "assigned", "bee_scrutiny"),
-            new Owner("director", "all", "director_review"), new Owner("secretary", "all", "secretary_approval"));
+            new Owner("officer", "all", "director_review"), new Owner("director", "all", "secretary_approval"));
         assertThat(StageReturn.values()).hasSize(4);
         for (var o : owners) {
             assertThat(StageReturn.check(caller(o.role(), o.scope()), app(NOVA, o.state(), o.state())).allowed()).as(o.role() + " from " + o.state()).isTrue();
@@ -214,7 +214,7 @@ class SlicePolicyTest {
         assertThat(StageReturn.check(caller("programme", "all"), app(NOVA, "rating")).reason()).isEqualTo("role_not_permitted");
         for (var state : List.of("draft", "returned", "approved", "rejected")) {
             assertThat(StageReturn.forState(state)).as(state).isEmpty();
-            assertThat(StageReturn.check(caller("director", "all"), app(NOVA, state)).reason()).as(state).isEqualTo("role_not_permitted");
+            assertThat(StageReturn.check(caller("officer", "all"), app(NOVA, state)).reason()).as(state).isEqualTo("role_not_permitted");
         }
         assertThat(StageReturn.check(caller("manufacturer", "own-org", NOVA), app(NOVA, "iame_scrutiny", "iame_scrutiny")).reason()).isEqualTo("role_not_permitted");
         for (var role : List.of("admin", "helpdesk", "auditor")) {
@@ -226,10 +226,10 @@ class SlicePolicyTest {
     void anAssignedOfficerMustHoldTheAssignmentAndAnyoneWhoActedAtAnotherStageIsRefused() {
         assertThat(StageReturn.check(caller("iame", "assigned"), app(NOVA, "iame_scrutiny")).reason()).isEqualTo("not_assigned");
         assertThat(StageReturn.check(caller("reviewer", "assigned"), app(NOVA, "bee_scrutiny", "iame_scrutiny")).reason()).isEqualTo("not_assigned");
-        var director = caller("director", "all");
+        var director = caller("officer", "all");
         var actedBefore = new ApplicationFacts(UUID.randomUUID(), NOVA, "director_review", Set.of(), Set.of(director.accountId()), false);
         assertThat(StageReturn.check(director, actedBefore).reason()).isEqualTo("same_user_other_stage");
-        assertThat(StageReturn.check(caller("director", "all"), app(NOVA, "director_review")).allowed()).isTrue();
+        assertThat(StageReturn.check(caller("officer", "all"), app(NOVA, "director_review")).allowed()).isTrue();
     }
 
     @Test
@@ -247,7 +247,7 @@ class SlicePolicyTest {
         record Owner(String role, String scope, String state) {
         }
         var owners = List.of(new Owner("iame", "assigned", "iame_scrutiny"), new Owner("reviewer", "assigned", "bee_scrutiny"),
-            new Owner("programme", "all", "rating"), new Owner("director", "all", "director_review"), new Owner("secretary", "all", "secretary_approval"));
+            new Owner("programme", "all", "rating"), new Owner("officer", "all", "director_review"), new Owner("director", "all", "secretary_approval"));
         assertThat(StageReject.values()).hasSize(5);
         for (var o : owners) {
             assertThat(StageReject.check(caller(o.role(), o.scope()), app(NOVA, o.state(), o.state())).allowed()).as(o.role() + " from " + o.state()).isTrue();
@@ -269,7 +269,7 @@ class SlicePolicyTest {
         assertThat(StageReject.check(caller("manufacturer", "own-org", NOVA), app(NOVA, "iame_scrutiny", "iame_scrutiny")).reason()).isEqualTo("role_not_permitted");
         for (var state : List.of("draft", "returned", "approved", "rejected")) {
             assertThat(StageReject.forState(state)).as(state).isEmpty();
-            assertThat(StageReject.check(caller("director", "all"), app(NOVA, state)).reason()).as(state).isEqualTo("role_not_permitted");
+            assertThat(StageReject.check(caller("officer", "all"), app(NOVA, state)).reason()).as(state).isEqualTo("role_not_permitted");
         }
         for (var role : List.of("admin", "helpdesk", "auditor")) {
             assertThat(StageReject.check(caller(role, "all"), app(NOVA, "rating")).reason()).as(role).isEqualTo("role_not_permitted");

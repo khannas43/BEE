@@ -33,4 +33,15 @@ describe("RoleProvider", () => {
     );
     expect(screen.getByTestId("role").textContent).toBe("admin");
   });
+
+  it("falls back to admin when a technical persona was stored (Brief C3B)", () => {
+    if (!ROLE_PREVIEW_ENABLED) return;
+    localStorage.setItem("bee-role", "programme");
+    render(
+      <RoleProvider>
+        <RoleProbe />
+      </RoleProvider>,
+    );
+    expect(screen.getByTestId("role").textContent).toBe("admin");
+  });
 });

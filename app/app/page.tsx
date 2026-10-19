@@ -52,7 +52,7 @@ export default function AppOverview() {
       {/* Welcome */}
       <div className="bg-forest-dark text-on-primary rounded-xl p-space-lg flex flex-col md:flex-row md:items-center justify-between gap-space-md">
         <div>
-          <div className="font-label-sm text-label-sm text-primary-fixed uppercase tracking-wider">{external ? t("app.partnerConsole") : t("app.officerConsole")}</div>
+          <div className="font-label-sm text-label-sm text-primary-fixed uppercase tracking-wider">{external ? t("app.partnerConsole") : t("app.portal")}</div>
           <h1 className="font-headline-lg text-headline-lg font-bold" data-preview-role>{t("app.welcome").replace("{name}", t(`role.${role}`) + PREVIEW_SUFFIX)}</h1>
           <p className="font-body-md text-body-md text-forest-light/85 mt-1">{summary}</p>
         </div>

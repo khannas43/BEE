@@ -69,7 +69,7 @@ describe("registration reviews", () => {
     installDeferredFetch();
   });
 
-  it("filters the queue for Programme and for the Director, and hides the menu from other roles", async () => {
+  it("filters the queue for Programme and for the Officer, and hides the menu from other roles", async () => {
     const items = [
       registration({ id: "a", reference: "REG-2026-1", state: "programme_review" }),
       registration({ id: "b", reference: "REG-2026-2", state: "director_approval", organisation: "Northwind" }),
@@ -94,15 +94,15 @@ describe("registration reviews", () => {
     expect(screen.getByTestId("rev-row-REG-2026-2").textContent).toContain("Northwind");
     expect(screen.getByTestId("rev-open-REG-2026-1").getAttribute("href")).toBe("/app/registrations/request?id=a");
 
-    identity.role = "director";
+    identity.role = "officer";
     mount(<RegistrationReviews {...frame} />);
     await resolveAt(0, listOf(items));
     expect(screen.getByTestId("rev-row-REG-2026-2")).toBeTruthy();
     expect(screen.queryByTestId("rev-row-REG-2026-1")).toBeNull();
 
     expect(runtimeNavFor([{ role: "programme" }]).some((r) => r.href === "/app/registrations/reviews")).toBe(true);
-    expect(runtimeNavFor([{ role: "director" }]).some((r) => r.href === "/app/registrations/reviews")).toBe(true);
-    for (const role of ["manufacturer", "agency", "finance", "secretary", "reviewer", "admin"]) {
+    expect(runtimeNavFor([{ role: "officer" }]).some((r) => r.href === "/app/registrations/reviews")).toBe(true);
+    for (const role of ["manufacturer", "agency", "finance", "director", "reviewer", "admin"]) {
       expect(runtimeNavFor([{ role }]).some((r) => r.href === "/app/registrations/reviews")).toBe(false);
     }
   });
@@ -144,8 +144,8 @@ describe("registration reviews", () => {
     expect(screen.getByTestId("rev-result").textContent).toContain("Back to the queue");
   });
 
-  it("offers the Director approve, return and reject, with the confirmation line", async () => {
-    identity.role = "director";
+  it("offers the Officer approve, return and reject, with the confirmation line", async () => {
+    identity.role = "officer";
     mount(<RegistrationRequest {...frame} />);
     await resolveAt(0, registration({ state: "director_approval", kind: "agency", validFrom: "2099-01-01", validTo: "2099-06-01" }));
     await resolveAt(1, docs);
@@ -159,7 +159,7 @@ describe("registration reviews", () => {
     });
     expect(JSON.parse(String(lastCall((c) => c.init?.method === "POST").init?.body))).toEqual({ action: "approve", version: 4, note: "Noted." });
 
-    identity.role = "director";
+    identity.role = "officer";
     mount(<RegistrationRequest {...frame} />);
     await resolveAt(0, registration({ state: "director_approval" }));
     await resolveAt(1, docs);

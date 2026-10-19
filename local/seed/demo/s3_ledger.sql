@@ -140,7 +140,7 @@ BEGIN
     INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after, occurred_at)
       VALUES (rate_ev, app, 'rate', 'rating', 'director_review', reviewer, 'reviewer', 1, issued - interval '1 day') ON CONFLICT (id) DO NOTHING;
     INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after, occurred_at)
-      VALUES (ok_ev, app, 'approve', 'secretary_approval', 'approved', sec, 'secretary', 2, issued) ON CONFLICT (id) DO NOTHING;
+      VALUES (ok_ev, app, 'approve', 'secretary_approval', 'approved', sec, 'director', 2, issued) ON CONFLICT (id) DO NOTHING;
     INSERT INTO model_application_rating (id, application_id, transition_event_id, rating_version, basis, scheme_key, declared_iseer, verified_iseer, stars, computed_by_account_id)
       VALUES (md5('ldg-rt-' || n)::uuid, app, rate_ev, 1, 'local_demo', 'rac_demo', iseer, iseer, stars, reviewer) ON CONFLICT (id) DO NOTHING;
     INSERT INTO certificate (id, application_id, transition_event_id, registration_id, category_code, issue_year, sequence_no, valid_from, valid_to,

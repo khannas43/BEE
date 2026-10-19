@@ -146,8 +146,8 @@ describe("register revocations", () => {
     expect(screen.queryByTestId("rvk-propose-auth-active")).toBeNull();
 
     expect(runtimeNavFor([{ role: "programme" }]).some((r) => r.href === "/app/registrations/register")).toBe(true);
-    expect(runtimeNavFor([{ role: "director" }]).some((r) => r.href === "/app/registrations/register")).toBe(true);
-    for (const role of ["manufacturer", "agency", "finance", "secretary", "reviewer", "admin"]) {
+    expect(runtimeNavFor([{ role: "officer" }]).some((r) => r.href === "/app/registrations/register")).toBe(true);
+    for (const role of ["manufacturer", "agency", "finance", "director", "reviewer", "admin"]) {
       expect(runtimeNavFor([{ role }]).some((r) => r.href === "/app/registrations/register")).toBe(false);
     }
   });

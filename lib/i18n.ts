@@ -132,7 +132,7 @@ export const DICT: Record<string, Entry> = {
   "module.mis-ai": { en: "MIS & AI", hi: "एमआईएस एवं एआई" },
   "module.audit": { en: "Audit", hi: "अंकेक्षण" },
 
-  "app.officerConsole": { en: "Officer Console", hi: "अधिकारी कंसोल" },
+  "app.portal": { en: "BEE S&L Portal", hi: "बीईई एस एंड एल पोर्टल" },
   "app.overview": { en: "Overview", hi: "अवलोकन" },
   "app.allScreens": { en: "All screens", hi: "सभी स्क्रीन" },
   "app.publicPortal": { en: "Public portal", hi: "सार्वजनिक पोर्टल" },
@@ -214,8 +214,8 @@ export const DICT: Record<string, Entry> = {
   "role.admin": { en: "BEE Administrator", hi: "बीईई प्रशासक" },
   "role.programme": { en: "Programme Officer", hi: "कार्यक्रम अधिकारी" },
   "role.reviewer": { en: "Reviewer & Approver", hi: "समीक्षक एवं अनुमोदक" },
+  "role.officer": { en: "BEE Officer", hi: "बीईई अधिकारी" },
   "role.director": { en: "Director", hi: "निदेशक" },
-  "role.secretary": { en: "Secretary", hi: "सचिव" },
   "role.finance": { en: "BEE Finance", hi: "बीईई वित्त" },
   "role.helpdesk": { en: "Helpdesk Agent", hi: "हेल्पडेस्क एजेंट" },
   "role.auditor": { en: "Auditor", hi: "अंकेक्षक" },

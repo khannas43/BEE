@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo } from "react";
 import { useClientStorageReady, useStoredValue, writeStoredValue } from "@/lib/client/useStoredValue";
-import { RoleKey, ROLE_ORDER, roleByKey } from "@/lib/roles";
+import { RoleKey, VISIBLE_SELECTOR_ROLE_KEYS, roleByKey } from "@/lib/roles";
 
 const KEY = "bee-role";
 
@@ -28,7 +28,7 @@ export function previewRoleOf(r: RoleKey) {
 
 function roleFromStored(stored: string | null): RoleKey {
   if (!stored || !ROLE_PREVIEW_ENABLED) return "admin";
-  return ROLE_ORDER.includes(stored as RoleKey) ? (stored as RoleKey) : "admin";
+  return VISIBLE_SELECTOR_ROLE_KEYS.includes(stored as RoleKey) ? (stored as RoleKey) : "admin";
 }
 
 interface RoleCtx {

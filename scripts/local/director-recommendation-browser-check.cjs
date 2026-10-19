@@ -244,7 +244,7 @@ async function runDirectorChecks(runLabel, nova, finance, iame, reviewer, progra
     // What the recommendation changed, in the database and for each reader. RAC is not final by default, so it goes to the Secretary.
     check(`${runLabel}.db.state-moved`, stateOf(A.id) === "secretary_approval" && sql(`SELECT version FROM app.model_application WHERE id = '${A.id}'`) === String(A.version + 1), `secretary_approval v${A.version + 1}`);
     const ev = sql(`SELECT action || ':' || from_state || '>' || to_state || ':' || actor_role FROM app.model_application_transition_event WHERE application_id = '${A.id}' AND action = 'director_recommend'`);
-    check(`${runLabel}.db.event`, ev === "director_recommend:director_review>secretary_approval:director" && countOf("model_application_transition_event", A.id) === 5, ev);
+    check(`${runLabel}.db.event`, ev === "director_recommend:director_review>secretary_approval:officer" && countOf("model_application_transition_event", A.id) === 5, ev);
     const rec = sql(`SELECT note || '|' || director_final || '|' || resulting_state FROM app.model_application_director_recommendation WHERE application_id = '${A.id}'`);
     check(`${runLabel}.db.recommendation-record`, rec === `${uiNote}|false|secretary_approval`, rec);
     check(`${runLabel}.db.no-assignment-made`, Number(sql(`SELECT count(*) FROM app.assignment WHERE subject_id = '${A.id}' AND active`)) === 0, "no active assignment: the Secretary reads the next stage by role");
@@ -289,7 +289,7 @@ async function main() {
   const chrome = await launchChrome();
   try {
     const twins = {};
-    for (const [k, u] of [["nova", "nova.applicant"], ["finance", "bee.finance"], ["iame", "iame.officer"], ["reviewer", "bee.reviewer"], ["programme", "bee.programme"], ["director", "bee.director"]]) {
+    for (const [k, u] of [["nova", "nova.applicant"], ["finance", "bee.finance"], ["iame", "iame.officer"], ["reviewer", "bee.reviewer"], ["programme", "bee.programme"], ["director", "bee.officer"]]) {
       twins[k] = ids.name(u);
       await totp.ensureEnrolled(twins[k]);
     }

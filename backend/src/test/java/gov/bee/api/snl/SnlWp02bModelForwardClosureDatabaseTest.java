@@ -63,8 +63,8 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
     static final UUID SECRETARY_USER = UUID.fromString("00000000-0000-4000-a000-000000000008");
     static final Caller REVIEWER_CALLER = new Caller(REVIEWER_USER, "bee.reviewer", List.of(new gov.bee.api.identity.IdentityRepository.RoleGrant("reviewer", "assigned")), Set.of());
     static final Caller PROGRAMME_CALLER = new Caller(PROGRAMME_USER, "bee.programme", List.of(new gov.bee.api.identity.IdentityRepository.RoleGrant("programme", "assigned")), Set.of());
-    static final Caller DIRECTOR_CALLER = new Caller(DIRECTOR_USER, "bee.director", List.of(new gov.bee.api.identity.IdentityRepository.RoleGrant("director", "all")), Set.of());
-    static final Caller SECRETARY_CALLER = new Caller(SECRETARY_USER, "bee.secretary", List.of(new gov.bee.api.identity.IdentityRepository.RoleGrant("secretary", "all")), Set.of());
+    static final Caller DIRECTOR_CALLER = new Caller(DIRECTOR_USER, "bee.officer", List.of(new gov.bee.api.identity.IdentityRepository.RoleGrant("officer", "all")), Set.of());
+    static final Caller SECRETARY_CALLER = new Caller(SECRETARY_USER, "bee.director", List.of(new gov.bee.api.identity.IdentityRepository.RoleGrant("director", "all")), Set.of());
 
     static IameRecommendationService iameService;
     static ReviewerForwardService reviewerService;
@@ -329,7 +329,7 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
     @Test
     void computeRatingAcceptedForwardClosesReturnCycle() throws Exception {
         UUID id = atDirector("WP02B2F-RAT-" + TAG);
-        wiredReturn(id, "director_review", DIRECTOR_USER, "director", UUID.randomUUID().toString());
+        wiredReturn(id, "director_review", DIRECTOR_USER, "officer", UUID.randomUUID().toString());
         applications.setEvidence(id, NOVA, new gov.bee.api.application.ModelApplicationRepository.EvidenceUpdate(true, "LAB", true, java.time.LocalDate.of(2026, 9, 1), true, new BigDecimal("4.80")));
         wiredResubmit(id, UUID.randomUUID().toString(), "Rating input updated.");
         int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
@@ -342,7 +342,7 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
     @Test
     void directorRecommendToSecretaryAcceptedForwardClosesReturnCycle() throws Exception {
         UUID id = atDirector("WP02B2F-DIR-S-" + TAG);
-        returnResubmitAt(id, "director_review", DIRECTOR_USER, "director");
+        returnResubmitAt(id, "director_review", DIRECTOR_USER, "officer");
         int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
         var body = json.readTree("{\"version\":" + v + ",\"note\":\"ok\"}");
         assertEquals(HttpStatus.OK, directorService.run(DIRECTOR_CALLER, id, idemKey("0000000000000023"), body).getStatusCode());
@@ -352,7 +352,7 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
     @Test
     void directorFinalRecommendAcceptedForwardClosesReturnCycle() throws Exception {
         UUID id = atDirector("WP02B2F-DIR-F-" + TAG);
-        returnResubmitAt(id, "director_review", DIRECTOR_USER, "director");
+        returnResubmitAt(id, "director_review", DIRECTOR_USER, "officer");
         int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
         owner.update("INSERT INTO director_final_rule (category_code, effective_from, director_final, source_reference, note) VALUES ('RAC', '2020-01-01', true, 'wp02b2-test', 'test final') ON CONFLICT DO NOTHING");
         var body = json.readTree("{\"version\":" + v + ",\"note\":\"final ok\"}");
@@ -363,8 +363,8 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
     @Test
     void secretaryApproveAcceptedForwardClosesReturnCycle() throws Exception {
         UUID id = atDirector("WP02B2F-SEC-" + TAG);
-        directorRepo.recommend(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), DIRECTOR_USER, "director", "n", false);
-        returnResubmitAt(id, "secretary_approval", DIRECTOR_USER, "director");
+        directorRepo.recommend(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), DIRECTOR_USER, "officer", "n", false);
+        returnResubmitAt(id, "secretary_approval", SECRETARY_USER, "director");
         int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
         var body = json.readTree("{\"version\":" + v + ",\"note\":\"ok\"}");
         assertEquals(HttpStatus.OK, secretaryService.run(SECRETARY_CALLER, id, idemKey("0000000000000025"), body).getStatusCode());
@@ -453,16 +453,16 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
     @Test
     void multiCycleDirectorRatingSecretaryJourney() throws Exception {
         UUID id = atDirector("WP02B2F-MC2-" + TAG);
-        wiredReturn(id, "director_review", DIRECTOR_USER, "director", UUID.randomUUID().toString());
+        wiredReturn(id, "director_review", DIRECTOR_USER, "officer", UUID.randomUUID().toString());
         applications.setEvidence(id, NOVA, new gov.bee.api.application.ModelApplicationRepository.EvidenceUpdate(true, "LAB", true, java.time.LocalDate.of(2026, 9, 1), true, new BigDecimal("4.80")));
         wiredResubmit(id, UUID.randomUUID().toString(), "superseded to rating");
         int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
         var rated = ratingRepo.compute(id, v, PROGRAMME_USER, "programme", "RAC-ISEER-DEMO-1", new BigDecimal("4.50"), new BigDecimal("4.62"), 4);
         wiring.afterAcceptedForward(id, rated.transitionEventId(), RatingRepository.ACTION, RatingRepository.FROM_STATE, RatingRepository.TO_STATE,
             rated.versionAfter(), PROGRAMME_USER, "programme", rated.computedAt(), idemKey("0000000000000033"));
-        directorRepo.recommend(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), DIRECTOR_USER, "director", "n", false);
+        directorRepo.recommend(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), DIRECTOR_USER, "officer", "n", false);
         assertEquals("secretary_approval", owner.queryForObject("SELECT state FROM model_application WHERE id = ?", String.class, id));
-        returnResubmitAt(id, "secretary_approval", DIRECTOR_USER, "director");
+        returnResubmitAt(id, "secretary_approval", SECRETARY_USER, "director");
         v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
         secretaryService.run(SECRETARY_CALLER, id, idemKey("0000000000000034"), json.readTree("{\"version\":" + v + ",\"note\":\"ok\"}"));
         assertTrue(owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ? AND status = 'closed'", Integer.class, id) >= 2);
@@ -477,7 +477,7 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
         Flyway.configure().dataSource(migrateSource(mig)).schemas(mig).defaultSchema(mig).createSchemas(false)
             .locations("classpath:db/migration").target("71").load().migrate();
         JdbcTemplate migOwner = new JdbcTemplate(migrateSource(mig));
-        migOwner.execute(Files.readString(Path.of("..", "local", "seed", "seed.sql")));
+        migOwner.execute(gov.bee.api.support.LocalSeedSql.beforeRoleSuccession());
         DriverManagerDataSource migRuntimeDs = sourceAs(mig, runtimeRole(), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime"));
         JdbcTemplate migDb = new JdbcTemplate(migRuntimeDs);
         TransactionTemplate migTx = new TransactionTemplate(new DataSourceTransactionManager(migRuntimeDs));
@@ -642,11 +642,11 @@ class SnlWp02bModelForwardClosureDatabaseTest extends SnlWp02bModelReturnWiringD
         v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
         reviewerService.run(REVIEWER_CALLER, id, idemKey("0000000000000044"), json.readTree("{\"version\":" + v + ",\"note\":\"m2\"}"));
         UUID idDir = atDirector("WP02B2A-MAP2-" + TAG);
-        returnResubmitAt(idDir, "director_review", DIRECTOR_USER, "director");
+        returnResubmitAt(idDir, "director_review", DIRECTOR_USER, "officer");
         v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, idDir);
         directorService.run(DIRECTOR_CALLER, idDir, idemKey("0000000000000045"), json.readTree("{\"version\":" + v + ",\"note\":\"m3\"}"));
-        directorRepo.recommend(idDir, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, idDir), DIRECTOR_USER, "director", "n", false);
-        returnResubmitAt(idDir, "secretary_approval", DIRECTOR_USER, "director");
+        directorRepo.recommend(idDir, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, idDir), DIRECTOR_USER, "officer", "n", false);
+        returnResubmitAt(idDir, "secretary_approval", SECRETARY_USER, "director");
         v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, idDir);
         secretaryService.run(SECRETARY_CALLER, idDir, idemKey("0000000000000046"), json.readTree("{\"version\":" + v + ",\"note\":\"m4\"}"));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM model_return_response_cycle WHERE application_id = ? AND status = 'open'", Integer.class, idDir));

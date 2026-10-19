@@ -67,8 +67,8 @@ class RegistrationReviewDatabaseTest {
     static final Caller PROGRAMME = new Caller(PROGRAMME_USER, "bee.programme", List.of(new RoleGrant("programme", "all")), Set.of(BEE_ORG));
     static final UUID DIRECTOR_USER = UUID.fromString("00000000-0000-4000-a000-000000000007");
     static final UUID DUAL_USER = UUID.fromString("00000000-0000-4000-a000-0000000000e1");
-    static final Caller DIRECTOR = new Caller(DIRECTOR_USER, "bee.director", List.of(new RoleGrant("director", "all")), Set.of(BEE_ORG));
-    static final Caller DUAL = new Caller(DUAL_USER, "dual.reviewer", List.of(new RoleGrant("programme", "all"), new RoleGrant("director", "all")), Set.of(BEE_ORG));
+    static final Caller DIRECTOR = new Caller(DIRECTOR_USER, "bee.officer", List.of(new RoleGrant("officer", "all")), Set.of(BEE_ORG));
+    static final Caller DUAL = new Caller(DUAL_USER, "dual.reviewer", List.of(new RoleGrant("programme", "all"), new RoleGrant("officer", "all")), Set.of(BEE_ORG));
     static final Caller ADMIN = new Caller(ADMIN_USER, "bee.admin", List.of(new RoleGrant("admin", "all")), Set.of(BEE_ORG));
 
     static final ObjectMapper JSON = new ObjectMapper();
@@ -192,7 +192,7 @@ class RegistrationReviewDatabaseTest {
 
     @Test
     void migrationAddsTheDirectorCapabilityAndTheTransitionGuards() {
-        assertEquals(1, owner.queryForObject("SELECT count(*) FROM capability_grant WHERE capability = 'registration_approve' AND role = 'director'", Integer.class));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM capability_grant WHERE capability = 'registration_approve' AND role = 'officer'", Integer.class));
         UUID id = atProgrammeReview("Guard Cool");
         // An illegal move is refused by the database, whoever asks: programme_review cannot jump to approved or rejected.
         assertThrows(DataAccessException.class, () -> db.update("UPDATE registration_application SET state = 'approved' WHERE id = ?", id));
@@ -250,12 +250,12 @@ class RegistrationReviewDatabaseTest {
         UUID id = atProgrammeReview("Ibis Cool");
         // A person who holds both roles can recommend, but cannot then approve what they recommended.
         owner.update("INSERT INTO user_account (id, keycloak_subject, username, display_name) VALUES (?, ?, 'dual.reviewer', 'Dual Reviewer')", DUAL_USER, DUAL_USER);
-        owner.update("INSERT INTO role_assignment (user_id, role, scope) VALUES (?, 'programme', 'all'), (?, 'director', 'all')", DUAL_USER, DUAL_USER);
+        owner.update("INSERT INTO role_assignment (user_id, role, scope) VALUES (?, 'programme', 'all'), (?, 'officer', 'all')", DUAL_USER, DUAL_USER);
         ok(act(DUAL, id, "recommend", 2, null), 200);
         refused(act(DUAL, id, "approve", 3, null), 403, "segregation_refused");
         // Applied directly to the database, the same rule holds: no approval event by the recommender.
         assertThrows(DataAccessException.class, () -> db.update("INSERT INTO registration_transition_event (id, application_id, action, from_state, to_state, "
-            + "actor_account_id, actor_role, version_after) VALUES (?, ?, 'approve', 'director_approval', 'approved', ?, 'director', 4)", UUID.randomUUID(), id, DUAL_USER));
+            + "actor_account_id, actor_role, version_after) VALUES (?, ?, 'approve', 'director_approval', 'approved', ?, 'officer', 4)", UUID.randomUUID(), id, DUAL_USER));
         assertEquals("not_permitted", db.queryForObject("SELECT out_state FROM registration_approve(?, ?, 3, NULL)", String.class, id, PROGRAMME_USER));
         assertEquals("segregation_refused", db.queryForObject("SELECT out_state FROM registration_approve(?, ?, 3, NULL)", String.class, id, DUAL_USER));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM brand WHERE name = 'Ibis Cool'", Integer.class));

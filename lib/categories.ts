@@ -45,7 +45,7 @@ const ALL_EXTERNAL: RoleKey[] = ["manufacturer", "agency", "iame", "sda", "labor
 /** Manufacturer + agency together own the registration/label/production journey. */
 const MFR_AGENCY: RoleKey[] = ["manufacturer", "agency"];
 /** All internal roles — used to scope an item to external partners only. */
-const ALL_INTERNAL: RoleKey[] = ["admin", "programme", "reviewer", "director", "secretary", "finance", "helpdesk", "auditor"];
+const ALL_INTERNAL: RoleKey[] = ["admin", "programme", "reviewer", "officer", "director", "finance", "helpdesk", "auditor"];
 
 export const CATEGORIES: Category[] = [
   {
@@ -54,7 +54,7 @@ export const CATEGORIES: Category[] = [
     hi: "मुख्य",
     icon: "home",
     items: [
-      { en: "Dashboard", hi: "डैशबोर्ड", href: "/app", icon: "dashboard", ext: ALL_EXTERNAL, hideFrom: ["director", "secretary"] },
+      { en: "Dashboard", hi: "डैशबोर्ड", href: "/app", icon: "dashboard", ext: ALL_EXTERNAL, hideFrom: ["officer", "director"] },
       { en: "My work", hi: "मेरा कार्य", href: "/app/workflow/personal-inbox", icon: "inbox", ext: ALL_EXTERNAL },
       { en: "Approvals", hi: "अनुमोदन", href: "/app/workflow/my-approvals", icon: "task_alt" },
       { en: "SLA and escalations", hi: "एसएलए एवं एस्केलेशन", href: "/app/workflow/escalation-dashboard", icon: "priority_high" },
@@ -188,8 +188,8 @@ export const ROLE_CATEGORIES: Record<RoleKey, string[]> = {
   admin: ["home", "administration", "audit", "insights"],
   programme: ["home", "registrations", "labels-production", "compliance", "insights"],
   reviewer: ["home", "registrations", "labels-production", "compliance", "insights"],
+  officer: ["home", "insights"],
   director: ["home", "insights"],
-  secretary: ["home", "insights"],
   finance: ["home", "finance", "registrations", "insights"],
   helpdesk: ["home", "support"],
   auditor: ["home", "audit", "insights"],
@@ -211,8 +211,8 @@ export const WORKFLOW_ACCESS: Record<string, RoleKey[]> = {
   "/app/model-label/model-payment": ["finance", "manufacturer", "agency"],
   "/app/model-label/iame-scrutiny": ["iame", "reviewer", "programme"],
   "/app/model-label/bee-scrutiny": ["reviewer", "programme"],
-  "/app/model-label/director-approval": ["director", "secretary"],
-  "/app/model-label/secretary-approval": ["secretary", "director"],
+  "/app/model-label/director-approval": ["officer", "director"],
+  "/app/model-label/secretary-approval": ["director", "officer"],
   "/app/model-label/rating-calculation": ["programme"],
 };
 

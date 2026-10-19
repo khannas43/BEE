@@ -31,13 +31,13 @@ import org.springframework.stereotype.Component;
  * few rows; a tile drills down to the full list behind the figure. Every tile, chart and list follows an optional date range
  * ({@code from}, {@code to}, yyyy-mm-dd, India time). Everything is computed from the live tables on every call; nothing here writes.
  * {@code GET dashboard}, {@code GET dashboard/{director|auditor}}, {@code GET dashboard/{view}/{tile}}, each with {@code ?from=&to=}.
- * Director: director, secretary, programme and admin, each held for all records. Auditor: auditor and admin, held for all records.
+ * Director dashboard: officer, director, programme and admin, each held for all records. Auditor: auditor and admin, held for all records.
  * Local demonstration on provisional rules, not a BEE report.
  */
 @Component
 public class DashboardModule implements DemoModule {
 
-    static final Set<String> DIRECTOR = Set.of("director", "secretary", "programme", "admin");
+    static final Set<String> DIRECTOR = Set.of("officer", "director", "programme", "admin");
     static final Set<String> AUDITOR = Set.of("auditor", "admin");
     static final int PREVIEW = 5;
     static final int DRILL = 200;

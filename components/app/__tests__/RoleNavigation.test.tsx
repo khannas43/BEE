@@ -65,14 +65,14 @@ describe("navigation definition", () => {
     expect(menu(["manufacturer"]).map((g) => g.title)).toEqual(["Dashboard", "Registration & Applications", "Labels & Operations", "Compliance & Support"]);
   });
 
-  it("2. Director gets exactly four groups", () => {
-    expect(menu(["director"]).map((g) => g.title)).toEqual(["Dashboard", "Work Queue & Decisions", "Oversight & Intelligence", "Registers & Compliance"]);
+  it("2. BEE Officer gets exactly four groups", () => {
+    expect(menu(["officer"]).map((g) => g.title)).toEqual(["Dashboard", "Work Queue & Decisions", "Oversight & Intelligence", "Registers & Compliance"]);
   });
 
-  it("3 and 4. Secretary and Finance get four groups or fewer, whatever their permissions", () => {
-    expect(menu(["secretary"]).map((g) => g.title)).toEqual(["Dashboard", "Final Approvals", "Certificates & Formats", "Oversight & Reports"]);
+  it("3 and 4. Director and Finance get four groups or fewer, whatever their permissions", () => {
+    expect(menu(["director"]).map((g) => g.title)).toEqual(["Dashboard", "Final Approvals", "Certificates & Formats", "Oversight & Reports"]);
     expect(menu(["finance"], ADMIN_CAPS).map((g) => g.title)).toEqual(["Dashboard", "Payments & Receipts", "Reconciliation", "Monitoring & Reports"]);
-    for (const roles of [["admin"], ["manufacturer"], ["agency"], ["director"], ["secretary"], ["finance"], ["programme"], ["reviewer"], ["iame"], ["auditor"], ["helpdesk"], ["director", "finance"]]) {
+    for (const roles of [["admin"], ["manufacturer"], ["agency"], ["officer"], ["director"], ["finance"], ["programme"], ["reviewer"], ["iame"], ["auditor"], ["helpdesk"], ["officer", "finance"]]) {
       expect(menu(roles, ADMIN_CAPS).length).toBeLessThanOrEqual(4);
     }
   });
@@ -101,9 +101,9 @@ describe("navigation definition", () => {
     expect(existsSync(path.join(process.cwd(), "app/app/identity/access-management/page.tsx"))).toBe(true);
   });
 
-  it("7 and 8. AI advisory and the secure ledger reach Admin and Director, labelled advisory and simulated", () => {
-    for (const roles of [["admin"], ["director"]]) {
-      const entries = menu(roles).flatMap((g) => leaves(g.children));
+  it("7 and 8. AI advisory and the secure ledger reach Admin and Officer, labelled advisory and simulated", () => {
+    for (const roles of [["admin"], ["officer"]]) {
+      const entries = menu(roles, ADMIN_CAPS).flatMap((g) => leaves(g.children));
       expect(entries.find((e) => e.route === "/app/demo/ai")?.badge).toBe("Advisory");
       expect(entries.find((e) => e.route === "/app/demo/ledger")?.badge).toBe("Simulated");
     }
@@ -122,8 +122,8 @@ describe("navigation definition", () => {
     expect(titles(f).filter((t) => /approv|confirm/i.test(t))).toEqual([]);
   });
 
-  it("11. Secretary has no manufacturer pre-approval", () => {
-    const s = menu(["secretary"]);
+  it("11. Director has no manufacturer pre-approval", () => {
+    const s = menu(["director"]);
     expect(routes(s).filter((r) => r.startsWith("/app/manufacturer/") || r === "/app/registrations/reviews")).toEqual([]);
     expect(titles(s).filter((t) => /company registration|pre-approval|onboarding/i.test(t))).toEqual([]);
   });
@@ -153,7 +153,7 @@ describe("navigation definition", () => {
 
 describe("sidebar", () => {
   it("6. no role sees an All screens or dev entry", () => {
-    for (const roles of [["admin"], ["manufacturer"], ["director"], ["secretary"], ["finance"], ["programme"]]) {
+    for (const roles of [["admin"], ["manufacturer"], ["officer"], ["director"], ["finance"], ["programme"]]) {
       const { container, unmount } = renderSidebar(roles);
       expect(container.textContent).not.toMatch(/all screens|app\.allScreens/i);
       expect(container.textContent).not.toMatch(/\bdev\b/i);
@@ -177,7 +177,7 @@ describe("sidebar", () => {
   });
 
   it("preview entries carry a Preview label; runtime links keep their test IDs", () => {
-    const { container } = renderSidebar(["director"]);
+    const { container } = renderSidebar(["officer"]);
     const risk = container.querySelector('[data-nav-id="dir.risk"]')!;
     expect(risk.textContent).toContain("Preview");
     expect(risk.textContent).toContain("Advisory");
@@ -186,7 +186,7 @@ describe("sidebar", () => {
   });
 
   it("13. highlights the current page, keeps its group open and opens one other group at a time", () => {
-    renderSidebar(["director"], "/app/demo/ai");
+    renderSidebar(["officer"], "/app/demo/ai");
     const groupButton = (id: string) => document.querySelector(`[data-nav-id="${id}"]`) as HTMLButtonElement;
     const current = document.querySelector('[aria-current="page"]')!;
     expect(current.getAttribute("data-nav-id")).toBe("dir.ai");
@@ -220,11 +220,10 @@ describe("sidebar", () => {
     expect(document.querySelector('[aria-current="page"]')?.getAttribute("data-nav-id")).toBe("mfr.status");
   });
 
-  it("Admin shows the demonstration note; the operational roles do not", () => {
-    renderSidebar(["admin"]);
-    expect(screen.getByTestId("nav-admin-note").textContent).toContain("In normal operation each user sees only the menus and records permitted for their role");
-    cleanup();
-    renderSidebar(["director"]);
+  it("Admin sidebar shows the Admin profile label only (no demonstration note)", () => {
+    const { container } = renderSidebar(["admin"]);
+    expect(screen.getByTestId("nav-profile").textContent).toBe("Admin");
+    expect(container.textContent).not.toMatch(/Consolidated view|read-only|demonstration umbrella/i);
     expect(screen.queryByTestId("nav-admin-note")).toBeNull();
   });
 

@@ -27,17 +27,17 @@ import org.springframework.stereotype.Component;
 public class AiDemoModule implements DemoModule {
 
     static final Map<String, Set<String>> RUN = Map.of(
-        "compliance-risk", Set.of("programme", "reviewer", "admin", "director", "secretary"),
-        "production-anomaly", Set.of("programme", "reviewer", "admin", "director", "secretary"),
-        "rating-trends", Set.of("programme", "director", "secretary", "admin"),
-        "helpdesk-assist", Set.of("helpdesk", "programme", "reviewer", "admin", "director", "secretary"),
-        "document-extraction", Set.of("reviewer", "programme", "admin", "director", "secretary"));
+        "compliance-risk", Set.of("programme", "reviewer", "admin", "officer", "director"),
+        "production-anomaly", Set.of("programme", "reviewer", "admin", "officer", "director"),
+        "rating-trends", Set.of("programme", "officer", "director", "admin"),
+        "helpdesk-assist", Set.of("helpdesk", "programme", "reviewer", "admin", "officer", "director"),
+        "document-extraction", Set.of("reviewer", "programme", "admin", "officer", "director"));
     static final Map<String, Set<String>> READ_EXTRA = Map.of(
-        "compliance-risk", Set.of("director", "secretary", "auditor"),
-        "production-anomaly", Set.of("director", "auditor"),
+        "compliance-risk", Set.of("officer", "director", "auditor"),
+        "production-anomaly", Set.of("officer", "auditor"),
         "rating-trends", Set.of("reviewer", "auditor"),
         "helpdesk-assist", Set.of("auditor"),
-        "document-extraction", Set.of("director", "auditor"));
+        "document-extraction", Set.of("officer", "auditor"));
     static final String ADVISORY = "advisory: a person decides";
 
     private final AiStore store;

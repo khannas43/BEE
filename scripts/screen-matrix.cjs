@@ -288,7 +288,7 @@ const sliceReach = SLICE_STEPS.map((s) => ({ ...s, allowed: canRoleAccessPath(s.
 const deviations = MATRIX.filter((r) => r.kind === "catalogue" && r.why);
 
 /* ---------- markdown ---------- */
-const SHORT = { admin: "Adm", programme: "Prg", reviewer: "Rev", director: "Dir", secretary: "Sec", finance: "Fin", helpdesk: "HD", auditor: "Aud", manufacturer: "Mfr", agency: "Agy", iame: "IAME", sda: "SDA", laboratory: "Lab" };
+const SHORT = { admin: "Adm", programme: "Prg", reviewer: "Rev", officer: "Off", director: "Dir", finance: "Fin", helpdesk: "HD", auditor: "Aud", manufacturer: "Mfr", agency: "Agy", iame: "IAME", sda: "SDA", laboratory: "Lab" };
 const esc = (s) => String(s ?? "").replace(/\|/g, "\\|");
 const count = (f) => MATRIX.filter(f).length;
 const WS = [

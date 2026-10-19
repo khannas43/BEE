@@ -7,7 +7,6 @@ import { Icon } from "@/components/ui/Icon";
 import { Module, Screen } from "@/lib/screens";
 import { ACCESS_CODES, RoleKey, isExternalRole, splitCodes } from "@/lib/roles";
 import { canRoleAccessPath } from "@/lib/categories";
-import { AdminDemonstrationBanner } from "./AdminDemonstrationBanner";
 import { useRole } from "./RoleContext";
 import { useSpringIdentity } from "./SessionBadge";
 import { useLang } from "@/components/i18n/LangProvider";
@@ -714,7 +713,6 @@ export function ScreenChrome({
   const runtime = Boolean(implemented);
   const body = (
     <div className="p-space-md lg:p-space-lg space-y-space-md">
-      {readOnlyAdmin ? <AdminDemonstrationBanner /> : null}
       <div className="flex flex-col gap-space-md">
         <div className="flex items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
           <Link href="/app" className="hover:text-primary">{t("app.console")}</Link>

@@ -149,7 +149,7 @@ export const STAGE_OWNERS: Record<Stage, RoleKey[]> = {
   fee_due: ["finance"],
   iame_scrutiny: ["iame"],
   bee_scrutiny: ["reviewer"],
-  approval: ["director", "secretary"],
+  approval: ["officer", "director"],
   rating: ["programme"],
   label: ["programme"],
   active: [],

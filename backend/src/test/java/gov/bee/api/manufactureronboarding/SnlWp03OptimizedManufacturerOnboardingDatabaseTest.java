@@ -151,7 +151,7 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
     }
 
     static Caller director() {
-        return new Caller(DIRECTOR, "bee.director", List.of(new RoleGrant("director", "all")), Set.of());
+        return new Caller(DIRECTOR, "bee.officer", List.of(new RoleGrant("officer", "all")), Set.of());
     }
 
     static Caller finance() {

@@ -347,7 +347,7 @@ describe("registration screens", () => {
   it("hides the registration menu from roles other than manufacturer and agency", () => {
     expect(runtimeNavFor([{ role: "manufacturer" }]).some((r) => r.href === "/app/registrations/requests")).toBe(true);
     expect(runtimeNavFor([{ role: "agency" }]).some((r) => r.href === "/app/registrations/requests")).toBe(true);
-    for (const role of ["finance", "director", "programme", "reviewer", "iame", "admin", "secretary"]) {
+    for (const role of ["finance", "director", "programme", "reviewer", "iame", "admin", "director"]) {
       expect(runtimeNavFor([{ role }]).some((r) => r.href === "/app/registrations/requests")).toBe(false);
     }
   });

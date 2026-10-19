@@ -1,6 +1,6 @@
 # Brief C3 — Role-based lifecycle navigation
 
-**Status:** implemented on `cursor/c3-role-navigation`; **ChatGPT review pending**, not accepted.
+**Status:** implemented on `cursor/c3-role-navigation` including **role identity succession (N8)**; **ChatGPT review pending**, not accepted.
 **Base:** `6c40482`, the integration tip of `cursor/wp3-auto-activation`.
 **Worktree:** `/Users/sameerkhanna/Developer/BEE-c3-role-navigation`
 **Decision:** owner-approved role/menu structure, recorded in [BEE_DECISIONS.md](../BEE_DECISIONS.md) under "Role-based lifecycle navigation".
@@ -20,7 +20,7 @@ The "All screens · dev" link is removed. The `/app/screens` page remains, reach
 ## 2. Rules the definition enforces
 
 - **Hierarchy from the Spring identity.** The menu follows `/api/runtime/me` (effective roles and capabilities), never the browser preview role.
-  - Admin is checked first, then Director, Secretary, Finance, and Manufacturer (which includes Agency).
+  - Admin is checked first, then BEE Officer, Director, Finance, and Manufacturer (which includes Agency).
   - Officer roles with no hierarchy of their own (Programme, Reviewer, IAME, SDA, Laboratory, Helpdesk, Auditor) see the Admin hierarchy, narrowed to the working screens the runtime registry already gives their role.
 - **At most four primary groups for every role.** Admin has exactly four.
 - **Each entry carries:** a stable ID, a title, an icon, a canonical route, its allowed roles, a state (`available`, `preview` or `planned`), optional children, and an optional badge.
@@ -41,7 +41,7 @@ The "All screens · dev" link is removed. The `/app/screens` page remains, reach
 
 ## 3. Hierarchies
 
-- **Admin (demonstration umbrella).** The Admin sidebar shows the narration: "Consolidated view of every screen for the demonstration. In normal operation each user sees only the menus and records permitted for their role."
+- **Admin (demonstration umbrella).** Four menu groups cover every available screen; no sidebar narration (Brief C3B).
   - **Executive Dashboard:**
     - Executive overview, Manufacturer 360, Programme MIS.
     - Officer work queue: My work, My approvals, Applications in progress, SLA and escalations.
@@ -180,8 +180,24 @@ The live check `read-ui-browser-check.cjs` step `read-ui.preview-elsewhere-uncha
 
 **Access model:** `AdminDemonstrationAccess` (Spring): umbrella `admin`/`all` with no operational own role → `mayReadAllOperationalRecords` on model applications, registrations and manufacturer onboarding; `deniesOperationalMutation` on workflow, filing, fee confirm, onboarding writes and registration review transitions. `/api/me` exposes `adminDemonstrationReadOnly`. Admin capabilities (fee rules, rating schemes, business settings, fee corrections, delegations approval, demo ledger writes) are unchanged.
 
-**Portal:** `AdminDemonstrationBanner`; `ScreenChrome` hides header actions; manufacturer routes use `ManufacturerRouteShell`; registration list and finance queue hide mutation controls when Spring reports read-only Admin.
+**Portal:** `ScreenChrome` hides header actions when Spring reports read-only Admin; manufacturer routes use `ManufacturerRouteShell`; registration list and finance queue hide mutation controls. No read-only banner (C3B).
 
 **Proof:** `AdminDemonstrationAccessTest`, `SlicePolicyTest`, `RegistrationDatabaseTest`, `RevocationDatabaseTest.adminDemonstrationReadsRegisterButCannotMutate`, `SnlWp03OptimizedManufacturerOnboardingDatabaseTest`; `AdminDemonstration.test.tsx`, `RegisterRevocations.test.tsx` (read-only Admin hides mutation controls), `adminMenuCoverage.test.tsx` (every menu route names real backend/UI tests); live `npm run local:c3a-five-role` (Admin opens all four menu groups plus register). OpenAPI **0.37.2** adds optional `adminDemonstrationReadOnly` on Me.
 
 **BL-266:** **done** (19 October 2026). Contract pin SHA256 `fc06669a…` matches OpenAPI **0.37.2**; `npm run local:c3a-five-role` **17/17** (five roles, Admin register read-only + POST `role_not_permitted`); full `@Tag("db")` suite, `web:test` **264/264**, `web:test:ui` **270/270**, `build`, `contract-artifact.test.mjs` **7/7**, `git diff --check` green.
+
+## 10. Brief C3B — simplified role selector and Admin UI cleanup (19 October 2026)
+
+**Goal:** Client demo shows only five personas in the header role dropdown; remove Admin demonstration copy from the UI while keeping C3A Spring boundaries.
+
+**Role selector:** `VISIBLE_SELECTOR_ROLES` in `lib/roles.ts`; `AppTopbar` shows exactly Manufacturer, Finance, BEE Officer, Director, Admin **only while signed out**, updating `RoleContext` localStorage for prototype sample data. It never calls `/api/runtime/demo/login`. Signed-in users change role only via Logout → oval login. Seed accounts for Programme, Reviewer, IAME, and the like remain for automation only.
+
+**Role succession (N8):** Spring **`officer`** / **`director`** personas; demo **`bee.officer`** / **`bee.director`**; no **`bee.secretary`**. Statutory workflow/API names unchanged.
+
+**Admin UI:** Remove `AdminDemonstrationBanner` and the Admin sidebar note (`nav-admin-note`). Admin profile label is "Admin". Operational screens still hide mutation controls when `/api/me.adminDemonstrationReadOnly` is true; Spring still denies mutations.
+
+**Login:** Single oval username/password form (`LoginPageClient` / `DemoLoginForm` with `showAccounts={false}`); no demo account list on `/login`.
+
+**Tests:** `AppTopbar.test.tsx`, updated `RoleNavigation.test.tsx`, `AdminDemonstration.test.tsx`, `RoleContext.test.tsx`; live `npm run local:c3a-five-role` asserts five dropdown options, no banner/note copy, Admin opens every menu link, mutations **403** from Spring.
+
+**Decisions:** [BEE_DECISIONS.md](../BEE_DECISIONS.md) N7; N6 updated for C3B (no banner).

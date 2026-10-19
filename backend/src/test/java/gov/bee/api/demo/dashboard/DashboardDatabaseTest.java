@@ -40,11 +40,11 @@ class DashboardDatabaseTest {
     static final Caller PIXEL = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000002"), "pixel.applicant", List.of(new RoleGrant("agency", "own-org")), Set.of(PIXEL_ORG));
     static final Caller FINANCE = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000003"), "bee.finance", List.of(new RoleGrant("finance", "all")), Set.of(BEE_ORG));
 
-    static final Caller DIRECTOR = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000007"), "bee.director", List.of(new RoleGrant("director", "all")), Set.of(BEE_ORG));
+    static final Caller DIRECTOR = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000007"), "bee.officer", List.of(new RoleGrant("officer", "all")), Set.of(BEE_ORG));
     static final Caller AUDITOR = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000011"), "bee.auditor", List.of(new RoleGrant("auditor", "all")), Set.of(BEE_ORG));
     static final Caller ADMIN = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000009"), "bee.admin", List.of(new RoleGrant("admin", "all")), Set.of(BEE_ORG));
     static final Caller REVIEWER = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000005"), "bee.reviewer", List.of(new RoleGrant("reviewer", "assigned")), Set.of(BEE_ORG));
-    static final Caller NARROW_DIRECTOR = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000007"), "narrow.director", List.of(new RoleGrant("director", "assigned")), Set.of(BEE_ORG));
+    static final Caller NARROW_DIRECTOR = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000007"), "narrow.director", List.of(new RoleGrant("officer", "assigned")), Set.of(BEE_ORG));
 
     static JdbcTemplate admin;
     static JdbcTemplate owner;

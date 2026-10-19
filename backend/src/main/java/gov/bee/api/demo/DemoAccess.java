@@ -4,7 +4,7 @@ import gov.bee.api.identity.Caller;
 import java.util.Set;
 
 /**
- * Role checks for the demonstration modules (BL-231). A role name alone is not enough: the oversight roles (programme, director, secretary,
+ * Role checks for the demonstration modules (BL-231). A role name alone is not enough: the oversight roles (programme, officer, director,
  * admin, auditor, finance, helpdesk) count only when held for all records, so a person who holds the same role with a narrower scope (the
  * Reviewer is "assigned") does not get all-organisation access by name. Delegated roles are always held for all records (Caller.roles()).
  */

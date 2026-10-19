@@ -155,12 +155,12 @@ class ReworkDatabaseTest {
         if (stage.equals("rating")) return id;
         ratingRepo.compute(id, 4, PROGRAMME_USER, "programme", "RAC-ISEER-DEMO-1", DECLARED, new BigDecimal("4.62"), 4);
         if (stage.equals("director_review")) return id;
-        directorRepo.recommend(id, 5, DIRECTOR_USER, "director", "n", false);
+        directorRepo.recommend(id, 5, DIRECTOR_USER, "officer", "n", false);
         return id;
     }
 
     static final Map<String, UUID> OFFICER = Map.of("iame_scrutiny", IAME_USER, "bee_scrutiny", REVIEWER_USER, "rating", PROGRAMME_USER, "director_review", DIRECTOR_USER, "secretary_approval", SECRETARY_USER);
-    static final Map<String, String> ROLE = Map.of("iame_scrutiny", "iame", "bee_scrutiny", "reviewer", "rating", "programme", "director_review", "director", "secretary_approval", "secretary");
+    static final Map<String, String> ROLE = Map.of("iame_scrutiny", "iame", "bee_scrutiny", "reviewer", "rating", "programme", "director_review", "officer", "secretary_approval", "director");
 
     static int version(UUID id) {
         return owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
@@ -293,7 +293,7 @@ class ReworkDatabaseTest {
         assertEquals(true, ratingRepo.actorsAtOtherStages(id).contains(REVIEWER_USER));
         assertEquals(true, directorRepo.actorsAtOtherStages(id).contains(PROGRAMME_USER), "Programme cannot also be the Director");
         assertEquals(false, directorRepo.actorsAtOtherStages(id).contains(DIRECTOR_USER));
-        directorRepo.recommend(id, version(id), DIRECTOR_USER, "director", "n", false);
+        directorRepo.recommend(id, version(id), DIRECTOR_USER, "officer", "n", false);
         assertEquals(false, directorRepo.actorsAtOtherStages(id).contains(DIRECTOR_USER), "after recommending, the Director is still not 'another stage' for the Director step");
         assertEquals(true, secretaryRepo.actorsAtOtherStages(id).contains(DIRECTOR_USER), "but the Director cannot also approve as the Secretary");
     }
@@ -340,7 +340,7 @@ class ReworkDatabaseTest {
             assertEquals(List.of(1, 2), owner.queryForList("SELECT rating_version FROM model_application_rating WHERE application_id = ? ORDER BY rating_version", Integer.class, id));
             assertEquals("director_review", state(id));
             // The Director who may have returned it can recommend again; the Secretary never sees the stale rating.
-            assertEquals(DirectorRecommendationRepository.Outcome.RECOMMENDED, directorRepo.recommend(id, version(id), DIRECTOR_USER, "director", "n", false).outcome());
+            assertEquals(DirectorRecommendationRepository.Outcome.RECOMMENDED, directorRepo.recommend(id, version(id), DIRECTOR_USER, "officer", "n", false).outcome());
             assertEquals("secretary_approval", state(id));
         }
     }
@@ -510,7 +510,7 @@ class ReworkDatabaseTest {
     void aReturnedApplicationCannotBeRejectedBecauseNoOneHoldsItsStage() {
         UUID id = at("director_review", "RW-NOT-RETURNED");
         giveBack(id, "director_review");
-        assertEquals(StageRejectRepository.Outcome.STALE, rejects.doReject(id, version(id), DIRECTOR_USER, "director", "director_review", "r").outcome());
+        assertEquals(StageRejectRepository.Outcome.STALE, rejects.doReject(id, version(id), DIRECTOR_USER, "officer", "director_review", "r").outcome());
         assertEquals("returned", state(id));
         assertEquals(0, count("model_application_rejection", id));
     }
@@ -519,7 +519,7 @@ class ReworkDatabaseTest {
     void aRejectionByAStaleVersionOrWrongStateWritesNothing() {
         UUID id = at("rating", "RW-REJ-STALE");
         assertEquals(StageRejectRepository.Outcome.STALE, rejects.doReject(id, version(id) - 1, PROGRAMME_USER, "programme", "rating", "r").outcome());
-        assertEquals(StageRejectRepository.Outcome.STALE, rejects.doReject(id, version(id), DIRECTOR_USER, "director", "director_review", "r").outcome(), "it is not in director_review");
+        assertEquals(StageRejectRepository.Outcome.STALE, rejects.doReject(id, version(id), DIRECTOR_USER, "officer", "director_review", "r").outcome(), "it is not in director_review");
         assertEquals("rating", state(id));
         assertEquals(0, count("model_application_rejection", id));
         assertEquals(1, owner.queryForObject("SELECT count(*) FROM assignment WHERE subject_id = ? AND stage = 'bee_scrutiny'", Integer.class, id), "the earlier assignment record is unchanged");
@@ -609,7 +609,7 @@ class ReworkDatabaseTest {
         UUID id = at("secretary_approval", "RW-HIST");
         giveBack(id, "secretary_approval");
         resubmit(id);
-        secretaryRepo.approve(id, version(id), SECRETARY_USER, "secretary", "Approved after the correction.");
+        secretaryRepo.approve(id, version(id), SECRETARY_USER, "director", "Approved after the correction.");
         var rows = history.events(id);
         assertEquals(List.of("submit", "confirm_fee", "iame_recommend", "reviewer_forward", "compute_rating", "director_recommend", "return", "resubmit", "secretary_approve"),
             rows.stream().map(HistoryRepository.Row::action).toList(), "every step in order, the submission first");

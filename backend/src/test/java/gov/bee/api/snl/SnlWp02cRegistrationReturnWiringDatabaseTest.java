@@ -125,6 +125,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         owner = new JdbcTemplate(migrateSource(MAIN));
         owner.execute(Files.readString(Path.of("..", "local", "seed", "seed.sql")));
         maint = new JdbcTemplate(sourceAs(MAIN, "bee_local_maint", env("BEE_MAINT_DB_PASSWORD", "bee-local-maint")));
+        owner.execute("GRANT EXECUTE ON FUNCTION " + MAIN + ".app_disposable_registration_cleanup(uuid[]) TO bee_local_maint");
         runtime = sourceAs(MAIN, runtimeRole(), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime"));
         db = new JdbcTemplate(runtime);
         tx = new TransactionTemplate(new DataSourceTransactionManager(runtime));
@@ -252,7 +253,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         UUID taskCommand = commandId(idempotencyKey, "registration_resubmit_task", applicationId);
         UUID taskOwner = owner.queryForObject("SELECT returned_by_account_id FROM registration_application_return WHERE id = ?", UUID.class, returnId);
         String taskOwnerRole = owner.queryForObject(
-            "SELECT CASE returned_from_state WHEN 'programme_review' THEN 'programme' WHEN 'director_approval' THEN 'director' END "
+            "SELECT CASE returned_from_state WHEN 'programme_review' THEN 'programme' WHEN 'director_approval' THEN 'officer' END "
                 + "FROM registration_application_return WHERE id = ?",
             String.class, returnId);
         var taskCmd = new WorkflowFoundationRepository.TaskCommand(WorkflowFoundationRepository.SUBJECT_REGISTRATION, applicationId, returnedFrom, "review",
@@ -408,7 +409,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
     @Test
     void directorReturnUsesPersistedTransitionAndReturningDirectorRule() {
         UUID id = atDirectorReview("WP02C-DIR-" + TAG);
-        wiredReturn(id, "director_approval", DIRECTOR_USER, "director", UUID.randomUUID().toString(), REASON);
+        wiredReturn(id, "director_approval", DIRECTOR_USER, "officer", UUID.randomUUID().toString(), REASON);
         wiredResubmit(id, latestReturnId(id), "director_approval",
             owner.queryForObject("SELECT returned_at FROM registration_application_return WHERE application_id = ?", Instant.class, id),
             REASON, UUID.randomUUID().toString(), null);
@@ -798,7 +799,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         wiredReturn(id, "programme_review", PROGRAMME_USER, "programme", UUID.randomUUID().toString(), REASON);
         owner.update("INSERT INTO local_disposable_registration (application_id) VALUES (?)", id);
         maint.execute("SELECT set_config('bee.cleanup_schema', '" + MAIN + "', true)");
-        maint.query("SELECT app_disposable_registration_cleanup(ARRAY[?]::uuid[])", rs -> {
+        maint.query("SELECT " + MAIN + ".app_disposable_registration_cleanup(ARRAY[?]::uuid[])", rs -> {
         }, id);
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM registration_application WHERE id = ?", Integer.class, id));
         assertEquals(0, owner.queryForObject("SELECT count(*) FROM registration_return_response_cycle WHERE application_id = ?", Integer.class, id));

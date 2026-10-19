@@ -8,8 +8,8 @@ export const ROLES = [
   { key: "admin", short: "BEE Admin", name: "BEE Administrator", kind: "internal" },
   { key: "programme", short: "Programme", name: "Programme Officer", kind: "internal" },
   { key: "reviewer", short: "Reviewer", name: "Reviewer & Approver", kind: "internal" },
+  { key: "officer", short: "BEE Officer", name: "BEE Officer", kind: "internal" },
   { key: "director", short: "Director", name: "Director", kind: "internal" },
-  { key: "secretary", short: "Secretary", name: "Secretary", kind: "internal" },
   { key: "finance", short: "Finance", name: "BEE Finance", kind: "internal" },
   { key: "helpdesk", short: "Helpdesk", name: "Helpdesk Agent", kind: "internal" },
   { key: "auditor", short: "Auditor", name: "Auditor", kind: "internal" },
@@ -28,6 +28,17 @@ export type RoleKind = (typeof ROLES)[number]["kind"];
 export const isExternalRole = (key: string) => ROLES.find((r) => r.key === key)?.kind === "external";
 
 export const ROLE_ORDER: RoleKey[] = ROLES.map((r) => r.key) as RoleKey[];
+
+/** Brief C3B: header role selector shows only these five personas (display labels are client-facing; seed accounts for other roles stay for automation). */
+export const VISIBLE_SELECTOR_ROLES = [
+  { key: "manufacturer" as const, label: "Manufacturer" },
+  { key: "finance" as const, label: "Finance" },
+  { key: "officer" as const, label: "Officer" },
+  { key: "director" as const, label: "Director" },
+  { key: "admin" as const, label: "Admin" },
+];
+
+export const VISIBLE_SELECTOR_ROLE_KEYS: RoleKey[] = VISIBLE_SELECTOR_ROLES.map((r) => r.key);
 
 export function roleByKey(key: string) {
   return ROLES.find((r) => r.key === key) ?? ROLES[0];

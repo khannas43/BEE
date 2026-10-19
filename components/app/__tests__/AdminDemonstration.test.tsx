@@ -1,7 +1,6 @@
 import { cleanup, render, screen as view } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AdminDemonstrationBanner } from "../AdminDemonstrationBanner";
 import { RegistrationList } from "../registrations/RegistrationList";
 import { ScreenChrome } from "../ScreenScaffold";
 import { moduleById, screenById } from "@/lib/screens";
@@ -52,32 +51,25 @@ afterEach(() => {
   identity.state = { status: "signed-in", me: { displayName: "Admin", effectiveRoles: [{ role: "admin", scope: "all" }], organisations: [], adminDemonstrationReadOnly: true } };
 });
 
-describe("Admin demonstration read-only UI", () => {
-  it("shows the banner copy from the brief", () => {
-    render(<AdminDemonstrationBanner />);
-    expect(view.getByTestId("admin-demonstration-banner").textContent).toContain(
-      "Admin demonstration view — read-only. Actions remain available only to the responsible operational role.",
-    );
-  });
-
-  it("ScreenChrome hides header actions for read-only Admin", () => {
-    const module = moduleById("finance")!;
+describe("Admin operational screen UI (Brief C3B)", () => {
+  it("ScreenChrome hides header actions when Spring reports read-only Admin", () => {
+    const mod = moduleById("finance")!;
     const pageScreen = screenById("finance", "finance-queue")!;
     render(
-      <ScreenChrome module={module} screen={pageScreen} actions={<button type="button">Act</button>} implemented={["List"]}>
+      <ScreenChrome module={mod} screen={pageScreen} actions={<button type="button">Act</button>} implemented={["List"]}>
         <p>Body</p>
       </ScreenChrome>,
     );
-    expect(view.getByTestId("admin-demonstration-banner")).toBeTruthy();
+    expect(view.queryByTestId("admin-demonstration-banner")).toBeNull();
     expect(view.queryByText("Act")).toBeNull();
+    expect(view.getByText("Body")).toBeTruthy();
   });
 
   it("Registration list hides New request for read-only Admin", () => {
-    const module = moduleById("model-label")!;
+    const mod = moduleById("model-label")!;
     const dashboard = screenById("model-label", "model-dashboard")!;
     const pageScreen = { ...dashboard, id: "registration-requests", name: "Registration requests" };
-    render(<RegistrationList module={module} screen={pageScreen} />);
+    render(<RegistrationList module={mod} screen={pageScreen} />);
     expect(view.queryByTestId("reg-new")).toBeNull();
   });
-
 });

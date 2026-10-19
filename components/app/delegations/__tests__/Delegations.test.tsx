@@ -96,10 +96,10 @@ describe("delegations", () => {
     expect(screen.getByTestId("del-pending")).toBeTruthy();
     expect(screen.getByTestId("del-history")).toBeTruthy();
 
-    for (const role of ["programme", "director", "finance", "admin"]) {
+    for (const role of ["programme", "officer", "finance", "admin"]) {
       expect(runtimeNavFor([{ role }]).some((r) => r.href === "/app/delegations")).toBe(true);
     }
-    for (const role of ["manufacturer", "agency", "secretary", "reviewer", "iame"]) {
+    for (const role of ["manufacturer", "agency", "director", "reviewer", "iame"]) {
       expect(runtimeNavFor([{ role }]).some((r) => r.href === "/app/delegations")).toBe(false);
     }
   });

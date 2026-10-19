@@ -13,8 +13,7 @@ export type AdminRouteProof = {
   ui: readonly string[];
 };
 
-const UI_BANNER = "AdminDemonstration.test.tsx: shows the banner copy from the brief";
-const UI_CHROME = "AdminDemonstration.test.tsx: ScreenChrome hides header actions for read-only Admin";
+const UI_CHROME = "AdminDemonstration.test.tsx: ScreenChrome hides header actions when Spring reports read-only Admin";
 const UI_REG_LIST = "AdminDemonstration.test.tsx: Registration list hides New request for read-only Admin";
 
 /** Runtime routes the Admin demonstration menu opens; each maps to named tests that prove read-only access. */
@@ -121,47 +120,47 @@ export const ADMIN_RUNTIME_READ_ONLY_PROVEN: Readonly<Record<string, AdminRouteP
   },
   "/app/demo/mis": {
     backend: ["MisModuleDatabaseTest.rolesAndMethodsAreEnforced"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/payments": {
     backend: ["PaymentsDatabaseTest.listsAreScopedAndReconciliationIsForFinanceAdminAuditor"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/ai": {
     backend: ["AiDemoDatabaseTest.otherRolesAreDeniedAndTheAuditorOnlyReads"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/ledger": {
     backend: ["LedgerDatabaseTest.readScopeAndRoleDenials"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/qr": {
     backend: ["QrDatabaseTest.readScopeAndPaging"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/executive": {
     backend: ["DashboardDatabaseTest.whoMayOpenWhichDashboard"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/manufacturer-360": {
     backend: ["DashboardDatabaseTest.theExecutiveDashboardCountsWhatIsInTheTablesAndFollowsTheFilters"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/notifications": {
     backend: ["MessagesDatabaseTest.aPaymentWritesMessagesToThePayerAndFinanceOnlyAndReadsAreOwnOnly"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/director": {
     backend: ["DashboardDatabaseTest.theDirectorsTilesCountWhatIsInTheTablesAndDrillDownToTheFullList"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/production": {
     backend: ["ProductionDatabaseTest.seedHasFourQuartersAndScopeFollowsTheOrganisation"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/demo/auditor": {
     backend: ["DashboardDatabaseTest.theAuditorSeesTheBrokenChainFirstAndTheTwoPersonProof"],
-    ui: [UI_BANNER],
+    ui: [UI_CHROME],
   },
   "/app/verify": {
     ui: ["verifyPage.test.tsx: asks nothing until a registration ID is given"],

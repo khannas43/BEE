@@ -14,8 +14,8 @@ describe("workTasks", () => {
     expect(t[0].approval).toBe(false);
   });
 
-  it("marks the Director and Secretary decisions as approvals", () => {
-    const t = workTasks(["secretary"], [app("director_review"), app("secretary_approval")]);
+  it("marks the Officer and Director decisions as approvals", () => {
+    const t = workTasks(["officer", "director"], [app("director_review"), app("secretary_approval")]);
     expect(t.map((x) => x.approval)).toEqual([true, true]);
     expect(t[0].href).toContain("/app/model-label/director-approval");
   });

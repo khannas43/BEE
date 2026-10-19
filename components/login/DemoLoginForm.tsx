@@ -11,8 +11,8 @@ export const DEMO_ACCOUNTS: readonly { username: string; role: string }[] = [
   { username: "iame.officer", role: "IAME officer" },
   { username: "bee.reviewer", role: "Reviewer" },
   { username: "bee.programme", role: "Programme" },
+  { username: "bee.officer", role: "BEE Officer" },
   { username: "bee.director", role: "Director" },
-  { username: "bee.secretary", role: "Secretary" },
   { username: "bee.admin", role: "Administrator" },
   { username: "bee.auditor", role: "Auditor" },
   { username: "bee.helpdesk", role: "Helpdesk" },
@@ -93,7 +93,7 @@ export function DemoLoginForm({
           required
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          placeholder="for example bee.director"
+          placeholder="for example bee.officer"
           className="w-full pl-10 pr-3 py-3 rounded-lg bg-surface-ground border border-border-subtle font-body-md text-body-md outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
         />
       </div>

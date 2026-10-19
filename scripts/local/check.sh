@@ -97,7 +97,7 @@ scope_want="$(jq -r '"\(.modelApplications) \(.assignments) \(.activeAssignments
 scope_got="$(psql_app -F ' ' -c "SELECT (SELECT count(*) FROM app.model_application), (SELECT count(*) FROM app.assignment), (SELECT count(*) FROM app.assignment WHERE active)" 2>/dev/null || true)"
 wf_tables="$(psql_app -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app' AND table_name IN ('transition','fee_confirmation','rating_result','approval_decision')" 2>/dev/null || echo x)"
 check "db.scope-fixtures-only" "$(ok test "$scope_got" = "$scope_want" -a "$wf_tables" = 0)" "applications/assignments/active = ${scope_got// //} (expected ${scope_want// //}); workflow tables=$wf_tables (transitions not implemented)"
-grants="$(psql_app -c "SELECT count(*) FROM app.role_assignment WHERE role NOT IN ('admin','programme','reviewer','director','secretary','finance','helpdesk','auditor','manufacturer','agency','iame','sda','laboratory')" 2>/dev/null || echo x)"
+grants="$(psql_app -c "SELECT count(*) FROM app.role_assignment WHERE role NOT IN ('admin','programme','reviewer','officer','director','finance','helpdesk','auditor','manufacturer','agency','iame','sda','laboratory')" 2>/dev/null || echo x)"
 check "db.no-matrix-grants" "$(ok test "$grants" = 0)" "role rows outside the 13 personas=$grants; no capacity grants table exists"
 iso="$(docker exec -e PGPASSWORD="$BEE_APP_DB_PASSWORD" bee-local-postgres psql -h 127.0.0.1 -U bee_app -d keycloak -c 'SELECT 1' 2>&1 || true)"
 check "db.keycloak-isolated" "$(ok grep -q 'permission denied' <<<"$iso")" "bee_app login to keycloak db: $(grep -o 'permission denied[^"]*' <<<"$iso" | head -1 | cut -c1-60)"

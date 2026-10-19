@@ -72,7 +72,7 @@ class SnlWp02bModelForwardServiceDatabaseTest extends SnlWp02bModelForwardClosur
     void serviceFinalApprovalClosureConflictReturns409AndRollsBackCertificate() throws Exception {
         UUID id = atDirector("WP02B2B-SVC-SEC-" + TAG);
         directorRepo.recommend(id, owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id), DIRECTOR_USER, "director", "n", false);
-        returnResubmitAt(id, "secretary_approval", DIRECTOR_USER, "director");
+        returnResubmitAt(id, "secretary_approval", SECRETARY_USER, "director");
         int v = owner.queryForObject("SELECT version FROM model_application WHERE id = ?", Integer.class, id);
         int transitionsBefore = owner.queryForObject("SELECT count(*) FROM model_application_transition_event WHERE application_id = ?", Integer.class, id);
         int approvalsBefore = owner.queryForObject("SELECT count(*) FROM model_application_secretary_approval WHERE application_id = ?", Integer.class, id);

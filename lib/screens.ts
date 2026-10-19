@@ -37,7 +37,7 @@ export interface Module {
 
 /* ------------------------------------------------------------------ *
  * Permission patterns (Annex A.1). Order: admin, programme, reviewer,
- * director, secretary, finance, helpdesk, auditor.
+ * officer, director, finance, helpdesk, auditor (Brief C3 succession).
  * ------------------------------------------------------------------ */
 const P = {
   IDENT_V: ["V", "V", "V", "V", "V", "—", "—", "—"],

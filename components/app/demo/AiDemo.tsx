@@ -983,6 +983,27 @@ function TrendCards({ cats, realRatings, syntheticRatings }: { cats: TrendCat[];
   const tools = useListTools({ rows: filtered, text: (c) => c.category, sortValue: () => 0, pageSize: 3 });
   return (
     <div className="mt-4 space-y-3" data-testid="ai-output-trends">
+      <div className="grid gap-3 sm:grid-cols-3" data-testid="ai-trend-headlines">
+        {cats.map((c) => {
+          const last = c.months[c.months.length - 1]?.meanIseer;
+          const first = c.months[0]?.meanIseer;
+          const top = c.ratings > 0 ? Math.round(((c.starDistribution[3] ?? 0) + (c.starDistribution[4] ?? 0)) / c.ratings * 100) : 0;
+          const up = c.slopePerMonth >= 0;
+          return (
+            <div key={c.category} className="rounded-xl border border-[#dbe6f7] bg-[#f4f8ff] p-3" data-testid={`ai-trend-headline-${c.category}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-bold text-[#14315E]">{c.category}</span>
+                <span className={`inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[12px] font-semibold ${up ? BAND.low.pill : BAND.high.pill}`}>
+                  <Icon name={up ? "trending_up" : "trending_down"} size={14} /> {up ? "Improving" : "Declining"}
+                </span>
+              </div>
+              <div className="mt-1 text-[26px] font-extrabold leading-8 text-[#14315E]">{last ?? "-"}</div>
+              <div className="text-[12px] text-[#475569]">latest monthly mean efficiency{first !== undefined && last !== undefined ? `, from ${first} at the start` : ""}</div>
+              <div className="mt-1 text-[12px] text-[#475569]">{top}% of {c.ratings} ratings are 4 or 5 stars{c.forecast ? `; next month about ${c.forecast.nextMonthMeanIseer}` : ""}.</div>
+            </div>
+          );
+        })}
+      </div>
       <div className="flex gap-2"><Chip>{realRatings} real ratings</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">{syntheticRatings} synthetic</Chip></div>
       <FilterBar testId="ai-trend-filters" active={Boolean(tools.query || trend || forecast || fit)} onClear={() => { tools.clear(); setTrend(""); setForecast(""); setFit(""); }}>
         <FSearch label="Search" value={tools.query} onChange={tools.setQuery} placeholder="Category" testId="ai-trend-search" />
@@ -1090,6 +1111,30 @@ function ExtractionTable({ o, fields }: { o: Record<string, unknown>; fields: Ex
   return (
     <div className="mt-4 space-y-3 font-body-sm" data-testid="ai-output-extraction">
       <div className="flex flex-wrap gap-2"><Chip>Application {String(o.applicationReference)}</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">text from: {String(o.textSource)}</Chip></div>
+      <div className="grid gap-3 sm:grid-cols-3" data-testid="ai-extract-cards">
+        {fields.map((f) => {
+          const differs = f.status === "differs";
+          const a = Number(f.extracted);
+          const b = Number(f.declared);
+          const delta = Number.isFinite(a) && Number.isFinite(b) && f.extracted !== null && f.declared !== null && a !== b ? Math.round((a - b) * 100) / 100 : null;
+          return (
+            <div key={f.field} className={`rounded-xl border p-3 ${differs ? "border-[#f5c2c0] bg-[#fdecea]/50" : f.extracted === null ? "border-[#d8e0ea] bg-[#eef2f7]/60" : "border-[#b7e0c6] bg-[#e2f3e8]/50"}`} data-testid={`ai-extract-card-${f.field}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748b]">{f.field}</span>
+                <span className={`inline-flex items-center gap-0.5 text-[12px] font-semibold ${differs ? "text-[#93000a]" : f.extracted === null ? "text-[#475569]" : "text-[#14532d]"}`}>
+                  <Icon name={differs ? "error" : f.extracted === null ? "help" : "check_circle"} size={14} /> {differs ? "Differs" : f.extracted === null ? "Not found" : "Matches"}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] text-[#64748b]">Read from the report</div>
+              <div className="text-[20px] font-extrabold leading-6 text-[#14315E]">{f.extracted ?? "-"}</div>
+              <div className="mt-1 text-[11px] text-[#64748b]">Declared on the application</div>
+              <div className="text-[15px] font-semibold text-[#334155]">{f.declared ?? "-"}</div>
+              {delta !== null ? <div className="mt-1 text-[12px] font-semibold text-[#93000a]">Report is {Math.abs(delta)} {delta < 0 ? "lower" : "higher"} than declared</div> : null}
+              <div className="mt-1 text-[11px] text-[#64748b]">Reading confidence {pct(f.confidence)}</div>
+            </div>
+          );
+        })}
+      </div>
       <FilterBar testId="ai-extract-filters" active={Boolean(tools.query || status || level)} onClear={() => { tools.clear(); setStatus(""); setLevel(""); }}>
         <FSearch value={tools.query} onChange={tools.setQuery} placeholder="Field, extracted or declared value" testId="ai-extract-search" />
         <FSelect label="Status" value={status} onChange={(v) => { setStatus(v); tools.setPage(1); }} testId="ai-extract-status" options={[["", "All"], ...statuses.map((x): [string, string] => [x, STATUS_WORD[x] ?? x])]} />

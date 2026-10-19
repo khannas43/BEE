@@ -36,7 +36,7 @@ describe("AiDemo", () => {
   });
 
   it("shows the persistent banner, the model card and runs a use case with evidence", async () => {
-    render(<AiDemo />);
+    render(<AiDemo hidden={[]} />);
     fireEvent.click(await screen.findByTestId("ai-tab-helpdesk-assist"));
     expect(screen.getByTestId("ai-model-card").textContent).toContain("not machine learning");
     fireEvent.click(await screen.findByTestId("ai-run"));
@@ -46,7 +46,7 @@ describe("AiDemo", () => {
   });
 
   it("shows the refusal when an override has no reason", async () => {
-    render(<AiDemo />);
+    render(<AiDemo hidden={[]} />);
     fireEvent.click(await screen.findByTestId("ai-tab-helpdesk-assist"));
     fireEvent.click(await screen.findByTestId("ai-run"));
     fireEvent.click(await screen.findByTestId("ai-decision-override"));

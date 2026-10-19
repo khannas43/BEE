@@ -18,6 +18,8 @@ export const USE_CASES = [
   { id: "document-extraction", label: "Document extraction" },
 ] as const;
 type UseCaseId = (typeof USE_CASES)[number]["id"];
+/** Left out of the demonstration screen: Helpdesk assist has nothing AI-specific to show. The back end still serves it. */
+export const DEFAULT_HIDDEN_USE_CASES: readonly string[] = ["helpdesk-assist"];
 
 export interface ModelCard {
   id: string;
@@ -171,7 +173,8 @@ function TrendLine({ points, forecast }: { points: { label: string; v: number }[
   );
 }
 
-export function AiDemo() {
+export function AiDemo({ hidden = DEFAULT_HIDDEN_USE_CASES }: { hidden?: readonly string[] } = {}) {
+  const SHOWN_USE_CASES = USE_CASES.filter((u) => !hidden.includes(u.id));
   const [models, setModels] = useState<ModelCard[] | null>(null);
   const [denied, setDenied] = useState<string | null>(null);
   const [tab, setTab] = useState<UseCaseId>("compliance-risk");
@@ -197,13 +200,13 @@ export function AiDemo() {
         <h1 className="flex-1 min-w-0">AI use cases</h1>
         {models ? <RunButton model={model} ctl={ctl} /> : null}
       </div>
-      <p className="ai-lead">Five transparent models read the live portal data. Each run keeps its evidence, model version and data version, and a person records the decision.</p>
+      <p className="ai-lead">{SHOWN_USE_CASES.length === 4 ? "Four" : "Five"} transparent models read the live portal data. Each run keeps its evidence, model version and data version, and a person records the decision.</p>
       {denied ? <p role="alert" className="text-error" data-testid="ai-error">{denied}</p> : null}
       {models === null && !denied ? <p role="status">Loading models…</p> : null}
       {models ? (
         <>
-          <div role="tablist" aria-label="AI use cases" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            {USE_CASES.map((u) => (
+          <div role="tablist" aria-label="AI use cases" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {SHOWN_USE_CASES.map((u) => (
               <button
                 key={u.id}
                 role="tab"

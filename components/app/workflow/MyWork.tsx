@@ -11,6 +11,7 @@ import { useSpringIdentity } from "@/components/app/SessionBadge";
 import { type WorkTask, workTasks } from "@/components/app/workflow/workTasks";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { readModelApplicationList, stateLabel } from "@/lib/client/runtimeModelApplications";
+import { readCompanyRegistrationsAwaitingApproval, type CompanyRegistrationItem } from "@/lib/client/runtimeCompanyRegistrations";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
@@ -21,7 +22,11 @@ import { Module, Screen } from "@/lib/screens";
  */
 export type MyWorkKind = "inbox" | "approvals";
 
-const loadList = () => readModelApplicationList();
+/** The model-application list plus, for the BEE Officer, the company registrations waiting for approval. */
+const loadList = async () => {
+  const [models, companies] = await Promise.all([readModelApplicationList(), readCompanyRegistrationsAwaitingApproval()]);
+  return models.ok ? { ...models, companies: companies.ok ? companies.items : [] } : models;
+};
 const LIST_TARGET = "list";
 
 export const MY_WORK_COPY = {
@@ -61,16 +66,16 @@ export function MyWork({ module, screen, kind }: { module: Module; screen: Scree
           loadingTestId={`${copy.prefix}-loading`}
           errorTestId={`${copy.prefix}-error`}
           signInReturnTo={copy.route}
-          isEmpty={(r) => tasksFor(kind, roles, r.list.items).length === 0}
+          isEmpty={(r) => rowsFor(kind, roles, r.list.items, r.companies).length === 0}
           emptyText={copy.empty}
           emptyTestId={`${copy.prefix}-empty`}
           resultAction={(r) => (
             <span className="font-label-sm text-label-sm text-on-surface-variant">
-              {tasksFor(kind, roles, r.list.items).length} waiting
+              {rowsFor(kind, roles, r.list.items, r.companies).length} waiting
             </span>
           )}
         >
-          {(r) => <TaskTable prefix={copy.prefix} tasks={tasksFor(kind, roles, r.list.items)} />}
+          {(r) => <TaskTable prefix={copy.prefix} rows={rowsFor(kind, roles, r.list.items, r.companies)} />}
         </ReadPanel>
       </div>
     </ScreenChrome>
@@ -82,32 +87,72 @@ function tasksFor(kind: MyWorkKind, roles: readonly string[], items: Parameters<
   return kind === "approvals" ? all.filter((t) => t.approval) : all;
 }
 
-function TaskTable({ prefix, tasks }: { prefix: string; tasks: WorkTask[] }) {
-  const columns: DataTableColumn<WorkTask>[] = [
+interface InboxRow {
+  key: string;
+  reference: string;
+  title: string;
+  subtitle: string;
+  stage: string;
+  action: string;
+  submittedAt: string | null;
+  href: string;
+}
+
+/** The company registrations awaiting approval are the BEE Officer's decision, so they appear for that role only. */
+function rowsFor(kind: MyWorkKind, roles: readonly string[], items: Parameters<typeof workTasks>[1], companies: readonly CompanyRegistrationItem[] = []): InboxRow[] {
+  const models: InboxRow[] = tasksFor(kind, roles, items).map((t) => ({
+    key: t.application.id,
+    reference: t.application.reference,
+    title: t.application.brandName,
+    subtitle: t.application.modelNumber,
+    stage: stateLabel(t.application.state),
+    action: t.action,
+    submittedAt: t.application.submittedAt ?? null,
+    href: t.href,
+  }));
+  const company: InboxRow[] = roles.includes("officer")
+    ? companies
+        .filter((c) => c.state === "director_review")
+        .map((c) => ({
+          key: c.id,
+          reference: c.reference,
+          title: c.legalName,
+          subtitle: "Company registration",
+          stage: "Awaiting BEE Officer approval",
+          action: "Review and approve the company registration",
+          submittedAt: c.createdAt,
+          href: "/app/manufacturer/director",
+        }))
+    : [];
+  return [...company, ...models];
+}
+
+function TaskTable({ prefix, rows }: { prefix: string; rows: InboxRow[] }) {
+  const columns: DataTableColumn<InboxRow>[] = [
     {
       key: "reference",
       header: "Reference",
-      sortValue: (t) => t.application.reference,
+      sortValue: (t) => t.reference,
       render: (t) => (
-        <span className="font-mono" data-testid={`${prefix}-ref-${t.application.reference}`}>
-          {t.application.reference}
+        <span className="font-mono" data-testid={`${prefix}-ref-${t.reference}`}>
+          {t.reference}
         </span>
       ),
     },
     {
       key: "brand",
       header: "Brand / Model",
-      sortValue: (t) => `${t.application.brandName} ${t.application.modelNumber}`,
+      sortValue: (t) => `${t.title} ${t.subtitle}`,
       render: (t) => (
         <div>
-          <div className="font-semibold text-on-surface">{t.application.brandName}</div>
-          <div className="font-label-sm text-label-sm text-on-surface-variant">{t.application.modelNumber}</div>
+          <div className="font-semibold text-on-surface">{t.title}</div>
+          <div className="font-label-sm text-label-sm text-on-surface-variant">{t.subtitle}</div>
         </div>
       ),
     },
-    { key: "state", header: "Stage", sortValue: (t) => t.application.state, render: (t) => stateLabel(t.application.state) },
+    { key: "state", header: "Stage", sortValue: (t) => t.stage, render: (t) => t.stage },
     { key: "action", header: "To do", sortValue: (t) => t.action, render: (t) => t.action },
-    { key: "submitted", header: "Submitted on", sortValue: (t) => t.application.submittedAt ?? "", render: (t) => (t.application.submittedAt ? t.application.submittedAt.slice(0, 10) : "—") },
+    { key: "submitted", header: "Submitted on", sortValue: (t) => t.submittedAt ?? "", render: (t) => (t.submittedAt ? t.submittedAt.slice(0, 10) : "—") },
     {
       key: "open",
       header: "",
@@ -115,7 +160,7 @@ function TaskTable({ prefix, tasks }: { prefix: string; tasks: WorkTask[] }) {
         <Link
           href={t.href}
           className="font-label-sm text-label-sm text-primary hover:underline inline-flex items-center gap-1"
-          data-testid={`${prefix}-open-${t.application.reference}`}
+          data-testid={`${prefix}-open-${t.reference}`}
         >
           Open <Icon name="arrow_forward" size={14} />
         </Link>
@@ -124,11 +169,11 @@ function TaskTable({ prefix, tasks }: { prefix: string; tasks: WorkTask[] }) {
   ];
   return (
     <DataTable
-      dateOf={(t) => t.application.submittedAt}
+      dateOf={(t) => t.submittedAt ?? undefined}
       dateLabel="Submitted on"
       columns={columns}
-      rows={tasks}
-      rowKey={(t) => t.application.id}
+      rows={rows}
+      rowKey={(t) => t.key}
       pageSize={100}
       tableTestId={`${prefix}-table`}
       filterTestId={`${prefix}-filter`}

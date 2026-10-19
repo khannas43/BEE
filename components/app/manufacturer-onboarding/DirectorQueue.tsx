@@ -87,7 +87,7 @@ export function DirectorQueue() {
   ];
 
   return (
-    <OnboardingChrome icon="verified_user" title="Director — manufacturer registrations awaiting decision">
+    <OnboardingChrome icon="verified_user" title="Manufacturer registrations awaiting BEE Officer approval">
       <NavLinks links={navLinks} />
       <div className="grid lg:grid-cols-[minmax(0,18rem)_1fr] gap-space-md">
         <section className="bg-surface-card rounded-xl shadow-sm p-space-md space-y-2" data-testid="director-pending-queue">

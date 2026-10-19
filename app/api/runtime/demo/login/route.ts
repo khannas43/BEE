@@ -25,8 +25,17 @@ const LANDING: Record<string, string> = {
   auditor: "/app/demo/auditor",
   helpdesk: "/app/demo/ai",
 };
+/** Organisations still in company registration (no permittee yet); they land on the registration wizard, every other manufacturer on its own 360 profile. */
+const REGISTRATION_ORG_CODES = ["VIRAA", "ONBOARD"]; // and the GUEST-nnnnn organisations created by a public registration
+function manufacturerLanding(me: unknown): string {
+  const orgs = (me as { organisations?: { code?: unknown }[] } | null)?.organisations;
+  const codes = (Array.isArray(orgs) ? orgs : []).map((o) => o?.code).filter((c): c is string => typeof c === "string");
+  if (codes.length === 0 || codes.every((c) => REGISTRATION_ORG_CODES.includes(c) || c.startsWith("GUEST-"))) return LANDING.manufacturer;
+  return `/app/demo/manufacturer-360?m=${encodeURIComponent(codes[0])}`;
+}
 function landingFor(me: unknown): string {
   const roles = (me as { effectiveRoles?: { role?: unknown }[] } | null)?.effectiveRoles;
+  if (Array.isArray(roles) && roles.some((r) => r?.role === "manufacturer")) return manufacturerLanding(me);
   for (const r of Array.isArray(roles) ? roles : []) if (typeof r?.role === "string" && LANDING[r.role]) return LANDING[r.role];
   return "/app";
 }

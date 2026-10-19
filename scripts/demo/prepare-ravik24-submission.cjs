@@ -253,8 +253,8 @@ async function fillWizardCore(page, tag) {
   await patchDraftViaBff(page, appId, {
     cin: CIN,
     gstin: GSTIN,
-    registeredAddress: { line1: "12 Okhla Industrial Area", line2: "", city: "Delhi", state: "DL", pincode: "110001" },
-    facilities: [{ name: "Okhla Plant 1", addressLine: "12 Okhla Industrial Area", city: "Delhi", state: "DL", pincode: "110001" }],
+    registeredAddress: { line1: "12 Okhla Industrial Area", line2: "", city: "New Delhi", state: "Delhi", pincode: "110020" },
+    facilities: [{ name: "Okhla Plant 1", addressLine: "12 Okhla Industrial Area", city: "New Delhi", state: "Delhi", pincode: "110020" }],
     authorisedSignatory: {
       name: "Ravi Kumar", email: "ravik24@example.invalid", phone: "9876543210", designation: "Director",
       pan: "ABCDE1234F", aadhaar: "123412341234", fatherName: "R. Kumar", din: "01234567",

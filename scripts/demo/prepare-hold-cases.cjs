@@ -260,8 +260,8 @@ async function fillWizardCore(page, tag) {
   await patchDraftViaBff(page, appId, {
     cin: CIN,
     gstin: GSTIN,
-    registeredAddress: { line1: CASE_ADDRESS, line2: "", city: "Delhi", state: "DL", pincode: "110001" },
-    facilities: [{ name: CASE_PLANT, addressLine: "Sector 5, Delhi", city: "Delhi", state: "DL", pincode: "110001" }],
+    registeredAddress: { line1: CASE_ADDRESS, line2: "", city: CASE_CITY, state: CASE_STATE, pincode: "110001" },
+    facilities: [{ name: CASE_PLANT, addressLine: CASE_ADDRESS, city: CASE_CITY, state: CASE_STATE, pincode: "110001" }],
     authorisedSignatory: {
       name: CASE_SIGNATORY, email: CASE_EMAIL, phone: "9876543210", designation: "Director",
       pan: "ABCDE1234F", aadhaar: "123412341234", fatherName: "R. Signatory", din: "01234567",

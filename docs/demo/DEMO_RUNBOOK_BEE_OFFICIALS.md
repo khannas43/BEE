@@ -7,11 +7,11 @@ Rehearsed on 19 October 2026 on branch `integration/wp3-c3`. The registration jo
 cd ~/Developer/BEE-integration
 npm run demo:reset
 ```
-It restarts the stack with demo sign-in on, re-imports the sign-in realm (so no guest account such as `ravik24` exists), resets the data and applies the demo seeds. Open http://127.0.0.1:3100/login. Every password is `demo123`. ngrok stays closed. Do not run `npm run local:check` on the day (it wipes the demo state; run `npm run demo:reset` again afterwards).
+It restarts the stack with demo sign-in on, re-imports the sign-in realm (removing rehearsal guest accounts), resets the data, applies the demo seeds and **re-creates `ravik24`** (password `demo123`, company Ravik Appliances Pvt Ltd, empty draft). `ravik24` therefore always exists after a reset. To make sure it exists without resetting: `npm run demo:ensure-ravik24`. Open http://127.0.0.1:3100/login. Every password is `demo123`. ngrok stays closed. Do not run `npm run local:check` on the day (it wipes the demo state; run `npm run demo:reset` again afterwards).
 
 | Person in the story | Sign in as |
 |---|---|
-| Applicant created live | `ravik24` (created at the registration page, section 2 step 1) |
+| Applicant | `ravik24` (already created by the reset; to show the sign-up page live, register a different username, for example `ravik25`) |
 | Established manufacturer | `nova.applicant` |
 | BEE Officer (operational approver, "bee.official") | `bee.officer` |
 | Director (final authority) | `bee.director` |
@@ -21,7 +21,7 @@ It restarts the stack with demo sign-in on, re-imports the sign-in realm (so no 
 ## 1. The registration journey (the core, about 12 minutes)
 Use a private window per person or sign out between people (icon at the top right).
 
-1. **Create applicant login** (not signed in): http://127.0.0.1:3100/register/manufacturer . Company `Ravik Appliances Pvt Ltd`, name `Ravi Kumar`, email `ravik24@example.invalid`, mobile `9876543210`, username `ravik24`, password `demo123` twice, Submit. Thank-you page (simulated e-mail), then "Continue to manufacturer application".
+1. **Create applicant login** (not signed in): http://127.0.0.1:3100/register/manufacturer . Show the page with a new name, for example company `Ravik Appliances Pvt Ltd`, name `Ravi Kumar`, email `ravik25@example.invalid`, mobile `9876543211`, username `ravik25`, password `demo123` twice, Submit; then carry on the journey as `ravik25`, or sign in as `ravik24` (already created) and continue from step 2. Thank-you page (simulated e-mail), then "Continue to manufacturer application".
 2. **Submit company registration** (as `ravik24`), seven steps:
    1. Company: legal name (already `Ravik Appliances Pvt Ltd`, carried over from sign-up), CIN `U27100DL2015PTC123456`, GSTIN `07AABCR1234A1Z5`, registered address (line 1 `12 Okhla Industrial Area`, state Delhi, city New Delhi, pincode `110020`; state and city are drop-downs, pick the state first).
    2. Facilities: one plant (`Okhla Plant 1`, same address).

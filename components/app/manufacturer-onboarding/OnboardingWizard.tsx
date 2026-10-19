@@ -560,6 +560,7 @@ export function OnboardingWizard() {
             stepCount={STEPS.length}
             busy={busy}
             issuesCount={issues.length}
+            issues={issues}
             saveNote={saveNote}
             submitError={submitError}
             onBack={() => goToStep((s) => Math.max(0, s - 1))}

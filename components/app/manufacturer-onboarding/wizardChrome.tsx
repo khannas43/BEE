@@ -124,6 +124,7 @@ export function WizardNavFooter({
   stepCount,
   busy,
   issuesCount,
+  issues = [],
   saveNote,
   submitError,
   onBack,
@@ -135,6 +136,8 @@ export function WizardNavFooter({
   stepCount: number;
   busy: boolean;
   issuesCount: number;
+  /** The outstanding items, listed beside Submit so the applicant sees why it is disabled. */
+  issues?: readonly string[];
   saveNote: string | null;
   submitError: string | null;
   onBack: () => void;
@@ -145,6 +148,16 @@ export function WizardNavFooter({
   const isLast = step >= stepCount - 1;
   return (
     <div className="space-y-2 pt-space-md border-t border-border-subtle">
+      {isLast && issuesCount > 0 && (
+        <div className="rounded-lg border border-error/40 bg-error-container/40 px-3 py-2 text-sm text-on-surface" role="status" data-testid="wizard-submit-blockers">
+          <p className="font-semibold">Submit is available once {issuesCount === 1 ? "this item is" : `these ${issuesCount} items are`} done:</p>
+          <ul className="mt-1 list-disc pl-5 space-y-0.5">
+            {issues.map((i) => (
+              <li key={i}>{i}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <button
           type="button"

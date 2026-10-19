@@ -150,9 +150,7 @@ function MenuEntry({ entry, depth, activeId, onNavigate }: { entry: NavEntry; de
 
   const chips = (
     <>
-      {entry.badge && <Chip text={entry.badge} />}
-      {entry.state === "preview" && <Chip text="Preview" />}
-      {entry.state === "planned" && <Chip text="Planned" />}
+                  {entry.state === "planned" && <Chip text="Planned" />}
     </>
   );
 

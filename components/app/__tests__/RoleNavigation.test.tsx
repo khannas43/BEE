@@ -101,11 +101,11 @@ describe("navigation definition", () => {
     expect(existsSync(path.join(process.cwd(), "app/app/identity/access-management/page.tsx"))).toBe(true);
   });
 
-  it("7 and 8. AI advisory and the secure ledger reach Admin and Officer, labelled advisory and simulated", () => {
+  it("7 and 8. AI advisory and the secure ledger reach Admin and Officer, without status labels", () => {
     for (const roles of [["admin"], ["officer"]]) {
       const entries = menu(roles, ADMIN_CAPS).flatMap((g) => leaves(g.children));
-      expect(entries.find((e) => e.route === "/app/demo/ai")?.badge).toBe("Advisory");
-      expect(entries.find((e) => e.route === "/app/demo/ledger")?.badge).toBe("Simulated");
+      expect(entries.find((e) => e.route === "/app/demo/ai")?.badge).toBeUndefined();
+      expect(entries.find((e) => e.route === "/app/demo/ledger")?.badge).toBeUndefined();
     }
   });
 
@@ -176,11 +176,11 @@ describe("sidebar", () => {
     expect(planned.map((el) => el.getAttribute("data-nav-id")).sort()).toEqual(plannedIds.sort());
   });
 
-  it("preview entries carry a Preview label; runtime links keep their test IDs", () => {
+  it("preview entries carry no status label; runtime links keep their test IDs", () => {
     const { container } = renderSidebar(["officer"]);
     const risk = container.querySelector('[data-nav-id="dir.risk"]')!;
-    expect(risk.textContent).toContain("Preview");
-    expect(risk.textContent).toContain("Advisory");
+    expect(risk.textContent).not.toContain("Preview");
+    expect(risk.textContent).not.toContain("Advisory");
     expect(container.querySelector('[data-testid="runtime-nav"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="runtime-nav-ai"]')?.getAttribute("href")).toBe("/app/demo/ai");
   });

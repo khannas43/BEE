@@ -59,6 +59,7 @@ export const STANDALONE_PAGES: Readonly<Record<string, NavState>> = {
 export const NOT_IN_MENU: Readonly<Record<string, string>> = {
   "/app/registrations/new": "Opened from Registration requests (Start a new request).",
   "/app/registrations/request": "Detail page for one request; needs the request ID.",
+  "/app/demo/mis": "Programme MIS duplicates the two dashboards (Programme at a glance, Programme performance); the page still opens by link.",
   "/app/manufacturer/director":
     "Information notice that company registration activates automatically; Observation monitoring replaces it in the menu.",
 };
@@ -173,7 +174,7 @@ export const NAVIGATION: readonly NavGroup[] = [
     children: [
       adminEntry("admin.executive-overview", "Programme performance", "space_dashboard", live(R.executive)),
       adminEntry("admin.m360", "Manufacturer 360", "hub", live(R.m360), { activePrefixes: ["/app/manufacturer/360/"] }),
-      adminEntry("admin.mis", "Programme MIS", "monitoring", live(R.mis)),
+      // hidden (duplicate of the two dashboards): adminEntry("admin.mis", "Programme MIS", "monitoring", live(R.mis)),
       parent("admin.work-queue", "Officer work queue", "inbox", [
         adminEntry("admin.my-work", "My work", "inbox", live(R.myWork)),
         adminEntry("admin.my-approvals", "My approvals", "task_alt", live(R.myApprovals)),
@@ -238,8 +239,8 @@ export const NAVIGATION: readonly NavGroup[] = [
         adminEntry("admin.withdrawals", "Withdrawals", "cancel", proto("withdrawal", "withdrawal-approval")),
         adminEntry("admin.revocation", "Register and revocation", "menu_book", live(R.register)),
       ]),
-      adminEntry("admin.ai", "AI advisory use cases", "psychology", live(R.ai), { badge: "Advisory" }),
-      adminEntry("admin.ledger", "Secure evidence ledger", "link", live(R.ledger), { badge: "Simulated" }),
+      adminEntry("admin.ai", "AI advisory use cases", "psychology", live(R.ai)),
+      adminEntry("admin.ledger", "Secure evidence ledger", "link", live(R.ledger)),
       parent("admin.access", "Users and access", "manage_accounts", [
         adminEntry("admin.delegations", "Delegations", "group", live(R.delegations)),
         adminEntry("admin.access-management", "Access management", "manage_accounts", page("/app/identity/access-management")),
@@ -326,12 +327,12 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     id: "dir.oversight", title: "Oversight & Intelligence", icon: "psychology", profile: "officer",
     children: [
-      entry("dir.ai", "AI advisory use cases", "psychology", live(R.ai), BEE_OFFICER, { badge: "Advisory" }),
-      entry("dir.risk", "Risk-prioritised cases", "priority_high", proto("mis-ai", "risk-scoring"), BEE_OFFICER, { badge: "Advisory" }),
+      entry("dir.ai", "AI advisory use cases", "psychology", live(R.ai), BEE_OFFICER),
+      entry("dir.risk", "Risk-prioritised cases", "priority_high", proto("mis-ai", "risk-scoring"), BEE_OFFICER),
       entry("dir.documents", "Document verification", "plagiarism", proto("agency-brand", "registration-scrutiny"), BEE_OFFICER),
       entry("dir.test-reports", "Test-report scrutiny", "science", proto("model-label", "test-reports"), BEE_OFFICER),
-      entry("dir.mis", "Programme MIS", "monitoring", live(R.mis), BEE_OFFICER),
-      entry("dir.ledger", "Secure evidence ledger", "link", live(R.ledger), BEE_OFFICER, { badge: "Simulated" }),
+      // hidden (duplicate of the two dashboards): entry("dir.mis", "Programme MIS", "monitoring", live(R.mis), BEE_OFFICER),
+      entry("dir.ledger", "Secure evidence ledger", "link", live(R.ledger), BEE_OFFICER),
     ],
   },
   {
@@ -379,9 +380,9 @@ export const NAVIGATION: readonly NavGroup[] = [
     children: [
       entry("sec.m360", "Manufacturer 360", "hub", live(R.m360), DIRECTOR, { activePrefixes: ["/app/manufacturer/360/"] }),
       entry("sec.approval-summary", "Programme at a glance", "dashboard", live(R.directorDash), DIRECTOR),
-      entry("sec.pending-applications", "Pending applications", "monitoring", live(R.mis), DIRECTOR),
-      entry("sec.ai", "AI advisory summary", "psychology", live(R.ai), DIRECTOR, { badge: "Advisory" }),
-      entry("sec.evidence", "Secure evidence status", "link", live(R.ledger), DIRECTOR, { badge: "Simulated" }),
+      // hidden (MIS page is not in menus): entry("sec.pending-applications", "Pending applications", "monitoring", live(R.mis), DIRECTOR),
+      entry("sec.ai", "AI advisory summary", "psychology", live(R.ai), DIRECTOR),
+      entry("sec.evidence", "Secure evidence status", "link", live(R.ledger), DIRECTOR),
       grantedSettings("sec"),
     ],
   },
@@ -418,7 +419,7 @@ export const NAVIGATION: readonly NavGroup[] = [
     children: [
       entry("fin.observation", "Manufacturer observation information", "insights", live(R.monitoring), FINANCE, { activePrefixes: APPLICATION_STATUS }),
       entry("fin.anomaly", "Raise anomaly", "report", live(R.monitoring), FINANCE),
-      entry("fin.reports", "Payment reports", "monitoring", live(R.mis), FINANCE),
+      // hidden (MIS page is not in menus): entry("fin.reports", "Payment reports", "monitoring", live(R.mis), FINANCE),
       entry("fin.m360", "Manufacturer 360", "hub", live(R.m360), FINANCE, { activePrefixes: ["/app/manufacturer/360/"] }),
       entry("fin.audit", "Audit history", "history", live(R.history), FINANCE),
       entry("fin.delegations", "Delegations", "group", live(R.delegations), FINANCE),

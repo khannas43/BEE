@@ -112,7 +112,7 @@ public class ManufacturerDirectoryRepository {
             });
         Map<UUID, List<Map<String, Object>>> models = grouped(
             "SELECT m.organisation_id AS org, m.reference, m.model_number, m.category, m.state, "
-                + "(SELECT r.stars FROM model_application_rating r WHERE r.application_id = m.id ORDER BY r.rating_version DESC LIMIT 1) AS stars, "
+                + "COALESCE((SELECT r.stars FROM model_application_rating r WHERE r.application_id = m.id ORDER BY r.rating_version DESC LIMIT 1), c.stars) AS stars, "
                 + "c.registration_id AS certificate, c.valid_to FROM model_application m LEFT JOIN certificate c ON c.application_id = m.id "
                 + "WHERE m.state <> 'draft' ORDER BY m.created_at DESC",
             "org", r -> map("reference", r.get("reference"), "model", r.get("model_number"), "category", r.get("category"),

@@ -19,7 +19,7 @@ describe("ProductionDemo", () => {
       ),
     );
     render(<ProductionDemo />);
-    await waitFor(() => expect(screen.getByText("2026-Q3")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("2026-Q3").length).toBeGreaterThan(1));
     expect(screen.getByRole("button", { name: "Create submission" })).toBeTruthy();
   });
 });

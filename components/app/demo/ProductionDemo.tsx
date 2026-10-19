@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Pill } from "./DemoShell";
+import { QuarterlySubmission } from "./QuarterlySubmission";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
 import { istStamp } from "@/lib/client/istTime";
@@ -201,7 +202,9 @@ export function ProductionDemo() {
 
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-production">
-      <h1 className="font-headline-md text-headline-md text-on-surface">Quarterly production</h1>
+      <h1 className="font-headline-md text-headline-md text-on-surface">Quarterly submission</h1>
+      <QuarterlySubmission />
+      <div role="heading" aria-level={2} className="pt-space-md text-[18px] font-bold text-[#14315E]">Production figures and evidence</div>
       {error && (
         <p role="alert" className="rounded bg-error-container p-space-sm text-on-error-container">
           {error}

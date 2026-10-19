@@ -15,7 +15,6 @@ import { useManufacturerOnboardingClient } from "./ManufacturerOnboardingProvide
 import {
   ErrorState,
   LoadingState,
-  NavLinks,
   OnboardingChrome,
   PhaseStatus,
   SimulatedPaymentNote,
@@ -132,27 +131,21 @@ export function OnboardingWizard() {
   if (loadError) return <ErrorState message={loadError} onRetry={() => void load()} />;
   if (!draft || !appId) return <LoadingState label="Loading company registration wizard…" />;
 
-  const navLinks = [
-    { href: "/app/manufacturer/onboarding", label: "Wizard", testId: "nav-onboarding-wizard" },
-    { href: `/app/manufacturer/application/${appId}`, label: "My application", testId: "nav-onboarding-application" },
-  ];
-
   return (
     <OnboardingChrome icon="factory" title="Manufacturer / company registration" showDisclosure={false}>
       <div className="space-y-space-md">
-        <NavLinks links={navLinks} />
         <section className="rounded-xl border border-border-subtle bg-surface-card p-space-sm" aria-label="Progress">
-          <ol className="flex min-w-max gap-1 overflow-x-auto pb-1" data-testid="onboarding-stepper">
+          <ol className="grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-8" data-testid="onboarding-stepper">
             {STEPS.map((s, i) => (
               <li key={s.id}>
                 <button
                   type="button"
                   onClick={() => setStep(i)}
-                  className={`min-w-32 text-left flex items-center gap-2 rounded-lg px-2 py-2 text-label-sm ${i === step ? "bg-primary/10 text-primary font-semibold" : "text-on-surface-variant hover:bg-surface-container-low"}`}
+                  className={`h-full w-full text-left flex items-center gap-1.5 rounded-lg px-2 py-2 text-label-sm leading-tight ${i === step ? "bg-primary/10 text-primary font-semibold" : "text-on-surface-variant hover:bg-surface-container-low"}`}
                   data-testid={`step-${s.id}`}
                 >
-                  <Icon name={s.icon} size={18} />
-                  <span>{i + 1}. {s.title}</span>
+                  <Icon name={s.icon} size={16} className="shrink-0" />
+                  <span className="break-words">{i + 1}. {s.title}</span>
                 </button>
               </li>
             ))}
@@ -165,7 +158,7 @@ export function OnboardingWizard() {
               <div>
                 <p className="font-label-sm text-primary uppercase tracking-wide">Manufacturer registration application</p>
                 <h2 className="font-headline-sm text-headline-sm mt-1">Step {step + 1} of {STEPS.length}: {STEPS[step].title}</h2>
-                <p className="font-body-sm text-on-surface-variant mt-1">Complete this section, then continue through the guided registration journey.</p>
+                <p className="font-body-sm text-on-surface-variant mt-1">Complete all eight sections, save your progress whenever needed, and submit the completed registration for BEE review.</p>
               </div>
               <div className="text-right space-y-1">
                 <p className="font-mono text-xs text-on-surface-variant">{appRecord?.reference}</p>

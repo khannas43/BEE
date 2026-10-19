@@ -107,11 +107,11 @@ describe("manufacturer onboarding UI", () => {
     vi.unstubAllGlobals();
   });
 
-  it("guest registration shows simulated OTP steps and opens the application", async () => {
+  it("guest registration creates the account and opens the confirmation page", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       applicationId: "00000000-0000-4000-d000-000000000099",
-      returnTo: "/app/manufacturer/onboarding",
+      returnTo: "/register/manufacturer/confirmation",
       verification: "simulated",
     }), {
       status: 201,
@@ -122,22 +122,24 @@ describe("manufacturer onboarding UI", () => {
     expect(screen.getByTestId("register-manufacturer-title").textContent).toBe("Create applicant account");
     expect(screen.getByTestId("existing-applicant-sign-in").textContent).toBe("Sign in");
 
+    fireEvent.change(screen.getByLabelText("Manufacturer / company legal name"), { target: { value: "Aarav Appliances Pvt Ltd" } });
     fireEvent.change(screen.getByLabelText("Applicant full name"), { target: { value: "Aarav Applicant" } });
     fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "aarav@example.test" } });
     fireEvent.change(screen.getByLabelText("Mobile number"), { target: { value: "9876543210" } });
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "aarav.applicant" } });
     fireEvent.change(screen.getByLabelText("Create password"), { target: { value: "Secure123" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "Secure123" } });
-    expect(screen.getByTestId("demo-verification-process").textContent).toMatch(/Email and mobile OTP verification/i);
-    expect(screen.getAllByText("Simulated verification", { selector: "span" })).toHaveLength(2);
     fireEvent.click(screen.getByTestId("create-demo-applicant"));
 
-    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/app/manufacturer/onboarding"));
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/register/manufacturer/confirmation"));
     expect(fetchMock).toHaveBeenCalledWith("/api/runtime/public/manufacturer-signup", expect.objectContaining({ method: "POST" }));
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(body).toEqual({
+      legalName: "Aarav Appliances Pvt Ltd",
       fullName: "Aarav Applicant",
       email: "aarav@example.test",
       mobile: "9876543210",
+      username: "aarav.applicant",
       password: "Secure123",
     });
   });

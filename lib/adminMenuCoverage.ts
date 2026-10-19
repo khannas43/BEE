@@ -2,7 +2,7 @@
  * Brief C3A: every Admin menu runtime route must have proven read-only access (backend + UI tests)
  * or be documented in NOT_IN_MENU. The coverage test fails if a new live link is added without one.
  */
-import { NOT_IN_MENU, leaves, menuRoutesFor, navigationFor } from "./navigation";
+import { NOT_IN_MENU, menuRoutesFor, navigationFor } from "./navigation";
 import { RUNTIME_ROUTES } from "./runtimeRoutes";
 
 export const ADMIN_DEMO_CAPS = ["fee_rule_manage", "rating_scheme_manage", "business_setting_manage", "fee_confirmation_correct"] as const;

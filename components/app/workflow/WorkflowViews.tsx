@@ -10,6 +10,7 @@ import { ReadPanel } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
 import { ApplicationHistory } from "@/components/app/lifecycle/ApplicationHistory";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
+import { manufacturerProfileHref } from "@/lib/demo/manufacturerDirectory";
 import { workTasks } from "@/components/app/workflow/workTasks";
 import { gateRead } from "@/lib/client/runtimeHttp";
 import { type ModelApplication, readModelApplicationList, stateLabel } from "@/lib/client/runtimeModelApplications";
@@ -42,10 +43,10 @@ function refCell(prefix: string, a: ModelApplication) {
   return <span className="font-mono" data-testid={`${prefix}-ref-${a.reference}`}>{a.reference}</span>;
 }
 const brandCell = (a: ModelApplication) => (
-  <div>
-    <div className="font-semibold text-on-surface">{a.brandName}</div>
-    <div className="font-label-sm text-label-sm text-on-surface-variant">{a.modelNumber}</div>
-  </div>
+  <Link href={manufacturerProfileHref(a.organisation)} className="block hover:underline" title="Open the Manufacturer 360 profile" data-testid={`profile-link-${a.reference}`}>
+    <div className="font-semibold text-primary">{a.brandName}</div>
+    <div className="font-label-sm text-label-sm text-primary/80">{a.modelNumber}</div>
+  </Link>
 );
 
 /** Application review: every application in progress that the person may see, its stage and the next action. */

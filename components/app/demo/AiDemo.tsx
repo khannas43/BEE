@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { manufacturerProfileHref, useManufacturers } from "@/lib/client/runtimeManufacturers";
 import { demoGet, demoPath, demoPost } from "@/lib/client/runtimeDemo";
+import { modelDashboardHref, readModelApplicationList } from "@/lib/client/runtimeModelApplications";
 
 /**
  * Demo slice S6: five advisory AI use cases with evidence, a model card, a data version and a persisted human disposition.
@@ -277,7 +278,7 @@ function useUseCase(model: ModelCard | null) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [question, setQuestion] = useState("How do I pay the application fee?");
-  const [appRef, setAppRef] = useState("LOCAL-MA-0004");
+  const [appRef, setAppRef] = useState("DEMO-Q-0001");
   const [category, setCategory] = useState("");
   const [seenUc, setSeenUc] = useState(uc);
   if (seenUc !== uc) {
@@ -1098,6 +1099,20 @@ const STATUS_WORD: Record<string, string> = { match: "Matches", differs: "Differ
 
 /** The extracted fields against the declared ones: filter by status and confidence, sort every column. */
 function ExtractionTable({ o, fields }: { o: Record<string, unknown>; fields: ExField[] }) {
+  const reference = String(o.applicationReference ?? "");
+  const [applicationId, setApplicationId] = useState<string | null>(null);
+  useEffect(() => {
+    // The application's record opens from its reference; a caller who may not read it simply gets no link.
+    let cancelled = false;
+    void readModelApplicationList()
+      .then((r) => {
+        if (!cancelled && r.ok) setApplicationId(r.list.items.find((a) => a.reference === reference)?.id ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [reference]);
   const [status, setStatus] = useState("");
   const [level, setLevel] = useState("");
   const statuses = [...new Set(fields.map((f) => f.status))].sort();
@@ -1110,7 +1125,11 @@ function ExtractionTable({ o, fields }: { o: Record<string, unknown>; fields: Ex
   });
   return (
     <div className="mt-4 space-y-3 font-body-sm" data-testid="ai-output-extraction">
-      <div className="flex flex-wrap gap-2"><Chip>Application {String(o.applicationReference)}</Chip><Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">text from: {String(o.textSource)}</Chip></div>
+      <div className="flex flex-wrap gap-2">{applicationId ? (
+          <Link href={modelDashboardHref(applicationId)} className="inline-flex items-center gap-1 rounded-full border border-primary bg-white px-2.5 py-0.5 text-[12px] font-semibold text-primary hover:bg-primary/5" data-testid="ai-extract-application-link">
+            Application {reference} <Icon name="open_in_new" size={12} />
+          </Link>
+        ) : <Chip>Application {reference}</Chip>}<Chip tone="bg-[#eef2f7] text-[#475569] border-[#d8e0ea]">text from: {String(o.textSource)}</Chip></div>
       <div className="grid gap-3 sm:grid-cols-3" data-testid="ai-extract-cards">
         {fields.map((f) => {
           const differs = f.status === "differs";

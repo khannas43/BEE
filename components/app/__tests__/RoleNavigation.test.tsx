@@ -220,11 +220,10 @@ describe("sidebar", () => {
     expect(document.querySelector('[aria-current="page"]')?.getAttribute("data-nav-id")).toBe("mfr.status");
   });
 
-  it("Admin shows the demonstration note; the operational roles do not", () => {
-    renderSidebar(["admin"]);
-    expect(screen.getByTestId("nav-admin-note").textContent).toContain("In normal operation each user sees only the menus and records permitted for their role");
-    cleanup();
-    renderSidebar(["director"]);
+  it("Admin sidebar shows the Admin profile label only (no demonstration note)", () => {
+    const { container } = renderSidebar(["admin"]);
+    expect(screen.getByTestId("nav-profile").textContent).toBe("Admin");
+    expect(container.textContent).not.toMatch(/Consolidated view|read-only|demonstration umbrella/i);
     expect(screen.queryByTestId("nav-admin-note")).toBeNull();
   });
 

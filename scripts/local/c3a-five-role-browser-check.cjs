@@ -1,7 +1,11 @@
 /* eslint-disable */
-/** Brief C3A: five-role menu smoke (Manufacturer, Finance, Director, Secretary, Admin) + Admin read-only banner on operational screens. */
+/** Brief C3B: five-role menu smoke + simplified role selector + Admin screen visibility without demo banners. */
 const totp = require("./totp.cjs");
 const { WEB, launchChrome, openPage, signIn } = require("./browser-check.cjs");
+
+const VISIBLE_ROLES = ["manufacturer", "finance", "director", "secretary", "admin"];
+const HIDDEN_ROLE_LABELS = /programme|reviewer|iame|auditor|helpdesk|agency|pixel|laboratory|sda|registered agency/i;
+const ADMIN_NOTE = /Admin demonstration view|read-only Admin|Consolidated view of every screen/i;
 
 const PERSONAS = [
   { key: "manufacturer", user: "nova.applicant", groups: 4, forbidden: "/app/finance/finance-queue" },
@@ -12,8 +16,8 @@ const PERSONAS = [
     key: "admin",
     user: "bee.admin",
     groups: 4,
-    adminBannerRoute: "/app/registrations/requests",
     adminRegisterRoute: "/app/registrations/register",
+    adminOperationalRoute: "/app/registrations/requests",
     menuGroupIds: ["admin.executive", "admin.registration", "admin.labels", "admin.operations"],
   },
 ];
@@ -33,6 +37,19 @@ async function menuGroups(page) {
   return page.eval(`document.querySelectorAll('[data-testid="runtime-nav"] [data-nav-group-button]').length`);
 }
 
+async function roleDropdown(page) {
+  return page.eval(`(() => {
+    const sel = document.querySelector('[data-testid="visible-role-selector"]');
+    if (!sel) return null;
+    return [...sel.options].map((o) => ({ value: o.value, text: (o.textContent || "").trim() }));
+  })()`);
+}
+
+async function pageForbiddenCopy(page) {
+  await page.waitFor(`!!document.body`, 10000);
+  return page.eval(`document.body?.innerText || ""`);
+}
+
 /** True when the screen is outside the signed-in role's menu (prototype guard or runtime deep link). */
 async function refusedUnrelatedScreen(page, href) {
   const path = href.split("?")[0];
@@ -45,7 +62,6 @@ async function refusedUnrelatedScreen(page, href) {
   })()`);
 }
 
-/** Opens each Admin group in turn and checks it exposes at least one child link (accordion allows one extra open group). */
 async function traverseAdminGroups(page, ids) {
   for (const id of ids) {
     await page.eval(`(() => {
@@ -57,6 +73,31 @@ async function traverseAdminGroups(page, ids) {
     if (!open || !child) return false;
   }
   return true;
+}
+
+async function expandAllAdminGroups(page, ids) {
+  for (const id of ids) {
+    await page.eval(`(() => {
+      const btn = document.querySelector('[data-nav-id="${id}"][data-nav-group-button]');
+      if (btn && btn.getAttribute("aria-expanded") !== "true") btn.click();
+    })()`);
+    await page.waitFor(`document.querySelector('[data-nav-id="${id}"][data-nav-group-button]')?.getAttribute('aria-expanded') === 'true'`, 5000);
+  }
+}
+
+async function adminMenuHrefs(page, ids) {
+  await expandAllAdminGroups(page, ids);
+  return page.eval(`[...new Set([...document.querySelectorAll('[data-testid="runtime-nav"] a[href]')].map((a) => a.getAttribute("href")).filter(Boolean))]`);
+}
+
+async function adminCanOpenRoute(page, href) {
+  const path = href.split("?")[0];
+  await page.goto(`${WEB}${href}`);
+  await page.waitFor(`location.pathname.startsWith(${JSON.stringify(path)})`, 25000);
+  const refused = await page.eval(`!!document.querySelector('[data-testid="route-guard-refused"]')`);
+  const banner = await page.eval(`!!document.querySelector('[data-testid="admin-demonstration-banner"]')`);
+  const text = await pageForbiddenCopy(page);
+  return !refused && !banner && !ADMIN_NOTE.test(text);
 }
 
 (async () => {
@@ -72,6 +113,13 @@ async function traverseAdminGroups(page, ids) {
       await waitForNav(page);
       const groups = await menuGroups(page);
       check(`${p.key}.menu-groups`, groups === p.groups, `groups=${groups}`);
+      const options = await roleDropdown(page);
+      check(`${p.key}.role-dropdown-five`, options?.length === 5, JSON.stringify(options?.map((o) => o.value)));
+      check(
+        `${p.key}.role-dropdown-labels`,
+        options?.every((o) => VISIBLE_ROLES.includes(o.value)) && !HIDDEN_ROLE_LABELS.test(options?.map((o) => o.text).join(" ") ?? ""),
+        options?.map((o) => o.text).join(", "),
+      );
       if (p.forbidden) {
         const refused = await refusedUnrelatedScreen(page, p.forbidden);
         check(`${p.key}.forbidden-route`, refused, p.forbidden);
@@ -81,14 +129,27 @@ async function traverseAdminGroups(page, ids) {
         await waitForNav(page);
         const traversed = await traverseAdminGroups(page, p.menuGroupIds);
         check("admin.menu-four-groups-traversed", traversed, p.menuGroupIds.join(","));
+        const hrefs = await adminMenuHrefs(page, p.menuGroupIds);
+        let opened = 0;
+        for (const href of hrefs) {
+          const ok = await adminCanOpenRoute(page, href);
+          if (!ok) check(`admin.open.${href}`, false, "refused, banner, or forbidden copy");
+          else opened++;
+        }
+        check("admin.opens-every-menu-route", opened === hrefs.length, `${opened}/${hrefs.length} menu links`);
       }
-      if (p.adminBannerRoute) {
-        await page.goto(`${WEB}${p.adminBannerRoute}`);
-        await page.waitFor(`location.pathname === ${JSON.stringify(p.adminBannerRoute)}`, 20000);
-        await page.waitFor(`!!document.querySelector('[data-testid="admin-demonstration-banner"]')`, 20000);
+      if (p.adminOperationalRoute) {
+        await page.goto(`${WEB}${p.adminOperationalRoute}`);
+        await page.waitFor(`location.pathname === ${JSON.stringify(p.adminOperationalRoute)}`, 20000);
+        await page.waitFor(
+          `fetch('/api/runtime/me',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(m=>m?.adminDemonstrationReadOnly===true)`,
+          20000,
+        );
+        await page.waitFor(`!document.querySelector('[data-testid="reg-list-loading"]')`, 20000);
         const banner = await page.eval(`!!document.querySelector('[data-testid="admin-demonstration-banner"]')`);
         const regNew = await page.eval(`!!document.querySelector('[data-testid="reg-new"]')`);
-        check("admin.read-only-banner", banner, p.adminBannerRoute);
+        const text = await pageForbiddenCopy(page);
+        check("admin.no-banner-on-operational", !banner && !ADMIN_NOTE.test(text), p.adminOperationalRoute);
         check("admin.no-reg-new-action", !regNew, "New request hidden");
         const me = await page.eval(`fetch('/api/runtime/me',{cache:'no-store'}).then(r=>r.ok?r.json():null)`);
         check("admin.me-read-only-flag", me?.adminDemonstrationReadOnly === true, String(me?.adminDemonstrationReadOnly));
@@ -96,16 +157,16 @@ async function traverseAdminGroups(page, ids) {
       if (p.adminRegisterRoute) {
         await page.goto(`${WEB}${p.adminRegisterRoute}`);
         await page.waitFor(`location.pathname === ${JSON.stringify(p.adminRegisterRoute)}`, 20000);
-        await page.waitFor(`!!document.querySelector('[data-testid="admin-demonstration-banner"]')`, 20000);
         const banner = await page.eval(`!!document.querySelector('[data-testid="admin-demonstration-banner"]')`);
         const propose = await page.eval(`!!document.querySelector('[data-testid^="rvk-propose-"]')`);
         const decide = await page.eval(`!!document.querySelector('[data-testid^="rvk-approve-"], [data-testid^="rvk-reject-"], [data-testid^="rvk-withdraw-"]')`);
-        check("admin.register-banner", banner, p.adminRegisterRoute);
+        const text = await pageForbiddenCopy(page);
+        check("admin.register-no-banner", !banner && !ADMIN_NOTE.test(text), p.adminRegisterRoute);
         check("admin.register-no-propose", !propose, "no propose buttons");
         check("admin.register-no-decide", !decide, "no approve/reject/withdraw");
         const proposeApi = await page.eval(`fetch('/api/runtime/register-revocations', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'c3a-admin-probe-' + Date.now() },
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'c3b-admin-probe-' + Date.now() },
           body: JSON.stringify({ targetKind: 'brand', targetId: '00000000-0000-4000-d000-000000000001', action: 'revoke', reason: 'probe' }),
         }).then(async (r) => ({ status: r.status, error: (await r.json().catch(() => ({}))).error }))`);
         check("admin.register-mutation-forbidden", proposeApi.status === 403 && proposeApi.error === "role_not_permitted", `${proposeApi.status} ${proposeApi.error}`);
@@ -115,7 +176,7 @@ async function traverseAdminGroups(page, ids) {
   } finally {
     await chrome.close();
   }
-  console.log(`c3a five-role checks: ${pass} passed, ${fail} failed`);
+  console.log(`c3 five-role checks: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => {
   console.error(e);

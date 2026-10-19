@@ -10,7 +10,7 @@ import { activeEntry, navigationFor, navProfileFor, type NavEntry, type NavGroup
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { useLang } from "@/components/i18n/LangProvider";
 
-const PROFILE_TITLE = { admin: "Admin demonstration", manufacturer: "Manufacturer", director: "Director", secretary: "Secretary", finance: "Finance" } as const;
+const PROFILE_TITLE = { admin: "Admin", manufacturer: "Manufacturer", director: "Director", secretary: "Secretary", finance: "Finance" } as const;
 
 /** The console menu: the signed-in person's role hierarchy from lib/navigation, used by the desktop sidebar and the mobile drawer alike. */
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -51,11 +51,6 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
             {profile && (
               <p className="px-space-md pb-1 font-label-sm text-label-sm uppercase tracking-[0.12em] text-forest-light/60" data-testid="nav-profile">
                 {PROFILE_TITLE[profile]}
-              </p>
-            )}
-            {profile === "admin" && roles?.some((g) => g.role === "admin") && (
-              <p className="mx-space-md mb-space-xs rounded-md bg-white/5 px-space-sm py-1.5 font-body-sm text-body-sm text-forest-light/80" data-testid="nav-admin-note">
-                Consolidated view of every screen for the demonstration. In normal operation each user sees only the menus and records permitted for their role.
               </p>
             )}
             <MenuGroups key={active?.group.id ?? "none"} groups={groups} activeGroup={active?.group.id ?? null} activeId={active?.entry.id ?? null} onNavigate={onNavigate} />

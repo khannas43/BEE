@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { ROLES, RoleKey } from "@/lib/roles";
+import { RoleKey, VISIBLE_SELECTOR_ROLES, VISIBLE_SELECTOR_ROLE_KEYS } from "@/lib/roles";
 import { countForRole } from "@/lib/screens";
 import { ROLE_PREVIEW_ENABLED, useRole } from "./RoleContext";
 import { NotificationBell } from "./notifications/NotificationBell";
@@ -20,7 +20,14 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
   const identity = useSpringIdentity();
   // In demo mode the dropdown switches the signed-in demo account; it shows the role Spring reports.
   const signedRole = identity.status === "signed-in" ? identity.me.effectiveRoles[0]?.role : undefined;
+  const selectedRole =
+    demo && signedRole && VISIBLE_SELECTOR_ROLE_KEYS.includes(signedRole as RoleKey)
+      ? (signedRole as RoleKey)
+      : VISIBLE_SELECTOR_ROLE_KEYS.includes(role)
+        ? role
+        : "admin";
   const changeRole = async (key: RoleKey) => {
+    if (!VISIBLE_SELECTOR_ROLE_KEYS.includes(key)) return;
     if (!demo) return setRole(key);
     const to = await switchDemoRole(key);
     if (to) window.location.assign(to);
@@ -43,21 +50,17 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
           {!demo && <Icon name="visibility" size={16} className="text-solar-gold-dark" />}
           {!demo && <span className="font-label-sm text-label-sm text-solar-gold-dark uppercase tracking-wide">{t("app.previewRole")}</span>}
           <select
-            value={demo && signedRole ? signedRole : role}
+            value={selectedRole}
             onChange={(e) => void changeRole(e.target.value as RoleKey)}
             className={demo ? "bg-surface-container-lowest border border-border-subtle rounded-lg px-space-sm py-1.5 outline-none focus:ring-2 focus:ring-primary font-label-md text-label-md text-on-surface cursor-pointer" : "bg-transparent outline-none font-label-md text-label-md text-forest-dark font-semibold cursor-pointer"}
             aria-label={t("app.previewRole")}
+            data-testid="visible-role-selector"
           >
-            <optgroup label={t("role.internal")}>
-              {ROLES.filter((r) => r.kind === "internal").map((r) => (
-                <option key={r.key} value={r.key}>{demo ? t(`role.${r.key}`) : `${t(`role.${r.key}`)} (${countForRole(r.key)})`}</option>
-              ))}
-            </optgroup>
-            <optgroup label={t("role.external")}>
-              {ROLES.filter((r) => r.kind === "external").map((r) => (
-                <option key={r.key} value={r.key}>{demo ? t(`role.${r.key}`) : `${t(`role.${r.key}`)} · scoped`}</option>
-              ))}
-            </optgroup>
+            {VISIBLE_SELECTOR_ROLES.map((r) => (
+              <option key={r.key} value={r.key}>
+                {demo ? r.label : `${r.label} (${countForRole(r.key)})`}
+              </option>
+            ))}
           </select>
         </div>
         )}

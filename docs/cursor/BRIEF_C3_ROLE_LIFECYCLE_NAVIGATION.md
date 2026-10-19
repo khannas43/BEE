@@ -41,7 +41,7 @@ The "All screens · dev" link is removed. The `/app/screens` page remains, reach
 
 ## 3. Hierarchies
 
-- **Admin (demonstration umbrella).** The Admin sidebar shows the narration: "Consolidated view of every screen for the demonstration. In normal operation each user sees only the menus and records permitted for their role."
+- **Admin (demonstration umbrella).** Four menu groups cover every available screen; no sidebar narration (Brief C3B).
   - **Executive Dashboard:**
     - Executive overview, Manufacturer 360, Programme MIS.
     - Officer work queue: My work, My approvals, Applications in progress, SLA and escalations.
@@ -180,8 +180,22 @@ The live check `read-ui-browser-check.cjs` step `read-ui.preview-elsewhere-uncha
 
 **Access model:** `AdminDemonstrationAccess` (Spring): umbrella `admin`/`all` with no operational own role → `mayReadAllOperationalRecords` on model applications, registrations and manufacturer onboarding; `deniesOperationalMutation` on workflow, filing, fee confirm, onboarding writes and registration review transitions. `/api/me` exposes `adminDemonstrationReadOnly`. Admin capabilities (fee rules, rating schemes, business settings, fee corrections, delegations approval, demo ledger writes) are unchanged.
 
-**Portal:** `AdminDemonstrationBanner`; `ScreenChrome` hides header actions; manufacturer routes use `ManufacturerRouteShell`; registration list and finance queue hide mutation controls when Spring reports read-only Admin.
+**Portal:** `ScreenChrome` hides header actions when Spring reports read-only Admin; manufacturer routes use `ManufacturerRouteShell`; registration list and finance queue hide mutation controls. No read-only banner (C3B).
 
 **Proof:** `AdminDemonstrationAccessTest`, `SlicePolicyTest`, `RegistrationDatabaseTest`, `RevocationDatabaseTest.adminDemonstrationReadsRegisterButCannotMutate`, `SnlWp03OptimizedManufacturerOnboardingDatabaseTest`; `AdminDemonstration.test.tsx`, `RegisterRevocations.test.tsx` (read-only Admin hides mutation controls), `adminMenuCoverage.test.tsx` (every menu route names real backend/UI tests); live `npm run local:c3a-five-role` (Admin opens all four menu groups plus register). OpenAPI **0.37.2** adds optional `adminDemonstrationReadOnly` on Me.
 
 **BL-266:** **done** (19 October 2026). Contract pin SHA256 `fc06669a…` matches OpenAPI **0.37.2**; `npm run local:c3a-five-role` **17/17** (five roles, Admin register read-only + POST `role_not_permitted`); full `@Tag("db")` suite, `web:test` **264/264**, `web:test:ui` **270/270**, `build`, `contract-artifact.test.mjs` **7/7**, `git diff --check` green.
+
+## 10. Brief C3B — simplified role selector and Admin UI cleanup (19 October 2026)
+
+**Goal:** Client demo shows only five personas in the header role dropdown; remove Admin demonstration copy from the UI while keeping C3A Spring boundaries.
+
+**Role selector:** `VISIBLE_SELECTOR_ROLES` in `lib/roles.ts`; `AppTopbar` renders exactly Manufacturer, Finance, Director, Secretary, Admin. Demo sign-in (`switchDemoRole`) and prototype preview (`RoleContext`) use the same five keys. Seed accounts for Programme, Reviewer, IAME, and the like remain for automation only.
+
+**Admin UI:** Remove `AdminDemonstrationBanner` and the Admin sidebar note (`nav-admin-note`). Admin profile label is "Admin". Operational screens still hide mutation controls when `/api/me.adminDemonstrationReadOnly` is true; Spring still denies mutations.
+
+**Login:** Single oval username/password form (`LoginPageClient` / `DemoLoginForm` with `showAccounts={false}`); no demo account list on `/login`.
+
+**Tests:** `AppTopbar.test.tsx`, updated `RoleNavigation.test.tsx`, `AdminDemonstration.test.tsx`, `RoleContext.test.tsx`; live `npm run local:c3a-five-role` asserts five dropdown options, no banner/note copy, Admin opens every menu link, mutations **403** from Spring.
+
+**Decisions:** [BEE_DECISIONS.md](../BEE_DECISIONS.md) N7; N6 updated for C3B (no banner).

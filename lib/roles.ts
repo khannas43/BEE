@@ -29,6 +29,17 @@ export const isExternalRole = (key: string) => ROLES.find((r) => r.key === key)?
 
 export const ROLE_ORDER: RoleKey[] = ROLES.map((r) => r.key) as RoleKey[];
 
+/** Brief C3B: header role selector shows only these five personas (display labels are client-facing; seed accounts for other roles stay for automation). */
+export const VISIBLE_SELECTOR_ROLES = [
+  { key: "manufacturer" as const, label: "Manufacturer" },
+  { key: "finance" as const, label: "Finance" },
+  { key: "director" as const, label: "Director" },
+  { key: "secretary" as const, label: "Secretary" },
+  { key: "admin" as const, label: "Admin" },
+];
+
+export const VISIBLE_SELECTOR_ROLE_KEYS: RoleKey[] = VISIBLE_SELECTOR_ROLES.map((r) => r.key);
+
 export function roleByKey(key: string) {
   return ROLES.find((r) => r.key === key) ?? ROLES[0];
 }

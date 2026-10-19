@@ -508,7 +508,7 @@ const PROGRESS = [
 ] as const;
 
 /** Where the request stands on the four-step path; a returned or rejected request marks the step it stopped at. */
-function RequestProgress({ state }: { state: Registration["state"] }) {
+export function RequestProgress({ state }: { state: Registration["state"] }) {
   const at = state === "draft" || state === "fee_due" ? 0 : state === "programme_review" ? 1 : state === "director_approval" ? 2 : state === "approved" ? 4 : state === "returned" ? 1 : 2;
   const stopped = state === "returned" || state === "rejected";
   return (

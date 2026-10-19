@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icon } from "@/components/ui/Icon";
 import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
 import { FailureBanner, LoadingNote } from "@/components/app/kit/StatePanels";
 import { useRevalidation, useRuntimeRead } from "@/components/app/kit/useRuntimeRead";
@@ -15,7 +16,7 @@ import {
 } from "@/lib/client/runtimeRegistrations";
 
 const loadBrands = () => readEligibleBrands();
-const field = "mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm";
+const field = "mt-1 w-full rounded-xl border border-border-subtle bg-white px-3 py-2.5 font-body-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
 
 export function RegistrationForm({
   kind,
@@ -74,8 +75,16 @@ export function RegistrationForm({
   }
 
   return (
-    <section className="bg-surface-card rounded-xl shadow-sm p-space-md" data-testid="reg-form">
-      <h2 className="font-title-md text-title-md text-on-surface">{kind === "brand" ? "Register a brand" : "Ask to act for a brand"}</h2>
+    <div className="rounded-2xl border border-border-subtle bg-white p-space-md shadow-sm" data-testid="reg-form">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon name={kind === "brand" ? "sell" : "handshake"} size={18} /></span>
+        <div role="heading" aria-level={2} className="font-title-md font-semibold text-on-surface">{kind === "brand" ? "Register a brand" : "Ask to act for a brand"}</div>
+      </div>
+      <p className="mt-1 text-sm text-on-surface-variant">
+        {kind === "brand"
+          ? "Give the brand name exactly as it should appear on the register. A draft can be edited until you submit it."
+          : "Choose the brand you want to act for and the period of the authorisation. The brand owner stays responsible for the brand."}
+      </p>
       {kind === "agency" && brands === null ? <LoadingNote text="Loading brands…" testId="reg-brands-loading" /> : null}
       {kind === "agency" && brands && !brands.ok ? <FailureBanner failure={brands.failure} testId="reg-brands-error" signInReturnTo={signInReturnTo} /> : null}
       {kind === "agency" && brands && brands.ok && brands.brands.items.length === 0 ? (
@@ -94,14 +103,14 @@ export function RegistrationForm({
         signInReturnTo={signInReturnTo}
       >
         {kind === "brand" ? (
-          <label className="block font-label-sm text-label-sm text-on-surface-variant">
+          <label className="block text-sm font-semibold text-on-surface">
             Brand name
             <input value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={120} className={field} data-testid="reg-brand-name" />
-            <span className="block mt-1" data-testid="reg-brand-rule">{BRAND_NAME_RULE}</span>
+            <span className="mt-1 block text-xs font-normal text-on-surface-variant" data-testid="reg-brand-rule">{BRAND_NAME_RULE}</span>
           </label>
         ) : (
           <>
-            <label className="block font-label-sm text-label-sm text-on-surface-variant">
+            <label className="block text-sm font-semibold text-on-surface">
               Brand
               <select value={brandId} onChange={(e) => setBrandId(e.target.value)} className={field} data-testid="reg-brand-choice">
                 <option value="">Choose a brand</option>
@@ -112,11 +121,11 @@ export function RegistrationForm({
                   : null}
               </select>
             </label>
-            <label className="block font-label-sm text-label-sm text-on-surface-variant">
+            <label className="block text-sm font-semibold text-on-surface">
               Starts on
               <input type="date" min={saved.validFrom && saved.validFrom < today ? saved.validFrom : today} value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className={field} data-testid="reg-valid-from" />
             </label>
-            <label className="block font-label-sm text-label-sm text-on-surface-variant">
+            <label className="block text-sm font-semibold text-on-surface">
               Ends on (optional)
               <input type="date" min={validFrom || today} value={validTo} onChange={(e) => setValidTo(e.target.value)} className={field} data-testid="reg-valid-to" />
             </label>
@@ -125,6 +134,6 @@ export function RegistrationForm({
       </CommandPanel>
       {inputError ? <p className="text-error font-body-sm mt-space-sm" data-testid="reg-form-input-error">{inputError}</p> : null}
       {dirty ? <p className="font-body-sm text-on-surface-variant mt-space-sm" data-testid="reg-dirty">Save your changes before reviewing submit.</p> : null}
-    </section>
+    </div>
   );
 }

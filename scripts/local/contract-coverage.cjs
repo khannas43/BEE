@@ -102,6 +102,9 @@ function springEvidence(p) {
   if (p.route === "/api/register-revocations" || p.route === "/api/register-revocations/{id}/decision") return mockMvc("registerRevocationDocumentedPairs");
   if (p.route === "/api/registrations/{id}/transition") return mockMvc("registrationTransitionDocumentedPairs");
   if (p.route === "/api/registrations" || p.route.startsWith("/api/registrations/")) return mockMvc("registrationOperationsDocumentedPairs");
+  if (p.route === "/api/public/manufacturer-signup") {
+    return mockMvc(p.status === 429 ? "publicManufacturerSignupRateLimitDocumentedPairs" : "publicManufacturerSignupDocumentedPairs");
+  }
   if (p.route === "/api/manufacturer-onboarding" || p.route.startsWith("/api/manufacturer-onboarding/")) {
     return mockMvc("manufacturerOnboardingOperationsDocumentedPairs");
   }

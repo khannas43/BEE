@@ -1,12 +1,41 @@
 # Current Cursor task
 
-**Holder:** released to Claude, 19 October 2026.
+## WP3-D1 — guest manufacturer signup and Director activation (this worktree)
+
+**Holder:** Cursor on `cursor/wp3-guest-director-approval` (worktree `/Users/sameerkhanna/Developer/BEE-wp3-guest-director-approval`), parallel with C3B. Do not edit Agent A C3B files (RoleContext, AppSidebar, Admin banner, login visual design). Do not restart the shared ngrok/demo stack.
+
+- Brief: **WP3-D1 guest manufacturer signup and Director-gated activation**
+- Branch: `cursor/wp3-guest-director-approval` from `cursor/c3-role-navigation` @ `cb85f18`
+- Policy: new applications stop at `director_review`; Director approval activates; V77 automatic-activation history is retained
+- Contract: **0.38.0**
+- Live demo apply: **BL-268** (coordinated window)
+
+---
+
+**Previous (C3A, other worktree):** released to Claude, 19 October 2026.
 
 - Brief: **C3A final verification correction** (contract pin + live five-role proof)
 - Branch: `cursor/c3-role-navigation` @ `522a6bb` + verification commit
 - Worktree: `/Users/sameerkhanna/Developer/BEE-c3-role-navigation`
 
-## Gates (19 October 2026)
+## WP3-D1 gates (19 October 2026)
+
+| Gate | Result |
+| --- | --- |
+| OpenAPI version | **0.38.0** |
+| `scripts/local/contract-pin.json` | SHA256 `00a11d61d07fbed0155c5d8c138417c1ede048e6be88f0371c30c9233f125fa6` |
+| `node scripts/local/contract-artifact.test.mjs` | **7/7** |
+| Default `mvn test` | **165/165** |
+| Full `@Tag("db")` suite | **597/597** (`mvn test -Dgroups=db -Dbee.test.excludedGroups=none`); WP3 class **32/32** |
+| Spring contract test | **40/40** (included in default suite) |
+| `npx tsc --noEmit` | pass |
+| `npx eslint` (changed TS files) | pass (DirectorQueue setState-in-effect fixed) |
+| `npm run web:test` | **272/272** |
+| `npm run web:test:ui` | **270/270** |
+| `npm run build` | pass |
+| `git diff --check` | pass |
+
+## Previous C3A gates (19 October 2026)
 
 | Gate | Result |
 | --- | --- |

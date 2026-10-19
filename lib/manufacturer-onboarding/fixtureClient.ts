@@ -3,6 +3,7 @@ import type { ManufacturerOnboardingClient } from "./client";
 import type {
   DirectorDecisionInput,
   DirectorRejectInput,
+  DirectorReturnInput,
   DirectorResolveInput,
   DirectorRevokeInput,
   ManufacturerApplication,
@@ -85,17 +86,17 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
       return apps().filter((a) => a.companyCode === "AARAV").map(summary);
     },
     async listDirectorQueue(): Promise<ManufacturerApplicationSummary[]> {
-      return [];
+      return apps().filter((a) => a.phase === "director_review").map(summary);
     },
     async listMonitoringQueue(): Promise<ManufacturerApplicationSummary[]> {
-      return apps().filter((a) => ["active_observation", "on_hold", "active"].includes(a.phase)).map(summary);
+      return apps().filter((a) => ["director_review", "active_observation", "on_hold", "active"].includes(a.phase)).map(summary);
     },
     async getApplication(id: string): Promise<ManufacturerApplication> {
       return structuredClone(find(id));
     },
     async uploadDocument(input: UploadDocumentInput): Promise<ManufacturerApplication> {
       const a = find(input.applicationId);
-      if (a.phase !== "draft" && a.phase !== "automatic_checks_failed") throw new Error("not_editable");
+      if (a.phase !== "draft" && a.phase !== "automatic_checks_failed" && a.phase !== "returned") throw new Error("not_editable");
       const label = DOCUMENT_KIND_LABELS[input.documentKind as ManufacturerOnboardingDocumentKind] ?? input.label;
       const doc = a.draft.annexureDocuments.find((d) => d.id === input.documentKind);
       const now = nowIso(deps);
@@ -109,7 +110,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     },
     async saveDraft(input: SaveDraftInput): Promise<ManufacturerApplication> {
       const a = find(input.id);
-      if (a.phase !== "draft" && a.phase !== "automatic_checks_failed") throw new Error("not_editable");
+      if (a.phase !== "draft" && a.phase !== "automatic_checks_failed" && a.phase !== "returned") throw new Error("not_editable");
       a.draft = structuredClone(input.draft);
       bumpVersion(a);
       if (a.phase === "automatic_checks_failed") a.phase = "draft";
@@ -125,7 +126,7 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
     async submit(input: SubmitApplicationInput): Promise<ManufacturerApplication> {
       const a = find(input.id);
       bumpVersion(a);
-      if (a.phase !== "draft" && a.phase !== "automatic_checks_failed") throw new Error("already_submitted");
+      if (a.phase !== "draft" && a.phase !== "automatic_checks_failed" && a.phase !== "returned") throw new Error("already_submitted");
       const { draft } = a;
       if (!draft.declarationAccepted || !draft.agreementAccepted) throw new Error("declaration_required");
       if (!draft.legalName.trim() || !draft.cin.trim()) throw new Error("validation_failed");
@@ -153,12 +154,11 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
           { id: "t-fail", at: now, title: "Automated checks failed", detail: "Correct the application and submit again.", icon: "error" },
         );
       } else {
-        const window = observationWindowFromApproval(now);
-        a.phase = "active_observation";
-        a.registrationNumber = `BEE/MFG/2026/AARAV-${a.reference.slice(-3)}`;
-        a.activatedAt = now;
-        a.observationStartedAt = window.observationStartedAt;
-        a.observationEndsAt = window.observationEndsAt;
+        a.phase = "director_review";
+        a.registrationNumber = null;
+        a.activatedAt = null;
+        a.observationStartedAt = null;
+        a.observationEndsAt = null;
         a.automatedChecks = [
           {
             id: "chk-docs",
@@ -176,10 +176,10 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
           },
         ];
         a.timeline.push(
-          { id: "t-sub", at: now, title: "Registration submitted", detail: "Submitted for automated processing.", icon: "send" },
+          { id: "t-sub", at: now, title: "Registration submitted", detail: "Submitted for Director review.", icon: "send" },
           { id: "t-pay", at: now, title: "Payment recorded", detail: "Simulated gateway payment captured.", icon: "payments" },
           { id: "t-chk", at: now, title: "Automated checks completed", detail: "Checks completed automatically.", icon: "rule" },
-          { id: "t-auto", at: now, title: "Automatic activation", detail: "Manufacturer activated for the 15-day observation window.", icon: "bolt" },
+          { id: "t-dirq", at: now, title: "Awaiting Director decision", detail: "Manufacturer remains inactive until Director approval.", icon: "pending_actions" },
         );
       }
       return structuredClone(a);
@@ -204,11 +204,28 @@ export function createFixtureManufacturerOnboardingClient(deps?: FixtureClientDe
       const a = find(input.id);
       bumpVersion(a);
       if (a.phase !== "director_review") throw new Error("not_awaiting_director");
-      if (!input.reason.trim()) throw new Error("reason_required");
+      if (input.reason.trim().length < 8) throw new Error("reason_required");
       a.phase = "rejected";
+      a.registrationNumber = null;
+      a.activatedAt = null;
       a.directorDecisionAt = nowIso(deps);
       a.directorDecisionNote = input.reason;
       a.timeline.push({ id: "t-rej", at: a.directorDecisionAt, title: "Registration rejected", detail: input.reason, icon: "cancel" });
+      return structuredClone(a);
+    },
+    async directorReturn(input: DirectorReturnInput): Promise<ManufacturerApplication> {
+      const a = find(input.id);
+      bumpVersion(a);
+      if (a.phase !== "director_review") throw new Error("not_awaiting_director");
+      if (input.reason.trim().length < 8) throw new Error("reason_required");
+      a.phase = "returned";
+      a.directorDecisionAt = nowIso(deps);
+      a.directorDecisionNote = input.reason;
+      a.registrationNumber = null;
+      a.activatedAt = null;
+      a.observationStartedAt = null;
+      a.observationEndsAt = null;
+      a.timeline.push({ id: "t-ret", at: a.directorDecisionAt, title: "Returned to applicant", detail: input.reason, icon: "undo" });
       return structuredClone(a);
     },
     async raiseAnomaly(input: RaiseAnomalyInput): Promise<ManufacturerApplication> {

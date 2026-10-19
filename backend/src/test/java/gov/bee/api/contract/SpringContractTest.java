@@ -203,6 +203,9 @@ class SpringContractTest {
     @org.springframework.beans.factory.annotation.Autowired
     gov.bee.api.verification.PublicRateLimiter publicRateLimiter;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    gov.bee.api.manufactureronboarding.ManufacturerSignupRateLimiter manufacturerSignupRateLimiter;
+
     @MockitoBean
     gov.bee.api.ratingschemes.RatingSchemeRepository schemesRepo;
 
@@ -2220,6 +2223,51 @@ class SpringContractTest {
     }
 
     @Test
+    void publicManufacturerSignupRateLimitDocumentedPairs() throws Exception {
+        String route = "/api/public/manufacturer-signup";
+        java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(8_000_000);
+        manufacturerSignupRateLimiter.resetForTest(1, clock::get);
+        try {
+            when(manufacturerOnboardingRepo.orchestratePublicSignup(any(), any(), any(), any(), any(), any()))
+                .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.SignupResult(
+                    "validation_failed", null, null, null, null)));
+            conforms(route, post(route).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+            var limited = conforms(route, post(route).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 429, "rate_limited");
+            assertEquals("60", limited.getHeader("Retry-After"));
+        } finally {
+            manufacturerSignupRateLimiter.resetForTest(30, System::currentTimeMillis);
+        }
+    }
+
+    @Test
+    void publicManufacturerSignupDocumentedPairs() throws Exception {
+        String route = "/api/public/manufacturer-signup";
+        UUID account = UUID.fromString("00000000-0000-4000-a000-000000000081");
+        UUID org = UUID.fromString("00000000-0000-4000-b000-000000000081");
+        UUID app = UUID.fromString("00000000-0000-4000-f000-000000000081");
+        String body = "{\"fullName\":\"Guest Applicant\",\"email\":\"guest.signup@example.invalid\",\"mobile\":\"9876501234\",\"keycloakSubject\":\"00000000-0000-4000-a000-000000000082\"}";
+        when(manufacturerOnboardingRepo.orchestratePublicSignup(any(), any(), any(), any(), any(), any()))
+            .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.SignupResult(
+                "created", account, org, app, "guest.signup@example.invalid")));
+        var created = conforms(route, post(route).header("Idempotency-Key", IDEM).contentType("application/json").content(body), 201, null);
+        assertTrue(created.getContentAsString().contains("\"verification\":\"simulated\""));
+        when(manufacturerOnboardingRepo.orchestratePublicSignup(any(), any(), any(), any(), any(), any()))
+            .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.SignupResult(
+                "registration_not_available", null, null, null, null)));
+        conforms(route, post(route).header("Idempotency-Key", "0123456789abcdef0123481").contentType("application/json").content(body), 409, "registration_not_available");
+        when(manufacturerOnboardingRepo.orchestratePublicSignup(any(), any(), any(), any(), any(), any()))
+            .thenReturn(Optional.of(new gov.bee.api.manufactureronboarding.ManufacturerOnboardingRepository.SignupResult(
+                "idempotency_key_conflict", null, null, null, null)));
+        conforms(route, post(route).header("Idempotency-Key", "0123456789abcdef0123482").contentType("application/json").content(body), 409, "idempotency_key_conflict");
+        conforms(route, post(route).contentType("application/json").content(body), 422, "idempotency_key_required");
+        conforms(route, post(route).header("Idempotency-Key", IDEM).contentType("application/json").content("{}"), 422, "validation_failed");
+        when(manufacturerOnboardingRepo.orchestratePublicSignup(any(), any(), any(), any(), any(), any()))
+            .thenThrow(new DataAccessResourceFailureException("down"));
+        conforms(route, post(route).header("Idempotency-Key", "0123456789abcdef0123483").contentType("application/json").content(body), 503, "service_unavailable");
+        assertEquals(401, mvc.perform(get(route)).andReturn().getResponse().getStatus());
+    }
+
+    @Test
     void feeReversalOperationsDocumentedPairs() throws Exception {
         String list = "/api/fee-corrections";
         String propose = "/api/fee-corrections/reversals";
@@ -3050,12 +3098,12 @@ class SpringContractTest {
 
         // Reads.
         fresh.get();
-        when(registrationRepo.list(any(), any())).thenReturn(List.of(draft));
+        when(registrationRepo.list(any(), any(), anyBoolean())).thenReturn(List.of(draft));
         when(registrationRepo.feeSnapshot(REG)).thenReturn(Optional.empty());
         conforms(LIST, get(LIST).with(token("manufacturer")), 200, null);
-        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).list(any(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(registrationRepo).list(any(), any(), anyBoolean());
         conforms(LIST, get(LIST).with(token("manufacturer")), 503, "service_unavailable");
-        doThrow(new IllegalStateException("boom")).when(registrationRepo).list(any(), any());
+        doThrow(new IllegalStateException("boom")).when(registrationRepo).list(any(), any(), anyBoolean());
         conforms(LIST, get(LIST).with(token("manufacturer")), 500, "internal_error");
         fresh.get();
         account("agency", "own-org");
@@ -3276,7 +3324,7 @@ class SpringContractTest {
             when(idempotency.find(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
             when(idempotency.begin(any(), any(), any(), any(), any(), any())).thenReturn(true);
             when(masters.feeRule(eq("REG"), eq("manufacturer_onboarding"), any())).thenReturn(Optional.of(mobFee));
-            when(manufacturerOnboardingRepo.list(any(), any())).thenReturn(List.of(draft));
+            when(manufacturerOnboardingRepo.list(any(), any(), anyBoolean())).thenReturn(List.of(draft));
             when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(draft));
             when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.of(draft));
             when(manufacturerOnboardingRepo.hasTradeLicenceDocument(MOB)).thenReturn(true);
@@ -3295,7 +3343,7 @@ class SpringContractTest {
         List<Op> ops = List.of(
             new Op(LIST, rp -> get(LIST).with(rp), "no_read_scope"),
             new Op(ONE, rp -> get(base).with(rp), "no_read_scope"),
-            new Op(ONE + "/submit", rp -> get(base + "/submit").with(rp), "no_write_scope"),
+            new Op(ONE + "/submit", rp -> get(base + "/submit").with(rp), "no_read_scope"),
             new Op(LIST, rp -> post(LIST).with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(createBody), "no_read_scope"),
             new Op(ONE, rp -> patch(base).with(rp).contentType("application/json").content(patchBody), "no_read_scope"),
             new Op(ONE + "/submit", rp -> post(base + "/submit").with(rp).header("Idempotency-Key", IDEM).contentType("application/json").content(submitBody), "no_write_scope"),
@@ -3322,7 +3370,7 @@ class SpringContractTest {
         account("manufacturer", "own-org");
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(ONBOARD));
         conforms(LIST, get(LIST).with(token("manufacturer")), 200, null);
-        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).list(any(), any());
+        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).list(any(), any(), anyBoolean());
         conforms(LIST, get(LIST).with(token("manufacturer")), 503, "service_unavailable");
         fresh.get();
         account("manufacturer", "own-org");
@@ -3362,11 +3410,11 @@ class SpringContractTest {
         when(masters.feeRule(eq("REG"), eq("manufacturer_onboarding"), any())).thenReturn(Optional.empty());
         conforms(ONE + "/submit", get(base + "/submit").with(token("manufacturer")), 422, "rule_not_available");
         when(masters.feeRule(eq("REG"), eq("manufacturer_onboarding"), any())).thenReturn(Optional.of(mobFee));
-        when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.empty());
+        when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.empty());
         conforms(ONE + "/submit", get(base + "/submit").with(token("manufacturer")), 404, "not_found");
-        when(manufacturerOnboardingRepo.findOwned(MOB, ONBOARD)).thenReturn(Optional.of(feeDueRow(draft)));
+        when(manufacturerOnboardingRepo.find(MOB)).thenReturn(Optional.of(feeDueRow(draft)));
         conforms(ONE + "/submit", get(base + "/submit").with(token("manufacturer")), 403, "not_submittable");
-        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).findOwned(MOB, ONBOARD);
+        doThrow(new DataAccessResourceFailureException("down")).when(manufacturerOnboardingRepo).find(MOB);
         conforms(ONE + "/submit", get(base + "/submit").with(token("manufacturer")), 503, "service_unavailable");
         fresh.get();
         account("manufacturer", "own-org");

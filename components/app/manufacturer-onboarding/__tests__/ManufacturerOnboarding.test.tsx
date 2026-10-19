@@ -108,8 +108,13 @@ describe("manufacturer onboarding UI", () => {
   });
 
   it("guest registration shows simulated OTP steps and opens the application", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
-      status: 200,
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      applicationId: "00000000-0000-4000-d000-000000000099",
+      returnTo: "/app/manufacturer/onboarding",
+      verification: "simulated",
+    }), {
+      status: 201,
       headers: { "Content-Type": "application/json" },
     }));
     vi.stubGlobal("fetch", fetchMock);
@@ -127,7 +132,14 @@ describe("manufacturer onboarding UI", () => {
     fireEvent.click(screen.getByTestId("create-demo-applicant"));
 
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/app/manufacturer/onboarding"));
-    expect(fetchMock).toHaveBeenCalledWith("/api/runtime/demo/login", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenCalledWith("/api/runtime/public/manufacturer-signup", expect.objectContaining({ method: "POST" }));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({
+      fullName: "Aarav Applicant",
+      email: "aarav@example.test",
+      mobile: "9876543210",
+      password: "Secure123",
+    });
   });
 
   it("wizard, lifecycle and 360 show the same ₹5,000 fee from the payment record", async () => {
@@ -187,19 +199,23 @@ describe("manufacturer onboarding UI", () => {
     expect(screen.getByTestId("checks-failed-wizard-link")).toBeTruthy();
   });
 
-  it("Director screen explains automatic activation and links to monitoring", async () => {
+  it("Director screen lists pending manufacturer registrations and can approve", async () => {
     render(wrap(<DirectorQueue />, "director"));
-    expect(await screen.findByTestId("director-automatic-activation-note")).toBeTruthy();
-    expect(screen.getByTestId("director-open-monitoring").getAttribute("href")).toBe("/app/manufacturer/monitoring");
-    expect(screen.queryByTestId("director-approve")).toBeNull();
+    expect(await screen.findByTestId("director-pending-queue")).toBeTruthy();
+    expect(await screen.findByTestId("director-item-MFG-ONB-2026-0102")).toBeTruthy();
+    await screen.findByTestId("director-approve");
+    fireEvent.change(screen.getByTestId("director-decision-note"), { target: { value: "Activate this manufacturer" } });
+    fireEvent.click(screen.getByTestId("director-approve"));
+    await waitFor(() => expect(screen.getByTestId("director-decision-status").textContent).toMatch(/observation/i));
   });
 
-  it("Director oversight screen has no pre-approval actions", async () => {
+  it("Director oversight screen exposes approve, return and reject", async () => {
     previewRole.role = "director";
     render(wrap(<DirectorQueue />, "manufacturer"));
-    await screen.findByTestId("director-automatic-activation-note");
-    expect(screen.queryByTestId("director-approve")).toBeNull();
-    expect(screen.queryByTestId("director-reject-open")).toBeNull();
+    await screen.findByTestId("director-pending-queue");
+    expect(await screen.findByTestId("director-approve")).toBeTruthy();
+    expect(screen.getByTestId("director-return")).toBeTruthy();
+    expect(screen.getByTestId("director-reject-open")).toBeTruthy();
   });
 
   it("signed-in roles for route access", () => {
@@ -269,12 +285,13 @@ describe("manufacturer onboarding UI", () => {
     expect(screen.getByTestId("onboarding-sign-in-required")).toBeTruthy();
   });
 
-  it("successful submit automatically activates under observation", async () => {
+  it("successful submit waits for Director decision and does not activate", async () => {
     const client = createFixtureManufacturerOnboardingClient();
     const app = await client.getApplication(FIXTURE_APPLICATION_IDS.director);
-    expect(app.phase).toBe("active_observation");
-    expect(app.registrationNumber).toBeTruthy();
-    expect(app.observationEndsAt).toBeTruthy();
+    expect(app.phase).toBe("director_review");
+    expect(app.registrationNumber).toBeNull();
+    expect(app.observationEndsAt).toBeNull();
+    expect(app.payment.verifiedAt).toBeTruthy();
   });
 
   it("default client path is HTTP; fixture requires explicit flag", () => {
@@ -286,9 +303,10 @@ describe("manufacturer onboarding UI", () => {
     expect(MANUFACTURER_ONBOARDING_BFF.list).toBe("/api/runtime/manufacturer-onboarding");
   });
 
-  it("does not display an awaiting-Director approval state", async () => {
+  it("displays awaiting-Director decision on the pending queue", async () => {
     render(wrap(<DirectorQueue />, "director"));
-    await screen.findByTestId("director-automatic-activation-note");
-    expect(screen.queryByText(/Awaiting Director decision/i)).toBeNull();
+    await screen.findByTestId("director-pending-queue");
+    await screen.findByTestId("director-approve");
+    expect(screen.getAllByText(/Awaiting Director decision/i).length).toBeGreaterThan(0);
   });
 });

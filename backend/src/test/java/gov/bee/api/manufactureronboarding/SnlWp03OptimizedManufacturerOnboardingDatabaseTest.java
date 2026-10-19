@@ -2,6 +2,7 @@ package gov.bee.api.manufactureronboarding;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gov.bee.api.application.DraftRequestSupport;
@@ -87,9 +88,9 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         docRepo = new ManufacturerOnboardingDocumentRepository(db);
         json = new ObjectMapper();
         service = new ManufacturerOnboardingService(repo, docRepo, new MasterDataRepository(db), new IdempotencyRepository(db), json);
-        assertEquals(77, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(78, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
         assertEquals(1, owner.queryForObject(
-            "SELECT count(*) FROM flyway_schema_history WHERE success AND version = '77'", Integer.class));
+            "SELECT count(*) FROM flyway_schema_history WHERE success AND version = '78'", Integer.class));
         assertEquals("none", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
         assertEquals("active", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, NOVA_ORG));
     }
@@ -117,6 +118,8 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
             "manufacturer_onboarding_orchestrate_raise_anomaly",
             "manufacturer_onboarding_orchestrate_resolve_anomaly",
             "manufacturer_onboarding_orchestrate_observation_close",
+            "manufacturer_onboarding_orchestrate_public_signup",
+            "manufacturer_onboarding_maint_cleanup_public_signup",
             "manufacturer_onboarding_maint_observation_close_as_of",
             "manufacturer_onboarding_maint_close_expired_observations",
             "manufacturer_onboarding_system_close_expired_observations");
@@ -238,14 +241,19 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         var preview = service.submitPreview(onboardApplicant(), id2);
         assertEquals("5000.00", ((Map<?, ?>) preview.getBody().get("expectedFee")).get("amountInr"));
         var submitted = service.submit(onboardApplicant(), id2, submitKey, body);
-        assertEquals("active_observation", submitted.getBody().get("state"));
+        assertEquals("director_review", submitted.getBody().get("state"));
         assertNotNull(submitted.getBody().get("paymentId"));
-        assertNotNull(submitted.getBody().get("permitteeNumber"));
+        assertNull(submitted.getBody().get("permitteeNumber"));
+        assertEquals("pending", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
+        int directorVersion = (int) submitted.getBody().get("version");
+        var approved = service.directorDecision(director(), id2, nextIdempotencyKey(),
+            json.createObjectNode().put("version", directorVersion).put("decision", "approve").put("note", "Activate for observation"));
+        assertEquals("active_observation", approved.getBody().get("state"));
+        assertNotNull(approved.getBody().get("permitteeNumber"));
         var replay = service.submit(onboardApplicant(), id2, submitKey, body);
         assertEquals(submitted.getBody().get("state"), replay.getBody().get("state"));
         assertEquals(1, owner.queryForObject("SELECT count(*) FROM manufacturer_onboarding_payment_link WHERE application_id = ?", Integer.class, id2));
 
-        int v = (int) submitted.getBody().get("version");
         assertEquals("active", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
         LocalDate obsEnd = LocalDate.now(IST);
         owner.update("UPDATE manufacturer_onboarding_application SET observation_ends_on = ? WHERE id = ?", obsEnd, id2);
@@ -256,10 +264,8 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id2);
         owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
 
-        UUID id4 = draftApp();
-        var sub3 = service.submit(onboardApplicant(), id4, nextIdempotencyKey(),
-            json.createObjectNode().put("version", readyToSubmit(id4)));
-        v = (int) sub3.getBody().get("version");
+        UUID id4 = approvedForObservation();
+        int v = repo.find(id4).orElseThrow().version();
         var raised = service.raiseAnomaly(finance(), id4, nextIdempotencyKey(),
             json.createObjectNode().put("version", v).put("reason", "Ledger mismatch probe"));
         assertEquals("on_hold", raised.getBody().get("state"));
@@ -270,10 +276,7 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id4);
         owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
 
-        UUID id5 = draftApp();
-        sub3 = service.submit(onboardApplicant(), id5, nextIdempotencyKey(),
-            json.createObjectNode().put("version", readyToSubmit(id5)));
-        v = (int) sub3.getBody().get("version");
+        UUID id5 = approvedForObservation();
         LocalDate pastEnd = LocalDate.now(IST).minusDays(1);
         owner.update("UPDATE manufacturer_onboarding_application SET observation_ends_on = ? WHERE id = ?", pastEnd, id5);
         owner.update("UPDATE manufacturer_onboarding_observation SET started_on = ?, ends_on = ? WHERE application_id = ?",
@@ -289,10 +292,8 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id5);
         owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
 
-        UUID id6 = draftApp();
-        sub3 = service.submit(onboardApplicant(), id6, nextIdempotencyKey(),
-            json.createObjectNode().put("version", readyToSubmit(id6)));
-        v = (int) sub3.getBody().get("version");
+        UUID id6 = approvedForObservation();
+        v = repo.find(id6).orElseThrow().version();
         service.raiseAnomaly(finance(), id6, nextIdempotencyKey(),
             json.createObjectNode().put("version", v).put("reason", "Revocation probe"));
         v = repo.find(id6).orElseThrow().version();
@@ -386,10 +387,8 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
 
     @Test
     void repeatedAnomalyEpisodesSeparateIdempotencyKeys() {
-        UUID id = draftApp();
-        var sub = service.submit(onboardApplicant(), id, nextIdempotencyKey(),
-            json.createObjectNode().put("version", readyToSubmit(id)));
-        int v = (int) sub.getBody().get("version");
+        UUID id = approvedForObservation();
+        int v = repo.find(id).orElseThrow().version();
         String key1 = nextIdempotencyKey();
         service.raiseAnomaly(finance(), id, key1, json.createObjectNode().put("version", v).put("reason", "First episode"));
         v = repo.find(id).orElseThrow().version();
@@ -414,6 +413,7 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
             "manufacturer_onboarding_orchestrate_director_decision",
             "manufacturer_onboarding_orchestrate_raise_anomaly",
             "manufacturer_onboarding_orchestrate_resolve_anomaly",
+            "manufacturer_onboarding_orchestrate_public_signup",
             "manufacturer_onboarding_system_close_expired_observations");
         var granted = new java.util.HashSet<>(owner.queryForList("""
             SELECT p.proname FROM pg_proc p
@@ -427,6 +427,7 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
                  'manufacturer_onboarding_orchestrate_director_decision',
                  'manufacturer_onboarding_orchestrate_raise_anomaly',
                  'manufacturer_onboarding_orchestrate_resolve_anomaly',
+                 'manufacturer_onboarding_orchestrate_public_signup',
                  'manufacturer_onboarding_orchestrate_observation_close',
                  'manufacturer_onboarding_system_close_expired_observations')
                AND has_function_privilege('bee_runtime', p.oid, 'EXECUTE')
@@ -449,8 +450,10 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
     UUID approvedForObservation() {
         UUID id = draftApp();
         int v = readyToSubmit(id);
-        String submitKey = nextIdempotencyKey();
-        service.submit(onboardApplicant(), id, submitKey, json.createObjectNode().put("version", v));
+        var submitted = service.submit(onboardApplicant(), id, nextIdempotencyKey(), json.createObjectNode().put("version", v));
+        v = (int) submitted.getBody().get("version");
+        service.directorDecision(director(), id, nextIdempotencyKey(),
+            json.createObjectNode().put("version", v).put("decision", "approve").put("note", "Activate for observation"));
         return id;
     }
 
@@ -471,15 +474,18 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         String key = "0123456789abcdef012345a01";
         var body = json.createObjectNode().put("version", v);
         var first = service.submit(onboardApplicant(), id, key, body);
-        assertEquals("active_observation", first.getBody().get("state"));
+        assertEquals("director_review", first.getBody().get("state"));
         UUID paymentId = UUID.fromString((String) first.getBody().get("paymentId"));
         int firstVersion = (int) first.getBody().get("version");
+        service.directorDecision(director(), id, nextIdempotencyKey(),
+            json.createObjectNode().put("version", firstVersion).put("decision", "approve").put("note", "Activate after submit replay"));
+        int afterApprove = repo.find(id).orElseThrow().version();
         service.raiseAnomaly(finance(), id, nextIdempotencyKey(),
-            json.createObjectNode().put("version", firstVersion).put("reason", "Move lifecycle after submit"));
+            json.createObjectNode().put("version", afterApprove).put("reason", "Move lifecycle after submit"));
         assertEquals("on_hold", repo.find(id).orElseThrow().state());
         var replay = service.submit(onboardApplicant(), id, key, body);
         assertEquals(200, replay.getStatusCode().value());
-        assertEquals("active_observation", replay.getBody().get("state"));
+        assertEquals("director_review", replay.getBody().get("state"));
         assertEquals(firstVersion, replay.getBody().get("version"));
         assertEquals(paymentId.toString(), replay.getBody().get("paymentId"));
         owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id);
@@ -500,15 +506,26 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
     }
 
     @Test
-    void directorDecisionIsNoLongerRequiredAfterAutomaticActivation() {
+    void directorApprovalActivatesAndFinanceCannotDecide() {
         UUID id = draftApp();
         int v = readyToSubmit(id);
-        service.submit(onboardApplicant(), id, nextIdempotencyKey(), json.createObjectNode().put("version", v));
-        v = repo.find(id).orElseThrow().version();
-        var obsolete = service.directorDecision(director(), id, "0123456789abcdef012345a03",
-            json.createObjectNode().put("version", v).put("decision", "approve").put("note", "No longer required"));
-        assertEquals(404, obsolete.getStatusCode().value());
-        assertEquals("active_observation", repo.find(id).orElseThrow().state());
+        var submitted = service.submit(onboardApplicant(), id, nextIdempotencyKey(), json.createObjectNode().put("version", v));
+        v = (int) submitted.getBody().get("version");
+        assertEquals("director_review", submitted.getBody().get("state"));
+        assertEquals("none", owner.queryForObject(
+            "SELECT CASE WHEN permittee_number IS NULL THEN 'none' ELSE permittee_number END FROM manufacturer_onboarding_application WHERE id = ?",
+            String.class, id));
+        var financeDenied = service.directorDecision(finance(), id, "0123456789abcdef012345a03",
+            json.createObjectNode().put("version", v).put("decision", "approve").put("note", "Finance must not activate"));
+        assertEquals(403, financeDenied.getStatusCode().value());
+        var adminDenied = service.directorDecision(adminDemonstration(), id, nextIdempotencyKey(),
+            json.createObjectNode().put("version", v).put("decision", "approve").put("note", "Admin must not activate"));
+        assertEquals(403, adminDenied.getStatusCode().value());
+        var approved = service.directorDecision(director(), id, nextIdempotencyKey(),
+            json.createObjectNode().put("version", v).put("decision", "approve").put("note", "Director activates"));
+        assertEquals("active_observation", approved.getBody().get("state"));
+        assertNotNull(approved.getBody().get("permitteeNumber"));
+        assertEquals("active", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
         owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id);
         owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
     }
@@ -741,6 +758,89 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         var conflict = service.submit(onboardApplicant(), id, key, json.createObjectNode().put("version", v + 1));
         assertEquals(409, conflict.getStatusCode().value());
         assertEquals(evidence, owner.queryForObject("SELECT count(*) FROM manufacturer_onboarding_command_evidence WHERE application_id = ?", Integer.class, id));
+        owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id);
+        owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
+    }
+
+    @Test
+    void guestSignupCreatesOwnDraftAndCleanupRemovesIt() {
+        String email = "wp3d1+" + nextIdempotencyKey().substring(0, 12) + "@example.invalid";
+        String mobile = "9" + nextIdempotencyKey().replaceAll("[^0-9]", "1").substring(0, 9);
+        String key = "0123456789abcdef012345s01";
+        String subject = UUID.randomUUID().toString();
+        var payload = json.createObjectNode()
+            .put("fullName", "Guest Applicant")
+            .put("email", email)
+            .put("mobile", mobile)
+            .put("keycloakSubject", subject);
+        var created = service.publicSignup(key, payload);
+        assertEquals(201, created.getStatusCode().value());
+        assertEquals("simulated", created.getBody().get("verification"));
+        assertEquals(true, created.getBody().get("emailVerifiedSimulated"));
+        assertEquals(true, created.getBody().get("mobileVerifiedSimulated"));
+        UUID accountId = UUID.fromString((String) created.getBody().get("accountId"));
+        UUID orgId = UUID.fromString((String) created.getBody().get("organisationId"));
+        UUID appId = UUID.fromString((String) created.getBody().get("applicationId"));
+        assertEquals(email, created.getBody().get("username"));
+        assertEquals("draft", repo.find(appId).orElseThrow().state());
+        assertEquals("none", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, orgId));
+        var same = service.publicSignup(key, payload.deepCopy());
+        assertEquals(201, same.getStatusCode().value());
+        assertEquals(appId.toString(), same.getBody().get("applicationId"));
+        var conflict = service.publicSignup(key, json.createObjectNode()
+            .put("fullName", "Changed Name").put("email", email).put("mobile", mobile).put("keycloakSubject", subject));
+        assertEquals(409, conflict.getStatusCode().value());
+        assertEquals("idempotency_key_conflict", conflict.getBody().get("error"));
+        var duplicate = service.publicSignup(nextIdempotencyKey(), json.createObjectNode()
+            .put("fullName", "Other Person").put("email", email).put("mobile", "8" + mobile.substring(1)));
+        assertEquals(409, duplicate.getStatusCode().value());
+        assertEquals("registration_not_available", duplicate.getBody().get("error"));
+        assertEquals(1, maint.queryForObject("SELECT manufacturer_onboarding_maint_cleanup_public_signup(?)", Integer.class, accountId));
+        assertEquals(0, owner.queryForObject("SELECT count(*) FROM user_account WHERE id = ?", Integer.class, accountId));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM user_account WHERE username = 'onboarding.applicant'", Integer.class));
+    }
+
+    @Test
+    void directorRejectAndReturnLeaveManufacturerInactive() {
+        UUID id = draftApp();
+        int v = readyToSubmit(id);
+        var submitted = service.submit(onboardApplicant(), id, nextIdempotencyKey(), json.createObjectNode().put("version", v));
+        v = (int) submitted.getBody().get("version");
+        var returned = service.directorDecision(director(), id, nextIdempotencyKey(),
+            json.createObjectNode().put("version", v).put("decision", "return").put("note", "Add the factory licence page"));
+        assertEquals("returned", returned.getBody().get("state"));
+        assertEquals("none", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
+        v = repo.find(id).orElseThrow().version();
+        applyCompleteDraft(id, v);
+        v = repo.find(id).orElseThrow().version();
+        var resubmitted = service.submit(onboardApplicant(), id, nextIdempotencyKey(), json.createObjectNode().put("version", v));
+        assertEquals("director_review", resubmitted.getBody().get("state"));
+        assertEquals(1, owner.queryForObject("SELECT count(*) FROM manufacturer_onboarding_payment_link WHERE application_id = ?", Integer.class, id));
+        v = (int) resubmitted.getBody().get("version");
+        var rejected = service.directorDecision(director(), id, nextIdempotencyKey(),
+            json.createObjectNode().put("version", v).put("decision", "reject").put("note", "Material discrepancy in Annexure"));
+        assertEquals("rejected", rejected.getBody().get("state"));
+        assertNull(repo.find(id).orElseThrow().permitteeNumber());
+        assertEquals("none", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
+        owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id);
+    }
+
+    @Test
+    void historicalAutomaticActivationEventsAreNotRewritten() {
+        UUID id = draftApp();
+        owner.update("""
+            INSERT INTO manufacturer_onboarding_event (application_id, event_kind, from_state, to_state, actor_account_id, actor_role, detail)
+            VALUES (?, 'automatic_activation', 'submitted', 'active_observation', ?, 'manufacturer', 'Historic V77 automatic activation')
+            """, id, ONBOARD_USER);
+        int historic = owner.queryForObject(
+            "SELECT count(*) FROM manufacturer_onboarding_event WHERE application_id = ? AND event_kind = 'automatic_activation'",
+            Integer.class, id);
+        int v = readyToSubmit(id);
+        service.submit(onboardApplicant(), id, nextIdempotencyKey(), json.createObjectNode().put("version", v));
+        assertEquals(historic, owner.queryForObject(
+            "SELECT count(*) FROM manufacturer_onboarding_event WHERE application_id = ? AND event_kind = 'automatic_activation' AND detail = 'Historic V77 automatic activation'",
+            Integer.class, id));
+        assertEquals("director_review", repo.find(id).orElseThrow().state());
         owner.update("UPDATE manufacturer_onboarding_application SET state = 'revoked' WHERE id = ?", id);
         owner.update("UPDATE organisation SET permittee_lifecycle = 'none' WHERE id = ?", ONBOARD_ORG);
     }

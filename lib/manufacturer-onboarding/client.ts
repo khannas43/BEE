@@ -7,6 +7,7 @@ export type {
   SubmitApplicationInput,
   DirectorDecisionInput,
   DirectorRejectInput,
+  DirectorReturnInput,
   RaiseAnomalyInput,
   DirectorResolveInput,
   DirectorRevokeInput,
@@ -17,6 +18,7 @@ import type { FetchLike } from "@/lib/client/runtimeHttp";
 import type {
   DirectorDecisionInput,
   DirectorRejectInput,
+  DirectorReturnInput,
   DirectorResolveInput,
   DirectorRevokeInput,
   ManufacturerApplication,
@@ -40,6 +42,7 @@ export interface ManufacturerOnboardingClient {
   submit(input: SubmitApplicationInput): Promise<ManufacturerApplication>;
   directorApprove(input: DirectorDecisionInput): Promise<ManufacturerApplication>;
   directorReject(input: DirectorRejectInput): Promise<ManufacturerApplication>;
+  directorReturn(input: DirectorReturnInput): Promise<ManufacturerApplication>;
   raiseAnomaly(input: RaiseAnomalyInput): Promise<ManufacturerApplication>;
   directorResolve(input: DirectorResolveInput): Promise<ManufacturerApplication>;
   directorRevoke(input: DirectorRevokeInput): Promise<ManufacturerApplication>;

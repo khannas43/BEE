@@ -23,7 +23,7 @@ Update this table when work starts, reaches a gate, becomes blocked or is accept
 |---|---|---|---:|---|---|---|
 | WP1 | Policy baseline and traceability | Complete | 100% | None | R0 | [SNL_WP01_BASELINE.md](SNL_WP01_BASELINE.md); accepted 18 Oct 2026; BL-252 deferred to WP3 |
 | WP2 | Common workflow tasks and SLA | In progress — Brief 19C-B1 review pending | 68% | WP1 | R1 | V69–V74; 19C-0 and 19D-0 accepted; V73+19C-A at `ae63275`; 19C-B service wiring review pending |
-| WP3 | Entity brand and category registration | In progress — **optimized manufacturer onboarding accepted with automatic activation** (Brief C2/V77); brand/category and production integrations remain | 78% | WP2, WP5 foundation | R2 | [SNL_WP03_OPTIMIZED_MANUFACTURER_ONBOARDING.md](SNL_WP03_OPTIMIZED_MANUFACTURER_ONBOARDING.md); BL-252, BL-254, BL-261–BL-264 open |
+| WP3 | Entity brand and category registration | In progress — **optimized manufacturer onboarding: guest signup + Director-gated activation** (Brief WP3-D1/V78; C2/V77 automatic activation superseded for new registrations only); brand/category and production integrations remain | 82% | WP2, WP5 foundation | R2 | [SNL_WP03_OPTIMIZED_MANUFACTURER_ONBOARDING.md](SNL_WP03_OPTIMIZED_MANUFACTURER_ONBOARDING.md); BL-252, BL-254, BL-261–BL-264, BL-268 open |
 | WP4 | Simplified model registration | Not started | 0% | WP2, WP3, WP5 foundation | R3 | Pending |
 | WP5 | Payment and financial controls | Not started | 0% | WP1 | R2–R5 | Pending |
 | WP6 | QR requisition and serial register | Not started | 0% | WP4, WP5 | R4 | Pending |
@@ -343,8 +343,8 @@ At the end of each development session, update the package status, progress, com
 
 | Tracking field | Current value |
 |---|---|
-| Status | **Optimized manufacturer onboarding automatic-activation slice accepted** (Brief C2, 18 Oct 2026): V77 changes successful submit directly to active observation, removes Director pre-approval UI, limits the expedited anomaly route to 15 days and schedules clean-window completion; full entity/brand/category WP3 scope remains open (BL-252, BL-254, BL-261–264) |
-| Progress | 78% (wizard + V75/V76 trusted boundary + V77 automatic activation/observation scheduler; guest account creation, category deposit and production integrations remain) |
+| Status | **Optimized manufacturer onboarding WP3-D1** (19 Oct 2026): V78 public guest signup and Director-gated activation for **new** applications; C2/V77 automatic activation is superseded for new registrations and retained as historic evidence. Full entity/brand/category WP3 scope remains open (BL-252, BL-254, BL-261–264, BL-268) |
+| Progress | 82% (wizard + V75/V76 trusted boundary + V77 historic automatic activation/scheduler + V78 guest signup and Director activation; category deposit and production integrations remain) |
 | Target release | R2 |
 | Depends on | WP2 and WP5 payment foundation |
 | Manual references | Sections 3.1.1, 3.1.2, 3.4, 3.10, 4.1 and 4.2; Annexures 1 and 2 |
@@ -385,7 +385,8 @@ At the end of each development session, update the package status, progress, com
 | Demo integration merge | `ce3b46a` — WP3 UI (`aeafc7c`) + demo/ngrok rehearsal (`098b05c`); runtime grant fix in `ensure-runtime-role.sh` |
 | C1 live smoke | **Pass** — `scripts/demo/c1-manufacturer-onboarding-journey.cjs` **25/25** (post-V76 API restart); evidence `.local/run/c1-journey-evidence.json`; ngrok `https://nicola-habited-barb.ngrok-free.dev` (eight routes, no localhost redirect) |
 | Backend tests | **18 Oct 2026 C1B:** `mvn test -Dgroups=db -Dbee.test.excludedGroups=none` **590 run, 0 failures, 0 errors**; default `mvn test` **161/161** with `BEE_MFA_REQUIRED=true` (presentation env uses `BEE_MFA_REQUIRED=false`, which breaks contract MFA pairs unless overridden for the gate); `SpringContractTest` **38/38**; `SnlWp03OptimizedManufacturerOnboardingDatabaseTest` **27/27** (includes V76 search_path proof) |
-| C2 automatic activation | **Accepted on the coordinated demo stack** — V77 migrated in place; C1 journey **23/23** proves submit → immediate permittee/active observation, no Director pre-approval, anomaly hold/clear/revoke and ngrok routes; WP3 database proofs **28/28**, full database suite **591/591**, default backend **161/161**, web **264/264**, UI **239/239**, production build pass. |
+| C2 automatic activation | **Historic (superseded for new registrations by WP3-D1).** V77 automatic-activation events remain in the database and are not rewritten. |
+| WP3-D1 guest signup + Director activation | **Implemented on `cursor/wp3-guest-director-approval` (V78, contract 0.38.0).** Isolated database tests are the gate until a coordinated live-integration window applies V78 to the shared ngrok/demo stack. |
 | Data and policy design | Pending |
 | Migration range | Pending |
 | Contract version | Pending |
@@ -398,11 +399,13 @@ At the end of each development session, update the package status, progress, com
 
 #### WP3 acceptance journey
 
-Optimized manufacturer/company onboarding (accepted C2):
+Optimized manufacturer/company onboarding (WP3-D1 current policy; C2 automatic activation superseded for new registrations):
 
-- [x] An authenticated applicant files the company application and uploads the required documents.
+- [x] A guest creates an applicant account (simulated email/mobile OTP) and signs in with those credentials.
+- [x] The applicant files the company application and uploads the required documents.
 - [x] Online demonstration payment confirms automatically and automated checks run.
-- [x] A successful submission activates the manufacturer and creates the permittee record atomically without Director pre-approval.
+- [x] A successful submission stops at `director_review`; the organisation is not active and has no permittee number.
+- [x] Director approval activates the manufacturer, issues the permittee record and starts the 15-day observation.
 - [x] Director, Programme and Finance receive information and can raise an anomaly during the 15-day window.
 - [x] An anomaly applies an immediate hold; the Director can clear or revoke it.
 - [x] With no open anomaly, the scheduled day-15 close leaves the manufacturer active.
@@ -413,7 +416,7 @@ Remaining full entity/brand/category journey:
 - [x] Online payment succeeds and confirms automatically for optimized manufacturer onboarding; production gateway remains BL-262.
 - [ ] BEE returns an expired document as a structured discrepancy.
 - [ ] The manufacturer replaces the document and responds.
-- [ ] Apply the approved automatic-activation policy to the remaining brand/category flow; no Director pre-approval is required for manufacturer onboarding.
+- [ ] Apply the approved WP3-D1 Director-gated activation policy to the remaining brand/category flow; manufacturer onboarding itself now waits for Director approval.
 - [ ] Brand and category records become active atomically with the already-active permittee.
 - [ ] The complete journey appears in the register, audit history and Manufacturer 360 source data.
 

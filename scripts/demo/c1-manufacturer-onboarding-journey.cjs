@@ -301,7 +301,7 @@ async function setTextarea(page, testId, value) {
 
 async function openDirectorQueueItem(page, reference) {
   await page.goto(`${WEB}/app/manufacturer/director`);
-  const itemId = `queue-item-${reference}`;
+  const itemId = `director-item-${reference}`;
   if (!(await waitTestId(page, itemId, 120000))) throw new Error(`director queue missing ${itemId}`);
   await clickTestId(page, itemId);
   await page.waitFor(
@@ -312,20 +312,42 @@ async function openDirectorQueueItem(page, reference) {
 
 async function directorRejectDisposable(page, appId, reference) {
   await openDirectorQueueItem(page, reference);
+  await setTextarea(page, "director-decision-note", "Incomplete demo dossier (disposable WP3-D1)");
   await page.eval(`document.querySelector('[data-testid=director-reject-open]').click(); true`);
-  await page.waitFor(`!!document.querySelector('[data-testid=director-reject-reason]')`);
-  await setTextarea(page, "director-reject-reason", "Incomplete demo dossier (disposable C1A)");
-  await waitEnabled(page, "director-reject-confirm");
-  await page.eval(`document.querySelector('[data-testid=director-reject-confirm]').click(); true`);
   await page.waitFor(`(document.body.textContent || '').toLowerCase().includes('rejected')`, 60000);
   return pollApplication(page, appId, (d) => d.state === "rejected", "director reject");
 }
 
 async function directorApprove(page, appId, reference) {
   await openDirectorQueueItem(page, reference);
+  await setTextarea(page, "director-decision-note", "Director activates manufacturer for observation");
   await page.eval(`document.querySelector('[data-testid=director-approve]').click(); true`);
-  await page.waitFor(`(document.body.textContent || '').toLowerCase().includes('approved')`, 60000);
+  await page.waitFor(`(document.body.textContent || '').toLowerCase().includes('observation')`, 60000);
   return pollApplication(page, appId, (d) => d.state === "active_observation", "director approve");
+}
+
+function guestCredentials(tag) {
+  const stamp = `${Date.now()}`.slice(-8);
+  return {
+    fullName: `WP3 D1 ${tag}`,
+    email: `wp3d1.${tag}.${stamp}@example.invalid`.toLowerCase(),
+    mobile: `9${stamp}0`.slice(0, 10),
+    password: "SecurePass1",
+  };
+}
+
+async function guestRegister(page, creds) {
+  await page.goto(`${WEB}/register/manufacturer`);
+  if (!(await waitTestId(page, "manufacturer-account-form", 60000))) throw new Error("registration form missing");
+  await setReactField(page, "manufacturer-full-name", creds.fullName);
+  await setReactField(page, "manufacturer-email", creds.email);
+  await setReactField(page, "manufacturer-mobile", creds.mobile);
+  await setReactField(page, "manufacturer-password", creds.password);
+  await setReactField(page, "manufacturer-confirm-password", creds.password);
+  await page.eval(`document.querySelector('[data-testid=create-demo-applicant]').click(); true`);
+  const ok = await page.waitFor(`location.pathname.startsWith('/app/manufacturer/onboarding')`, 120000);
+  if (!ok) throw new Error("guest signup did not open onboarding");
+  return true;
 }
 
 async function openMonitoringItem(page, reference) {
@@ -413,23 +435,33 @@ async function main() {
   const chrome = await launchChrome();
   try {
     const applicant = await openPage(chrome.cdp);
-    check("c1.applicant.sign-in", await demoSignIn(applicant, "onboarding.applicant"), "demo sign-in");
-    const activationRun = await fillWizardCore(applicant, "automatic-activation");
-    check("c1.applicant.automatic-activation", activationRun.detail.state === "active_observation", activationRun.detail.reference);
-    evidence.applications.automaticActivation = {
+    const guestA = guestCredentials("activate");
+    check("c1.applicant.guest-signup", await guestRegister(applicant, guestA), guestA.email);
+    const activationRun = await fillWizardCore(applicant, "director-review");
+    check("c1.applicant.director-review", activationRun.detail.state === "director_review", activationRun.detail.reference);
+    evidence.applications.directorReview = {
       id: activationRun.appId,
       reference: activationRun.detail.reference,
       version: activationRun.detail.version,
       state: activationRun.detail.state,
     };
     await applicant.close();
+    const dirActivate = await openPage(chrome.cdp);
+    await demoSignIn(dirActivate, "bee.director");
+    const activated = await directorApprove(dirActivate, activationRun.appId, activationRun.detail.reference);
+    check("c1.director.approve-activation", activated.state === "active_observation", activated.reference);
+    await dirActivate.close();
 
-    cleanOnboardSynthetic();
     const applicantRevoke = await openPage(chrome.cdp);
-    await demoSignIn(applicantRevoke, "onboarding.applicant");
+    const guestR = guestCredentials("revoke");
+    await guestRegister(applicantRevoke, guestR);
     const revokeRun = await fillWizardCore(applicantRevoke, "revoke");
-    check("c1.applicant.submit-revoke", revokeRun.detail.state === "active_observation", revokeRun.detail.reference);
+    check("c1.applicant.submit-revoke", revokeRun.detail.state === "director_review", revokeRun.detail.reference);
     await applicantRevoke.close();
+    const dirRevokeReady = await openPage(chrome.cdp);
+    await demoSignIn(dirRevokeReady, "bee.director");
+    await directorApprove(dirRevokeReady, revokeRun.appId, revokeRun.detail.reference);
+    await dirRevokeReady.close();
     const finRevoke = await openPage(chrome.cdp);
     await demoSignIn(finRevoke, "bee.finance");
     const held = await financeRaiseAnomaly(finRevoke, revokeRun.appId, revokeRun.detail.reference);
@@ -446,17 +478,17 @@ async function main() {
     };
     await dirRevoke2.close();
 
-    cleanOnboardSynthetic();
     const applicantMain = await openPage(chrome.cdp);
-    await demoSignIn(applicantMain, "onboarding.applicant");
+    const guestM = guestCredentials("primary");
+    await guestRegister(applicantMain, guestM);
     const mainRun = await fillWizardCore(applicantMain, "primary");
     const appMeta = mainRun.detail;
     const feeInr = appMeta.fee?.amountInr;
     const paymentStatus = appMeta.payment?.status;
     const receipt = appMeta.payment?.receiptNumber;
     check(
-      "c1.applicant.automatic-activation",
-      appMeta.state === "active_observation" && paymentStatus === "paid" && feeInr === "5000.00" && !!receipt,
+      "c1.applicant.submit-director-review",
+      appMeta.state === "director_review" && paymentStatus === "paid" && feeInr === "5000.00" && !!receipt && !appMeta.permitteeNumber,
       `${appMeta.reference} state=${appMeta.state} fee=${feeInr} payment=${paymentStatus} receipt=${receipt}`,
     );
     evidence.applications.primary = {
@@ -474,12 +506,8 @@ async function main() {
 
     const director = await openPage(chrome.cdp);
     check("c1.director.sign-in", await demoSignIn(director, "bee.director"), "director demo sign-in");
-    await director.goto(`${WEB}/app/manufacturer/director`);
-    check(
-      "c1.director.no-preapproval",
-      await waitTestId(director, "director-automatic-activation-note", 60000),
-      "automatic activation information shown",
-    );
+    const approvedMain = await directorApprove(director, appMeta.id, appMeta.reference);
+    check("c1.director.pending-queue", approvedMain.state === "active_observation", approvedMain.reference);
     const afterActivate = await fetchStrict(director, `/api/runtime/manufacturer-onboarding/${encodeURIComponent(appMeta.id)}`, { method: "GET" });
     const obs = observationDays(appMeta.id);
     const permittee = afterActivate.permitteeNumber || afterActivate.permitteeActivation?.permitteeNumber;

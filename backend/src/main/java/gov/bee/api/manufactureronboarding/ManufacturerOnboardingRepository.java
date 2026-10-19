@@ -25,6 +25,9 @@ public class ManufacturerOnboardingRepository {
     public record OrchestratorResult(String outState, Integer outVersion, UUID paymentId, String permitteeNumber) {
     }
 
+    public record SignupResult(String outState, UUID accountId, UUID organisationId, UUID applicationId, String username) {
+    }
+
     public record AutomatedCheck(String checkCode, String outcome, String detail, Instant checkedAt) {
     }
 
@@ -217,6 +220,23 @@ public class ManufacturerOnboardingRepository {
               FROM manufacturer_onboarding_anomaly WHERE application_id = ? ORDER BY raised_at
             """, (rs, i) -> new AnomalyRow(rs.getString(1), rs.getString(2), rs.getString(3),
             rs.getTimestamp(4).toInstant(), rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant()), applicationId);
+    }
+
+    public Optional<SignupResult> orchestratePublicSignup(String fullName, String email, String mobile, UUID keycloakSubject,
+                                                           UUID commandId, String payloadHash) {
+        try {
+            return jdbc.query("""
+                SELECT out_state, out_account_id, out_organisation_id, out_application_id, out_username
+                  FROM manufacturer_onboarding_orchestrate_public_signup(?, ?, ?, ?, ?, ?::char(64))
+                """, (rs, i) -> new SignupResult(rs.getString(1), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
+                rs.getObject(4, UUID.class), rs.getString(5)), fullName, email, mobile, keycloakSubject, commandId, payloadHash)
+                .stream().findFirst();
+        } catch (DataAccessException ex) {
+            if (WorkflowFoundationRepository.isSqlMessage(ex, "idempotency_key_conflict")) {
+                return Optional.of(new SignupResult("idempotency_key_conflict", null, null, null, null));
+            }
+            throw ex;
+        }
     }
 
     public Optional<OrchestratorResult> orchestrateSubmit(UUID applicationId, UUID actor, String role, int version, BigDecimal amountInr,

@@ -164,7 +164,7 @@ class SnlWp02bModelReturnWiringDatabaseTest {
         var brands = new BrandAuthRepository(db);
         resubmitService = transactional(new ResubmitApplicationService(new IdentityRepository(db), applications, brands, new BrandAuthService(brands),
             evidence, resub, wiring, idempotency, json));
-        assertEquals(77, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(78, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
     }
 
     UUID atDirector(String model) {

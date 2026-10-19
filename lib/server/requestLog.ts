@@ -60,6 +60,7 @@ export type WebRoute =
   | "/api/runtime/fee-corrections/reversals"
   | "/api/runtime/fee-corrections/reversals/{id}/decision"
   | "/api/runtime/verification"
+  | "/api/runtime/public/manufacturer-signup"
   | "/api/runtime/notifications"
   | "/api/runtime/notifications/read-all"
   | "/api/runtime/notifications/{id}/read"
@@ -121,6 +122,7 @@ export type SpringRoute =
   | "/api/fee-corrections/reversals"
   | "/api/fee-corrections/reversals/{id}/decision"
   | "/api/public/verification"
+  | "/api/public/manufacturer-signup"
   | "/api/notifications"
   | "/api/notifications/read-all"
   | "/api/notifications/{id}/read"
@@ -158,7 +160,7 @@ export const safeOutcome = (code: unknown): string => (typeof code === "string" 
 export function springRoute(path: string): SpringRoute {
   const p = path.split("?")[0];
   if (p === "/api/me" || p === "/api/model-applications" || p === "/api/model-applications/eligible-brands" || p === "/actuator/health") return p;
-  if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/business-settings" || p === "/api/business-settings/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/fee-corrections/reversals" || p === "/api/public/verification" || p === "/api/notifications" || p === "/api/notifications/read-all" || p === "/api/messages" || p === "/api/messages/read-all") return p;
+  if (p === "/api/fee-rules" || p === "/api/fee-rules/proposals" || p === "/api/rating-schemes" || p === "/api/rating-schemes/proposals" || p === "/api/business-settings" || p === "/api/business-settings/proposals" || p === "/api/fee-corrections" || p === "/api/fee-corrections/proposals" || p === "/api/fee-corrections/reversals" || p === "/api/public/verification" || p === "/api/public/manufacturer-signup" || p === "/api/notifications" || p === "/api/notifications/read-all" || p === "/api/messages" || p === "/api/messages/read-all") return p;
   if (p === "/api/registrations" || p === "/api/registrations/eligible-brands") return p;
   if (/^\/api\/registrations\/[^/]+\/submit$/.test(p)) return "/api/registrations/{id}/submit";
   if (/^\/api\/registrations\/[^/]+\/fee-confirmation$/.test(p)) return "/api/registrations/{id}/fee-confirmation";

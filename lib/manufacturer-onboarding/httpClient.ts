@@ -12,6 +12,7 @@ import type { ManufacturerOnboardingClient } from "./client";
 import type {
   DirectorDecisionInput,
   DirectorRejectInput,
+  DirectorReturnInput,
   DirectorResolveInput,
   DirectorRevokeInput,
   ManufacturerApplication,
@@ -110,8 +111,8 @@ const DEFAULT_CREATE_LEGAL_NAME = "Aarav Appliances Pvt Ltd";
 export function createManufacturerOnboardingHttpClient(fetchImpl: FetchLike = fetch): ManufacturerOnboardingClient {
   return {
     listForApplicant: async () => fetchList(fetchImpl),
-    listDirectorQueue: async () => [],
-    listMonitoringQueue: async () => (await fetchList(fetchImpl)).filter((x) => MONITORING_QUEUE_PHASES.has(x.phase)),
+    listDirectorQueue: async () => (await fetchList(fetchImpl)).filter((x) => x.phase === "director_review"),
+    listMonitoringQueue: async () => (await fetchList(fetchImpl)).filter((x) => MONITORING_QUEUE_PHASES.has(x.phase) || x.phase === "director_review"),
     getApplication: async (id) => parseApplication(await fetchImpl(MANUFACTURER_ONBOARDING_BFF.detail(id), runtimeReadInit())),
     saveDraft: async (input: SaveDraftInput) => {
       const payload = {
@@ -170,6 +171,13 @@ export function createManufacturerOnboardingHttpClient(fetchImpl: FetchLike = fe
         { version: input.version, decision: "reject", note: input.reason },
         input.idempotencyKey ?? newIdempotencyKey(),
       ),
+    directorReturn: async (input: DirectorReturnInput) =>
+      commandApp(
+        fetchImpl,
+        MANUFACTURER_ONBOARDING_BFF.directorDecision(input.id),
+        { version: input.version, decision: "return", note: input.reason },
+        input.idempotencyKey ?? newIdempotencyKey(),
+      ),
     raiseAnomaly: async (input: RaiseAnomalyInput) =>
       commandApp(
         fetchImpl,
@@ -193,7 +201,7 @@ export function createManufacturerOnboardingHttpClient(fetchImpl: FetchLike = fe
       ),
     defaultDraftId: async () => {
       const list = await fetchList(fetchImpl);
-      const editable = list.find((x) => x.phase === "draft" || x.phase === "automatic_checks_failed");
+      const editable = list.find((x) => x.phase === "draft" || x.phase === "automatic_checks_failed" || x.phase === "returned");
       if (editable) return editable.id;
       const created = await commandApp(
         fetchImpl,

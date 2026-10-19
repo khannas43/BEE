@@ -42,23 +42,19 @@ describe("manufacturer onboarding HTTP adapter", () => {
     expect(app.observationEndsAt).toBeTruthy();
   });
 
-  it("has no pre-approval Director queue after automatic activation", async () => {
-    const calls: string[] = [];
+  it("lists Director queue as director_review and monitoring includes those payments", async () => {
     const items = [
       { ...DETAIL_FIXTURE, id: "a", state: "director_review" },
       { ...DETAIL_FIXTURE, id: "b", state: "draft", version: 1 },
       { ...DETAIL_FIXTURE, id: "c", state: "automatic_checks_failed", version: 1 },
     ];
-    const client = createManufacturerOnboardingHttpClient(async (url) => {
-      calls.push(String(url));
-      return jsonResponse({ items, count: items.length, authority: "spring-database" });
-    });
+    const client = createManufacturerOnboardingHttpClient(async () =>
+      jsonResponse({ items, count: items.length, authority: "spring-database" }),
+    );
     const director = await client.listDirectorQueue();
-    expect(calls).toEqual([]);
-    expect(director).toEqual([]);
+    expect(director.map((x) => x.id)).toEqual(["a"]);
     const monitoring = await client.listMonitoringQueue();
-    expect(calls).toEqual([MANUFACTURER_ONBOARDING_BFF.list]);
-    expect(monitoring).toEqual([]);
+    expect(monitoring.map((x) => x.id)).toEqual(["a"]);
   });
 
   it("filters monitoring queue phases", async () => {
@@ -139,9 +135,11 @@ describe("manufacturer onboarding HTTP adapter", () => {
     await client.submit({ id: DETAIL_FIXTURE.id, version: 4 });
     await client.directorApprove({ id: DETAIL_FIXTURE.id, version: 4, note: "yes" });
     await client.directorReject({ id: DETAIL_FIXTURE.id, version: 4, reason: "no" });
+    await client.directorReturn({ id: DETAIL_FIXTURE.id, version: 4, reason: "need more" });
     expect(bodies[0]).toEqual({ version: 4 });
     expect(bodies[1]).toEqual({ version: 4, decision: "approve", note: "yes" });
     expect(bodies[2]).toEqual({ version: 4, decision: "reject", note: "no" });
+    expect(bodies[3]).toEqual({ version: 4, decision: "return", note: "need more" });
   });
 
   it("anomaly commands use reason and resolution payloads", async () => {

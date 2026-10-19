@@ -18,6 +18,7 @@ export const MANUFACTURER_ONBOARDING_STATES = [
   "submitted",
   "automatic_checks_failed",
   "director_review",
+  "returned",
   "active_observation",
   "active",
   "on_hold",
@@ -176,7 +177,7 @@ const validatePaymentBlock = (pay: unknown): boolean => {
 const validateDirectorDecision = (d: unknown): boolean => {
   if (!isObject(d) || !exactKeys(d, ["decision", "decidedAt"], ["note"])) return false;
   return (
-    (d.decision === "approve" || d.decision === "reject") &&
+    (d.decision === "approve" || d.decision === "reject" || d.decision === "return") &&
     isString(d.decidedAt) &&
     !Number.isNaN(Date.parse(d.decidedAt)) &&
     (d.note === undefined || d.note === null || isString(d.note))

@@ -3,7 +3,7 @@ import type { ManufacturerLifecyclePhase } from "./types";
 /** Owner-approved operational labels — keep wording exact for demo and tests. */
 export const LABEL_AUTO_PAYMENT = "Automatically verified payment";
 export const LABEL_AUTO_RULES = "Automated rules check";
-export const LABEL_AWAITING_DIRECTOR = "Legacy — awaiting migration to automatic activation";
+export const LABEL_AWAITING_DIRECTOR = "Awaiting Director decision";
 export const LABEL_ACTIVE_OBSERVATION = "Active — under 15-day observation";
 export const LABEL_HOLD = "On hold — anomaly under review";
 export const LABEL_OBSERVATION_DONE = "Active — observation completed";
@@ -11,7 +11,7 @@ export const LABEL_REJECTED = "Registration rejected";
 export const LABEL_REVOKED = "Revoked by Director";
 
 export const OPERATIONAL_FLOW =
-  "Create applicant login → submit manufacturer/company registration → payment automatically verified → document and eligibility checks automatically completed → manufacturer automatically activated → Director, Programme and Finance informed → 15-day observation → final active if no anomaly.";
+  "Create applicant login → submit manufacturer/company registration → payment automatically verified → document and eligibility checks automatically completed → Director reviews → Director approval activates the manufacturer → 15-day observation → final active if no anomaly.";
 
 export const ANOMALY_FLOW =
   "If an anomaly is raised: Active under observation → immediate hold → Director resolves to active, or Director revokes.";
@@ -26,6 +26,8 @@ export function phaseLabel(phase: ManufacturerLifecyclePhase): string {
       return "Automated rules check — action required";
     case "director_review":
       return LABEL_AWAITING_DIRECTOR;
+    case "returned":
+      return "Returned to applicant";
     case "active_observation":
       return LABEL_ACTIVE_OBSERVATION;
     case "active":

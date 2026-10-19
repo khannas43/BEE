@@ -1,7 +1,7 @@
 /** Typed manufacturer/company onboarding records — consumed via the client adapter, not raw fixtures. */
 
 export const ONBOARDING_DISCLOSURE =
-  "Optimized demonstration workflow based on the S&L registration requirements. Automatic processing and the post-approval observation policy are owner-approved assumptions pending formal BEE confirmation.";
+  "Optimized demonstration workflow based on the S&L registration requirements. New manufacturer applications wait for Director activation; payment and eligibility checks remain automatic. The 15-day observation policy is an owner-approved assumption pending formal BEE confirmation.";
 
 export const DEMO_APPLICANT_IDENTITY = {
   username: "onboarding.applicant",
@@ -16,6 +16,7 @@ export type ManufacturerLifecyclePhase =
   | "submitted"
   | "automatic_checks_failed"
   | "director_review"
+  | "returned"
   | "active_observation"
   | "active"
   | "on_hold"
@@ -152,6 +153,8 @@ export type SubmitApplicationInput = CommandIdempotency & { id: string; version:
 export type DirectorDecisionInput = CommandIdempotency & { id: string; version: number; note?: string };
 
 export type DirectorRejectInput = CommandIdempotency & { id: string; version: number; reason: string };
+
+export type DirectorReturnInput = CommandIdempotency & { id: string; version: number; reason: string };
 
 export type RaiseAnomalyInput = CommandIdempotency & {
   applicationId: string;

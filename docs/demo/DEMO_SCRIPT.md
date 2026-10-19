@@ -266,16 +266,17 @@ Sign in as `bee.auditor`. You land on the **Auditor's dashboard**.
 
 ## UC10. Manufacturer / company onboarding (optional, ~8 min). WP3 demo slice
 
-**Say:** "This is the optimized company-registration path: eight Annexure PDFs, simulated auto-payment, automated eligibility checks, immediate activation, and a fifteen-calendar-day observation window — not the legacy brand registration in UC9."
+**Say:** "This is the optimized company-registration path: a guest creates their own applicant account, eight Annexure PDFs, simulated auto-payment, automated eligibility checks, Director review, then a fifteen-calendar-day observation window after Director approval — not the legacy brand registration in UC9. Historic automatic-activation records from an earlier slice stay in the archive; new applications wait for the Director."
 
-**Public URL:** same ngrok host as the rehearsal (`https://nicola-habited-barb.ngrok-free.dev`) or `http://127.0.0.1:3100` locally. Demo login must stay on (`BEE_DEMO_LOGIN=1`, password `demo123`).
+**Public URL:** same ngrok host as the rehearsal (`https://nicola-habited-barb.ngrok-free.dev`) or `http://127.0.0.1:3100` locally. Demo login must stay on (`BEE_DEMO_LOGIN=1`, password `demo123`) for officer accounts. Guest signup uses the public **Register** form.
 
-1. Sign in as **`onboarding.applicant`** → **Manufacturer onboarding** wizard (`/app/manufacturer/onboarding`). Fill legal entity, address, signatory; upload all eight PDFs on the Annexure step; accept declaration and agreement; **Submit**. Point at **active observation**, the permittee number, fee **₹5,000**, payment **paid**, automated checks and the simulated receipt. The system activates the manufacturer immediately; there is no Director pre-approval step.
-2. Switch to **`bee.director`** → **Director oversight**. Show the automatic-activation explanation, then open **Monitoring** and show the **15-day** observation window.
-3. Switch to **`bee.finance`** → **Monitoring** → **Raise anomaly** (immediate **on_hold**; finance cannot resolve).
-4. Switch back to **`bee.director`** → **Monitoring** → **Resolve** to return to **active observation**.
+1. From the public home, **Register** → `/register/manufacturer`. Enter a unique name, email, 10-digit Indian mobile and password. Point at **simulated** email and mobile OTP. **Create applicant account and continue** signs the new applicant in and opens **their** onboarding wizard.
+2. Fill legal entity, address, signatory; upload all eight PDFs on the Annexure step; accept declaration and agreement; **Submit**. Point at **awaiting Director decision**, fee **₹5,000**, payment **paid**, automated checks and the simulated receipt. There is **no** permittee number yet; the manufacturer is not active.
+3. Switch to **`bee.director`** → **Manufacturer registrations awaiting decision**. Show submitted details, documents, payment and checks. **Approve and activate**. Point at the permittee number and the **15-day** observation window.
+4. Switch to **`bee.finance`** → **Monitoring**. Finance can see the automatically verified payment and **Raise anomaly** (immediate **on_hold**; finance cannot activate, return, reject or resolve).
+5. Switch back to **`bee.director`** → **Monitoring** → **Resolve** to return to **active observation**, or **Revoke** after a hold.
 
-Automated rehearsal (headless Chrome): `node scripts/demo/c1-manufacturer-onboarding-journey.cjs` — also runs a disposable **revoke** journey (automatic activation → anomaly → hold → revoke) on synthetic ONBOARD data only.
+Automated rehearsal (headless Chrome): `node scripts/demo/c1-manufacturer-onboarding-journey.cjs` — guest signup → `director_review` → Director approval → anomaly → hold → clear/revoke. Requires V78 on the live stack (**BL-268**). Historic V77 automatic-activation rows are not rewritten.
 
 There is **no** browser control to manually close observation. The backend scheduler changes a clean expired observation to **Final Active** automatically.
 

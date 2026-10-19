@@ -110,7 +110,7 @@ class ModelApplicationControllerSecurityTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"admin", "helpdesk", "auditor"})
+        @ValueSource(strings = {"helpdesk", "auditor"})
     void nonSliceRolesHaveNoReadScope(String role) throws Exception {
         account(role, "all");
         mvc.perform(get("/api/model-applications").with(token(role)))
@@ -181,8 +181,8 @@ class ModelApplicationControllerSecurityTest {
         mvc.perform(get("/api/model-applications").with(jwt().jwt(j -> j.subject(USER.toString()).claim("amr", List.of("pwd")))))
             .andExpect(status().isForbidden())
             .andExpect(content().json(body.formatted("mfa_required", "Sign-in must include a verified one-time code."), true));
-        account("admin", "all", NOVA);
-        mvc.perform(get("/api/model-applications").with(token("admin")))
+        account("auditor", "all", NOVA);
+        mvc.perform(get("/api/model-applications").with(token("auditor")))
             .andExpect(status().isForbidden())
             .andExpect(content().json(body.formatted("no_read_scope", "This role has no read access to model applications."), true));
     }

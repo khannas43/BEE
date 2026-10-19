@@ -33,18 +33,26 @@ export default function RegisterManufacturerPage() {
     }
     setBusy(true);
     try {
-      const response = await fetch("/api/runtime/demo/login", {
+      const idempotencyKey = crypto.randomUUID().replace(/-/g, "") + "0";
+      const response = await fetch("/api/runtime/public/manufacturer-signup", {
         method: "POST",
         credentials: "include",
         cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: "onboarding.applicant", password: "demo123" }),
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({ fullName: fullName.trim(), email: email.trim(), mobile: mobile.trim(), password }),
       });
-      const body = (await response.json().catch(() => ({}))) as { ok?: boolean };
-      if (!response.ok || !body.ok) throw new Error("registration_session_failed");
-      router.push("/app/manufacturer/onboarding");
-    } catch {
-      setError("The applicant account could not be started. Please try again.");
+      const body = (await response.json().catch(() => ({}))) as { ok?: boolean; returnTo?: string; error?: string };
+      if (!response.ok || !body.ok) {
+        if (body.error === "registration_not_available") {
+          throw new Error("registration_not_available");
+        }
+        throw new Error("registration_session_failed");
+      }
+      router.push(typeof body.returnTo === "string" ? body.returnTo : "/app/manufacturer/onboarding");
+    } catch (err) {
+      setError(err instanceof Error && err.message === "registration_not_available"
+        ? "This registration could not be completed. Sign in if you already have an account, or try different details."
+        : "The applicant account could not be started. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -123,7 +131,7 @@ function Field({ id, label, icon, value, onChange, type = "text", ...input }: {
       <span className="font-label-md block mb-1">{label}</span>
       <span className="relative block">
         <Icon name={icon} size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-        <input {...input} id={id} aria-label={label} type={type} required value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-lg border border-border-subtle bg-surface-ground py-3 pl-10 pr-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+        <input {...input} id={id} data-testid={id} aria-label={label} type={type} required value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-lg border border-border-subtle bg-surface-ground py-3 pl-10 pr-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
       </span>
     </label>
   );
@@ -142,7 +150,7 @@ function PasswordField({ id, label, value, onChange, show, toggle }: {
       <span className="font-label-md block mb-1">{label}</span>
       <span className="relative block">
         <Icon name="lock" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-        <input id={id} aria-label={label} type={show ? "text" : "password"} required minLength={8} autoComplete="new-password" value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-lg border border-border-subtle bg-surface-ground py-3 pl-10 pr-11 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+        <input id={id} data-testid={id} aria-label={label} type={show ? "text" : "password"} required minLength={8} autoComplete="new-password" value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-lg border border-border-subtle bg-surface-ground py-3 pl-10 pr-11 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
         <button type="button" onClick={toggle} aria-label={show ? "Hide password" : "Show password"} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-on-surface-variant hover:text-primary">
           <Icon name={show ? "visibility_off" : "visibility"} size={18} />
         </button>

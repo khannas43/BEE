@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BEE local API contract",
-    "version": "0.37.2",
+    "version": "0.38.0",
     "summary": "Existing local routes of the Next.js portal boundary and the Spring API (WP03.1).",
-    "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. Every route listed here is operational, including the draft, submit, stage, history, document, notification, fee-administration, registration, register-revocation and delegation routes; anything not listed is denied.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). The routes added since 0.5.0 are not itemised here: each minor version added operations and codes, recorded in docs/wp03 and in the evidence notes of the work package that added them (for example 0.28.0 registration, 0.29.0 registration review, 0.30.0 register revocation, 0.31.0 the register audit trail, 0.32.0 delegation). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
+    "description": "Local MacBook runtime only (ADR-001 D-RT2). The Next.js same-origin route handlers are the browser-facing boundary; the single Spring API is the authority. There is no separate gateway.\n\n- Authority: Spring decides every read from bee_app database rows (account, membership, role, assignment). Token organisation claims are ignored.\n- MFA: Spring requires amr to contain pwd and otp on every authenticated route (403 mfa_required); Next.js also refuses to create a session without it.\n- No browser bearer token: the browser holds only the opaque bee_session cookie. Tokens stay in the Next.js server session; a browser Authorization header is ignored.\n- No-store: every response of both layers carries Cache-Control including no-store.\n- Not found: out-of-scope, unknown and malformed model IDs return an identical 404 not_found.\n- Default deny: every Spring method/path not listed here returns 401 unauthenticated without a token and 403 denied_by_default with one. Every route listed here is operational, including the draft, submit, stage, history, document, notification, fee-administration, registration, register-revocation and delegation routes; anything not listed is denied.\n- Correlation: see components.headers.CorrelationId.\n\nVersion policy: info.version is the contract version (semver). The routes added since 0.5.0 are not itemised here: each minor version added operations and codes, recorded in docs/wp03 and in the evidence notes of the work package that added them (for example 0.28.0 registration, 0.29.0 registration review, 0.30.0 register revocation, 0.31.0 the register audit trail, 0.32.0 delegation). 0.5.0 added local test-report document intake (list, multipart upload, PDF content). 0.3.0 added the two browser-facing model reads and tightened ModelApplication (state enum, readBasis pattern, version >= 0). 0.2.0 closed Me.ignoredTokenClaims and made the Next boundary enforce the Me schema and per-operation error codes. 0.38.0 added public guest manufacturer signup and restored Director-gated activation for new manufacturer applications (historic V77 automatic-activation evidence is retained). Patch = wording/examples; minor = new optional field, new route or new error code; major = removed/renamed field, changed status or code meaning. URL paths are not versioned (no /v1 aliases) while the API is local-only; scripts/local/contract-check.cjs and scripts/local/api-contract.test.mjs fail when code and this file disagree."
   },
   "tags": [
     {
@@ -17707,6 +17707,216 @@
         }
       }
     },
+    "/api/public/manufacturer-signup": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:8090",
+          "description": "Spring API. INTERNAL: bound to 127.0.0.1 and called only by Next.js server code with the session's access token."
+        }
+      ],
+      "x-bee-audience": "internal",
+      "post": {
+        "operationId": "springPublicManufacturerSignup",
+        "tags": [
+          "spring-internal"
+        ],
+        "security": [],
+        "summary": "Public guest manufacturer applicant signup: create the portal account, a prospective manufacturer organisation and a draft application, with simulated email and mobile OTP. No sign-in. Duplicate email or mobile returns a generic conflict.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fullName",
+                  "email",
+                  "mobile"
+                ],
+                "properties": {
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "description": "10-digit Indian mobile number."
+                  },
+                  "keycloakSubject": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The guest applicant, organisation and draft application were created. Email and mobile OTP are simulated.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManufacturerSignupCreated"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "registration_not_available": {
+                    "value": {
+                      "error": "registration_not_available",
+                      "message": "The request could not be completed."
+                    }
+                  },
+                  "idempotency_key_conflict": {
+                    "value": {
+                      "error": "idempotency_key_conflict",
+                      "message": "This Idempotency-Key was already used with a different request body."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "registration_not_available",
+              "idempotency_key_conflict"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required"
+            ]
+          },
+          "429": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "rate_limited": {
+                    "value": {
+                      "error": "rate_limited",
+                      "message": "Too many requests. Wait a moment and try again."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
     "/api/runtime/verification": {
       "servers": [
         {
@@ -17909,6 +18119,222 @@
             },
             "x-error-codes": [
               "service_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/runtime/public/manufacturer-signup": {
+      "servers": [
+        {
+          "url": "http://127.0.0.1:3100",
+          "description": "Next.js portal. BROWSER-FACING same-origin routes; the browser never holds a token."
+        }
+      ],
+      "x-bee-audience": "browser",
+      "post": {
+        "operationId": "runtimePublicManufacturerSignup",
+        "tags": [
+          "next-browser"
+        ],
+        "security": [],
+        "summary": "Browser public manufacturer registration: create the guest applicant, sign them in automatically and return the onboarding wizard address. Email and mobile OTP verification are simulated.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fullName",
+                  "email",
+                  "mobile",
+                  "password"
+                ],
+                "properties": {
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "mobile": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The applicant account was created and a session cookie was issued when identity sign-in succeeded.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManufacturerSignupSession"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "registration_not_available": {
+                    "value": {
+                      "error": "registration_not_available",
+                      "message": "The request could not be completed."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "registration_not_available"
+            ]
+          },
+          "422": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "value": {
+                      "error": "validation_failed",
+                      "message": "The request could not be accepted."
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "value": {
+                      "error": "idempotency_key_required",
+                      "message": "An Idempotency-Key header is required for this request."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "validation_failed",
+              "idempotency_key_required"
+            ]
+          },
+          "429": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "rate_limited": {
+                    "value": {
+                      "error": "rate_limited",
+                      "message": "Too many requests. Wait a moment and try again."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "503": {
+            "description": "Error.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "identity_unavailable": {
+                    "value": {
+                      "error": "identity_unavailable",
+                      "message": "The identity service is not reachable. Try again later."
+                    }
+                  },
+                  "service_unavailable": {
+                    "value": {
+                      "error": "service_unavailable",
+                      "message": "The service is temporarily unavailable. Try again later."
+                    }
+                  },
+                  "api_unreachable": {
+                    "value": {
+                      "error": "api_unreachable",
+                      "message": "The BEE service is not reachable. Try again later."
+                    }
+                  }
+                }
+              }
+            },
+            "x-error-codes": [
+              "identity_unavailable",
+              "service_unavailable",
+              "api_unreachable"
             ]
           }
         }
@@ -34475,10 +34901,10 @@
                       "message": "There is no active BEE role for this identity."
                     }
                   },
-                  "no_write_scope": {
+                  "no_read_scope": {
                     "value": {
-                      "error": "no_write_scope",
-                      "message": "This role cannot create or edit model application drafts."
+                      "error": "no_read_scope",
+                      "message": "This role has no read access to model applications."
                     }
                   },
                   "not_submittable": {
@@ -34494,7 +34920,7 @@
               "mfa_required",
               "no_active_account",
               "no_effective_role",
-              "no_write_scope",
+              "no_read_scope",
               "not_submittable"
             ]
           },
@@ -37019,10 +37445,10 @@
                       "message": "There is no active BEE role for this identity."
                     }
                   },
-                  "no_write_scope": {
+                  "no_read_scope": {
                     "value": {
-                      "error": "no_write_scope",
-                      "message": "This role cannot create or edit model application drafts."
+                      "error": "no_read_scope",
+                      "message": "This role has no read access to model applications."
                     }
                   },
                   "not_submittable": {
@@ -37038,7 +37464,7 @@
               "mfa_required",
               "no_active_account",
               "no_effective_role",
-              "no_write_scope",
+              "no_read_scope",
               "not_submittable"
             ]
           },
@@ -38823,6 +39249,7 @@
               "organisation_not_eligible",
               "proposal_not_pending",
               "rate_limited",
+              "registration_not_available",
               "rating_below_threshold",
               "reversal_already_pending",
               "reversal_not_possible",
@@ -43687,6 +44114,7 @@
               "submitted",
               "automatic_checks_failed",
               "director_review",
+              "returned",
               "active_observation",
               "active",
               "on_hold",
@@ -43829,6 +44257,7 @@
               "submitted",
               "automatic_checks_failed",
               "director_review",
+              "returned",
               "active_observation",
               "active",
               "on_hold",
@@ -43957,7 +44386,77 @@
             }
           }
         }
+      },
+    "ManufacturerSignupCreated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "username",
+        "accountId",
+        "organisationId",
+        "applicationId",
+        "emailVerifiedSimulated",
+        "mobileVerifiedSimulated",
+        "verification"
+      ],
+      "properties": {
+        "username": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "organisationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "applicationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "emailVerifiedSimulated": {
+          "type": "boolean",
+          "const": true
+        },
+        "mobileVerifiedSimulated": {
+          "type": "boolean",
+          "const": true
+        },
+        "verification": {
+          "type": "string",
+          "const": "simulated"
+        }
       }
+    },
+    "ManufacturerSignupSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "applicationId",
+        "returnTo",
+        "verification"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "applicationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "returnTo": {
+          "type": "string",
+          "enum": ["/app/manufacturer/onboarding", "/login"]
+        },
+        "verification": {
+          "type": "string",
+          "const": "simulated"
+        }
+      }
+    }
     }
   },
   "x-bee-error-codes": {
@@ -44230,6 +44729,12 @@
       "layer": "spring",
       "message": "Too many requests. Wait a moment and try again.",
       "when": "The public verification route was asked too often. The portal limits each visitor (or all visitors together when no trusted proxy identifies them); Spring keeps a service-wide ceiling as a backstop. Retry-After says how many seconds to wait."
+    },
+    "registration_not_available": {
+      "status": 409,
+      "layer": "spring",
+      "message": "The request could not be completed.",
+      "when": "Public manufacturer signup could not complete (duplicate email or mobile, reserved identity, or identity conflict). The body never discloses whether an account already exists."
     },
     "reversal_already_pending": {
       "status": 409,

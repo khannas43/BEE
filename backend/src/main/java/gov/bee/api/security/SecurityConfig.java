@@ -42,8 +42,9 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(a -> a
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
-                // The one public route besides health: anyone may ask whether a registration ID is valid (decision D8). It reads one view.
+                // Public routes besides health: certificate verification (D8) and guest manufacturer signup (WP3-D1).
                 .requestMatchers(HttpMethod.GET, "/api/public/verification").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/public/manufacturer-signup").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/me").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/model-applications/eligible-brands").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/model-applications", "/api/model-applications/*").authenticated()

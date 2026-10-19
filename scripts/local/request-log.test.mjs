@@ -2,7 +2,7 @@
 // the shared runtime (Keycloak unreachable or refusing, planted Keycloak and callback values),
 // exercised through the real route handlers with a stubbed fetch.
 // Run: npm run web:test (needs --import ./scripts/local/test-resolve.mjs)
-import { test, before } from "node:test";
+import { test, before, describe } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -82,6 +82,7 @@ before(async () => {
     mobAnomalies: await import("../../app/api/runtime/manufacturer-onboarding/[id]/anomalies/route.ts"),
     mobAnomalyResolution: await import("../../app/api/runtime/manufacturer-onboarding/[id]/anomaly-resolution/route.ts"),
     mobDocuments: await import("../../app/api/runtime/manufacturer-onboarding/[id]/documents/route.ts"),
+    manufacturerSignup: await import("../../app/api/runtime/public/manufacturer-signup/route.ts"),
   };
 });
 
@@ -95,11 +96,30 @@ const req = (path, id, cookie, init = {}) => new NextRequest(`http://127.0.0.1:3
 });
 const refreshRefusedStub = () => stubFetch(async (url) => (url.endsWith("openid-configuration") ? json(200, discovery) : json(400, { error: "invalid_grant", error_description: `Token is not active ${SECRET}` })));
 const seen = [];
+function fetchUrl(url) {
+  if (typeof url === "string") return url;
+  if (url instanceof URL) return url.href;
+  if (url && typeof url === "object" && typeof url.url === "string") return url.url;
+  return String(url);
+}
 function stubFetch(handler) {
   globalThis.fetch = async (url, init) => {
-    seen.push(String(url));
-    return handler(String(url), init);
+    const href = fetchUrl(url);
+    seen.push(href);
+    return handler(href, init);
   };
+}
+function isAdminToken(url) {
+  return url.includes("/realms/master/") && url.includes("token");
+}
+function isUsersCollection(url) {
+  return url.includes("/admin/realms/") && /\/users\/?$/.test(url.split("?")[0]);
+}
+function isUserResource(url) {
+  return url.includes("/admin/realms/") && url.includes("/users/");
+}
+function isSpringSignup(url) {
+  return url.includes("/api/public/manufacturer-signup");
 }
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 /** A session whose access token is inside the refresh leeway, so the next read refreshes it. */
@@ -779,17 +799,17 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
 /* WP03 manufacturer onboarding: session_expired when Keycloak refuses refresh (unit evidence). */
 {
   const MOB_ID = "00000000-0000-4000-f000-000000000001";
-  const json = { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123472" };
+  const jsonHeaders = { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123472" };
   const mobOps = [
     ["GET", "/api/runtime/manufacturer-onboarding", "mobList", "GET", "/api/runtime/manufacturer-onboarding", {}, null],
-    ["POST", "/api/runtime/manufacturer-onboarding", "mobList", "POST", "/api/runtime/manufacturer-onboarding", json, "{}"],
+    ["POST", "/api/runtime/manufacturer-onboarding", "mobList", "POST", "/api/runtime/manufacturer-onboarding", jsonHeaders, "{}"],
     ["GET", "/api/runtime/manufacturer-onboarding/{id}", "mobDetail", "GET", `/api/runtime/manufacturer-onboarding/${MOB_ID}`, {}, null],
-    ["PATCH", "/api/runtime/manufacturer-onboarding/{id}", "mobDetail", "PATCH", `/api/runtime/manufacturer-onboarding/${MOB_ID}`, json, "{}"],
+    ["PATCH", "/api/runtime/manufacturer-onboarding/{id}", "mobDetail", "PATCH", `/api/runtime/manufacturer-onboarding/${MOB_ID}`, jsonHeaders, "{}"],
     ["GET", "/api/runtime/manufacturer-onboarding/{id}/submit", "mobSubmit", "GET", `/api/runtime/manufacturer-onboarding/${MOB_ID}/submit`, {}, null],
-    ["POST", "/api/runtime/manufacturer-onboarding/{id}/submit", "mobSubmit", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/submit`, json, "{}"],
-    ["POST", "/api/runtime/manufacturer-onboarding/{id}/director-decision", "mobDirector", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/director-decision`, json, "{}"],
-    ["POST", "/api/runtime/manufacturer-onboarding/{id}/anomalies", "mobAnomalies", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/anomalies`, json, "{}"],
-    ["POST", "/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution", "mobAnomalyResolution", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/anomaly-resolution`, json, "{}"],
+    ["POST", "/api/runtime/manufacturer-onboarding/{id}/submit", "mobSubmit", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/submit`, jsonHeaders, "{}"],
+    ["POST", "/api/runtime/manufacturer-onboarding/{id}/director-decision", "mobDirector", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/director-decision`, jsonHeaders, "{}"],
+    ["POST", "/api/runtime/manufacturer-onboarding/{id}/anomalies", "mobAnomalies", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/anomalies`, jsonHeaders, "{}"],
+    ["POST", "/api/runtime/manufacturer-onboarding/{id}/anomaly-resolution", "mobAnomalyResolution", "POST", `/api/runtime/manufacturer-onboarding/${MOB_ID}/anomaly-resolution`, jsonHeaders, "{}"],
     ["GET", "/api/runtime/manufacturer-onboarding/{id}/documents", "mobDocuments", "GET", `/api/runtime/manufacturer-onboarding/${MOB_ID}/documents`, {}, null],
   ];
   for (const [method, route, handler, verb, url, headers, body] of mobOps) {
@@ -815,6 +835,156 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
       null,
     );
     assert.equal(validateManufacturerOnboardingDetail({ ...MANUFACTURER_ONBOARDING_DETAIL_FIXTURE, documents: [{ foo: "bar" }] }), null);
+  });
+
+  const signupBody = JSON.stringify({
+    fullName: "Guest Applicant",
+    email: "guest.signup@example.invalid",
+    mobile: "9876501234",
+    password: "SecurePass1",
+  });
+  const signupHeaders = { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123490" };
+  const createdSignup = {
+    username: "guest.signup@example.invalid",
+    accountId: "00000000-0000-4000-a000-000000000081",
+    organisationId: "00000000-0000-4000-b000-000000000081",
+    applicationId: "00000000-0000-4000-f000-000000000081",
+    emailVerifiedSimulated: true,
+    mobileVerifiedSimulated: true,
+    verification: "simulated",
+  };
+  const guestUserLocation = "http://127.0.0.1:8180/admin/realms/bee-local/users/00000000-0000-4000-a000-000000000099";
+  function stubGuestIdentity(next) {
+    stubFetch(async (url, init) => {
+      if (url.includes("openid-configuration") || url.includes("/.well-known/")) return json(200, discovery);
+      if (url.includes("/certs") || url.includes("jwks")) return json(200, { keys: [] });
+      if (isAdminToken(url)) return json(200, { access_token: "admin-token" });
+      if (isUsersCollection(url) && (!init?.method || init.method === "POST")) {
+        return new Response(null, { status: 201, headers: { Location: guestUserLocation } });
+      }
+      if (isUserResource(url)) return json(204, {});
+      if (typeof next === "function") return next(url, init);
+      throw new Error(url);
+    });
+  }
+  describe("public manufacturer signup", { concurrency: 1 }, () => {
+  test("unit-evidence: POST /api/runtime/public/manufacturer-signup 422 idempotency_key_required | missing Idempotency-Key on public signup", async () => {
+    const res = await routes.manufacturerSignup.POST(req("/api/runtime/public/manufacturer-signup", "unit-signup-idem", null, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: signupBody,
+    }));
+    const body = await res.json();
+    assert.equal(res.status, 422);
+    assert.equal(body.error, "idempotency_key_required");
+    assert.deepEqual(lib.conforms(contract, "/api/runtime/public/manufacturer-signup", "POST", { status: res.status, headers: res.headers, json: body }), []);
+  });
+  test("unit-evidence: POST /api/runtime/public/manufacturer-signup 422 validation_failed | invalid public signup body", async () => {
+    const res = await routes.manufacturerSignup.POST(req("/api/runtime/public/manufacturer-signup", "unit-signup-validation", null, {
+      method: "POST",
+      headers: signupHeaders,
+      body: "{}",
+    }));
+    const body = await res.json();
+    assert.equal(res.status, 422);
+    assert.equal(body.error, "validation_failed");
+    assert.deepEqual(lib.conforms(contract, "/api/runtime/public/manufacturer-signup", "POST", { status: res.status, headers: res.headers, json: body }), []);
+  });
+  test("unit-evidence: POST /api/runtime/public/manufacturer-signup 409 registration_not_available | Keycloak reports an identity conflict", async () => {
+    stubFetch(async (url) => {
+      if (isAdminToken(url)) return json(200, { access_token: "admin-token" });
+      if (isUsersCollection(url)) return json(409, { errorMessage: "User exists" });
+      throw new Error(url);
+    });
+    const res = await routes.manufacturerSignup.POST(req("/api/runtime/public/manufacturer-signup", "unit-signup-conflict", null, {
+      method: "POST",
+      headers: signupHeaders,
+      body: signupBody,
+    }));
+    const body = await res.json();
+    assert.equal(res.status, 409);
+    assert.equal(body.error, "registration_not_available");
+    assert.deepEqual(lib.conforms(contract, "/api/runtime/public/manufacturer-signup", "POST", { status: res.status, headers: res.headers, json: body }), []);
+  });
+  test("unit-evidence: POST /api/runtime/public/manufacturer-signup 503 identity_unavailable | Keycloak admin unreachable", async () => {
+    stubFetch(async () => { throw new TypeError("fetch failed"); });
+    const res = await routes.manufacturerSignup.POST(req("/api/runtime/public/manufacturer-signup", "unit-signup-identity", null, {
+      method: "POST",
+      headers: signupHeaders,
+      body: signupBody,
+    }));
+    const body = await res.json();
+    assert.equal(res.status, 503);
+    assert.equal(body.error, "identity_unavailable");
+    assert.deepEqual(lib.conforms(contract, "/api/runtime/public/manufacturer-signup", "POST", { status: res.status, headers: res.headers, json: body }), []);
+  });
+  test("unit-evidence: POST /api/runtime/public/manufacturer-signup 503 api_unreachable | Spring unreachable after guest identity create", async () => {
+    stubGuestIdentity((url) => {
+      if (isSpringSignup(url)) throw new TypeError("fetch failed");
+      throw new Error(url);
+    });
+    const res = await routes.manufacturerSignup.POST(req("/api/runtime/public/manufacturer-signup", "unit-signup-api-down", null, {
+      method: "POST",
+      headers: signupHeaders,
+      body: signupBody,
+    }));
+    const body = await res.json();
+    assert.equal(res.status, 503);
+    assert.equal(body.error, "api_unreachable");
+    assert.deepEqual(lib.conforms(contract, "/api/runtime/public/manufacturer-signup", "POST", { status: res.status, headers: res.headers, json: body }), []);
+  });
+  test("unit-evidence: POST /api/runtime/public/manufacturer-signup 503 service_unavailable | Spring 503 on public signup", async () => {
+    stubGuestIdentity((url) => {
+      if (isSpringSignup(url)) return json(503, { error: "service_unavailable", message: "The service is temporarily unavailable. Try again later." });
+      throw new Error(url);
+    });
+    const res = await routes.manufacturerSignup.POST(req("/api/runtime/public/manufacturer-signup", "unit-signup-spring-503", null, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123491" },
+      body: signupBody,
+    }));
+    const body = await res.json();
+    assert.equal(res.status, 503);
+    assert.equal(body.error, "service_unavailable");
+    assert.deepEqual(lib.conforms(contract, "/api/runtime/public/manufacturer-signup", "POST", { status: res.status, headers: res.headers, json: body }), []);
+  });
+  test("unit-evidence: POST /api/runtime/public/manufacturer-signup 201 - | guest signup creates a session fallback", async () => {
+    stubGuestIdentity((url) => {
+      if (isSpringSignup(url)) return json(201, createdSignup);
+      if (url.includes("token")) return json(200, { access_token: "access", refresh_token: "refresh", expires_in: 300 });
+      throw new Error(url);
+    });
+    const res = await routes.manufacturerSignup.POST(req("/api/runtime/public/manufacturer-signup", "unit-signup-created", null, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123492" },
+      body: signupBody,
+    }));
+    const body = await res.json();
+    assert.equal(res.status, 201);
+    assert.equal(body.ok, true);
+    assert.equal(body.verification, "simulated");
+    assert.equal(body.returnTo, "/login");
+    assert.deepEqual(lib.conforms(contract, "/api/runtime/public/manufacturer-signup", "POST", { status: res.status, headers: res.headers, json: body }), []);
+  });
+  test("unit-evidence: POST /api/runtime/public/manufacturer-signup 429 rate_limited | public signup window exhausted", async () => {
+    stubFetch(async () => { throw new TypeError("fetch failed"); });
+    let limited;
+    for (let i = 0; i < 12; i++) {
+      const res = await routes.manufacturerSignup.POST(req("/api/runtime/public/manufacturer-signup", `unit-signup-rate-${i}`, null, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": `0123456789abcdef01234r${String(i).padStart(2, "0")}` },
+        body: signupBody,
+      }));
+      if (res.status === 429) {
+        limited = res;
+        break;
+      }
+    }
+    assert.ok(limited);
+    const body = await limited.json();
+    assert.equal(body.error, "rate_limited");
+    assert.deepEqual(lib.conforms(contract, "/api/runtime/public/manufacturer-signup", "POST", { status: limited.status, headers: limited.headers, json: body }), []);
+  });
   });
 
   test("unit-evidence: POST /api/runtime/manufacturer-onboarding/{id}/documents 401 session_expired | Keycloak refusing refresh on a manufacturer document upload", async () => {

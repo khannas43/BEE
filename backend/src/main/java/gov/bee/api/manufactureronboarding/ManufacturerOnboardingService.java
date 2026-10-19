@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ManufacturerOnboardingService {
 
+    static final String ROUTE_SIGNUP = "/api/public/manufacturer-signup";
     static final String ROUTE_CREATE = "/api/manufacturer-onboarding";
     static final String ROUTE_PATCH = "/api/manufacturer-onboarding/{id}";
     static final String ROUTE_SUBMIT = "/api/manufacturer-onboarding/{id}/submit";
@@ -51,6 +52,46 @@ public class ManufacturerOnboardingService {
         this.masters = masters;
         this.idempotency = idempotency;
         this.json = json;
+    }
+
+    @Transactional
+    public ResponseEntity<Map<String, Object>> publicSignup(String idempotencyKey, JsonNode body) {
+        if (idempotencyKey == null || !DraftRequestSupport.IDEMPOTENCY_KEY.matcher(idempotencyKey).matches()) {
+            return error(HttpStatus.UNPROCESSABLE_ENTITY, "idempotency_key_required");
+        }
+        String fullName = text(body, "fullName");
+        String email = text(body, "email");
+        String mobile = text(body, "mobile");
+        UUID keycloakSubject = uuidField(body, "keycloakSubject");
+        if (fullName == null || email == null || mobile == null) {
+            return error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+        }
+        email = email.toLowerCase();
+        String commandHash = ManufacturerOnboardingCommandHash.publicSignup(fullName, email, mobile, keycloakSubject);
+        UUID commandId = commandId(idempotencyKey, "public_signup", NIL);
+        Optional<ManufacturerOnboardingRepository.SignupResult> result =
+            repo.orchestratePublicSignup(fullName, email, mobile, keycloakSubject, commandId, commandHash);
+        if (result.isEmpty() || result.get().outState() == null) {
+            return error(HttpStatus.CONFLICT, "version_conflict");
+        }
+        String state = result.get().outState();
+        return switch (state) {
+            case "validation_failed" -> error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed");
+            case "registration_not_available" -> error(HttpStatus.CONFLICT, "registration_not_available");
+            case "idempotency_key_conflict" -> error(HttpStatus.CONFLICT, "idempotency_key_conflict");
+            case "created" -> {
+                Map<String, Object> view = new LinkedHashMap<>();
+                view.put("username", result.get().username());
+                view.put("accountId", result.get().accountId().toString());
+                view.put("organisationId", result.get().organisationId().toString());
+                view.put("applicationId", result.get().applicationId().toString());
+                view.put("emailVerifiedSimulated", true);
+                view.put("mobileVerifiedSimulated", true);
+                view.put("verification", "simulated");
+                yield ResponseEntity.status(HttpStatus.CREATED).body(view);
+            }
+            default -> error(HttpStatus.CONFLICT, state);
+        };
     }
 
     public ResponseEntity<Map<String, Object>> list(Caller caller) {
@@ -229,6 +270,9 @@ public class ManufacturerOnboardingService {
             String decision = text(node, "decision");
             String note = text(node, "note");
             if (decision == null) {
+                return Optional.of(error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed"));
+            }
+            if (("reject".equals(decision) || "return".equals(decision)) && (note == null || note.length() < 8)) {
                 return Optional.of(error(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed"));
             }
             if (!ManufacturerOnboardingPolicy.canDirectorAct(caller)) {
@@ -487,7 +531,7 @@ public class ManufacturerOnboardingService {
     }
 
     private static boolean submittable(String state) {
-        return "draft".equals(state) || "automatic_checks_failed".equals(state);
+        return "draft".equals(state) || "automatic_checks_failed".equals(state) || "returned".equals(state);
     }
 
     private static Map<String, Object> feeView(FeeRule fee) {
@@ -512,6 +556,18 @@ public class ManufacturerOnboardingService {
         }
         String v = body.get(field).asText().trim();
         return v.isEmpty() ? null : v;
+    }
+
+    private static UUID uuidField(JsonNode body, String field) {
+        String v = text(body, field);
+        if (v == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(v);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static Optional<Integer> intField(JsonNode body, String field) {

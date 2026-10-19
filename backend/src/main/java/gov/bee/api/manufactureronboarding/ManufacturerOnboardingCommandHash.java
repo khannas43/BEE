@@ -34,6 +34,15 @@ final class ManufacturerOnboardingCommandHash {
             note == null ? "" : note));
     }
 
+    static String publicSignup(String fullName, String email, String mobile, UUID keycloakSubject) {
+        return canonicalHash(List.of(
+            "public_signup",
+            email == null ? "" : email,
+            mobile == null ? "" : mobile,
+            fullName == null ? "" : fullName,
+            keycloakSubject == null ? "" : keycloakSubject.toString()));
+    }
+
     static String directorDecision(UUID applicationId, UUID actor, int version, String decision, String note) {
         String trimmedNote = note == null ? "" : note.trim();
         return canonicalHash(List.of(

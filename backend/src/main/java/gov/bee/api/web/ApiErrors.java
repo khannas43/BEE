@@ -69,6 +69,7 @@ public final class ApiErrors {
         Map.entry("reversal_already_pending", "A reversal of this fee confirmation is already waiting for a decision."),
         Map.entry("reversal_not_possible", "Work has already started on this application, so the fee confirmation cannot be reversed here."),
         Map.entry("rate_limited", "Too many requests. Wait a moment and try again."),
+        Map.entry("registration_not_available", "The request could not be completed."),
         Map.entry("service_unavailable", "The service is temporarily unavailable. Try again later."),
         Map.entry("internal_error", "The request could not be completed."));
 

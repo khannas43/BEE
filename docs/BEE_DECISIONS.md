@@ -277,6 +277,20 @@ Each decision below gives what the system does today, the realistic options, a r
 | A30 | Optimized manufacturer onboarding: director approval enters **15 calendar days** observation before permittee becomes **active** | Derived from Table 2 observation pattern; local slice | Provisional — owner confirmation pending |
 | A31 | Submit runs **simulated payment auto-settle** and automated document checks in one orchestrated step | Assumption A16; WP3 fast path | Provisional — owner confirmation pending |
 | A32 | `organisation.permittee_lifecycle` gates new model-application submit when **on_hold** or **revoked** | Least privilege for permittee status | Provisional — owner confirmation pending |
+| A33 | **New** manufacturer applications wait at **`director_review`** after automatic payment and checks; Director approval activates the organisation, issues the permittee number and starts the 15-calendar-day IST observation. V77 automatic-activation rows remain historical evidence and are not rewritten. | Owner-approved WP3-D1, 19 Oct 2026 | Current owner-approved WP3 activation policy |
+
+## WP3 manufacturer activation (Brief WP3-D1, 19 October 2026)
+
+**Status:** owner-approved for **new** manufacturer applications. This supersedes the C2/V77 automatic-activation policy for new registrations only. Historic V77 `automatic_activation` events and already-activated records keep their historical basis. It also supersedes N2's "no onboarding pre-approval queue" for manufacturer registrations only; C3 navigation ownership is unchanged.
+
+1. A guest creates a manufacturer applicant account (public signup; email and mobile OTP are **simulated** in this demonstration).
+2. The applicant signs in with those credentials (the signup response also starts their session).
+3. The applicant completes the company application, uploads documents and submits.
+4. Payment is automatically verified and automated checks run.
+5. The application moves to **`director_review`**. The organisation stays inactive and has no permittee number.
+6. Director approval atomically activates the manufacturer organisation, issues the permittee/registration number and starts the 15-calendar-day IST observation (`active_observation`).
+7. Finance can view the automatically verified payment and may raise an anomaly only during observation. Finance does not approve a normal payment and cannot activate, reject or return.
+8. Director may return or reject **before** activation (organisation remains inactive), clear a hold during observation, or revoke after activation.
 
 **Policy conflicts recorded in WP01 (not decisions):** discrepancy day counts (A08); entity approval roles silent (A02–A03); portal `agency` registration kind not described as such in the manual.
 

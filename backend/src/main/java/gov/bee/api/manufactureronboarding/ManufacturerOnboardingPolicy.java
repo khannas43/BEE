@@ -17,7 +17,7 @@ public final class ManufacturerOnboardingPolicy {
     }
 
     public static boolean editable(String state) {
-        return "draft".equals(state) || "automatic_checks_failed".equals(state);
+        return "draft".equals(state) || "automatic_checks_failed".equals(state) || "returned".equals(state);
     }
 
     public static Optional<UUID> filingOrganisation(Caller caller) {
@@ -54,9 +54,9 @@ public final class ManufacturerOnboardingPolicy {
             if ("manufacturer".equals(g.role()) && "own-org".equals(g.scope())) {
                 orgs.addAll(caller.organisationIds());
             } else if ("director".equals(g.role()) && "all".equals(g.scope())) {
-                stages.addAll(List.of("director_review", "active_observation", "active", "on_hold", "rejected", "revoked", "automatic_checks_failed", "submitted"));
+                stages.addAll(List.of("director_review", "returned", "active_observation", "active", "on_hold", "rejected", "revoked", "automatic_checks_failed", "submitted"));
             } else if (("finance".equals(g.role()) || "programme".equals(g.role())) && "all".equals(g.scope())) {
-                stages.addAll(List.of("director_review", "submitted", "automatic_checks_failed", "active_observation", "active", "on_hold"));
+                stages.addAll(List.of("director_review", "submitted", "automatic_checks_failed", "active_observation", "active", "on_hold", "returned"));
             }
         }
         return new ReadScope(orgs, stages);

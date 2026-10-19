@@ -30,11 +30,10 @@ UPDATE capability_grant SET role = 'director' WHERE role = 'secretary';
 UPDATE capability_grant SET role = 'officer' WHERE role = 'officer_staging';
 
 -- Delegations: delegable stage role director -> officer.
-UPDATE delegation SET role = 'officer' WHERE role = 'director';
+-- Existing delegation rows are immutable by trigger (who, what, when) and are left exactly as recorded: a row delegated as role director before this migration keeps that name.
 
 -- Historical actor_role on workflow events (read models and checks use the new keys).
-UPDATE model_application_transition_event SET actor_role = 'officer' WHERE actor_role = 'director';
-UPDATE model_application_transition_event SET actor_role = 'director' WHERE actor_role = 'secretary';
+-- model_application_transition_event is append-only: past rows keep the actor role recorded at the time (director for the former Director, secretary for the former Secretary).
 
 ALTER TABLE role_assignment DROP CONSTRAINT IF EXISTS role_assignment_role_check;
 ALTER TABLE role_assignment ADD CONSTRAINT role_assignment_role_check CHECK (role IN (
@@ -42,8 +41,9 @@ ALTER TABLE role_assignment ADD CONSTRAINT role_assignment_role_check CHECK (rol
   'manufacturer', 'agency', 'iame', 'sda', 'laboratory'
 ));
 
+-- 'director' stays an accepted value only so that delegation rows recorded before this migration (immutable) remain valid when their state changes; the service offers programme, officer and finance only.
 ALTER TABLE delegation DROP CONSTRAINT IF EXISTS delegation_role_check;
-ALTER TABLE delegation ADD CONSTRAINT delegation_role_check CHECK (role IN ('programme', 'officer', 'finance'));
+ALTER TABLE delegation ADD CONSTRAINT delegation_role_check CHECK (role IN ('programme', 'officer', 'director', 'finance'));
 
 -- SNL WP02B forward validation after resubmit (actor roles).
 CREATE OR REPLACE FUNCTION model_return_response_validate_forward_transition(
@@ -161,7 +161,7 @@ BEGIN
 END $$;
 
 -- Registration review: director_approval stage is acted by role officer (succession from former Director persona).
-UPDATE registration_transition_event SET actor_role = 'officer' WHERE actor_role = 'director';
+-- registration_transition_event is append-only: past rows keep the actor role recorded at the time.
 
 CREATE OR REPLACE FUNCTION registration_return_response_assert_stage_actor(
   p_from_stage text, p_actor_role text, p_actor_account uuid, p_valid_at timestamptz

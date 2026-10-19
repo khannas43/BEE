@@ -212,30 +212,31 @@ export function OnboardingWizard() {
             )}
 
             {step === 1 && (
-              <div className="space-y-3">
+              <div className="space-y-space-md">
                 {draft.facilities.map((f, idx) => (
-                  <div key={f.id} className="border rounded-lg p-space-sm space-y-2" data-testid={`facility-${idx}`}>
-                    <input className="w-full rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={f.name} onChange={(e) => {
-                      const facilities = [...draft.facilities];
-                      facilities[idx] = { ...f, name: e.target.value };
-                      setDraft({ ...draft, facilities });
-                    }} placeholder="Facility name" />
-                    <input className="w-full rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={f.addressLine} onChange={(e) => {
-                      const facilities = [...draft.facilities];
-                      facilities[idx] = { ...f, addressLine: e.target.value };
-                      setDraft({ ...draft, facilities });
-                    }} placeholder="Address" />
+                  <div key={f.id} className="rounded-2xl border border-border-subtle bg-surface-container-lowest/60 p-space-md space-y-3" data-testid={`facility-${idx}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="font-label-lg font-semibold flex items-center gap-2"><Icon name="factory" size={20} className="text-primary" /> Facility {idx + 1}</p>
+                      {draft.facilities.length > 1 && <button type="button" onClick={() => setDraft({ ...draft, facilities: draft.facilities.filter((_, i) => i !== idx) })} className="font-label-sm text-error hover:underline">Remove</button>}
+                    </div>
+                    <label className="block"><span className="font-label-sm text-label-sm">Facility name</span><input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={f.name} onChange={(e) => { const facilities = [...draft.facilities]; facilities[idx] = { ...f, name: e.target.value }; setDraft({ ...draft, facilities }); }} data-testid={`field-facility-name-${idx}`} /></label>
+                    <label className="block"><span className="font-label-sm text-label-sm">Street address</span><input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={f.addressLine} onChange={(e) => { const facilities = [...draft.facilities]; facilities[idx] = { ...f, addressLine: e.target.value }; setDraft({ ...draft, facilities }); }} data-testid={`field-facility-address-${idx}`} /></label>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {(["state", "city", "pincode"] as const).map((key) => <label key={key} className="block"><span className="font-label-sm text-label-sm capitalize">{key === "pincode" ? "PIN code" : key}</span><input className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface" value={f[key]} onChange={(e) => { const facilities = [...draft.facilities]; facilities[idx] = { ...f, [key]: e.target.value }; setDraft({ ...draft, facilities }); }} data-testid={`field-facility-${key}-${idx}`} /></label>)}
+                    </div>
                   </div>
                 ))}
+                <button type="button" onClick={() => setDraft({ ...draft, facilities: [...draft.facilities, { id: crypto.randomUUID(), name: "", addressLine: "", city: "", state: "", pincode: "" }] })} className="inline-flex items-center gap-1 rounded-xl border border-dashed border-primary/50 px-4 py-2.5 font-label-md text-primary hover:bg-primary/5"><Icon name="add" size={18} /> Add another facility</button>
               </div>
             )}
 
             {step === 2 && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block sm:col-span-2 font-label-md font-semibold">Authorised signatory</label>
-                {(["name", "email", "phone", "role"] as const).map((key) => (
-                  <label key={key} className="block">
-                    <span className="font-label-sm text-label-sm capitalize">{key}</span>
+              <div className="space-y-space-md">
+                <div><h3 className="font-label-lg font-semibold">Authorised signatory</h3><p className="font-body-sm text-on-surface-variant mt-1">Enter the person authorised to submit and respond on behalf of the company.</p></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(["name", "role", "email", "phone"] as const).map((key) => (
+                    <label key={key} className={`block ${key === "name" ? "sm:col-span-2" : ""}`}>
+                      <span className="font-label-sm text-label-sm">{key === "role" ? "Designation" : key.charAt(0).toUpperCase() + key.slice(1)}</span>
                     <input
                       className="w-full mt-1 rounded-lg border border-outline-variant px-3 py-2 font-body-md bg-surface"
                       value={draft.authorisedSignatory[key]}
@@ -243,15 +244,19 @@ export function OnboardingWizard() {
                       data-testid={`field-signatory-${key}`}
                     />
                   </label>
-                ))}
+                  ))}
+                </div>
+                <div className="rounded-xl border border-primary/15 bg-primary/5 p-space-sm font-body-sm text-on-surface-variant"><Icon name="badge" size={17} className="inline mr-1 text-primary" /> PAN, identity proof and authorisation evidence are uploaded in the Annexure 1 documents step.</div>
               </div>
             )}
 
             {step === 3 && (
-              <ul className="space-y-2">
+              <div className="space-y-3"><p className="font-body-sm text-on-surface-variant">Upload clear PDF or image copies of every required Annexure 1 document.</p><ul className="space-y-2">
                 {draft.annexureDocuments.map((doc) => (
-                  <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 border rounded-lg p-space-sm">
-                    <div>
+                  <li key={doc.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-space-sm ${doc.uploadedAt ? "border-success/30 bg-success-container/10" : "border-border-subtle bg-surface-container-lowest"}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`grid place-items-center h-9 w-9 rounded-lg ${doc.uploadedAt ? "bg-success/15 text-success" : "bg-primary/10 text-primary"}`}><Icon name={doc.uploadedAt ? "task" : "attach_file"} size={20} /></span>
+                      <div>
                       <p className="font-label-md">{doc.kind}</p>
                       <p className="font-body-sm text-on-surface-variant">{doc.fileName}</p>
                       {doc.uploadedAt ? (
@@ -259,8 +264,9 @@ export function OnboardingWizard() {
                       ) : (
                         <p className="font-body-sm text-on-surface-variant" data-testid={`upload-status-${doc.id}`}>Required</p>
                       )}
+                      </div>
                     </div>
-                    <label className="text-primary font-semibold text-label-sm cursor-pointer">
+                    <label className="rounded-lg border border-dashed border-primary/50 bg-primary/5 px-3 py-2 text-primary font-semibold text-label-sm cursor-pointer">
                       <input
                         type="file"
                         className="sr-only"
@@ -276,16 +282,16 @@ export function OnboardingWizard() {
                     </label>
                   </li>
                 ))}
-              </ul>
+              </ul></div>
             )}
 
             {step === 4 && (
               <div className="space-y-3">
-                <label className="flex items-start gap-2">
+                <label className={`flex items-start gap-3 rounded-xl border p-space-md cursor-pointer ${draft.declarationAccepted ? "border-primary/40 bg-primary/5" : "border-border-subtle"}`}>
                   <input type="checkbox" checked={draft.declarationAccepted} onChange={(e) => setDraft({ ...draft, declarationAccepted: e.target.checked })} data-testid="checkbox-declaration" />
                   <span className="font-body-sm">I declare that the information supplied is accurate for this demonstration submission.</span>
                 </label>
-                <label className="flex items-start gap-2">
+                <label className={`flex items-start gap-3 rounded-xl border p-space-md cursor-pointer ${draft.agreementAccepted ? "border-primary/40 bg-primary/5" : "border-border-subtle"}`}>
                   <input type="checkbox" checked={draft.agreementAccepted} onChange={(e) => setDraft({ ...draft, agreementAccepted: e.target.checked })} data-testid="checkbox-agreement" />
                   <span className="font-body-sm">I accept the demonstration terms and S&L registration agreement placeholder.</span>
                 </label>
@@ -293,9 +299,9 @@ export function OnboardingWizard() {
             )}
 
             {step === 5 && (
-              <div className="space-y-3">
-                <p className="font-body-md" data-testid="wizard-fee">
-                  Demonstration fee: <strong>₹ {appRecord ? formatFeeInr(appRecord.payment.amountInr) : "—"}</strong> INR
+              <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-surface p-space-lg space-y-space-md">
+                <p className="font-body-lg font-semibold" data-testid="wizard-fee">
+                  Registration fee: <strong>₹ {appRecord ? formatFeeInr(appRecord.payment.amountInr) : "—"}</strong> INR
                 </p>
                 <SimulatedPaymentNote />
                 <p className="font-body-sm text-on-surface-variant">On submit, payment will be recorded as {LABEL_AUTO_PAYMENT.toLowerCase()} and {LABEL_AUTO_RULES.toLowerCase()} will run automatically.</p>
@@ -303,12 +309,16 @@ export function OnboardingWizard() {
             )}
 
             {step === 6 && (
-              <div className="space-y-3">
-                <p className="font-body-md">Review your entries, then submit. Payment and initial automated checks run immediately; a BEE Officer then reviews the registration before activation.</p>
-                <dl className="grid sm:grid-cols-2 gap-2 font-body-sm">
-                  <div><dt className="text-on-surface-variant">Entity</dt><dd>{draft.legalName}</dd></div>
-                  <div><dt className="text-on-surface-variant">CIN</dt><dd>{draft.cin}</dd></div>
-                  <div className="sm:col-span-2"><dt className="text-on-surface-variant">Address</dt><dd>{draft.registeredAddress.line1}, {draft.registeredAddress.city}</dd></div>
+              <div className="space-y-space-md">
+                <p className="font-body-md">Review your details below. Payment and automated eligibility checks run after submission; a BEE Officer then reviews the registration before activation.</p>
+                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl border border-border-subtle bg-surface-container-lowest p-space-md font-body-sm">
+                  <div className="sm:col-span-2"><dt className="text-on-surface-variant">Legal entity</dt><dd>{draft.legalName || "—"}</dd></div>
+                  <div><dt className="text-on-surface-variant">CIN</dt><dd>{draft.cin || "—"}</dd></div>
+                  <div><dt className="text-on-surface-variant">GSTIN</dt><dd>{draft.gstin || "—"}</dd></div>
+                  <div className="sm:col-span-2"><dt className="text-on-surface-variant">Registered office</dt><dd>{[draft.registeredAddress.line1, draft.registeredAddress.city, draft.registeredAddress.state].filter(Boolean).join(", ") || "—"}</dd></div>
+                  <div><dt className="text-on-surface-variant">Facilities</dt><dd>{draft.facilities.length}</dd></div>
+                  <div><dt className="text-on-surface-variant">Authorised signatory</dt><dd>{draft.authorisedSignatory.name || "—"}</dd></div>
+                  <div><dt className="text-on-surface-variant">Documents uploaded</dt><dd>{draft.annexureDocuments.filter((document) => document.uploadedAt).length} of {draft.annexureDocuments.length}</dd></div>
                 </dl>
                 {submitError && <p className="text-error font-body-sm" role="alert">{submitError}</p>}
               </div>

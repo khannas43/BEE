@@ -227,7 +227,7 @@ function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPr
             <thead>
               <tr>
                 <SortableTh tools={tools} k="name" className={TH}>Name</SortableTh><SortableTh tools={tools} k="owner" className={TH}>Owner</SortableTh>
-                <SortableTh tools={tools} k="status" className={TH}>Status</SortableTh><SortableTh tools={tools} k="source" className={TH}>Source</SortableTh>
+                <SortableTh tools={tools} k="status" className={TH}>Status</SortableTh><th className={TH}>Reason for status</th><SortableTh tools={tools} k="source" className={TH}>Source</SortableTh>
                 <th className={TH}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -238,13 +238,13 @@ function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPr
                   <td className={TD}><Link href={manufacturerProfileHref(brand.owner)} className="text-primary hover:underline" data-testid={`rvk-brand-owner-link-${brand.id}`}>{names.get(brand.owner) ?? brand.owner}</Link></td>
                   <td className={TD}>
                     <StatusPill code={brand.status} label={words(BRAND_STATUS, brand.status)} />
-                    {brand.status !== "active" ? <div className="mt-1 max-w-xs text-xs text-on-surface-variant" data-testid={`rvk-brand-reason-${brand.id}`}>{reasons.get(brand.id) ?? "No reason recorded."}</div> : null}
                   </td>
+                  <td className={`${TD} max-w-sm text-on-surface-variant`} data-testid={`rvk-brand-reason-${brand.id}`}>{brand.status === "active" ? "-" : reasons.get(brand.id) ?? "No reason recorded."}</td>
                   <td className={TD}>{brand.source}</td>
                   <td className={TD}>{proposeButton(register.canPropose, brand.status === "active", brand.id, openId, onOpen)}</td>
                 </tr>
               ))}
-              {tools.paged.total === 0 ? <tr><td className={TD} colSpan={5}>No brand matches these filters.</td></tr> : null}
+              {tools.paged.total === 0 ? <tr><td className={TD} colSpan={6}>No brand matches these filters.</td></tr> : null}
             </tbody>
           </table>
         </div>

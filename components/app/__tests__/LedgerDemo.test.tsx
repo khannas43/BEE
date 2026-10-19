@@ -29,6 +29,18 @@ describe("LedgerDemo", () => {
     await waitFor(() => expect(screen.getByTestId("ledger-verify").textContent).toMatch(/MISMATCH/));
     expect((screen.getByTestId("ledger-action-commit") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/a second person must commit or fail it/)).toBeTruthy();
+    expect(screen.getByTestId("ledger-txs")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("ledger-back"));
+    fireEvent.click(screen.getByTestId("ledger-tab-explorer"));
     expect(screen.getByTestId("ledger-explorer")).toBeTruthy();
+  });
+
+  it("opens the certificate from a block explorer row", async () => {
+    mockFetch();
+    render(<LedgerDemo />);
+    await waitFor(() => expect(screen.getByTestId("ledger-certs")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("ledger-tab-explorer"));
+    fireEvent.click(screen.getByRole("button", { name: "BEE/RAC/2026/10001" }));
+    await waitFor(() => expect(screen.getByTestId("ledger-verify")).toBeTruthy());
   });
 });

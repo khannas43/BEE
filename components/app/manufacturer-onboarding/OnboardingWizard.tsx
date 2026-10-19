@@ -454,9 +454,9 @@ export function OnboardingWizard() {
                 </div>
               </WizardSection>
               <WizardSection title="Company contact (optional)" icon="support_agent">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {(["name", "email", "phone", "role"] as const).map((key) => (
-                    <label key={key} className={`block ${key === "name" ? "sm:col-span-2" : ""}`}>
+                    <label key={key} className="block">
                       <WizardFieldLabel>{key === "role" ? "Role / department" : key.charAt(0).toUpperCase() + key.slice(1)}</WizardFieldLabel>
                       <input className={wizardInputClass} value={primaryCompanyContact(draft)[key]} onChange={(e) => setDraft(withPrimaryCompanyContact(draft, { ...primaryCompanyContact(draft), [key]: e.target.value }))} data-testid={`field-company-contact-${key}`} />
                     </label>

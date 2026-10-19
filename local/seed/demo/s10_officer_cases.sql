@@ -10,7 +10,7 @@ DECLARE
   programme uuid := '00000000-0000-4000-a000-000000000006';
   q int;
   app uuid;
-  labs text[] := ARRAY['TESTLAB-DEL-01', 'TESTLAB-DEL-01', 'TESTLAB-CHE-02'];
+  labs text[] := ARRAY['LAB', 'LAB', 'LAB'];
   tested date[] := ARRAY[(current_date - 40), (current_date - 33), (current_date - 29)];
   declared numeric[] := ARRAY[4.62, 4.35, 5.05];
   stars int[] := ARRAY[4, 3, 5];

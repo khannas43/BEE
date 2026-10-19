@@ -809,3 +809,17 @@ BEGIN
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
 END $$;
+
+-- Pin search_path (schema, pg_catalog, pg_temp last) on the onboarding functions redefined above.
+DO $$
+DECLARE
+  home_schema text := current_schema();
+  f regprocedure;
+BEGIN
+  FOR f IN SELECT p.oid::regprocedure FROM pg_proc p WHERE p.pronamespace = to_regnamespace(home_schema) AND p.prosecdef
+            AND p.proname IN ('manufacturer_onboarding_assert_anomaly_actor', 'manufacturer_onboarding_orchestrate_director_decision',
+                              'manufacturer_onboarding_orchestrate_resolve_anomaly', 'manufacturer_onboarding_maint_observation_close_as_of',
+                              'manufacturer_onboarding_maint_close_expired_observations', 'notification_foundation_fan_out') LOOP
+    EXECUTE format('ALTER FUNCTION %s SET search_path = %I, pg_catalog, pg_temp', f, home_schema);
+  END LOOP;
+END $$;

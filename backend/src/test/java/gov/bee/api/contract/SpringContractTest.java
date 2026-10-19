@@ -3416,7 +3416,7 @@ class SpringContractTest {
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(ONBOARD));
         conforms(ONE + "/submit", get(base + "/submit").with(token("finance")), 403, "no_effective_role");
         account("auditor", "all");
-        conforms(ONE + "/submit", get(base + "/submit").with(token("auditor")), 403, "no_write_scope");
+        conforms(ONE + "/submit", get(base + "/submit").with(token("auditor")), 403, "no_read_scope");
         account("manufacturer", "own-org");
         when(identity.activeMembershipOrganisationIds(USER)).thenReturn(Set.of(ONBOARD));
         conforms(ONE + "/submit", get(base + "/submit").with(token("manufacturer")), 200, null);

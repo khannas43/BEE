@@ -3,7 +3,6 @@ import { sessionRead, sessionWrite } from "@/lib/server/bff";
 import {
   SPRING_MANUFACTURER_ONBOARDING_CREATE,
   SPRING_MANUFACTURER_ONBOARDING_LIST,
-  SPRING_MANUFACTURER_ONBOARDING_READ,
 } from "@/lib/server/contracts/manufacturer-onboarding";
 import { logged, methodNotAllowed } from "@/lib/server/http";
 

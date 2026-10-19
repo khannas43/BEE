@@ -15,7 +15,7 @@ public final class LocalSeedSql {
         return Files.readString(SEED);
     }
 
-    /** Seed compatible with Flyway schemas stopped before V78 (director/secretary roles, no officer). */
+    /** Seed compatible with Flyway schemas stopped before V79 (director/secretary roles, no officer). */
     public static String beforeRoleSuccession() throws IOException {
         return current()
             .replace("'00000000-0000-4000-a000-000000000007', 'bee.officer', 'BEE Officer'",

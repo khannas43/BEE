@@ -841,6 +841,7 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
     fullName: "Guest Applicant",
     email: "guest.signup@example.invalid",
     mobile: "9876501234",
+    username: "guest.signup",
     password: "SecurePass1",
   });
   const signupHeaders = { "Content-Type": "application/json", "Idempotency-Key": "0123456789abcdef0123490" };
@@ -862,6 +863,8 @@ test("retention: the file rotates at its size limit, keeps at most 3 rotated fil
       if (isUsersCollection(url) && (!init?.method || init.method === "POST")) {
         return new Response(null, { status: 201, headers: { Location: guestUserLocation } });
       }
+      if (url.includes("/roles/manufacturer")) return json(200, { id: "role-manufacturer", name: "manufacturer" });
+      if (url.includes("/role-mappings/realm")) return new Response(null, { status: 204 });
       if (isUserResource(url)) return json(204, {});
       if (typeof next === "function") return next(url, init);
       throw new Error(url);

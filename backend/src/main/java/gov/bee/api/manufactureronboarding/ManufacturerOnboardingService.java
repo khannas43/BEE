@@ -196,7 +196,7 @@ public class ManufacturerOnboardingService {
     public ResponseEntity<Map<String, Object>> submitPreview(Caller caller, UUID id) {
         var scope = ManufacturerOnboardingPolicy.readScope(caller);
         if (scope.isEmpty()) {
-            return error(HttpStatus.FORBIDDEN, "no_write_scope");
+            return error(HttpStatus.FORBIDDEN, "no_read_scope");
         }
         Optional<ManufacturerOnboardingRepository.Row> row = repo.find(id).filter(scope::canRead);
         if (row.isEmpty()) {

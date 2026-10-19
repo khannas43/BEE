@@ -315,7 +315,7 @@ export const NAVIGATION: readonly NavGroup[] = [
     id: "dir.work", title: "Work Queue & Decisions", icon: "inbox", profile: "officer",
     children: [
       entry("dir.work-queue", "Officer work queue", "inbox", live(R.myWork), BEE_OFFICER),
-      entry("dir.observations", "Registration observations", "insights", live(R.monitoring), BEE_OFFICER, { activePrefixes: APPLICATION_STATUS }),
+      // "Registration observations" is hidden for now (demonstration); the screen stays reachable by URL and from "Anomalies and holds".
       entry("dir.holds", "Anomalies and holds", "pause_circle", live(R.monitoring), BEE_OFFICER),
       entry("dir.recommendations", "Model recommendations", "how_to_reg", live(R.approval), BEE_OFFICER),
       entry("dir.brand-reviews", "Brand registration reviews", "rate_review", live(R.regReviews), BEE_OFFICER),

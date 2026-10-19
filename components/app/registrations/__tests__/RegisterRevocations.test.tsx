@@ -6,6 +6,8 @@ import { deferredFetches, installDeferredFetch, type DeferredFetch } from "@/com
 import type { RegisterRevocations as Register, RegisterRevocationProposal } from "@/lib/client/runtimeRegisterRevocations";
 import { runtimeNavFor } from "@/lib/runtimeRoutes";
 
+const search = vi.hoisted(() => ({ value: "" }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(search.value) }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => <a href={href} {...rest}>{children}</a>,
 }));

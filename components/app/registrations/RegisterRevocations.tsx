@@ -2,6 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { RegisterDetail, registerDetailHref, type RegisterView } from "@/components/app/registrations/RegisterDetail";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { istStamp } from "@/lib/client/istTime";
@@ -49,6 +51,10 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
   const revalidation = useRevalidation();
   const read = gateRead(identity.status, useRuntimeRead("register", loadRegister, revalidation));
   const [openId, setOpenId] = useState<string | null>(null);
+  const params = useSearchParams();
+  const viewParam = params.get("view");
+  const view: RegisterView | null = viewParam === "brand" || viewParam === "authorisation" || viewParam === "proposal" ? viewParam : null;
+  const detailId = params.get("id");
 
   return (
     <ScreenChrome module={module} screen={screen} subtitle="Register" implemented={runtimeRouteFor(registerHref())?.implemented}>
@@ -62,7 +68,9 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
           errorTestId="rvk-error"
           signInReturnTo={registerHref()}
         >
-          {(r) => (
+          {(r) => view && detailId ? (
+            <RegisterDetail register={r.register} view={view} id={detailId} />
+          ) : (
             <RegisterBody
               register={r.register}
               readOnlyAdmin={readOnlyAdmin}
@@ -215,7 +223,7 @@ function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPr
             <tbody>
               {tools.paged.pageRows.map((brand) => (
                 <tr key={brand.id} className="border-t border-outline-variant" data-testid={`rvk-brand-${brand.id}`} data-status={brand.status}>
-                  <td className={`${TD} font-semibold`}>{brand.name}</td>
+                  <td className={`${TD} font-semibold`}><Link href={registerDetailHref("brand", brand.id)} className="text-primary hover:underline" data-testid={`rvk-brand-open-${brand.id}`}>{brand.name}</Link></td>
                   <td className={TD}>{brand.owner}</td>
                   <td className={TD}><StatusPill code={brand.status} label={words(BRAND_STATUS, brand.status)} /></td>
                   <td className={TD}>{brand.source}</td>
@@ -277,7 +285,7 @@ function AuthsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPro
             <tbody>
               {tools.paged.pageRows.map((auth) => (
                 <tr key={auth.id} className="border-t border-outline-variant" data-testid={`rvk-auth-${auth.id}`} data-status={auth.status}>
-                  <td className={`${TD} font-semibold`}>{auth.brandName}</td>
+                  <td className={`${TD} font-semibold`}><Link href={registerDetailHref("authorisation", auth.id)} className="text-primary hover:underline" data-testid={`rvk-auth-open-${auth.id}`}>{auth.brandName}</Link></td>
                   <td className={TD}>{auth.agency}</td>
                   <td className={TD}>{auth.principal}</td>
                   <td className={TD}>{auth.validFrom}</td>
@@ -375,7 +383,7 @@ function HistoryPanel({ decided }: { decided: RegisterRevocationProposal[] }) {
             {tools.paged.pageRows.map((p) => (
               <tr key={p.id} className="border-t border-outline-variant" data-testid={`rvk-history-${p.id}`} data-state={p.state}>
                 <td className={TD}><StatusPill code={p.state} label={words(PROPOSAL_STATE, p.state)} /></td>
-                <td className={`${TD} font-semibold`}>{p.targetLabel}</td>
+                <td className={`${TD} font-semibold`}><Link href={registerDetailHref("proposal", p.id)} className="text-primary hover:underline" data-testid={`rvk-history-open-${p.id}`}>{p.targetLabel}</Link></td>
                 <td className={TD}>{words(ACTION_WORD, p.action)}{p.closeOn ? ` on ${p.closeOn}` : ""}</td>
                 <td className={TD}>{p.proposedBy}</td>
                 <td className={TD}>{p.decidedBy ?? ""}</td>
@@ -536,7 +544,7 @@ function PendingRow({
   return (
     <li className="font-body-sm border border-outline-variant rounded-lg p-space-sm" data-testid={`rvk-pending-${proposal.id}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-semibold text-on-surface">{proposal.targetLabel}</span>
+        <Link href={registerDetailHref("proposal", proposal.id)} className="font-semibold text-primary hover:underline" data-testid={`rvk-pending-open-${proposal.id}`}>{proposal.targetLabel}</Link>
         <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[12px] font-semibold bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]">
           {words(ACTION_WORD, proposal.action)}{proposal.closeOn ? ` on ${proposal.closeOn}` : ""}
         </span>

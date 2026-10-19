@@ -32,8 +32,8 @@ public final class SlicePolicy {
         "reviewer", new ReadRule(ASSIGNED, null),
         "finance", new ReadRule(ALL, "fee_due"),
         "programme", new ReadRule(ALL, "rating"),
-        "director", new ReadRule(ALL, "director_review"),
-        "secretary", new ReadRule(ALL, "secretary_approval"));
+        "officer", new ReadRule(ALL, "director_review"),
+        "director", new ReadRule(ALL, "secretary_approval"));
 
     private record ReadRule(String scope, String stage) {
     }

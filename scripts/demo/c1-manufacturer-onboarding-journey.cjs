@@ -436,7 +436,7 @@ async function main() {
     check("c1.finance.anomaly-before-revoke", held.state === "on_hold", held.state);
     await finRevoke.close();
     const dirRevoke2 = await openPage(chrome.cdp);
-    await demoSignIn(dirRevoke2, "bee.director");
+    await demoSignIn(dirRevoke2, "bee.officer");
     const revoked = await directorRevokeAfterHold(dirRevoke2, revokeRun.appId, revokeRun.detail.reference);
     check("c1.director.revoke-disposable", revoked.state === "revoked", revoked.reference);
     evidence.applications.revoke = {
@@ -473,7 +473,7 @@ async function main() {
     await applicantMain.close();
 
     const director = await openPage(chrome.cdp);
-    check("c1.director.sign-in", await demoSignIn(director, "bee.director"), "director demo sign-in");
+    check("c1.director.sign-in", await demoSignIn(director, "bee.officer"), "director demo sign-in");
     await director.goto(`${WEB}/app/manufacturer/director`);
     check(
       "c1.director.no-preapproval",
@@ -510,7 +510,7 @@ async function main() {
     await finance.close();
 
     const director2 = await openPage(chrome.cdp);
-    await demoSignIn(director2, "bee.director");
+    await demoSignIn(director2, "bee.officer");
     const resolved = await directorResolveHold(director2, appMeta.id, appMeta.reference);
     check("c1.director.resolve-hold", resolved.state === "active_observation", `state=${resolved.state}`);
     evidence.applications.primary.anomaly.directorResolveState = resolved.state;

@@ -211,7 +211,7 @@ async function main() {
     }
 
     /* ---------- empty and no read access: real Spring answers, no entry for these roles ---------- */
-    for (const [persona, testCase] of [["bee.secretary", "empty"], ["lab.officer", "forbidden"]]) {
+    for (const [persona, testCase] of [["bee.officer", "empty"], ["lab.officer", "forbidden"]]) {
       const twin = ids.name(persona);
       await totp.ensureEnrolled(twin);
       const page = await openPage(chrome.cdp);

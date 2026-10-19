@@ -91,7 +91,7 @@ class MisModuleDatabaseTest {
 
     @Test
     void summaryFiguresEqualDirectSql() {
-        DemoResult r = get(as("director"), "summary", Map.of());
+        DemoResult r = get(as("officer"), "summary", Map.of());
         assertNull(r.code());
         long submitted = owner.queryForObject("SELECT count(*) FROM model_application_submission_event", Long.class);
         long approved = owner.queryForObject("SELECT count(*) FROM model_application WHERE state = 'approved'", Long.class);
@@ -132,12 +132,12 @@ class MisModuleDatabaseTest {
     @Test
     @SuppressWarnings("unchecked")
     void tablesOfOtherDemoAreasDegradeToNotAvailable() {
-        Map<String, Object> prod = get(as("secretary"), "production", Map.of()).body();
+        Map<String, Object> prod = get(as("director"), "production", Map.of()).body();
         boolean landed = owner.queryForObject("SELECT to_regclass('production_submission') IS NOT NULL", Boolean.class);
         if (!landed) {
             assertEquals(1, ((List<?>) prod.get("unavailable")).size());
         }
-        Map<String, Object> cert = get(as("secretary"), "certificates", Map.of()).body();
+        Map<String, Object> cert = get(as("director"), "certificates", Map.of()).body();
         assertNotNull(cert.get("tables"));
     }
 

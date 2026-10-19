@@ -13,7 +13,7 @@ public final class AdminDemonstrationAccess {
 
     /** Roles that do operational work; an Admin who also holds one keeps that role's actions. */
     private static final Set<String> OPERATIONAL = Set.of(
-        "manufacturer", "agency", "director", "secretary", "finance", "programme", "reviewer", "iame", "sda", "laboratory");
+        "manufacturer", "agency", "officer", "director", "finance", "programme", "reviewer", "iame", "sda", "laboratory");
 
     private AdminDemonstrationAccess() {
     }

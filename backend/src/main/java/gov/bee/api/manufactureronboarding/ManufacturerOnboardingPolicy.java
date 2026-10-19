@@ -53,8 +53,10 @@ public final class ManufacturerOnboardingPolicy {
         for (RoleGrant g : caller.ownRoles()) {
             if ("manufacturer".equals(g.role()) && "own-org".equals(g.scope())) {
                 orgs.addAll(caller.organisationIds());
-            } else if ("director".equals(g.role()) && "all".equals(g.scope())) {
+            } else if ("officer".equals(g.role()) && "all".equals(g.scope())) {
                 stages.addAll(List.of("director_review", "active_observation", "active", "on_hold", "rejected", "revoked", "automatic_checks_failed", "submitted"));
+            } else if ("director".equals(g.role()) && "all".equals(g.scope())) {
+                stages.addAll(List.of("active_observation", "active", "on_hold", "rejected", "revoked"));
             } else if (("finance".equals(g.role()) || "programme".equals(g.role())) && "all".equals(g.scope())) {
                 stages.addAll(List.of("director_review", "submitted", "automatic_checks_failed", "active_observation", "active", "on_hold"));
             }
@@ -70,6 +72,9 @@ public final class ManufacturerOnboardingPolicy {
         if (caller.holds("programme", "all")) {
             return "programme";
         }
+        if (caller.holds("officer", "all")) {
+            return "officer";
+        }
         if (caller.holds("director", "all")) {
             return "director";
         }
@@ -77,6 +82,6 @@ public final class ManufacturerOnboardingPolicy {
     }
 
     public static boolean canDirectorAct(Caller caller) {
-        return caller.holds("director", "all");
+        return caller.holds("officer", "all");
     }
 }

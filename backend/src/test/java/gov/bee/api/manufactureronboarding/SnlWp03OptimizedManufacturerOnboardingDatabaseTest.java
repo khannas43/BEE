@@ -87,7 +87,7 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
         docRepo = new ManufacturerOnboardingDocumentRepository(db);
         json = new ObjectMapper();
         service = new ManufacturerOnboardingService(repo, docRepo, new MasterDataRepository(db), new IdempotencyRepository(db), json);
-        assertEquals(77, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(78, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
         assertEquals(1, owner.queryForObject(
             "SELECT count(*) FROM flyway_schema_history WHERE success AND version = '77'", Integer.class));
         assertEquals("none", owner.queryForObject("SELECT permittee_lifecycle FROM organisation WHERE id = ?", String.class, ONBOARD_ORG));
@@ -148,7 +148,7 @@ class SnlWp03OptimizedManufacturerOnboardingDatabaseTest {
     }
 
     static Caller director() {
-        return new Caller(DIRECTOR, "bee.director", List.of(new RoleGrant("director", "all")), Set.of());
+        return new Caller(DIRECTOR, "bee.officer", List.of(new RoleGrant("officer", "all")), Set.of());
     }
 
     static Caller finance() {

@@ -15,7 +15,7 @@ DECLARE
   secretary  uuid := '00000000-0000-4000-a000-000000000008';
   stage_state text[] := ARRAY['fee_due','iame_scrutiny','bee_scrutiny','rating','director_review','secretary_approval','approved'];
   stage_actor uuid[];
-  stage_role  text[] := ARRAY['manufacturer','finance','iame','reviewer','reviewer','director','secretary'];
+  stage_role  text[] := ARRAY['manufacturer','finance','iame','reviewer','reviewer','officer','director'];
   org_ids uuid[] := ARRAY['00000000-0000-4000-b000-000000000501','00000000-0000-4000-b000-000000000502','00000000-0000-4000-b000-000000000503']::uuid[];
   org_names text[] := ARRAY['Synthetic Maker One (synthetic, MIS demo)','Synthetic Maker Two (synthetic, MIS demo)','Synthetic Maker Three (synthetic, MIS demo)'];
   n int; k int; level int; o int; app uuid; sub_ev uuid; snap uuid; ev uuid; ev4 uuid; ev_last uuid;
@@ -241,7 +241,7 @@ BEGIN
         VALUES (rate_ev, app, 'rate', 'rating', 'director_review', reviewer, 'reviewer', 2, approved_ts - interval '2 days') ON CONFLICT (id) DO NOTHING;
       ev := md5('s5b-ok-' || n)::uuid;
       INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after, occurred_at)
-        VALUES (ev, app, 'approve', 'secretary_approval', 'approved', secretary, 'secretary', 3, approved_ts) ON CONFLICT (id) DO NOTHING;
+        VALUES (ev, app, 'approve', 'secretary_approval', 'approved', secretary, 'director', 3, approved_ts) ON CONFLICT (id) DO NOTHING;
       INSERT INTO model_application_rating (id, application_id, transition_event_id, rating_version, basis, scheme_key, declared_iseer, verified_iseer, stars,
                                             computed_by_account_id, computed_at)
         VALUES (md5('s5b-rt-' || n)::uuid, app, rate_ev, 1, 'local_demo', 'RAC-ISEER-DEMO-1', iseer, iseer, stars, reviewer, approved_ts - interval '2 days')
@@ -328,7 +328,7 @@ BEGIN
 
   -- Open delegations. Born pending, then approved, because a delegation cannot be inserted already decided.
   INSERT INTO delegation (id, delegator_id, delegate_id, role, reason, valid_from, valid_to, state) VALUES
-    ('00000000-0000-4000-c000-00000000f001', director, programme, 'director', 'Cover for the approval desk during the demonstration week (synthetic)', current_date, current_date + 14, 'pending'),
+    ('00000000-0000-4000-c000-00000000f001', director, programme, 'officer', 'Cover for the BEE Officer desk during the demonstration week (synthetic)', current_date, current_date + 14, 'pending'),
     ('00000000-0000-4000-c000-00000000f002', finance, programme, 'finance', 'Fee desk cover while the finance officer is in a meeting (synthetic)', current_date, current_date + 10, 'pending'),
     ('00000000-0000-4000-c000-00000000f003', programme, helpdesk, 'programme', 'Asked so helpdesk can see a programme queue during the demonstration (synthetic)', current_date, current_date + 7, 'pending')
   ON CONFLICT (id) DO NOTHING;

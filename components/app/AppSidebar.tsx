@@ -10,7 +10,7 @@ import { activeEntry, navigationFor, navProfileFor, type NavEntry, type NavGroup
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { useLang } from "@/components/i18n/LangProvider";
 
-const PROFILE_TITLE = { admin: "Admin", manufacturer: "Manufacturer", director: "Director", secretary: "Secretary", finance: "Finance" } as const;
+const PROFILE_TITLE = { admin: "Admin", manufacturer: "Manufacturer", officer: "Officer", director: "Director", finance: "Finance" } as const;
 
 /** The console menu: the signed-in person's role hierarchy from lib/navigation, used by the desktop sidebar and the mobile drawer alike. */
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {

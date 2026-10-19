@@ -31,7 +31,7 @@ function check(id, ok, detail) {
 const sqlMaint = (q) => execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${env("BEE_MAINT_DB_PASSWORD", "bee-local-maint")}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", env("BEE_MAINT_DB_USER", "bee_local_maint"), "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", q]).toString().trim();
 const sql = (q) => execFileSync("docker", ["exec", "-i", "-e", `PGPASSWORD=${env("BEE_APP_DB_PASSWORD", "bee-local-app")}`, "bee-local-postgres", "psql", "-h", "127.0.0.1", "-U", "bee_app", "-d", "bee_app", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", q]).toString().trim();
 
-const PERSONAS = ["nova.applicant", "pixel.applicant", "bee.finance", "iame.officer", "bee.reviewer", "bee.programme", "bee.director", "bee.secretary", "bee.admin", "bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer"];
+const PERSONAS = ["nova.applicant", "pixel.applicant", "bee.finance", "iame.officer", "bee.reviewer", "bee.programme", "bee.officer", "bee.director", "bee.admin", "bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer"];
 const ROUTE_CASES = {
   // route: { method, body, legit(persona, appRef, state) }
   "fee-confirmation": { m: "POST", legit: (p, s) => p === "bee.finance" && s === "fee_due" },
@@ -136,8 +136,8 @@ async function main() {
   r = await probe("iame.officer", "POST", `/api/model-applications/${a3.id}/secretary-approval`, {});
   const ri = await probe("iame.officer", "POST", `/api/model-applications/${a4.id}/iame-recommendation`, {});
   check("denial.N5-iame-no-approval-and-only-assigned", [403, 404].includes(r.status) && [403, 404].includes(ri.status), `IAME approving ${r.status}; IAME on an unassigned application ${ri.status}`);
-  r = await probe("bee.director", "POST", `/api/model-applications/${a4.id}/director-recommendation`, {});
-  const rj = await probe("bee.secretary", "POST", `/api/model-applications/${a4.id}/secretary-approval`, {});
+  r = await probe("bee.officer", "POST", `/api/model-applications/${a4.id}/director-recommendation`, {});
+  const rj = await probe("bee.director", "POST", `/api/model-applications/${a4.id}/secretary-approval`, {});
   check("denial.N6-N7-N9-deciding-out-of-order", [403, 404].includes(r.status) && [403, 404].includes(rj.status), `an application at BEE scrutiny with no rating: Director ${r.status}, Secretary ${rj.status}`);
   for (const [name, who] of [["helpdesk", "bee.helpdesk"], ["admin", "bee.admin"], ["auditor", "bee.auditor"]]) {
     const codes = [];
@@ -155,15 +155,15 @@ async function main() {
 
   /* The other API routes, by persona (WP02 package review): administration, fees, registration, the register and the request to delegate. Every
      persona not entitled to a route is denied (403 or 404); the entitled personas reach it (a read answers 200; a write is not exercised). */
-  const ALL = ["nova.applicant", "pixel.applicant", "bee.finance", "iame.officer", "bee.reviewer", "bee.programme", "bee.director", "bee.secretary", "bee.admin", "bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer", "inactive.role", "role.mismatch"];
+  const ALL = ["nova.applicant", "pixel.applicant", "bee.finance", "iame.officer", "bee.reviewer", "bee.programme", "bee.officer", "bee.director", "bee.admin", "bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer", "inactive.role", "role.mismatch"];
   const OTHER = [
     { m: "GET", path: "/api/fee-rules", who: ["bee.admin"] },
     { m: "GET", path: "/api/rating-schemes", who: ["bee.admin"] },
     { m: "GET", path: "/api/business-settings", who: ["bee.admin"] },
     { m: "GET", path: "/api/fee-corrections", who: ["bee.finance"] },
-    { m: "GET", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant", "bee.finance", "bee.programme", "bee.director"] },
+    { m: "GET", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant", "bee.finance", "bee.programme", "bee.officer"] },
     { m: "GET", path: "/api/registrations/eligible-brands", who: ["nova.applicant", "pixel.applicant"] },
-    { m: "GET", path: "/api/register-revocations", who: ["bee.programme", "bee.director", "bee.admin"] },
+    { m: "GET", path: "/api/register-revocations", who: ["bee.programme", "bee.officer", "bee.admin"] },
     { m: "POST", path: "/api/fee-rules/proposals", who: ["bee.admin"] },
     { m: "POST", path: "/api/rating-schemes/proposals", who: ["bee.admin"] },
     { m: "POST", path: "/api/business-settings/proposals", who: ["bee.admin"] },
@@ -171,7 +171,7 @@ async function main() {
     { m: "POST", path: "/api/fee-corrections/reversals", who: ["bee.finance"] },
     { m: "POST", path: "/api/registrations", who: ["nova.applicant", "pixel.applicant"] },
     { m: "POST", path: "/api/register-revocations", who: ["bee.programme"] },
-    { m: "POST", path: "/api/delegations", who: ["bee.programme", "bee.director", "bee.finance"] },
+    { m: "POST", path: "/api/delegations", who: ["bee.programme", "bee.officer", "bee.finance"] },
   ];
   const otherSnapshot = () => sql(`SELECT (SELECT count(*) FROM app.fee_rule_proposal) || '|' || (SELECT count(*) FROM app.rating_scheme_proposal) || '|' || (SELECT count(*) FROM app.business_setting_proposal) || '|' || (SELECT count(*) FROM app.fee_correction_proposal) || '|' || (SELECT count(*) FROM app.registration_application) || '|' || (SELECT count(*) FROM app.register_revocation_proposal) || '|' || (SELECT count(*) FROM app.delegation) || '|' || (SELECT count(*) FROM app.fee_reversal_proposal)`);
   const otherBefore = otherSnapshot();
@@ -199,7 +199,7 @@ async function main() {
 
   /* N8: a person who already acted at another stage of one application is refused at this one, whatever the role. A seeded application is moved
      to the stage and an earlier step by the same twin is written (the local maintenance login removes it again). */
-  for (const [who, route, stage, priorFrom, label] of [["bee.secretary", "secretary-approval", "secretary_approval", "director_review", "Secretary"], ["bee.director", "director-recommendation", "director_review", "rating", "Director"]]) {
+  for (const [who, route, stage, priorFrom, label] of [["bee.director", "secretary-approval", "secretary_approval", "director_review", "Secretary"], ["bee.officer", "director-recommendation", "director_review", "rating", "Director"]]) {
     const account = ids.accountId(who);
     const started = sql(`SELECT version FROM app.model_application WHERE id = '${a4.id}'`);
     let marker = null;

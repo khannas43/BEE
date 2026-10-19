@@ -124,7 +124,7 @@ function cleanup(twinIds, brandIds, modelIds) {
 
 async function runChecks(run, P) {
   const tag = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  const PERSONA = ["nova.applicant", "pixel.applicant", "bee.programme", "bee.director", "bee.admin"];
+  const PERSONA = ["nova.applicant", "pixel.applicant", "bee.programme", "bee.officer", "bee.admin"];
   const twinIds = PERSONA.map((u) => `'${ids.accountId(u)}'`).join(",");
   const before = counts();
   const brandIds = [];
@@ -258,7 +258,7 @@ async function runChecks(run, P) {
 async function main() {
   const chrome = await launchChrome();
   try {
-    const who = { nova: ids.name("nova.applicant"), pixel: ids.name("pixel.applicant"), programme: ids.name("bee.programme"), director: ids.name("bee.director"), admin: ids.name("bee.admin") };
+    const who = { nova: ids.name("nova.applicant"), pixel: ids.name("pixel.applicant"), programme: ids.name("bee.programme"), director: ids.name("bee.officer"), admin: ids.name("bee.admin") };
     const P = {};
     for (const [k, u] of Object.entries(who)) {
       await totp.ensureEnrolled(u);

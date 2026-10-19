@@ -27,8 +27,8 @@ public class LedgerModule implements DemoModule {
 
     /** An amended valid-to date may not run further than this from today (a certificate lasts three years; the demonstration allows some slack). */
     static final int MAX_YEARS_AHEAD = 10;
-    private static final Set<String> WRITERS = Set.of("programme", "secretary", "admin");
-    private static final Set<String> ALL_READERS = Set.of("programme", "secretary", "admin", "auditor", "director");
+    private static final Set<String> WRITERS = Set.of("programme", "director", "admin");
+    private static final Set<String> ALL_READERS = Set.of("programme", "director", "admin", "auditor", "officer");
 
     private final java.util.function.Supplier<LedgerRepository> repository;
 

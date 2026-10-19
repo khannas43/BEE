@@ -894,7 +894,8 @@ Accepted by and date:
 
 - **C3:** `lib/navigation.ts` drives the Spring-backed menu (five profiles, four groups max). Admin is the demonstration umbrella; operational roles keep distinct menus. See [BEE_DECISIONS.md](../BEE_DECISIONS.md) N1–N5.
 - **C3A:** Umbrella Admin without an operational own role receives widened **read** scope for operational records (model applications, registrations, manufacturer onboarding, **register revocations**) and explicit **mutation denial** via `AdminDemonstrationAccess` (including `GET /api/register-revocations` and denied propose/decide). `/api/me.adminDemonstrationReadOnly` signals the read-only profile; operational screens **hide** mutation controls where needed (register screen included). `lib/adminMenuCoverage.ts` maps every Admin menu runtime route to named backend/UI tests. Contract **0.37.2** (pin SHA256 `fc06669ad1b40bf79d4018b5dd7a459a2967bf92641602e4dc4dc6affba01e85`). **BL-266** closed.
-- **C3B:** The header role dropdown shows only **Manufacturer, Finance, Director, Secretary, Admin** (`VISIBLE_SELECTOR_ROLES`). Admin sidebar narration and `AdminDemonstrationBanner` are removed; Admin still opens every Admin-menu route while Spring rejects operational mutations. Login keeps the single oval username/password form without a demo account list. Live proof on `npm run local:c3a-five-role` (C3B assertions). See N6–N7 in [BEE_DECISIONS.md](../BEE_DECISIONS.md).
+- **C3B:** The header role dropdown shows only **Manufacturer, Finance, BEE Officer, Director, Admin** (`VISIBLE_SELECTOR_ROLES`). Admin sidebar narration and `AdminDemonstrationBanner` are removed; Admin still opens every Admin-menu route while Spring rejects operational mutations. Login keeps the single oval username/password form without a demo account list. Live proof on `npm run local:c3a-five-role` (C3B assertions). See N6–N7 in [BEE_DECISIONS.md](../BEE_DECISIONS.md).
+- **C3 role succession (N8):** Spring **`officer`** / **`director`** replace the former director/secretary *personas* for authority; demo **`bee.officer`** / **`bee.director`**; workflow states and API paths (`director_review`, `secretary_approval`, `director-recommendation`, `secretary-approval`) stay statutory labels. V78 migrates fixtures and delegation stage roles.
 
 The following demonstrated modules should be promoted into the formal API rather than rebuilt:
 
@@ -917,10 +918,10 @@ The console menu is a role-based lifecycle hierarchy, defined once in `lib/navig
   - It has exactly four groups: Executive Dashboard; Registration & Applications; Labels & Consumer Services; Operations & Intelligence.
   - Together they cover every available screen.
   - No sidebar narration or read-only banner (Brief C3B); screen visibility is for demonstration walkthrough only.
-- **The four operational roles stay distinct, each with at most four groups:**
+- **The four operational roles stay distinct, each with at most four groups (N2, N8):**
   - Manufacturer: Dashboard; Registration & Applications; Labels & Operations; Compliance & Support.
-  - Director: Dashboard; Work Queue & Decisions; Oversight & Intelligence; Registers & Compliance.
-  - Secretary: Dashboard; Final Approvals; Certificates & Formats; Oversight & Reports.
+  - BEE Officer: Dashboard; Work Queue & Decisions; Oversight & Intelligence; Registers & Compliance (former Director operational scope).
+  - Director: Dashboard; Final Approvals; Certificates & Formats; Oversight & Reports (former Secretary final-approval scope; workflow stage still named secretary_approval).
   - Finance: Dashboard; Payments & Receipts; Reconciliation; Monitoring & Reports.
 - **AI is advisory and human-controlled.** The ledger is simulated. Future blueprint functions appear as Preview (sample-data prototype) or Planned (not a link). None is presented as complete.
 - **The development "All screens" link is removed.** The menu and the client route guard follow the Spring sign-in; the preview role grants nothing.

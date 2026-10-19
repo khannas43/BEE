@@ -16,8 +16,8 @@ import java.util.Optional;
 public enum StageReturn {
     IAME("iame_scrutiny", new RoleGrant("iame", SlicePolicy.ASSIGNED)),
     REVIEWER("bee_scrutiny", new RoleGrant("reviewer", SlicePolicy.ASSIGNED)),
-    DIRECTOR("director_review", new RoleGrant("director", SlicePolicy.ALL)),
-    SECRETARY("secretary_approval", new RoleGrant("secretary", SlicePolicy.ALL));
+    DIRECTOR("director_review", new RoleGrant("officer", SlicePolicy.ALL)),
+    SECRETARY("secretary_approval", new RoleGrant("director", SlicePolicy.ALL));
 
     private final String stage;
     private final RoleGrant actor;

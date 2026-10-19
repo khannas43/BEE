@@ -8,8 +8,8 @@ const ADMIN_NOTE = /Admin demonstration view|read-only Admin|Consolidated view o
 const PERSONAS = [
   { key: "manufacturer", user: "nova.applicant", groups: 4, forbidden: "/app/finance/finance-queue" },
   { key: "finance", user: "bee.finance", groups: 4, forbidden: "/app/workflow/my-approvals" },
-  { key: "director", user: "bee.director", groups: 4, forbidden: "/app/registrations/fees" },
-  { key: "secretary", user: "bee.secretary", groups: 4, forbidden: "/app/manufacturer/onboarding" },
+  { key: "officer", user: "bee.officer", groups: 4, forbidden: "/app/registrations/fees" },
+  { key: "director", user: "bee.director", groups: 4, forbidden: "/app/manufacturer/onboarding" },
   {
     key: "admin",
     user: "bee.admin",

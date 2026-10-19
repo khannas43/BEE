@@ -149,12 +149,12 @@
         "description": "BEE persona: reviewer"
       },
       {
-        "name": "director",
-        "description": "BEE persona: director"
+        "name": "officer",
+        "description": "BEE persona: officer"
       },
       {
-        "name": "secretary",
-        "description": "BEE persona: secretary"
+        "name": "director",
+        "description": "BEE persona: director"
       },
       {
         "name": "finance",
@@ -433,6 +433,28 @@
     },
     {
       "id": "00000000-0000-4000-a000-000000000007",
+      "username": "bee.officer",
+      "email": "bee.officer@bee.local.invalid",
+      "emailVerified": true,
+      "firstName": "BEE",
+      "lastName": "Officer",
+      "enabled": true,
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bee-local-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "officer"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-a000-000000000008",
       "username": "bee.director",
       "email": "bee.director@bee.local.invalid",
       "emailVerified": true,
@@ -451,28 +473,6 @@
       ],
       "realmRoles": [
         "director"
-      ]
-    },
-    {
-      "id": "00000000-0000-4000-a000-000000000008",
-      "username": "bee.secretary",
-      "email": "bee.secretary@bee.local.invalid",
-      "emailVerified": true,
-      "firstName": "BEE",
-      "lastName": "Secretary",
-      "enabled": true,
-      "requiredActions": [
-        "CONFIGURE_TOTP"
-      ],
-      "credentials": [
-        {
-          "type": "password",
-          "value": "bee-local-dev",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "secretary"
       ]
     },
     {

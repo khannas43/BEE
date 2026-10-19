@@ -60,8 +60,8 @@ public class PaymentsModule implements DemoModule {
     }
 
     private static boolean isFinanceView(Caller caller) {
-        return caller.holds("finance", "all") || caller.holds("admin", "all") || caller.holds("auditor", "all") || caller.holds("director", "all")
-            || caller.holds("secretary", "all") || caller.holds("programme", "all");
+        return caller.holds("finance", "all") || caller.holds("admin", "all") || caller.holds("auditor", "all") || caller.holds("officer", "all")
+            || caller.holds("director", "all") || caller.holds("programme", "all");
     }
 
     private static String actorRole(Caller caller) {

@@ -304,7 +304,7 @@ async function main() {
   const chrome = await launchChrome();
   try {
     const twins = {};
-    for (const [k, u] of [["nova", "nova.applicant"], ["finance", "bee.finance"], ["iame", "iame.officer"], ["reviewer", "bee.reviewer"], ["programme", "bee.programme"], ["director", "bee.director"], ["secretary", "bee.secretary"]]) {
+    for (const [k, u] of [["nova", "nova.applicant"], ["finance", "bee.finance"], ["iame", "iame.officer"], ["reviewer", "bee.reviewer"], ["programme", "bee.programme"], ["director", "bee.officer"], ["secretary", "bee.officer"]]) {
       twins[k] = ids.name(u);
       await totp.ensureEnrolled(twins[k]);
     }

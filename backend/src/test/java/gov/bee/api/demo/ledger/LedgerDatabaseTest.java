@@ -47,7 +47,7 @@ class LedgerDatabaseTest {
     static final Caller NOVA = new Caller(NOVA_USER, "nova.applicant", List.of(new RoleGrant("manufacturer", "own-org")), Set.of(NOVA_ORG));
     static final Caller PIXEL_MFR = new Caller(PIXEL_USER, "pixel.applicant", List.of(new RoleGrant("manufacturer", "own-org")), Set.of(PIXEL_ORG));
     static final Caller PROGRAMME = new Caller(PROGRAMME_USER, "bee.programme", List.of(new RoleGrant("programme", "all")), Set.of(BEE_ORG));
-    static final Caller SECRETARY = new Caller(SECRETARY_USER, "bee.secretary", List.of(new RoleGrant("secretary", "all")), Set.of(BEE_ORG));
+    static final Caller SECRETARY = new Caller(SECRETARY_USER, "bee.director", List.of(new RoleGrant("director", "all")), Set.of(BEE_ORG));
     static final Caller ADMIN = new Caller(ADMIN_USER, "bee.admin", List.of(new RoleGrant("admin", "all")), Set.of(BEE_ORG));
     static final Caller AUDITOR = new Caller(AUDITOR_USER, "bee.auditor", List.of(new RoleGrant("auditor", "all")), Set.of(BEE_ORG));
     static final Caller FINANCE = new Caller(UUID.fromString("00000000-0000-4000-a000-000000000003"), "bee.finance", List.of(new RoleGrant("finance", "all")), Set.of(BEE_ORG));
@@ -80,7 +80,7 @@ class LedgerDatabaseTest {
         UUID ev = UUID.randomUUID();
         owner.update("INSERT INTO model_application (id, reference, organisation_id, brand_name, category, model_number, state, version) VALUES (?, ?, ?, 'Nova Cool', 'RAC', ?, 'approved', 0)",
             app, "S3-MA-" + n, org, "S3-" + n);
-        owner.update("INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) VALUES (?, ?, 'approve', 'secretary_approval', 'approved', ?, 'secretary', 1)",
+        owner.update("INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) VALUES (?, ?, 'approve', 'secretary_approval', 'approved', ?, 'director', 1)",
             ev, app, SECRETARY_USER);
         UUID cert = UUID.randomUUID();
         owner.update("INSERT INTO certificate (id, application_id, transition_event_id, registration_id, category_code, issue_year, sequence_no, valid_from, valid_to, organisation_name, brand_name, model_number, stars, declared_iseer, verified_iseer, scheme_key, issued_by_account_id) "

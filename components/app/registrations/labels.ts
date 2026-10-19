@@ -58,7 +58,7 @@ export const REGISTRATION_ACTOR_LABEL: Record<string, string> = {
  */
 export const REVIEW_ACTIONS: Record<string, Partial<Record<RegistrationState, readonly ("recommend" | "return" | "approve" | "reject")[]>>> = {
   programme: { programme_review: ["recommend", "return"] },
-  director: { director_approval: ["approve", "return", "reject"] },
+  officer: { director_approval: ["approve", "return", "reject"] },
 };
 
 export function reviewActionsFor(roles: readonly string[], state: RegistrationState): ("recommend" | "return" | "approve" | "reject")[] {
@@ -75,7 +75,7 @@ export function reviewActionsFor(roles: readonly string[], state: RegistrationSt
 export function waitingStatesFor(roles: readonly string[]): Set<RegistrationState> {
   const states = new Set<RegistrationState>();
   if (roles.includes("programme")) states.add("programme_review");
-  if (roles.includes("director")) states.add("director_approval");
+  if (roles.includes("officer")) states.add("director_approval");
   return states;
 }
 

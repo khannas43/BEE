@@ -23,7 +23,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Executive dashboard",
     hi: "कार्यकारी डैशबोर्ड",
     icon: "space_dashboard",
-    navRoles: ["director", "secretary", "programme", "admin"],
+    navRoles: ["officer", "director", "programme", "admin"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
@@ -31,7 +31,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Manufacturer 360",
     hi: "निर्माता 360",
     icon: "hub",
-    navRoles: ["manufacturer", "agency", "programme", "director", "secretary", "finance", "auditor", "admin"],
+    navRoles: ["manufacturer", "agency", "programme", "officer", "director", "finance", "auditor", "admin"],
     implemented: ["Guided WP3–WP9 synthetic lifecycle; links to working demo and registration screens"],
   },
   {
@@ -55,7 +55,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Certificate ledger",
     hi: "प्रमाणपत्र लेजर",
     icon: "link",
-    navRoles: ["manufacturer", "agency", "programme", "secretary", "admin", "auditor"],
+    navRoles: ["manufacturer", "agency", "programme", "officer", "admin", "auditor"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
@@ -71,7 +71,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Director's dashboard",
     hi: "निदेशक डैशबोर्ड",
     icon: "dashboard",
-    navRoles: ["director", "secretary", "programme", "admin"],
+    navRoles: ["officer", "director", "programme", "admin"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
@@ -87,7 +87,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "MIS dashboard",
     hi: "एमआईएस डैशबोर्ड",
     icon: "monitoring",
-    navRoles: ["programme", "director", "secretary", "admin", "auditor", "finance"],
+    navRoles: ["programme", "officer", "director", "admin", "auditor", "finance"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
@@ -95,7 +95,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "AI use cases",
     hi: "एआई उपयोग",
     icon: "psychology",
-    navRoles: ["programme", "reviewer", "director", "secretary", "admin", "auditor", "helpdesk"],
+    navRoles: ["programme", "reviewer", "officer", "director", "admin", "auditor", "helpdesk"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
@@ -103,7 +103,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Notifications (email and SMS)",
     hi: "सूचनाएँ (ईमेल और एसएमएस)",
     icon: "notifications_active",
-    navRoles: ["manufacturer", "agency", "finance", "programme", "reviewer", "director", "secretary", "admin", "auditor", "helpdesk", "iame"],
+    navRoles: ["manufacturer", "agency", "finance", "programme", "reviewer", "officer", "director", "admin", "auditor", "helpdesk", "iame"],
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
@@ -147,7 +147,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "My work",
     hi: "मेरा कार्य",
     icon: "inbox",
-    navRoles: ["manufacturer", "agency", "finance", "iame", "reviewer", "programme", "director", "secretary"],
+    navRoles: ["manufacturer", "agency", "finance", "iame", "reviewer", "programme", "officer", "director"],
     implemented: ["List the applications waiting for you", "Open the screen where each is done"],
   },
   {
@@ -155,7 +155,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "My approvals",
     hi: "मेरे अनुमोदन",
     icon: "how_to_reg",
-    navRoles: ["director", "secretary"],
+    navRoles: ["officer", "director"],
     implemented: ["List the applications waiting for your decision", "Open the approval screen"],
   },
   {
@@ -219,7 +219,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Registration reviews",
     hi: "पंजीकरण समीक्षा",
     icon: "rate_review",
-    navRoles: ["programme", "director"],
+    navRoles: ["programme", "officer"],
     implemented: ["List requests waiting for you", "Recommend or return", "Approve, return or reject", "Read the trail"],
   },
   {
@@ -227,7 +227,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Register",
     hi: "रजिस्टर",
     icon: "menu_book",
-    navRoles: ["programme", "director"],
+    navRoles: ["programme", "officer"],
     implemented: ["See registered brands and authorisations", "Propose a closure or revocation", "Approve, reject or withdraw a proposal", "Read the history"],
   },
   {
@@ -299,7 +299,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Approval",
     hi: "अनुमोदन",
     icon: "how_to_reg",
-    navRoles: ["director", "secretary"],
+    navRoles: ["officer", "director"],
     implemented: ["List applications awaiting your decision", "View the rating, evidence and test reports", "Recommend approval (Director)", "Give final approval (Secretary)", "Return to the applicant", "Reject permanently", "See the earlier steps and notes"],
   },
   {
@@ -315,7 +315,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Company registration activation",
     hi: "कंपनी पंजीकरण सक्रियण",
     icon: "how_to_reg",
-    navRoles: ["director"],
+    navRoles: ["officer"],
     implemented: ["Explains that company registration activates automatically after the automated checks", "Open observation monitoring"],
   },
   {
@@ -323,7 +323,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Manufacturer observation monitoring",
     hi: "निर्माता अवलोकन निगरानी",
     icon: "insights",
-    navRoles: ["director", "finance", "programme"],
+    navRoles: ["officer", "finance", "programme"],
     implemented: ["15-day observation status", "Finance/Programme anomaly raise", "Director resolve or revoke on hold"],
   },
   {
@@ -331,7 +331,7 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     en: "Delegations",
     hi: "प्रत्यायोजन",
     icon: "group",
-    navRoles: ["programme", "director", "finance", "admin"],
+    navRoles: ["programme", "officer", "finance", "admin"],
     implemented: ["Ask to delegate a role", "Withdraw or revoke your delegation", "Approve or reject a request", "See what you hold and until when"],
   },
 ];

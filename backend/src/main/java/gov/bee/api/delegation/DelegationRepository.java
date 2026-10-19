@@ -21,9 +21,9 @@ public class DelegationRepository {
 
     public static final String APPROVE = "delegation_approve";
     /** The roles that can be delegated: stage roles held for all records. Never the Secretary, an administrative role, or an assigned-scope role. */
-    public static final Set<String> DELEGABLE = Set.of("programme", "director", "finance");
+    public static final Set<String> DELEGABLE = Set.of("programme", "officer", "finance");
     /** Every role that acts at a stage: a delegator may hold only the one they delegate, or the delegate would act where the delegator also acts. */
-    public static final Set<String> STAGE_ROLES = Set.of("programme", "director", "secretary", "finance", "iame", "reviewer");
+    public static final Set<String> STAGE_ROLES = Set.of("programme", "officer", "director", "finance", "iame", "reviewer");
 
     public record Delegation(UUID id, UUID delegatorId, String delegator, UUID delegateId, String delegate, String role, String reason, LocalDate validFrom,
                              LocalDate validTo, String state, Instant requestedAt, String decidedBy, Instant decidedAt, String decisionNote,

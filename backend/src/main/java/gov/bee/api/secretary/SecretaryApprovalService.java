@@ -99,14 +99,14 @@ public class SecretaryApprovalService {
         if (!idempotency.begin(caller.accountId(), "POST", ROUTE, appId, idempotencyKey, DraftRequestSupport.bodyHash(body))) {
             return error(HttpStatus.CONFLICT, "idempotency_in_progress");
         }
-        var done = repository.approve(appId, row.version(), caller.accountId(), "secretary", input.get().note());
+        var done = repository.approve(appId, row.version(), caller.accountId(), "director", input.get().note());
         if (done.outcome() != SecretaryApprovalRepository.Outcome.APPROVED) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
         try {
             returnWiring.afterAcceptedForward(appId, done.transitionEventId(), SecretaryApprovalRepository.ACTION, SecretaryApprovalRepository.FROM_STATE,
-                SecretaryApprovalRepository.TO_STATE, done.versionAfter(), caller.accountId(), "secretary", done.approvedAt(), idempotencyKey);
+                SecretaryApprovalRepository.TO_STATE, done.versionAfter(), caller.accountId(), "director", done.approvedAt(), idempotencyKey);
         } catch (WorkflowIdempotencyConflictException ex) {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             return error(HttpStatus.CONFLICT, "idempotency_key_conflict");
@@ -166,7 +166,7 @@ public class SecretaryApprovalService {
         if (priorHash.isEmpty() || !MessageDigest.isEqual(priorHash.get(), DraftRequestSupport.bodyHash(body))) {
             return Optional.of(error(HttpStatus.CONFLICT, "idempotency_key_conflict"));
         }
-        if (!caller.holds("secretary", SlicePolicy.ALL)) {
+        if (!caller.holds("director", SlicePolicy.ALL)) {
             return Optional.of(error(HttpStatus.FORBIDDEN, "role_not_permitted"));
         }
         try {

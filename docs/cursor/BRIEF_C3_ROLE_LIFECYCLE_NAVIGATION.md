@@ -1,6 +1,6 @@
 # Brief C3 — Role-based lifecycle navigation
 
-**Status:** implemented on `cursor/c3-role-navigation`; **ChatGPT review pending**, not accepted.
+**Status:** implemented on `cursor/c3-role-navigation` including **role identity succession (N8)**; **ChatGPT review pending**, not accepted.
 **Base:** `6c40482`, the integration tip of `cursor/wp3-auto-activation`.
 **Worktree:** `/Users/sameerkhanna/Developer/BEE-c3-role-navigation`
 **Decision:** owner-approved role/menu structure, recorded in [BEE_DECISIONS.md](../BEE_DECISIONS.md) under "Role-based lifecycle navigation".
@@ -20,7 +20,7 @@ The "All screens · dev" link is removed. The `/app/screens` page remains, reach
 ## 2. Rules the definition enforces
 
 - **Hierarchy from the Spring identity.** The menu follows `/api/runtime/me` (effective roles and capabilities), never the browser preview role.
-  - Admin is checked first, then Director, Secretary, Finance, and Manufacturer (which includes Agency).
+  - Admin is checked first, then BEE Officer, Director, Finance, and Manufacturer (which includes Agency).
   - Officer roles with no hierarchy of their own (Programme, Reviewer, IAME, SDA, Laboratory, Helpdesk, Auditor) see the Admin hierarchy, narrowed to the working screens the runtime registry already gives their role.
 - **At most four primary groups for every role.** Admin has exactly four.
 - **Each entry carries:** a stable ID, a title, an icon, a canonical route, its allowed roles, a state (`available`, `preview` or `planned`), optional children, and an optional badge.
@@ -190,7 +190,9 @@ The live check `read-ui-browser-check.cjs` step `read-ui.preview-elsewhere-uncha
 
 **Goal:** Client demo shows only five personas in the header role dropdown; remove Admin demonstration copy from the UI while keeping C3A Spring boundaries.
 
-**Role selector:** `VISIBLE_SELECTOR_ROLES` in `lib/roles.ts`; `AppTopbar` shows exactly Manufacturer, Finance, Director, Secretary, Admin **only while signed out**, updating `RoleContext` localStorage for prototype sample data. It never calls `/api/runtime/demo/login`. Signed-in users change role only via Logout → oval login. Seed accounts for Programme, Reviewer, IAME, and the like remain for automation only.
+**Role selector:** `VISIBLE_SELECTOR_ROLES` in `lib/roles.ts`; `AppTopbar` shows exactly Manufacturer, Finance, BEE Officer, Director, Admin **only while signed out**, updating `RoleContext` localStorage for prototype sample data. It never calls `/api/runtime/demo/login`. Signed-in users change role only via Logout → oval login. Seed accounts for Programme, Reviewer, IAME, and the like remain for automation only.
+
+**Role succession (N8):** Spring **`officer`** / **`director`** personas; demo **`bee.officer`** / **`bee.director`**; no **`bee.secretary`**. Statutory workflow/API names unchanged.
 
 **Admin UI:** Remove `AdminDemonstrationBanner` and the Admin sidebar note (`nav-admin-note`). Admin profile label is "Admin". Operational screens still hide mutation controls when `/api/me.adminDemonstrationReadOnly` is true; Spring still denies mutations.
 

@@ -113,7 +113,7 @@ class DirectorRecommendationDatabaseTest {
         reviewerRepo = transactional(new ReviewerForwardRepository(db));
         ratingRepo = transactional(new RatingRepository(db));
         repo = transactional(new DirectorRecommendationRepository(db));
-        assertEquals(77, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V77");
+        assertEquals(78, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V78");
     }
 
     @AfterAll
@@ -143,7 +143,7 @@ class DirectorRecommendationDatabaseTest {
     }
 
     static DirectorRecommendationRepository.Result recommend(UUID appId, int version, boolean directorFinal) {
-        return repo.recommend(appId, version, DIRECTOR_USER, "director", "Rating reviewed; recommend approval.", directorFinal);
+        return repo.recommend(appId, version, DIRECTOR_USER, "officer", "Rating reviewed; recommend approval.", directorFinal);
     }
 
     static int count(String table, UUID appId) {
@@ -187,7 +187,7 @@ class DirectorRecommendationDatabaseTest {
         assertEquals("director_review", ev.get("from_state"));
         assertEquals("secretary_approval", ev.get("to_state"));
         assertEquals(DIRECTOR_USER, ev.get("actor_account_id"));
-        assertEquals("director", ev.get("actor_role"));
+        assertEquals("officer", ev.get("actor_role"));
         var rec = owner.queryForMap("SELECT note, director_final, resulting_state, recommended_by_account_id FROM model_application_director_recommendation WHERE application_id = ?", id);
         assertEquals("Rating reviewed; recommend approval.", rec.get("note"));
         assertEquals(false, rec.get("director_final"));

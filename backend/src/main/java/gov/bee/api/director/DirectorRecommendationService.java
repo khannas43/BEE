@@ -102,14 +102,14 @@ public class DirectorRecommendationService {
         }
         // The owner's D1 assumption: is the Director's recommendation final for this category today (India date)?
         boolean directorFinal = repository.directorFinal(row.category(), LocalDate.now(gov.bee.api.application.ModelDraftPolicy.IST));
-        var done = repository.recommend(appId, row.version(), caller.accountId(), "director", input.get().note(), directorFinal);
+        var done = repository.recommend(appId, row.version(), caller.accountId(), "officer", input.get().note(), directorFinal);
         if (done.outcome() != DirectorRecommendationRepository.Outcome.RECOMMENDED) {
             idempotency.abandon(caller.accountId(), "POST", ROUTE, appId, idempotencyKey);
             return error(HttpStatus.CONFLICT, "version_conflict");
         }
         try {
             returnWiring.afterAcceptedForward(appId, done.transitionEventId(), DirectorRecommendationRepository.ACTION,
-                DirectorRecommendationRepository.FROM_STATE, done.toState(), done.versionAfter(), caller.accountId(), "director", done.recommendedAt(),
+                DirectorRecommendationRepository.FROM_STATE, done.toState(), done.versionAfter(), caller.accountId(), "officer", done.recommendedAt(),
                 idempotencyKey);
         } catch (WorkflowIdempotencyConflictException ex) {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -171,7 +171,7 @@ public class DirectorRecommendationService {
         if (priorHash.isEmpty() || !MessageDigest.isEqual(priorHash.get(), DraftRequestSupport.bodyHash(body))) {
             return Optional.of(error(HttpStatus.CONFLICT, "idempotency_key_conflict"));
         }
-        if (!caller.holds("director", SlicePolicy.ALL)) {
+        if (!caller.holds("officer", SlicePolicy.ALL)) {
             return Optional.of(error(HttpStatus.FORBIDDEN, "role_not_permitted"));
         }
         try {

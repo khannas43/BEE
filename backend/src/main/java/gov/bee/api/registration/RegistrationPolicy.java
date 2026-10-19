@@ -73,7 +73,7 @@ public final class RegistrationPolicy {
                 stages.add("fee_due");
             } else if ("programme".equals(g.role()) && "all".equals(g.scope())) {
                 stages.addAll(List.of("programme_review", "director_approval", "approved", "returned", "rejected"));
-            } else if ("director".equals(g.role()) && "all".equals(g.scope())) {
+            } else if ("officer".equals(g.role()) && "all".equals(g.scope())) {
                 stages.addAll(List.of("director_approval", "approved", "returned", "rejected"));
             }
         }

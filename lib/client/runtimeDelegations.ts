@@ -5,7 +5,7 @@
 import { type FetchLike, type ReadFailure, runtimeCommand, runtimeRead } from "@/lib/client/runtimeHttp";
 
 export type DelegationState = "pending" | "approved" | "rejected" | "withdrawn" | "revoked";
-export type DelegableRole = "director" | "finance" | "programme";
+export type DelegableRole = "officer" | "finance" | "programme";
 export type DelegationDecision = "approve" | "reject" | "withdraw" | "revoke";
 
 export type Delegation = {

@@ -60,8 +60,8 @@ describe("DemoLoginForm", () => {
     expect(pw.type).toBe("text");
     fireEvent.click(screen.getByRole("button", { name: /Demo accounts/ }));
     expect(screen.getByText("demo123")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /bee\.secretary/ }));
-    expect((screen.getByLabelText("Username") as HTMLInputElement).value).toBe("bee.secretary");
+    fireEvent.click(screen.getByRole("button", { name: /bee\.officer/ }));
+    expect((screen.getByLabelText("Username") as HTMLInputElement).value).toBe("bee.officer");
     expect(pw.value).toBe("");
   });
 });

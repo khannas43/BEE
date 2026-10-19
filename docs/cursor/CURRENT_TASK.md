@@ -1,8 +1,7 @@
 # Current Cursor task
 
-**Holder:** cursor (Brief C3B on `cursor/c3-role-navigation`).
+**Holder:** none (Brief C3 role succession handback ready on `cursor/c3-role-navigation`).
 
-- Brief: `BRIEF_C3_ROLE_LIFECYCLE_NAVIGATION.md` §10 (C3B)
+- Brief: `BRIEF_C3_ROLE_LIFECYCLE_NAVIGATION.md` (C3 succession + C3B)
 - Branch: `cursor/c3-role-navigation`
-- Base: commit `cb85f18` (C3A verification)
-- Deliverable: five-role visible selector, Admin UI cleanup (no banner/note), tests and docs; commit on branch only (no push)
+- Status: implementation and gates complete; commit on branch only (no push). Claude merges after review.

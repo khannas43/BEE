@@ -20,7 +20,7 @@ import { screenById } from "./screens";
 export type NavState = "available" | "preview" | "planned";
 
 /** The five menu hierarchies. Admin is the demonstration umbrella profile, not a workflow actor. */
-export type NavProfile = "admin" | "manufacturer" | "director" | "secretary" | "finance";
+export type NavProfile = "admin" | "manufacturer" | "officer" | "director" | "finance";
 
 export interface NavEntry {
   /** Stable ID, unique across the whole definition. */
@@ -88,8 +88,8 @@ const ADMIN: readonly RoleKey[] = ["admin"];
 /** Officer roles without a hierarchy of their own see the Admin hierarchy, narrowed to the working screens their role is given. */
 const OFFICER_ROLES: readonly RoleKey[] = ["programme", "reviewer", "iame", "sda", "laboratory", "helpdesk", "auditor"];
 const MFR: readonly RoleKey[] = ["manufacturer", "agency"];
+const BEE_OFFICER: readonly RoleKey[] = ["officer"];
 const DIRECTOR: readonly RoleKey[] = ["director"];
-const SECRETARY: readonly RoleKey[] = ["secretary"];
 const FINANCE: readonly RoleKey[] = ["finance"];
 
 function entry(
@@ -181,7 +181,7 @@ export const NAVIGATION: readonly NavGroup[] = [
         adminEntry("admin.sla", "SLA and escalations", "priority_high", live(R.sla)),
       ]),
       adminEntry("admin.messages", "Notifications and messages", "notifications_active", live(R.messages)),
-      adminEntry("admin.director-overview", "Director overview", "dashboard", live(R.directorDash)),
+      adminEntry("admin.director-overview", "BEE Officer overview", "dashboard", live(R.directorDash)),
     ],
   },
   {
@@ -301,87 +301,87 @@ export const NAVIGATION: readonly NavGroup[] = [
     ],
   },
 
-  // ---------------------------------------------------------------- Director
+  // ---------------------------------------------------------------- BEE Officer (former Director operational persona)
   {
-    id: "dir.dashboard", title: "Dashboard", icon: "dashboard", profile: "director",
+    id: "dir.dashboard", title: "Dashboard", icon: "dashboard", profile: "officer",
     children: [
-      entry("dir.overview", "Director overview", "dashboard", live(R.directorDash), DIRECTOR),
-      entry("dir.executive", "Executive overview", "space_dashboard", live(R.executive), DIRECTOR),
-      entry("dir.m360", "Manufacturer 360", "hub", live(R.m360), DIRECTOR, { activePrefixes: ["/app/manufacturer/360/"] }),
-      entry("dir.messages", "Notifications and messages", "notifications_active", live(R.messages), DIRECTOR),
+      entry("dir.overview", "BEE Officer overview", "dashboard", live(R.directorDash), BEE_OFFICER),
+      entry("dir.executive", "Executive overview", "space_dashboard", live(R.executive), BEE_OFFICER),
+      entry("dir.m360", "Manufacturer 360", "hub", live(R.m360), BEE_OFFICER, { activePrefixes: ["/app/manufacturer/360/"] }),
+      entry("dir.messages", "Notifications and messages", "notifications_active", live(R.messages), BEE_OFFICER),
     ],
   },
   {
-    id: "dir.work", title: "Work Queue & Decisions", icon: "inbox", profile: "director",
+    id: "dir.work", title: "Work Queue & Decisions", icon: "inbox", profile: "officer",
     children: [
-      entry("dir.work-queue", "Officer work queue", "inbox", live(R.myWork), DIRECTOR),
-      entry("dir.observations", "Registration observations", "insights", live(R.monitoring), DIRECTOR, { activePrefixes: APPLICATION_STATUS }),
-      entry("dir.holds", "Anomalies and holds", "pause_circle", live(R.monitoring), DIRECTOR),
-      entry("dir.recommendations", "Model recommendations", "how_to_reg", live(R.approval), DIRECTOR),
-      entry("dir.brand-reviews", "Brand registration reviews", "rate_review", live(R.regReviews), DIRECTOR),
-      entry("dir.withdrawals", "Withdrawal requests", "cancel", proto("withdrawal", "withdrawal-approval"), DIRECTOR),
-      entry("dir.revocation", "Rejection and revocation", "gavel", live(R.register), DIRECTOR),
+      entry("dir.work-queue", "Officer work queue", "inbox", live(R.myWork), BEE_OFFICER),
+      entry("dir.observations", "Registration observations", "insights", live(R.monitoring), BEE_OFFICER, { activePrefixes: APPLICATION_STATUS }),
+      entry("dir.holds", "Anomalies and holds", "pause_circle", live(R.monitoring), BEE_OFFICER),
+      entry("dir.recommendations", "Model recommendations", "how_to_reg", live(R.approval), BEE_OFFICER),
+      entry("dir.brand-reviews", "Brand registration reviews", "rate_review", live(R.regReviews), BEE_OFFICER),
+      entry("dir.withdrawals", "Withdrawal requests", "cancel", proto("withdrawal", "withdrawal-approval"), BEE_OFFICER),
+      entry("dir.revocation", "Rejection and revocation", "gavel", live(R.register), BEE_OFFICER),
     ],
   },
   {
-    id: "dir.oversight", title: "Oversight & Intelligence", icon: "psychology", profile: "director",
+    id: "dir.oversight", title: "Oversight & Intelligence", icon: "psychology", profile: "officer",
     children: [
-      entry("dir.ai", "AI advisory use cases", "psychology", live(R.ai), DIRECTOR, { badge: "Advisory" }),
-      entry("dir.risk", "Risk-prioritised cases", "priority_high", proto("mis-ai", "risk-scoring"), DIRECTOR, { badge: "Advisory" }),
-      entry("dir.documents", "Document verification", "plagiarism", proto("agency-brand", "registration-scrutiny"), DIRECTOR),
-      entry("dir.test-reports", "Test-report scrutiny", "science", proto("model-label", "test-reports"), DIRECTOR),
-      entry("dir.mis", "Programme MIS", "monitoring", live(R.mis), DIRECTOR),
-      entry("dir.ledger", "Secure evidence ledger", "link", live(R.ledger), DIRECTOR, { badge: "Simulated" }),
+      entry("dir.ai", "AI advisory use cases", "psychology", live(R.ai), BEE_OFFICER, { badge: "Advisory" }),
+      entry("dir.risk", "Risk-prioritised cases", "priority_high", proto("mis-ai", "risk-scoring"), BEE_OFFICER, { badge: "Advisory" }),
+      entry("dir.documents", "Document verification", "plagiarism", proto("agency-brand", "registration-scrutiny"), BEE_OFFICER),
+      entry("dir.test-reports", "Test-report scrutiny", "science", proto("model-label", "test-reports"), BEE_OFFICER),
+      entry("dir.mis", "Programme MIS", "monitoring", live(R.mis), BEE_OFFICER),
+      entry("dir.ledger", "Secure evidence ledger", "link", live(R.ledger), BEE_OFFICER, { badge: "Simulated" }),
     ],
   },
   {
-    id: "dir.registers", title: "Registers & Compliance", icon: "menu_book", profile: "director",
+    id: "dir.registers", title: "Registers & Compliance", icon: "menu_book", profile: "officer",
     children: [
-      entry("dir.manufacturer-register", "Manufacturer register", "factory", PLANNED, DIRECTOR),
-      entry("dir.brand-register", "Brand and category register", "menu_book", live(R.register), DIRECTOR),
-      entry("dir.model-register", "Model and certificate register", "verified_user", proto("mis-ai", "model-dashboard"), DIRECTOR),
-      entry("dir.reconciliation", "QR and production reconciliation", "balance", proto("production", "reconciliation"), DIRECTOR),
-      entry("dir.audit", "Audit history", "history", live(R.history), DIRECTOR),
-      entry("dir.delegations", "Delegations", "group", live(R.delegations), DIRECTOR),
+      entry("dir.manufacturer-register", "Manufacturer register", "factory", PLANNED, BEE_OFFICER),
+      entry("dir.brand-register", "Brand and category register", "menu_book", live(R.register), BEE_OFFICER),
+      entry("dir.model-register", "Model and certificate register", "verified_user", proto("mis-ai", "model-dashboard"), BEE_OFFICER),
+      entry("dir.reconciliation", "QR and production reconciliation", "balance", proto("production", "reconciliation"), BEE_OFFICER),
+      entry("dir.audit", "Audit history", "history", live(R.history), BEE_OFFICER),
+      entry("dir.delegations", "Delegations", "group", live(R.delegations), BEE_OFFICER),
       grantedSettings("dir"),
     ],
   },
 
-  // ---------------------------------------------------------------- Secretary (model/appliance approval)
+  // ---------------------------------------------------------------- Director (former Secretary operational persona — final approvals)
   {
-    id: "sec.dashboard", title: "Dashboard", icon: "dashboard", profile: "secretary",
+    id: "sec.dashboard", title: "Dashboard", icon: "dashboard", profile: "director",
     children: [
-      entry("sec.overview", "Secretary overview", "space_dashboard", live(R.executive), SECRETARY),
-      entry("sec.messages", "Notifications and messages", "notifications_active", live(R.messages), SECRETARY),
+      entry("sec.overview", "Director overview", "space_dashboard", live(R.executive), DIRECTOR),
+      entry("sec.messages", "Notifications and messages", "notifications_active", live(R.messages), DIRECTOR),
     ],
   },
   {
-    id: "sec.approvals", title: "Final Approvals", icon: "how_to_reg", profile: "secretary",
+    id: "sec.approvals", title: "Final Approvals", icon: "how_to_reg", profile: "director",
     children: [
-      entry("sec.models", "Model applications", "how_to_reg", live(R.approval), SECRETARY),
-      entry("sec.returned", "Returned applications", "assignment_return", PLANNED, SECRETARY),
-      entry("sec.rejections", "Rejection recommendations", "block", PLANNED, SECRETARY),
-      entry("sec.pending", "Pending final decisions", "task_alt", live(R.myApprovals), SECRETARY),
+      entry("sec.models", "Model applications", "how_to_reg", live(R.approval), DIRECTOR),
+      entry("sec.returned", "Returned applications", "assignment_return", PLANNED, DIRECTOR),
+      entry("sec.rejections", "Rejection recommendations", "block", PLANNED, DIRECTOR),
+      entry("sec.pending", "Pending final decisions", "task_alt", live(R.myApprovals), DIRECTOR),
     ],
   },
   {
-    id: "sec.certificates", title: "Certificates & Formats", icon: "verified_user", profile: "secretary",
+    id: "sec.certificates", title: "Certificates & Formats", icon: "verified_user", profile: "director",
     children: [
-      entry("sec.approved-certificates", "Approved certificates", "verified_user", live(R.ledger), SECRETARY),
-      entry("sec.letters", "Generated approval letters", "description", proto("model-label", "approval-letter"), SECRETARY),
-      entry("sec.model-register", "Model register", "menu_book", proto("mis-ai", "model-dashboard"), SECRETARY),
-      entry("sec.certificate-history", "Certificate history", "history", PLANNED, SECRETARY),
-      entry("sec.revoked", "Revoked certificates", "block", PLANNED, SECRETARY),
+      entry("sec.approved-certificates", "Approved certificates", "verified_user", live(R.ledger), DIRECTOR),
+      entry("sec.letters", "Generated approval letters", "description", proto("model-label", "approval-letter"), DIRECTOR),
+      entry("sec.model-register", "Model register", "menu_book", proto("mis-ai", "model-dashboard"), DIRECTOR),
+      entry("sec.certificate-history", "Certificate history", "history", PLANNED, DIRECTOR),
+      entry("sec.revoked", "Revoked certificates", "block", PLANNED, DIRECTOR),
     ],
   },
   {
-    id: "sec.oversight", title: "Oversight & Reports", icon: "monitoring", profile: "secretary",
+    id: "sec.oversight", title: "Oversight & Reports", icon: "monitoring", profile: "director",
     children: [
-      entry("sec.m360", "Manufacturer 360", "hub", live(R.m360), SECRETARY, { activePrefixes: ["/app/manufacturer/360/"] }),
-      entry("sec.approval-summary", "Approval summary", "dashboard", live(R.directorDash), SECRETARY),
-      entry("sec.pending-applications", "Pending applications", "monitoring", live(R.mis), SECRETARY),
-      entry("sec.ai", "AI advisory summary", "psychology", live(R.ai), SECRETARY, { badge: "Advisory" }),
-      entry("sec.evidence", "Secure evidence status", "link", live(R.ledger), SECRETARY, { badge: "Simulated" }),
+      entry("sec.m360", "Manufacturer 360", "hub", live(R.m360), DIRECTOR, { activePrefixes: ["/app/manufacturer/360/"] }),
+      entry("sec.approval-summary", "Approval summary", "dashboard", live(R.directorDash), DIRECTOR),
+      entry("sec.pending-applications", "Pending applications", "monitoring", live(R.mis), DIRECTOR),
+      entry("sec.ai", "AI advisory summary", "psychology", live(R.ai), DIRECTOR, { badge: "Advisory" }),
+      entry("sec.evidence", "Secure evidence status", "link", live(R.ledger), DIRECTOR, { badge: "Simulated" }),
       grantedSettings("sec"),
     ],
   },
@@ -431,8 +431,8 @@ export const NAVIGATION: readonly NavGroup[] = [
 export function navProfileFor(roles: readonly string[]): NavProfile | null {
   if (!roles.length) return null;
   if (roles.includes("admin")) return "admin";
+  if (roles.includes("officer")) return "officer";
   if (roles.includes("director")) return "director";
-  if (roles.includes("secretary")) return "secretary";
   if (roles.includes("finance")) return "finance";
   if (roles.includes("manufacturer") || roles.includes("agency")) return "manufacturer";
   if (roles.some((r) => (OFFICER_ROLES as readonly string[]).includes(r))) return "admin";

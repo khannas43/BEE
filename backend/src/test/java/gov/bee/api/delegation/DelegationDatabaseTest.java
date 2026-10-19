@@ -58,11 +58,11 @@ class DelegationDatabaseTest {
     static final Caller PROGRAMME = new Caller(PROGRAMME_USER, "bee.programme", List.of(new RoleGrant("programme", "all")), Set.of(BEE_ORG));
     static final UUID DIRECTOR_USER = UUID.fromString("00000000-0000-4000-a000-000000000007");
     static final UUID DUAL_USER = UUID.fromString("00000000-0000-4000-a000-0000000000e1");
-    static final Caller DIRECTOR = new Caller(DIRECTOR_USER, "bee.director", List.of(new RoleGrant("director", "all")), Set.of(BEE_ORG));
-    static final Caller DUAL = new Caller(DUAL_USER, "dual.reviewer", List.of(new RoleGrant("programme", "all"), new RoleGrant("director", "all")), Set.of(BEE_ORG));
+    static final Caller DIRECTOR = new Caller(DIRECTOR_USER, "bee.officer", List.of(new RoleGrant("officer", "all")), Set.of(BEE_ORG));
+    static final Caller DUAL = new Caller(DUAL_USER, "dual.reviewer", List.of(new RoleGrant("programme", "all"), new RoleGrant("officer", "all")), Set.of(BEE_ORG));
     static final UUID SECRETARY_USER = UUID.fromString("00000000-0000-4000-a000-000000000008");
     static final Caller FINANCE_C = FINANCE;
-    static final Caller SECRETARY = new Caller(SECRETARY_USER, "bee.secretary", List.of(new RoleGrant("secretary", "all")), Set.of(BEE_ORG));
+    static final Caller SECRETARY = new Caller(SECRETARY_USER, "bee.director", List.of(new RoleGrant("director", "all")), Set.of(BEE_ORG));
     static final Caller ADMIN = new Caller(ADMIN_USER, "bee.admin", List.of(new RoleGrant("admin", "all")), Set.of(BEE_ORG));
 
     static final ObjectMapper JSON = new ObjectMapper();
@@ -104,7 +104,7 @@ class DelegationDatabaseTest {
         repo = new DelegationRepository(db);
         identity = new gov.bee.api.identity.IdentityRepository(db);
         service = new DelegationService(repo, new gov.bee.api.application.IdempotencyRepository(db), JSON);
-        assertEquals(77, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V77");
+        assertEquals(78, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V78");
     }
 
     @AfterAll
@@ -150,11 +150,11 @@ class DelegationDatabaseTest {
     @Test
     void onlyAHolderOfAStageRoleDelegatesItToAColleagueForAtMostThirtyDays() {
         // The Secretary's final approval, an administrative role and an applicant cannot delegate anything.
-        refused(service.propose(SECRETARY, key(), json(ask(FINANCE_USER, "secretary", TODAY, TODAY.plusDays(5)))), 403, "role_not_permitted");
+        refused(service.propose(SECRETARY, key(), json(ask(FINANCE_USER, "director", TODAY, TODAY.plusDays(5)))), 403, "role_not_permitted");
         refused(service.propose(ADMIN, key(), json(ask(FINANCE_USER, "programme", TODAY, TODAY.plusDays(5)))), 403, "role_not_permitted");
         refused(service.propose(NOVA, key(), json(ask(FINANCE_USER, "programme", TODAY, TODAY.plusDays(5)))), 403, "role_not_permitted");
         // A programme officer cannot delegate a role they do not hold, nor to themselves, nor for the wrong period.
-        refused(service.propose(PROGRAMME, key(), json(ask(FINANCE_USER, "director", TODAY, TODAY.plusDays(5)))), 403, "role_not_permitted");
+        refused(service.propose(PROGRAMME, key(), json(ask(FINANCE_USER, "officer", TODAY, TODAY.plusDays(5)))), 403, "role_not_permitted");
         refused(service.propose(PROGRAMME, key(), json(ask(PROGRAMME_USER, "programme", TODAY, TODAY.plusDays(5)))), 422, "validation_failed");
         refused(service.propose(PROGRAMME, key(), json(ask(FINANCE_USER, "programme", TODAY.minusDays(1), TODAY.plusDays(5)))), 422, "validation_failed");
         refused(service.propose(PROGRAMME, key(), json(ask(FINANCE_USER, "programme", TODAY, TODAY))), 422, "validation_failed");
@@ -195,10 +195,10 @@ class DelegationDatabaseTest {
         // A person who holds both the approving role and the delegable role cannot approve their own delegation (the database refuses, not only the service).
         UUID dual = UUID.fromString("00000000-0000-4000-a000-0000000000e2");
         owner.update("INSERT INTO user_account (id, keycloak_subject, username, display_name) VALUES (?, ?, 'dual.delegator', 'Dual Delegator')", dual, dual);
-        owner.update("INSERT INTO role_assignment (user_id, role, scope) VALUES (?, 'admin', 'all'), (?, 'director', 'all')", dual, dual);
+        owner.update("INSERT INTO role_assignment (user_id, role, scope) VALUES (?, 'admin', 'all'), (?, 'officer', 'all')", dual, dual);
         owner.update("INSERT INTO organisation_membership (user_id, organisation_id) VALUES (?, ?)", dual, BEE_ORG);
-        var dualCaller = new Caller(dual, "dual.delegator", List.of(new RoleGrant("admin", "all"), new RoleGrant("director", "all")), Set.of(BEE_ORG));
-        var own = ok(service.propose(dualCaller, key(), json(ask(FINANCE_USER, "director", TODAY, TODAY.plusDays(4)))), 201);
+        var dualCaller = new Caller(dual, "dual.delegator", List.of(new RoleGrant("admin", "all"), new RoleGrant("officer", "all")), Set.of(BEE_ORG));
+        var own = ok(service.propose(dualCaller, key(), json(ask(FINANCE_USER, "officer", TODAY, TODAY.plusDays(4)))), 201);
         refused(decide(dualCaller, own.get("id"), "approve", null), 403, "segregation_refused");
         assertEquals("same_person", db.queryForObject("SELECT out_state FROM delegation_decide(?::uuid, ?, 'approve', NULL)", String.class, own.get("id"), dual));
         ok(decide(dualCaller, own.get("id"), "withdraw", null), 200);
@@ -331,13 +331,13 @@ class DelegationDatabaseTest {
         // A partner (here an applicant in Nova's organisation, sharing a Nova delegator) cannot receive a stage role.
         UUID novaOfficer = UUID.fromString("00000000-0000-4000-a000-0000000000e4");
         owner.update("INSERT INTO user_account (id, keycloak_subject, username, display_name) VALUES (?, ?, 'nova.officer', 'Nova Officer')", novaOfficer, novaOfficer);
-        owner.update("INSERT INTO role_assignment (user_id, role, scope) VALUES (?, 'director', 'all')", novaOfficer);
+        owner.update("INSERT INTO role_assignment (user_id, role, scope) VALUES (?, 'officer', 'all')", novaOfficer);
         owner.update("INSERT INTO organisation_membership (user_id, organisation_id) VALUES (?, ?)", novaOfficer, NOVA_ORG);
-        var novaDirector = new Caller(novaOfficer, "nova.officer", List.of(new RoleGrant("director", "all")), Set.of(NOVA_ORG));
+        var novaDirector = new Caller(novaOfficer, "nova.officer", List.of(new RoleGrant("officer", "all")), Set.of(NOVA_ORG));
         @SuppressWarnings("unchecked") List<Map<String, Object>> colleagues = (List<Map<String, Object>>) ok(service.read(novaDirector), 200).get("colleagues");
         assertTrue(colleagues.stream().noneMatch(c -> NOVA_USER.toString().equals(c.get("id"))), "an applicant is not offered as a delegate");
-        refused(service.propose(novaDirector, key(), json(ask(NOVA_USER, "director", TODAY, TODAY.plusDays(5)))), 409, "delegate_not_eligible");
-        UUID partner = owner.queryForObject("INSERT INTO delegation (delegator_id, delegate_id, role, reason, valid_from, valid_to) VALUES (?, ?, 'director', 'x', ?, ?) RETURNING id",
+        refused(service.propose(novaDirector, key(), json(ask(NOVA_USER, "officer", TODAY, TODAY.plusDays(5)))), 409, "delegate_not_eligible");
+        UUID partner = owner.queryForObject("INSERT INTO delegation (delegator_id, delegate_id, role, reason, valid_from, valid_to) VALUES (?, ?, 'officer', 'x', ?, ?) RETURNING id",
             UUID.class, novaOfficer, NOVA_USER, TODAY, TODAY.plusDays(5));
         refused(decide(ADMIN, partner, "approve", null), 409, "delegate_not_eligible");
         ok(decide(ADMIN, partner, "reject", "Applicant"), 200);

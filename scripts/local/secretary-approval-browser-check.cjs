@@ -243,7 +243,7 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     // What the approval changed, in the database and for each reader.
     check(`${runLabel}.db.state-moved`, stateOf(A.id) === "approved" && sql(`SELECT version FROM app.model_application WHERE id = '${A.id}'`) === String(A.version + 1), `approved v${A.version + 1}`);
     const ev = sql(`SELECT action || ':' || from_state || '>' || to_state || ':' || actor_role FROM app.model_application_transition_event WHERE application_id = '${A.id}' AND action = 'secretary_approve'`);
-    check(`${runLabel}.db.event`, ev === "secretary_approve:secretary_approval>approved:secretary" && countOf("model_application_transition_event", A.id) === 6, ev);
+    check(`${runLabel}.db.event`, ev === "secretary_approve:secretary_approval>approved:director" && countOf("model_application_transition_event", A.id) === 6, ev);
     check(`${runLabel}.db.approval-record`, sql(`SELECT note FROM app.model_application_secretary_approval WHERE application_id = '${A.id}'`) === uiNote, "the Secretary's note is recorded");
     check(`${runLabel}.db.whole-chain`, sql(`SELECT string_agg(action, ',' ORDER BY version_after) FROM app.model_application_transition_event WHERE application_id = '${A.id}'`) === "confirm_fee,iame_recommend,reviewer_forward,compute_rating,director_recommend,secretary_approve", "six events, one per step, in order");
     check(`${runLabel}.db.six-distinct-actors`, Number(sql(`SELECT count(DISTINCT actor_account_id) FROM app.model_application_transition_event WHERE application_id = '${A.id}'`)) === 6, "six different people took the six steps after submit");
@@ -255,7 +255,7 @@ async function runSecretaryChecks(runLabel, nova, finance, iame, reviewer, progr
     // WP09.1a: the approval issued the certificate in the same step; the applicant sees it (a local demonstration) and the dashboard shows it.
     const cert = r.body?.certificate;
     check(`${runLabel}.nova.sees-the-certificate`, /^BEE\/RAC\/\d{4}\/\d{5}$/.test(cert?.registrationId ?? "") && cert?.status === "valid" && cert?.stars === 4 && cert?.localDemoCertificate === true, `${cert?.registrationId} ${cert?.status} ${cert?.stars} stars`);
-    check(`${runLabel}.db.one-certificate-issued-by-the-secretary-for-three-years`, sql(`SELECT count(*) || '|' || (valid_to = valid_from + interval '3 years' - interval '1 day') || '|' || (issued_by_account_id = '${ids.accountId("bee.secretary")}') || '|' || basis FROM app.certificate WHERE application_id = '${A.id}' GROUP BY valid_from, valid_to, issued_by_account_id, basis`) === "1|true|true|local_demo", sql(`SELECT registration_id || ' ' || valid_from || '..' || valid_to FROM app.certificate WHERE application_id = '${A.id}'`));
+    check(`${runLabel}.db.one-certificate-issued-by-the-secretary-for-three-years`, sql(`SELECT count(*) || '|' || (valid_to = valid_from + interval '3 years' - interval '1 day') || '|' || (issued_by_account_id = '${ids.accountId("bee.director")}') || '|' || basis FROM app.certificate WHERE application_id = '${A.id}' GROUP BY valid_from, valid_to, issued_by_account_id, basis`) === "1|true|true|local_demo", sql(`SELECT registration_id || ' ' || valid_from || '..' || valid_to FROM app.certificate WHERE application_id = '${A.id}'`));
     await nova.goto(`${WEB}/app/model-label/model-dashboard?id=${A.id}`);
     const card = await nova.waitFor(`!!document.querySelector('[data-testid=model-app-certificate]')`, 30000);
     check(`${runLabel}.ui.dashboard-shows-the-certificate`, card && (await nova.eval(`document.querySelector('[data-testid=model-app-certificate-registration]').textContent`)) === cert?.registrationId && /local demonstration/i.test(await nova.eval(`document.querySelector('[data-testid=model-app-certificate-demo]').textContent`)), cert?.registrationId ?? "no certificate");
@@ -439,7 +439,7 @@ async function main() {
   const chrome = await launchChrome();
   try {
     const twins = {};
-    for (const [k, u] of [["nova", "nova.applicant"], ["finance", "bee.finance"], ["iame", "iame.officer"], ["reviewer", "bee.reviewer"], ["programme", "bee.programme"], ["director", "bee.director"], ["secretary", "bee.secretary"]]) {
+    for (const [k, u] of [["nova", "nova.applicant"], ["finance", "bee.finance"], ["iame", "iame.officer"], ["reviewer", "bee.reviewer"], ["programme", "bee.programme"], ["director", "bee.officer"], ["secretary", "bee.director"]]) {
       twins[k] = ids.name(u);
       await totp.ensureEnrolled(twins[k]);
     }

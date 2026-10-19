@@ -127,7 +127,7 @@ async function main() {
   const fd = await call("bee.finance", `/api/model-applications/${byRef["LOCAL-MA-0001"].id}`);
   check("scope.finance-fee-stage-only", r.status === 200 && same(refs(r), ["LOCAL-MA-0002"]) && fd.status === 404, `fee_due only: ${refs(r).join(", ")}; draft LOCAL-MA-0001 HTTP ${fd.status}`);
   const stage = [];
-  for (const u of ["bee.programme", "bee.director", "bee.secretary"]) stage.push([u, await call(u, "/api/model-applications")]);
+  for (const u of ["bee.programme", "bee.officer", "bee.director"]) stage.push([u, await call(u, "/api/model-applications")]);
   check("scope.stage-roles-empty", stage.every(([, x]) => x.status === 200 && x.json.count === 0), stage.map(([u, x]) => `${u} ${x.status}/${x.json?.count}`).join("; ") + " (no seeded application at their stage)");
   const none = [];
   for (const u of ["bee.admin", "bee.helpdesk", "bee.auditor", "sda.officer", "lab.officer"]) {
@@ -181,8 +181,8 @@ async function main() {
     ["iame.officer", "POST", `/api/model-applications/${pid}/recommend`],
     ["bee.reviewer", "POST", `/api/model-applications/${byRef["LOCAL-MA-0004"].id}/recommend`],
     ["bee.programme", "POST", `/api/model-applications/${id}/rating/override`],
+    ["bee.officer", "POST", `/api/model-applications/${id}/decision`],
     ["bee.director", "POST", `/api/model-applications/${id}/decision`],
-    ["bee.secretary", "POST", `/api/model-applications/${id}/decision`],
     ["iame.officer", "POST", `/api/model-applications/${pid}/return/override`],
     ["iame.officer", "POST", `/api/model-applications/${pid}/reject/override`],
     ["bee.admin", "POST", `/api/model-applications/${id}/decision`],

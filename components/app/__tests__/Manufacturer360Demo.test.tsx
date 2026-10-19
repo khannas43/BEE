@@ -58,7 +58,7 @@ describe("Manufacturer360Demo", () => {
 });
 
 describe("Manufacturer 360 navigation", () => {
-  const rolesWithNav = ["manufacturer", "agency", "programme", "director", "secretary", "finance", "auditor", "admin"] as const;
+  const rolesWithNav = ["manufacturer", "agency", "programme", "officer", "director", "finance", "auditor", "admin"] as const;
 
   it("registers the runtime route with expected nav roles", () => {
     const route = runtimeRouteFor("/app/demo/manufacturer-360");

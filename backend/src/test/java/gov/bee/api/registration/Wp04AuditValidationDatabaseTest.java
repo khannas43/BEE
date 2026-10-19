@@ -67,8 +67,8 @@ class Wp04AuditValidationDatabaseTest {
     static final Caller PROGRAMME = new Caller(PROGRAMME_USER, "bee.programme", List.of(new RoleGrant("programme", "all")), Set.of(BEE_ORG));
     static final UUID DIRECTOR_USER = UUID.fromString("00000000-0000-4000-a000-000000000007");
     static final UUID DUAL_USER = UUID.fromString("00000000-0000-4000-a000-0000000000e1");
-    static final Caller DIRECTOR = new Caller(DIRECTOR_USER, "bee.director", List.of(new RoleGrant("director", "all")), Set.of(BEE_ORG));
-    static final Caller DUAL = new Caller(DUAL_USER, "dual.reviewer", List.of(new RoleGrant("programme", "all"), new RoleGrant("director", "all")), Set.of(BEE_ORG));
+    static final Caller DIRECTOR = new Caller(DIRECTOR_USER, "bee.officer", List.of(new RoleGrant("officer", "all")), Set.of(BEE_ORG));
+    static final Caller DUAL = new Caller(DUAL_USER, "dual.reviewer", List.of(new RoleGrant("programme", "all"), new RoleGrant("officer", "all")), Set.of(BEE_ORG));
     static final Caller ADMIN = new Caller(ADMIN_USER, "bee.admin", List.of(new RoleGrant("admin", "all")), Set.of(BEE_ORG));
 
     static final ObjectMapper JSON = new ObjectMapper();
@@ -133,7 +133,7 @@ class Wp04AuditValidationDatabaseTest {
         review = transactional(new RegistrationReviewService(registrationRepo, service, registrationWiring, idem, JSON));
         documentService = new RegistrationDocumentService(registrationRepo, documentRepo, new RegistrationDocumentRecorder(documentRepo, idem),
             new gov.bee.api.document.LocalSha256FileStore(props), idem, JSON);
-        assertEquals(77, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V77");
+        assertEquals(78, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V78");
     }
 
     @AfterAll
@@ -243,7 +243,7 @@ class Wp04AuditValidationDatabaseTest {
         assertEquals(proposal.get("id"), rev.get(1).get("p"));
         var read = ok(revocation.read(DIRECTOR), 200);
         @SuppressWarnings("unchecked") List<Map<String, Object>> events = (List<Map<String, Object>>) read.get("events");
-        assertTrue(events.stream().anyMatch(e -> brand.toString().equals(e.get("targetId")) && "revoked".equals(e.get("kind")) && "BEE Director".equals(e.get("by"))), "the audit trail is readable");
+        assertTrue(events.stream().anyMatch(e -> brand.toString().equals(e.get("targetId")) && "revoked".equals(e.get("kind")) && "BEE Officer".equals(e.get("by"))), "the audit trail is readable");
 
         // The revoked name can be registered again by the same owner.
         UUID again = atProgrammeReview("Trail Cool");

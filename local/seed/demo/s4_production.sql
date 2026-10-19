@@ -12,10 +12,10 @@ INSERT INTO model_application (id, reference, organisation_id, brand_name, categ
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after) VALUES
-  ('00000000-0000-4000-c100-000000000101', '00000000-0000-4000-c000-000000000101', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'secretary', 1),
-  ('00000000-0000-4000-c100-000000000102', '00000000-0000-4000-c000-000000000102', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'secretary', 1),
-  ('00000000-0000-4000-c100-000000000103', '00000000-0000-4000-c000-000000000103', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'secretary', 1),
-  ('00000000-0000-4000-c100-000000000104', '00000000-0000-4000-c000-000000000104', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'secretary', 1)
+  ('00000000-0000-4000-c100-000000000101', '00000000-0000-4000-c000-000000000101', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'director', 1),
+  ('00000000-0000-4000-c100-000000000102', '00000000-0000-4000-c000-000000000102', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'director', 1),
+  ('00000000-0000-4000-c100-000000000103', '00000000-0000-4000-c000-000000000103', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'director', 1),
+  ('00000000-0000-4000-c100-000000000104', '00000000-0000-4000-c000-000000000104', 'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'director', 1)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO certificate (id, application_id, transition_event_id, registration_id, category_code, issue_year, sequence_no, valid_from, valid_to,
@@ -106,7 +106,7 @@ FROM (VALUES ('1101'), ('1102'), ('1111'), ('1112'), ('1121'), ('1122'), ('1131'
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO model_application_transition_event (id, application_id, action, from_state, to_state, actor_account_id, actor_role, version_after, occurred_at)
 SELECT ('00000000-0000-4000-c110-00000000' || suffix)::uuid, ('00000000-0000-4000-c000-00000000' || suffix)::uuid,
-       'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'secretary', 2, now() - interval '80 days'
+       'approve', 'secretary_approval', 'approved', '00000000-0000-4000-a000-000000000008', 'director', 2, now() - interval '80 days'
 FROM (VALUES ('1101'), ('1102'), ('1111'), ('1112'), ('1121'), ('1122'), ('1131'), ('1132')) AS v (suffix)
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO model_application_rating (id, application_id, transition_event_id, rating_version, basis, scheme_key, declared_iseer, verified_iseer, stars, computed_by_account_id)

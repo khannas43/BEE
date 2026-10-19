@@ -123,7 +123,7 @@ async function runChecks(run, pages) {
 async function main() {
   const chrome = await launchChrome();
   try {
-    const people = [["nova", "nova.applicant"], ["finance", "bee.finance"], ["programme", "bee.programme"], ["director", "bee.director"], ["secretary", "bee.secretary"]];
+    const people = [["nova", "nova.applicant"], ["finance", "bee.finance"], ["programme", "bee.programme"], ["director", "bee.officer"], ["secretary", "bee.officer"]];
     const pages = {};
     for (const [k, u] of people) {
       const twin = ids.name(u);

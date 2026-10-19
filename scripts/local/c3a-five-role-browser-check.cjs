@@ -3,8 +3,6 @@
 const totp = require("./totp.cjs");
 const { WEB, launchChrome, openPage, signIn } = require("./browser-check.cjs");
 
-const VISIBLE_ROLES = ["manufacturer", "finance", "director", "secretary", "admin"];
-const HIDDEN_ROLE_LABELS = /programme|reviewer|iame|auditor|helpdesk|agency|pixel|laboratory|sda|registered agency/i;
 const ADMIN_NOTE = /Admin demonstration view|read-only Admin|Consolidated view of every screen/i;
 
 const PERSONAS = [
@@ -103,6 +101,14 @@ async function adminCanOpenRoute(page, href) {
 (async () => {
   const chrome = await launchChrome();
   try {
+    {
+      const page = await openPage(chrome.cdp);
+      await page.goto(`${WEB}/login`);
+      await page.waitFor(`!!document.getElementById("demo-username")`, 15000);
+      const loginForm = await page.eval(`!!document.querySelector('[data-testid="demo-login-form"]') && !document.body.innerText.includes("Sign in with BEE identity")`);
+      check("login.oval-demo-form", loginForm, "/login");
+      await page.close();
+    }
     for (const p of PERSONAS) {
       await totp.ensureEnrolled(p.user, { allowProtected: true });
       const page = await openPage(chrome.cdp);
@@ -113,13 +119,23 @@ async function adminCanOpenRoute(page, href) {
       await waitForNav(page);
       const groups = await menuGroups(page);
       check(`${p.key}.menu-groups`, groups === p.groups, `groups=${groups}`);
+      const selectorHidden = await page.eval(`!document.querySelector('[data-testid="visible-role-selector"]')`);
+      check(`${p.key}.role-selector-hidden-when-signed-in`, selectorHidden, "top bar must not switch identity");
+      const meBefore = await page.eval(`fetch('/api/runtime/me',{cache:'no-store'}).then(r=>r.ok?r.json():null)`);
+      const badgeBefore = await page.eval(`document.querySelector('[data-testid="session-badge"]')?.textContent?.replace(/\\s+/g,' ').trim() || ""`);
+      await page.eval(`window.__demoLoginPosts = 0; const f = window.fetch; window.fetch = function(...a) { if (String(a[0]||'').includes('/api/runtime/demo/login')) window.__demoLoginPosts++; return f.apply(this, a); };`);
       const options = await roleDropdown(page);
-      check(`${p.key}.role-dropdown-five`, options?.length === 5, JSON.stringify(options?.map((o) => o.value)));
+      check(`${p.key}.no-dropdown-to-change`, options === null, "selector absent");
+      const meAfter = await page.eval(`fetch('/api/runtime/me',{cache:'no-store'}).then(r=>r.ok?r.json():null)`);
+      const badgeAfter = await page.eval(`document.querySelector('[data-testid="session-badge"]')?.textContent?.replace(/\\s+/g,' ').trim() || ""`);
+      const demoPosts = await page.eval(`window.__demoLoginPosts || 0`);
+      check(`${p.key}.me-unchanged`, meBefore?.effectiveRoles?.[0]?.role === meAfter?.effectiveRoles?.[0]?.role, `${meBefore?.effectiveRoles?.[0]?.role} → ${meAfter?.effectiveRoles?.[0]?.role}`);
       check(
-        `${p.key}.role-dropdown-labels`,
-        options?.every((o) => VISIBLE_ROLES.includes(o.value)) && !HIDDEN_ROLE_LABELS.test(options?.map((o) => o.text).join(" ") ?? ""),
-        options?.map((o) => o.text).join(", "),
+        `${p.key}.identity-unchanged`,
+        meBefore?.displayName === meAfter?.displayName && badgeBefore === badgeAfter && badgeBefore.length > 0,
+        meBefore?.displayName ?? badgeBefore.slice(0, 40),
       );
+      check(`${p.key}.no-demo-login-from-topbar`, demoPosts === 0, `posts=${demoPosts}`);
       if (p.forbidden) {
         const refused = await refusedUnrelatedScreen(page, p.forbidden);
         check(`${p.key}.forbidden-route`, refused, p.forbidden);

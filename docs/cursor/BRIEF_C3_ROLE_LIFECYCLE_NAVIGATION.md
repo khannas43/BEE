@@ -190,7 +190,7 @@ The live check `read-ui-browser-check.cjs` step `read-ui.preview-elsewhere-uncha
 
 **Goal:** Client demo shows only five personas in the header role dropdown; remove Admin demonstration copy from the UI while keeping C3A Spring boundaries.
 
-**Role selector:** `VISIBLE_SELECTOR_ROLES` in `lib/roles.ts`; `AppTopbar` renders exactly Manufacturer, Finance, Director, Secretary, Admin. Demo sign-in (`switchDemoRole`) and prototype preview (`RoleContext`) use the same five keys. Seed accounts for Programme, Reviewer, IAME, and the like remain for automation only.
+**Role selector:** `VISIBLE_SELECTOR_ROLES` in `lib/roles.ts`; `AppTopbar` shows exactly Manufacturer, Finance, Director, Secretary, Admin **only while signed out**, updating `RoleContext` localStorage for prototype sample data. It never calls `/api/runtime/demo/login`. Signed-in users change role only via Logout → oval login. Seed accounts for Programme, Reviewer, IAME, and the like remain for automation only.
 
 **Admin UI:** Remove `AdminDemonstrationBanner` and the Admin sidebar note (`nav-admin-note`). Admin profile label is "Admin". Operational screens still hide mutation controls when `/api/me.adminDemonstrationReadOnly` is true; Spring still denies mutations.
 

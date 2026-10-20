@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
@@ -16,33 +16,33 @@ import {
  * `?tab=overview|grievances|selection|cases`. A failed test leads only to a recommendation. Local demonstration, not BEE rules.
  */
 
-const card = "rounded-xl border border-[#dbe6f7] bg-white";
+export const card = "rounded-xl border border-[#dbe6f7] bg-white";
 const th = "px-3 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-[#475569]";
 const td = "px-3 py-2 align-top";
-const fieldCls = "mt-1 block w-full rounded-lg border border-outline-variant bg-white px-3 py-2 text-[13px]";
-const labelCls = "block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]";
-const btn = "inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50";
-const btnOutline = "inline-flex items-center gap-1 rounded-lg border border-primary bg-white px-3 py-1.5 text-[13px] font-semibold text-primary disabled:opacity-50";
+export const fieldCls = "mt-1 block w-full rounded-lg border border-outline-variant bg-white px-3 py-2 text-[13px]";
+export const labelCls = "block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]";
+export const btn = "inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50";
+export const btnOutline = "inline-flex items-center gap-1 rounded-lg border border-primary bg-white px-3 py-1.5 text-[13px] font-semibold text-primary disabled:opacity-50";
 
 type Tab = "overview" | "grievances" | "selection" | "cases";
 const TABS: { key: Tab; label: string }[] = [{ key: "overview", label: "Overview" }, { key: "grievances", label: "Grievance inbox" }, { key: "selection", label: "Risk selection" }, { key: "cases", label: "Test cases" }];
 const COPY: Record<Tab, string> = {
-  overview: "Complaints from customers and the compliance risk of each manufacturer decide which products BEE buys from the market and tests, at its own cost.",
+  overview: "Products shortlisted for random testing, from complaints and compliance risk. Open one to see why it was picked and to approve it for testing. BEE buys the units from the market and tests them at its own cost.",
   grievances: "Complaints from end customers, from every channel in one list.",
-  selection: "Every certified product ranked by review priority. Each score shows the points behind it. Add a product to testing, or draw at random, weighted by risk.",
+  selection: "Every certified product ranked by review priority. Each score shows the points behind it. Add a product to the shortlist, or draw at random, weighted by risk.",
   cases: "Each product BEE buys and tests moves through five stages. The manufacturer sees only the result.",
 };
 
-const stamp = (iso: string) => {
+export const stamp = (iso: string) => {
   const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T"));
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 };
-const day = (iso: string) => stamp(iso).split(",")[0];
+export const day = (iso: string) => stamp(iso).split(",")[0];
 
-const BAND_TONE = { high: "border-[#f5c2c0] bg-[#fdecea] text-[#93000a]", medium: "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]", low: "border-[#b7e0c6] bg-[#e2f3e8] text-[#14532d]" };
+export const BAND_TONE = { high: "border-[#f5c2c0] bg-[#fdecea] text-[#93000a]", medium: "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]", low: "border-[#b7e0c6] bg-[#e2f3e8] text-[#14532d]" };
 const RESULT_TONE: Record<string, string> = { pass: "border-[#b7e0c6] bg-[#e2f3e8] text-[#14532d]", fail: "border-[#f5c2c0] bg-[#fdecea] text-[#93000a]", retest: "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]" };
 
-function Chip({ tone, children }: { tone: string; children: ReactNode }) {
+export function Chip({ tone, children }: { tone: string; children: ReactNode }) {
   return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${tone}`}>{children}</span>;
 }
 
@@ -74,7 +74,8 @@ function useLoad<T>(load: () => Promise<{ ok: true; value: T } | { ok: false; me
 export function ProductTesting() {
   const param = useSearchParams()?.get("tab") ?? "";
   const tab: Tab = param === "grievances" || param === "selection" || param === "cases" ? param : "overview";
-  const [notice, setNotice] = useState<string | null>(null);
+  const approved = useSearchParams()?.get("approved") ?? "";
+  const [notice, setNotice] = useState<string | null>(approved ? `Case ${approved} was approved for testing. BEE now buys a unit from the market and tests it.` : null);
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-testing">
       <h1 className="flex-1 min-w-0">Product testing</h1>
@@ -86,12 +87,12 @@ export function ProductTesting() {
         ))}
       </nav>
       {notice ? <p role="status" className="rounded-lg border border-[#b7e0c6] bg-[#e2f3e8] px-3 py-2 text-[13px] font-semibold text-[#14532d]" data-testid="testing-notice">{notice}</p> : null}
-      {tab === "overview" ? <OverviewView onDone={setNotice} /> : tab === "grievances" ? <GrievanceView onDone={setNotice} /> : tab === "selection" ? <SelectionView onDone={setNotice} /> : <CasesView onDone={setNotice} />}
+      {tab === "overview" ? <OverviewView /> : tab === "grievances" ? <GrievanceView onDone={setNotice} /> : tab === "selection" ? <SelectionView onDone={setNotice} /> : <CasesView onDone={setNotice} />}
     </div>
   );
 }
 
-function Bars({ data, words, tone }: { data: Record<string, number>; words: Record<string, string>; tone: string }) {
+export function Bars({ data, words, tone }: { data: Record<string, number>; words: Record<string, string>; tone: string }) {
   const max = Math.max(1, ...Object.values(data));
   return (
     <ul className="space-y-2">
@@ -105,25 +106,21 @@ function Bars({ data, words, tone }: { data: Record<string, number>; words: Reco
   );
 }
 
-function OverviewView({ onDone }: { onDone: (m: string) => void }) {
+function OverviewView() {
   const { data, error } = useLoad<Overview>(readOverview);
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
   return (
     <div className="space-y-space-md" data-testid="testing-overview">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <a href="#overview-open-grievances" className="block hover:opacity-90" data-testid="tile-open-grievances" aria-label="Open grievances: go to the list">
+        <Link href="/app/demo/testing?tab=grievances&status=active" className="block hover:opacity-90" data-testid="tile-open-grievances" aria-label="Open grievances: go to the list">
           <Tile label="Open grievances" value={data.openGrievances} note={`${data.grievancesLast30} in the last 30 days. Click to list them`} tone="text-[#8a4b00]" />
-        </a>
+        </Link>
         <Tile label="Products flagged" value={data.flagged} note="high review priority" tone="text-[#93000a]" />
         <Tile label="Cases in progress" value={data.stages.selected + data.stages.procured + data.stages.at_lab + data.stages.result_in} note="not yet closed" />
         <Tile label="Results this quarter" value={data.resultsThisQuarter} note="tested by BEE" />
       </div>
-      <ProductPanel />
-      <section id="overview-open-grievances" data-testid="overview-open-grievances" className="space-y-space-sm">
-        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Open grievances ({data.openGrievances})</div>
-        <GrievanceView onDone={onDone} initialStatus="active" />
-      </section>
+      <ShortlistTable />
       <section className={`${card} p-4`}>
         <div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Test cases by stage</div>
         <ol className="grid grid-cols-2 gap-2 lg:grid-cols-5">
@@ -156,32 +153,57 @@ function OverviewView({ onDone }: { onDone: (m: string) => void }) {
   );
 }
 
-function ProductPanel() {
-  const { data: list } = useLoad<{ products: RankedProduct[]; total: number }>(readSelection);
-  const [reg, setReg] = useState("");
-  const [view, setView] = useState<ProductView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const chosen = reg || list?.products[0]?.registrationId || "";
-  useEffect(() => {
-    if (!chosen) return;
-    let live = true;
-    void readProduct(chosen).then((r) => { if (!live) return; if (r.ok) { setView(r.value); setError(null); } else setError(r.message); });
-    return () => { live = false; };
-  }, [chosen]);
-  if (!list) return null;
-  const shown = view && view.product.registrationId === chosen ? view : null;
+const SHORT_WORD: Record<string, string> = { shortlisted: "Waiting for approval", not_approved: "Not approved" };
+
+function ShortlistTable() {
+  const router = useRouter();
+  const { data, error } = useLoad<{ cases: TestCase[] }>(readCases);
+  const [status, setStatus] = useState("");
+  const [basis, setBasis] = useState("");
+  const all = (data?.cases ?? []).filter((c) => c.stage === "shortlisted" || c.stage === "not_approved");
+  const rows = all.filter((c) => (!status || c.stage === status) && (!basis || c.basis === basis));
+  const tools = useListTools<TestCase>({
+    rows,
+    text: (c) => `${c.reference} ${c.model} ${c.brand} ${c.manufacturer} ${c.reason}`,
+    date: (c) => c.selectedAt.slice(0, 10),
+    sortValue: (c, k) => (k === "ref" ? c.reference : k === "model" ? c.model : k === "mfr" ? c.manufacturer : k === "score" ? c.riskScore ?? 0 : k === "basis" ? c.basis : k === "status" ? c.stage : c.selectedAt),
+    pageSize: 10,
+  });
+  if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
+  if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
+  const open = (c: TestCase) => router.push(`/app/demo/testing/product?reg=${encodeURIComponent(c.registrationId)}&case=${encodeURIComponent(c.reference)}`);
   return (
-    <section className={`${card} p-4 space-y-space-sm`} data-testid="product-view">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Product view: risk, production anomaly and grievances</div>
-        <label className={labelCls}>Product
-          <select value={chosen} onChange={(e) => setReg(e.target.value)} className={`${fieldCls} w-auto min-w-[280px]`} data-testid="product-select">
-            {list.products.map((p) => <option key={p.registrationId} value={p.registrationId}>{p.model} · {p.manufacturer} (score {p.score})</option>)}
-          </select>
-        </label>
+    <section className="space-y-space-sm" data-testid="shortlist">
+      <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Shortlisted for random testing ({all.filter((c) => c.stage === "shortlisted").length} waiting for approval)</div>
+      <section className={`${card} p-4 space-y-space-sm`}>
+        <ListToolbar tools={tools} searchLabel="Search" placeholder="Product, manufacturer or reference" dateLabel="Shortlisted"
+          exportCsv={{ filename: "shortlist", header: ["Case", "Product", "Manufacturer", "Risk score", "Basis", "Shortlisted", "Status"], rows: tools.visible.map((c) => [c.reference, c.model, c.manufacturer, c.riskScore ?? "", c.basis, day(c.selectedAt), SHORT_WORD[c.stage]]) }} />
+        <div className="flex flex-wrap items-end gap-3">
+          <label className={labelCls}>Status<select value={status} onChange={(e) => { setStatus(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="shortlist-status"><option value="">All</option><option value="shortlisted">Waiting for approval</option><option value="not_approved">Not approved</option></select></label>
+          <label className={labelCls}>Picked by<select value={basis} onChange={(e) => { setBasis(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="shortlist-basis"><option value="">All</option><option value="random">Random draw</option><option value="risk">Risk ranking</option><option value="manual">Officer</option></select></label>
+        </div>
+      </section>
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-[13px]" data-testid="shortlist-table">
+          <caption className="sr-only">Products shortlisted for random testing</caption>
+          <thead><tr className="bg-[#eef3fb]">
+            <SortableTh tools={tools} k="ref" className={th}>Case</SortableTh><SortableTh tools={tools} k="model" className={th}>Product</SortableTh><SortableTh tools={tools} k="mfr" className={th}>Manufacturer</SortableTh>
+            <SortableTh tools={tools} k="score" className={th}>Risk score</SortableTh><SortableTh tools={tools} k="basis" className={th}>Picked by</SortableTh><SortableTh tools={tools} k="date" className={th}>Shortlisted</SortableTh><SortableTh tools={tools} k="status" className={th}>Status</SortableTh>
+          </tr></thead>
+          <tbody>
+            {tools.paged.pageRows.length === 0 ? <tr><td className={td} colSpan={7}>No product on the shortlist for this selection.</td></tr> : tools.paged.pageRows.map((c) => (
+              <tr key={c.id} className="cursor-pointer border-t border-[#e2e8f0] hover:bg-[#f4f8ff]" onClick={() => open(c)} data-testid={`shortlist-row-${c.reference}`}>
+                <td className={`${td} font-semibold`}><Link href={`/app/demo/testing/product?reg=${encodeURIComponent(c.registrationId)}&case=${encodeURIComponent(c.reference)}`} onClick={(e) => e.stopPropagation()} className="text-primary hover:underline">{c.reference}</Link></td>
+                <td className={td}>{c.model}<div className="text-[12px] text-[#64748b]">{c.registrationId}</div></td><td className={td}>{c.manufacturer}</td>
+                <td className={td}>{c.riskScore ?? "-"}</td><td className={td}>{c.basis === "random" ? "Random draw (risk-weighted)" : c.basis === "risk" ? "Risk ranking" : "Officer"}</td>
+                <td className={`${td} whitespace-nowrap`}>{day(c.selectedAt)}</td>
+                <td className={td}><Chip tone={c.stage === "shortlisted" ? "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]" : "border-[#e2e8f0] bg-[#f1f5f9] text-[#475569]"}>{SHORT_WORD[c.stage]}</Chip></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      {error ? <p role="alert" className="text-error font-body-sm">{error}</p> : null}
-      {!shown ? <p role="status" className="font-body-sm">Loading…</p> : <ProductBody v={shown} />}
+      <ListPager tools={tools} />
     </section>
   );
 }
@@ -305,9 +327,9 @@ function GrievanceDetail({ g, statusWord, onClose, onDone }: { g: Grievance; sta
   const open = view?.product.openCase ?? null;
   const approve = async () => {
     setBusy(true); setProblem(null);
-    const r = await addToTesting(g.registrationId, `Approved by the BEE Officer after grievance ${g.reference} (${CATEGORY_WORD[g.category]}).`);
+    const r = await addToTesting(g.registrationId, `Shortlisted after grievance ${g.reference} (${CATEGORY_WORD[g.category]}).`);
     setBusy(false);
-    if (r.ok) onDone(`${g.model} was approved for testing as case ${String(r.value.reference)}. It now goes for testing: BEE buys a unit from the market.`); else setProblem(r.message);
+    if (r.ok) onDone(`${g.model} was added to the shortlist as case ${String(r.value.reference)}. The Officer approves it for testing from the Overview.`); else setProblem(r.message);
   };
   return (
     <section className={`${card} p-5 space-y-space-sm`} data-testid="grievance-detail">
@@ -325,10 +347,10 @@ function GrievanceDetail({ g, statusWord, onClose, onDone }: { g: Grievance; sta
       {view ? <ProductBody v={view} /> : <p role="status" className="font-body-sm">Loading the product view…</p>}
       {problem ? <p role="alert" className="rounded-lg bg-error-container p-space-sm font-body-sm text-on-error-container">{problem}</p> : null}
       <div className="rounded-xl border border-[#dbe6f7] bg-[#f9fbff] p-4">
-        {open ? <p className="text-[13px] text-[#334155]">This product is already approved for testing as case <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{open}</Link>.</p>
+        {open ? <p className="text-[13px] text-[#334155]">This product is already on the shortlist or in testing as case <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{open}</Link>.</p>
           : g.status === "closed" ? <p className="text-[13px] text-[#475569]">This grievance is closed.</p>
-          : <div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-xl text-[13px] text-[#334155]">Approving puts the product into testing: BEE buys a unit from the market, tests it at its own cost, and the manufacturer sees only the result.</p>
-              <button type="button" className={btn} disabled={busy || !view} onClick={() => void approve()} data-testid="grievance-approve"><Icon name="check_circle" size={16} /> Approve for testing</button></div>}
+          : <div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-xl text-[13px] text-[#334155]">Shortlisting puts the product on the Overview list. The BEE Officer then approves it for testing, with remarks: BEE buys a unit from the market and tests it at its own cost.</p>
+              <button type="button" className={btn} disabled={busy || !view} onClick={() => void approve()} data-testid="grievance-approve"><Icon name="playlist_add" size={16} /> Add to shortlist</button></div>}
       </div>
     </section>
   );
@@ -346,13 +368,13 @@ function SelectionView({ onDone }: { onDone: (m: string) => void }) {
     setBusy(true); setProblem(null);
     const r = await addToTesting(p.registrationId);
     setBusy(false);
-    if (r.ok) { onDone(`${p.model} was added to testing as case ${String(r.value.reference)}.`); void reload(); } else setProblem(r.message);
+    if (r.ok) { onDone(`${p.model} was added to the shortlist as case ${String(r.value.reference)}.`); void reload(); } else setProblem(r.message);
   };
   const draw = async () => {
     setBusy(true); setProblem(null);
     const r = await drawAtRandom(Number(size));
     setBusy(false);
-    if (r.ok) { onDone(`Drew ${(r.value.references as string[]).length} products at random, weighted by risk (${(r.value.references as string[]).join(", ")}). The draw is recorded.`); void reload(); } else setProblem(r.message);
+    if (r.ok) { onDone(`Drew ${(r.value.references as string[]).length} products at random, weighted by risk (${(r.value.references as string[]).join(", ")}). The draw is recorded and they wait for the Officer on the Overview.`); void reload(); } else setProblem(r.message);
   };
   return (
     <div className="space-y-space-sm" data-testid="testing-selection">
@@ -379,7 +401,7 @@ function SelectionView({ onDone }: { onDone: (m: string) => void }) {
                   <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setOpen(open === p.registrationId ? null : p.registrationId)} aria-expanded={open === p.registrationId} data-testid={`why-${p.registrationId}`}>{open === p.registrationId ? "Hide" : "Show points"}</button>
                   {open === p.registrationId ? <ul className="mt-2 max-w-[360px] space-y-1 text-[12px]">{p.factors.map((f) => <li key={f.label} className="flex justify-between gap-3"><span>{f.label}</span><b className="tabular-nums">+{f.points}</b></li>)}<li className="flex justify-between gap-3 border-t border-[#e2e8f0] pt-1"><b>Total (at most 100)</b><b className="tabular-nums">{p.score}</b></li></ul> : null}
                 </td>
-                <td className={td}>{p.openCase ? <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{p.openCase}</Link> : <button type="button" className={btnOutline} disabled={busy} onClick={() => void add(p)} data-testid={`add-${p.registrationId}`}>Approve for testing</button>}</td>
+                <td className={td}>{p.openCase ? <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{p.openCase}</Link> : <button type="button" className={btnOutline} disabled={busy} onClick={() => void add(p)} data-testid={`add-${p.registrationId}`}>Add to shortlist</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -390,7 +412,7 @@ function SelectionView({ onDone }: { onDone: (m: string) => void }) {
   );
 }
 
-const NEXT_HINT: Record<Exclude<Stage, "closed">, string> = {
+const NEXT_HINT: Record<"selected" | "procured" | "at_lab" | "result_in", string> = {
   selected: "Record where BEE bought the unit.", procured: "Record the laboratory the unit was sent to.", at_lab: "Record the test result.", result_in: "Close the case with a recommendation.",
 };
 
@@ -399,12 +421,13 @@ function CasesView({ onDone }: { onDone: (m: string) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
-  const current = data.cases.find((c) => c.id === openId) ?? null;
+  const approvedCases = data.cases.filter((c) => STAGES.includes(c.stage));
+  const current = approvedCases.find((c) => c.id === openId) ?? null;
   return (
     <div className="space-y-space-md" data-testid="testing-cases">
       <div className="grid gap-3 lg:grid-cols-5">
         {STAGES.map((s, i) => {
-          const list = data.cases.filter((c) => c.stage === s);
+          const list = approvedCases.filter((c) => c.stage === s);
           return (
             <section key={s} className="rounded-xl border border-[#dbe6f7] bg-[#f9fbff] p-3" data-testid={`stage-${s}`}>
               <div className="mb-2 text-[12px] font-bold uppercase tracking-wide text-[#475569]">{i + 1}. {STAGE_WORD[s]} <span className="text-[#14315E]">({list.length})</span></div>
@@ -460,7 +483,7 @@ function CaseDetail({ c, onDone }: { c: TestCase; onDone: (m: string) => void })
       {last ? <p className="rounded-lg bg-[#f1f5f9] px-3 py-2 text-[13px] text-[#475569]">This case is closed.</p> : (
         <div className="rounded-xl border border-[#dbe6f7] bg-[#f9fbff] p-4 space-y-space-sm">
           <div className="text-[14px] font-bold text-[#14315E]">Next: {STAGE_WORD[STAGES[STAGES.indexOf(c.stage) + 1]]}</div>
-          <p className="text-[12px] text-[#64748b]">{NEXT_HINT[c.stage as Exclude<Stage, "closed">]}</p>
+          <p className="text-[12px] text-[#64748b]">{NEXT_HINT[c.stage as "selected" | "procured" | "at_lab" | "result_in"]}</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {c.stage === "selected" ? <label className={labelCls}>Bought from<input className={fieldCls} value={form.procuredFrom ?? ""} onChange={(e) => set("procuredFrom", e.target.value)} placeholder="Shop or channel and city" data-testid="adv-procured" /></label> : null}
             {c.stage === "procured" ? <label className={labelCls}>Laboratory<input className={fieldCls} value={form.laboratory ?? ""} onChange={(e) => set("laboratory", e.target.value)} placeholder="Name and city" data-testid="adv-lab" /></label> : null}

@@ -5,9 +5,10 @@
  */
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
 
-export type Stage = "selected" | "procured" | "at_lab" | "result_in" | "closed";
+export type Stage = "shortlisted" | "not_approved" | "selected" | "procured" | "at_lab" | "result_in" | "closed";
+/** The five stages of an approved test case, in order; "shortlisted" and "not_approved" come before them, on the Officer's decision. */
 export const STAGES: Stage[] = ["selected", "procured", "at_lab", "result_in", "closed"];
-export const STAGE_WORD: Record<Stage, string> = { selected: "Selected", procured: "Bought from market", at_lab: "At laboratory", result_in: "Result in", closed: "Closed" };
+export const STAGE_WORD: Record<Stage, string> = { shortlisted: "Shortlisted", not_approved: "Not approved", selected: "Approved for testing", procured: "Bought from market", at_lab: "At laboratory", result_in: "Result in", closed: "Closed" };
 export const SOURCE_WORD: Record<string, string> = { qr_scan: "QR label scan", helpline: "Helpline", email: "Email", consumer_portal: "Consumer portal", forum: "Retailer or consumer forum" };
 export const CATEGORY_WORD: Record<string, string> = { cooling: "Cooling performance", power: "Power consumption", noise: "Noise", label: "Label", counterfeit: "Suspected counterfeit", other: "Other" };
 export const RESULT_WORD: Record<string, string> = { pass: "Pass", fail: "Fail", retest: "Retest" };
@@ -31,7 +32,7 @@ export type TestCase = {
   id: string; reference: string; registrationId: string; model: string; brand: string; manufacturer: string; basis: "risk" | "random" | "manual"; reason: string;
   riskScore: number | null; stage: Stage; procuredFrom: string | null; laboratory: string | null; result: "pass" | "fail" | "retest" | null;
   measuredIseer: string | null; ratedIseer: string | null; testedOn: string | null; recommendation: "none" | "review" | "hold" | null;
-  selectedAt: string; updatedAt: string; history: CaseEvent[];
+  approvalRemarks: string | null; approvedAt: string | null; selectedAt: string; updatedAt: string; history: CaseEvent[];
 };
 export type MineProduct = {
   registrationId: string; model: string; brand: string; stars: number; ratedIseer: string; validTo: string;
@@ -68,4 +69,5 @@ async function write(path: string, body: object): Promise<{ ok: true; value: Dem
 }
 export const addToTesting = (registrationId: string, reason?: string) => write(demoPath("product-testing", "cases"), { registrationId, basis: "risk", reason });
 export const drawAtRandom = (size: number) => write(demoPath("product-testing", "draw"), { size });
+export const decideCase = (id: string, decision: "approve" | "decline", remarks: string) => write(demoPath("product-testing", id, "decide"), { decision, remarks });
 export const advanceCase = (id: string, body: Record<string, string>) => write(demoPath("product-testing", id, "advance"), body);

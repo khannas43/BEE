@@ -84,6 +84,9 @@ public class ProductTestingModule implements DemoModule {
         if ("POST".equals(method) && "advance".equals(action)) {
             return advance(caller, id, body);
         }
+        if ("POST".equals(method) && "decide".equals(action)) {
+            return decide(caller, id, body);
+        }
         return DemoResult.notFound();
     }
 
@@ -115,7 +118,7 @@ public class ProductTestingModule implements DemoModule {
             latest.put(String.valueOf(r.get("registration_id")), String.valueOf(r.get("result")));
         }
         Map<String, String> open = new LinkedHashMap<>();
-        for (Map<String, Object> r : jdbc().queryForList("SELECT registration_id, reference FROM test_case WHERE stage <> 'closed'")) {
+        for (Map<String, Object> r : jdbc().queryForList("SELECT registration_id, reference FROM test_case WHERE stage NOT IN ('closed', 'not_approved')")) {
             open.put(String.valueOf(r.get("registration_id")), String.valueOf(r.get("reference")));
         }
         List<Map<String, Object>> out = new ArrayList<>();
@@ -239,7 +242,7 @@ public class ProductTestingModule implements DemoModule {
 
     private DemoResult grievances() {
         Map<String, String> open = new LinkedHashMap<>();
-        for (Map<String, Object> r : jdbc().queryForList("SELECT registration_id, reference FROM test_case WHERE stage <> 'closed'")) {
+        for (Map<String, Object> r : jdbc().queryForList("SELECT registration_id, reference FROM test_case WHERE stage NOT IN ('closed', 'not_approved')")) {
             open.put(String.valueOf(r.get("registration_id")), String.valueOf(r.get("reference")));
         }
         List<Map<String, Object>> out = new ArrayList<>();
@@ -299,6 +302,8 @@ public class ProductTestingModule implements DemoModule {
             m.put("ratedIseer", r.get("rated_iseer") == null ? null : r.get("rated_iseer").toString());
             m.put("testedOn", r.get("tested_on") == null ? null : String.valueOf(r.get("tested_on")));
             m.put("recommendation", r.get("recommendation"));
+            m.put("approvalRemarks", r.get("approval_remarks"));
+            m.put("approvedAt", r.get("approved_at") == null ? null : String.valueOf(r.get("approved_at")));
             m.put("selectedAt", String.valueOf(r.get("selected_at")));
             m.put("updatedAt", String.valueOf(r.get("updated_at")));
             m.put("history", events.getOrDefault(String.valueOf(r.get("id")), List.of()));
@@ -327,6 +332,8 @@ public class ProductTestingModule implements DemoModule {
         }
         Map<String, Integer> stages = new LinkedHashMap<>();
         STAGES.forEach(s -> stages.put(s, 0));
+        stages.put("shortlisted", 0);
+        stages.put("not_approved", 0);
         for (Map<String, Object> r : jdbc().queryForList("SELECT stage AS k, count(*) AS n FROM test_case GROUP BY 1")) {
             stages.put(String.valueOf(r.get("k")), num(r.get("n")));
         }
@@ -359,7 +366,7 @@ public class ProductTestingModule implements DemoModule {
         if (reason != null && reason.length() > 300) {
             return DemoResult.invalid("reason can be at most 300 characters.");
         }
-        String ref = insertCase(caller, product.get(), basis, reason != null ? reason : "Selected from the risk ranking (score " + product.get().get("score") + ").", null);
+        String ref = insertCase(caller, product.get(), basis, reason != null ? reason : "Added to the shortlist from the risk ranking (score " + product.get().get("score") + ").", null);
         return DemoResult.created(Map.of("reference", ref));
     }
 
@@ -367,10 +374,10 @@ public class ProductTestingModule implements DemoModule {
         UUID id = UUID.randomUUID();
         Integer seq = jdbc().queryForObject("SELECT count(*) + 1 FROM test_case", Integer.class);
         String ref = String.format("TC-%d-%04d", LocalDate.now().getYear(), seq == null ? 1 : seq);
-        jdbc().update("INSERT INTO test_case (id, reference, registration_id, model_number, brand_name, organisation_id, basis, reason, risk_score, rated_iseer, selected_by, draw_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc().update("INSERT INTO test_case (id, reference, registration_id, model_number, brand_name, organisation_id, basis, reason, risk_score, rated_iseer, selected_by, draw_id, stage) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'shortlisted')",
             id, ref, p.get("registrationId"), p.get("model"), p.get("brand"), UUID.fromString(String.valueOf(p.get("organisationId"))), basis, reason, num(p.get("score")),
             new java.math.BigDecimal(String.valueOf(p.get("ratedIseer"))), caller.accountId(), drawId);
-        jdbc().update("INSERT INTO test_case_event (case_id, stage, note, by_user) VALUES (?,?,?,?)", id, "selected", reason, caller.accountId());
+        jdbc().update("INSERT INTO test_case_event (case_id, stage, note, by_user) VALUES (?,?,?,?)", id, "shortlisted", reason, caller.accountId());
         return ref;
     }
 
@@ -410,12 +417,41 @@ public class ProductTestingModule implements DemoModule {
         jdbc().update("INSERT INTO selection_draw (id, by_user, seed, size, picks) VALUES (?,?,?,?,?)", drawId, caller.accountId(), seed, size, picks.toString());
         List<String> refs = new ArrayList<>();
         for (Map<String, Object> p : picked) {
-            refs.add(insertCase(caller, p, "random", "Risk-weighted random draw (weight " + (num(p.get("score")) + 5) + " = risk score + 5).", drawId));
+            refs.add(insertCase(caller, p, "random", "Drawn at random with weight " + (num(p.get("score")) + 5) + " (risk score plus a base of 5).", drawId));
         }
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("references", refs);
         res.put("seed", seed);
         return DemoResult.created(res);
+    }
+
+    /** The Officer's decision on a shortlisted product: approve it for testing or decline, with remarks (required). */
+    private DemoResult decide(Caller caller, String id, Map<String, Object> body) {
+        UUID uid;
+        try {
+            uid = UUID.fromString(id);
+        } catch (RuntimeException e) {
+            return DemoResult.notFound();
+        }
+        List<Map<String, Object>> found = jdbc().queryForList("SELECT stage FROM test_case WHERE id = ?", uid);
+        if (found.isEmpty()) {
+            return DemoResult.notFound();
+        }
+        if (!"shortlisted".equals(found.get(0).get("stage"))) {
+            return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "This product is not waiting for a decision.");
+        }
+        String decision = text(body.get("decision"));
+        String remarks = text(body.get("remarks"));
+        if (decision == null || !Set.of("approve", "decline").contains(decision)) {
+            return DemoResult.invalid("decision must be approve or decline.");
+        }
+        if (remarks == null || remarks.length() < 5 || remarks.length() > 500) {
+            return DemoResult.invalid("Remarks are required (5 to 500 characters).");
+        }
+        String next = "approve".equals(decision) ? "selected" : "not_approved";
+        jdbc().update("UPDATE test_case SET stage = ?, approval_remarks = ?, approved_by = ?, approved_at = now(), updated_at = now() WHERE id = ?", next, remarks, caller.accountId(), uid);
+        jdbc().update("INSERT INTO test_case_event (case_id, stage, note, by_user) VALUES (?,?,?,?)", uid, next, remarks, caller.accountId());
+        return DemoResult.ok(Map.of("stage", next));
     }
 
     private DemoResult advance(Caller caller, String id, Map<String, Object> body) {
@@ -432,6 +468,9 @@ public class ProductTestingModule implements DemoModule {
         Map<String, Object> c = found.get(0);
         String stage = String.valueOf(c.get("stage"));
         int at = STAGES.indexOf(stage);
+        if (at < 0) {
+            return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "The Officer must approve this shortlisted product for testing first.");
+        }
         if (at >= STAGES.size() - 1) {
             return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "This case is already closed.");
         }

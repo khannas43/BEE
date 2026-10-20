@@ -84,7 +84,7 @@ describe("navigation definition", () => {
     const missing = RUNTIME_ROUTES.map((r) => r.href).filter((href) => !reached.has(href) && !(href in NOT_IN_MENU));
     expect(missing).toEqual([]);
     const elsewhere = NAVIGATION.filter((g) => g.profile !== "admin").flatMap((g) => leaves(g.children)).filter((e) => e.state === "available").map((e) => e.route!);
-    expect(elsewhere.filter((r) => !reached.has(r))).toEqual([]);
+    expect(elsewhere.filter((r) => !reached.has(r) && !(r in NOT_IN_MENU))).toEqual([]);
   });
 
   it("every entry points at a route that exists, and IDs are unique", () => {

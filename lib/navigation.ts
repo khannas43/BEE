@@ -63,10 +63,12 @@ export const STANDALONE_PAGES: Readonly<Record<string, NavState>> = {
   "/app/identity/access-management": "preview",
 };
 
-/** Runtime routes deliberately left out of every menu, with the reason; the Admin coverage test reads this. */
+/** Runtime routes deliberately left out of every menu, or out of the Admin menu while another role has them, with the reason; the Admin coverage tests read this. */
 export const NOT_IN_MENU: Readonly<Record<string, string>> = {
   "/app/registrations/new": "Opened from Registration requests (Start a new request).",
   "/app/architecture": "Solution architecture: opened from the icon in the top bar, for every signed-in role.",
+  "/app/demo/testing": "Product testing is shown to the BEE Officer only for now; it is not in the Admin menu.",
+  "/app/demo/test-results": "The manufacturer's read-only view of BEE's test results; it is not in the Admin menu.",
   "/app/registrations/request": "Detail page for one request; needs the request ID.",
   "/app/demo/mis": "Programme MIS duplicates the two dashboards (Programme at a glance, Programme performance); the page still opens by link.",
   "/app/manufacturer/director":
@@ -149,6 +151,8 @@ const R = {
   messages: "/app/demo/notifications",
   requests: "/app/demo/requests",
   activity: "/app/demo/activity",
+  testing: "/app/demo/testing",
+  testResults: "/app/demo/test-results",
   feeRules: "/app/administration/fee-rules",
   receipts: "/app/finance/receipt",
   ratingSchemes: "/app/administration/rating-formula",
@@ -311,6 +315,7 @@ export const NAVIGATION: readonly NavGroup[] = [
       entry("mfr.notices", "Application notifications", "notifications", live(R.modelNotices), MFR),
       // hidden (not shown in the demonstration): entry("mfr.templates", "Official templates", "article", PLANNED, MFR),
       entry("mfr.helpdesk", "Helpdesk", "support_agent", live(R.requests), MFR, { query: "kind=helpdesk" }),
+      entry("mfr.test-results", "BEE test results", "science", live(R.testResults), MFR),
       entry("mfr.activity", "Sign-in activity", "manage_search", live(R.activity), MFR),
       grantedSettings("mfr"),
     ],
@@ -348,6 +353,10 @@ export const NAVIGATION: readonly NavGroup[] = [
       entry("dir.ai-extraction", "Document extraction", "plagiarism", live(R.ai), BEE_OFFICER, { query: "tab=document-extraction" }),
       // hidden (duplicate of the two dashboards): entry("dir.mis", "Programme MIS", "monitoring", live(R.mis), BEE_OFFICER),
       entry("dir.ledger", "Secure evidence ledger", "link", live(R.ledger), BEE_OFFICER),
+      entry("dir.testing-overview", "Product testing", "science", live(R.testing), BEE_OFFICER, { query: "tab=overview", isDefault: true }),
+      entry("dir.testing-grievances", "Grievance inbox", "report", live(R.testing), BEE_OFFICER, { query: "tab=grievances" }),
+      entry("dir.testing-selection", "Risk selection for testing", "casino", live(R.testing), BEE_OFFICER, { query: "tab=selection" }),
+      entry("dir.testing-cases", "Product test cases", "biotech", live(R.testing), BEE_OFFICER, { query: "tab=cases" }),
       entry("dir.activity", "Sign-in activity", "manage_search", live(R.activity), BEE_OFFICER),
     ],
   },

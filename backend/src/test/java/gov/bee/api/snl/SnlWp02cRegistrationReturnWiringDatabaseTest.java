@@ -133,7 +133,7 @@ class SnlWp02cRegistrationReturnWiringDatabaseTest {
         wiringRepo = new RegistrationReturnResponseWiringRepository(db);
         policyRepo = new SnlReturnResponsePolicyRepository(db);
         json = new ObjectMapper();
-        assertEquals(82, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(83, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
     }
 
     @AfterAll

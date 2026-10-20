@@ -7,6 +7,8 @@ import { correlationIdOf, errorResponse, logged, setOutcome, withContractHeaders
 import { KeycloakError, passwordGrant, signingKeys } from "@/lib/server/keycloak";
 import { RateLimiter } from "@/lib/server/rateLimit";
 import { authMethods, verifyIdToken } from "@/lib/server/oidc";
+import { recordActivity } from "@/lib/server/activityTrail";
+import { clientIpOf } from "@/lib/server/clientIp";
 import { createSession, destroySession, sessionCookieOf, setSessionCookie } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -96,6 +98,7 @@ export const POST = logged("/api/runtime/demo", async (request: NextRequest) => 
 
   destroySession(sessionCookieOf(request));
   const { cookie } = createSession(claims.sub, claims.preferred_username ?? claims.sub, tokens, authMethods(claims));
+  await recordActivity(tokens.access_token, clientIpOf(request.headers), "login", "Signed in");
   const res = json({ ok: true, returnTo: landingFor(me.body) }, 200, correlationId);
   setSessionCookie(res, cookie);
   return setOutcome(res, "ok");

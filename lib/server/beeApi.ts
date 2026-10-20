@@ -6,6 +6,9 @@
 import "server-only";
 import { CORRELATION_HEADER, isErrorCode } from "@/lib/server/apiContract";
 import { springRoute, writeLogLine } from "@/lib/server/requestLog";
+import { describeWrite, recordActivity } from "@/lib/server/activityTrail";
+import { clientIpOf } from "@/lib/server/clientIp";
+import { demoLoginEnabled } from "@/lib/server/demoLogin";
 
 const API_BASE = process.env.BEE_API_URL ?? "http://127.0.0.1:8090";
 const TIMEOUT_MS = 3000;
@@ -104,7 +107,20 @@ export async function callBeeApi(path: string, init: CallInit): Promise<ApiResul
     result = { status: 503, body: { error: "api_unreachable" }, correlationId };
   }
   logUpstream(path, init, result.status, result.body, start);
+  await trailWrite(path, init, result.status);
   return result;
+}
+
+/** Demonstration trail: a successful write made for a signed-in person is recorded with the address of the request. Never fails the call. */
+async function trailWrite(path: string, init: CallInit, status: number): Promise<void> {
+  const method = init.method ?? "GET";
+  if (!demoLoginEnabled() || !init.accessToken || method === "GET" || status >= 400 || path.startsWith("/api/demo/activity")) return;
+  try {
+    const { headers } = await import("next/headers");
+    await recordActivity(init.accessToken, clientIpOf(await headers()), "action", describeWrite(method, path));
+  } catch {
+    // outside a request (a test or a script): nothing to record
+  }
 }
 
 /**

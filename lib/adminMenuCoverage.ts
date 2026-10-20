@@ -134,6 +134,10 @@ export const ADMIN_RUNTIME_READ_ONLY_PROVEN: Readonly<Record<string, AdminRouteP
     backend: ["ServiceRequestsModuleTest.adminDemonstrationCannotRaiseOrAnswerRequests"],
     ui: [UI_CHROME],
   },
+  "/app/demo/activity": {
+    backend: ["ActivityModuleTest.callersWithoutOversightOrOrganisationAreDeniedAndBadRecordsRefused"],
+    ui: [UI_CHROME],
+  },
   "/app/demo/ledger": {
     backend: ["LedgerDatabaseTest.readScopeAndRoleDenials"],
     ui: [UI_CHROME],

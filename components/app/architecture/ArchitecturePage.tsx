@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 
@@ -304,6 +305,7 @@ export function ArchitecturePage() {
           </div>
           <p className="mt-3 text-[12px] text-white/70">Technology blocks below: Built {counts.built} · Simulated {counts.simulated} · Planned {counts.planned}</p>
           <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-[12px] font-bold text-[#146c43]" data-testid="arch-opensource-pill"><Icon name="lock_open" size={16} /> 100% open source · no licence fees</span>
+          <Link href="/app/security" className="ml-2 mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/60 px-3 py-1 text-[12px] font-bold !text-white hover:bg-white/15" data-testid="arch-security-link"><Icon name="shield_lock" size={16} /> How it is secured <Icon name="arrow_forward" size={14} /></Link>
         </div>
         <div className="group relative rounded-2xl bg-white p-2" tabIndex={0} data-testid="arch-readiness">
           <Donut counts={jc} centre={`${pct}%`} caption="journey items working" />
@@ -339,7 +341,7 @@ export function ArchitecturePage() {
       <div className="rounded-2xl border border-[#dbe6f7] bg-white p-5" data-testid="arch-stack">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">The building blocks</div>
-          <span className="text-[12px] text-[#64748b]">Click any block to see what it does · letters M A C H show the MACH pillar it serves · green tags are the open-source technology with its licence</span>
+          
         </div>
         <div className="mt-3 space-y-2">
           {LAYERS.map((l, idx) => (

@@ -109,6 +109,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const editId = params.get("edit");
   const justCreated = params.get("saved") === "1";
   const [notice, setNotice] = useState<string | null>(null);
+  const [reportCount, setReportCount] = useState(0);
   useEffect(() => {
     if (!justCreated || !editId) return;
     const t = window.setTimeout(() => document.getElementById("model-test-reports")?.scrollIntoView({ behavior: "smooth", block: "start" }), 1200);
@@ -647,7 +648,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             >
               {saveBusy ? "Saving…" : isEdit ? "Save changes" : "Save draft"}
             </button>
-            {isEdit && activeId ? <div id="model-test-reports"><DraftTestReports applicationId={activeId} /></div> : null}
+            {isEdit && activeId ? <div id="model-test-reports"><DraftTestReports applicationId={activeId} onCount={setReportCount} /></div> : null}
             {returned && activeId ? (
               <ResubmitPanel
                 application={{ id: activeId, version }}
@@ -710,9 +711,10 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                 </ul>
                 <div className="mt-4 border-t border-[#e7edf6] pt-3 text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Checked when you review the submit</div>
                 <ul className="mt-2 space-y-2">
-                  {Object.values(GATE_LABELS).map((label) => (
-                    <li key={label} className="flex items-start gap-2 text-[13px] text-[#1e293b]"><Icon name="radio_button_unchecked" size={16} className="mt-0.5 text-[#94a3b8]" />{label}</li>
-                  ))}
+                  {Object.entries(GATE_LABELS).map(([key, label]) => {
+                    const done = key === "test_report_required" ? reportCount > 0 : key === "declared_efficiency_required" ? Boolean(evidence.declaredIseer.trim()) : key === "test_date_invalid" ? Boolean(evidence.testedOn) : false;
+                    return <li key={label} className={`flex items-start gap-2 text-[13px] ${done ? "text-[#14532d]" : "text-[#1e293b]"}`}><Icon name={done ? "check_circle" : "radio_button_unchecked"} size={16} className={`mt-0.5 ${done ? "text-[#1c7c4a]" : "text-[#94a3b8]"}`} fill={done} />{label}{done ? "" : key === "test_report_required" ? " (upload the PDF in step 2)" : ""}</li>;
+                  })}
                 </ul>
               </div>
               <div className="rounded-xl border border-[#dbe6f7] bg-[#f4f8ff] p-5 text-[13px] text-[#475569]">

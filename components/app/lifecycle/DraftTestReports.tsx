@@ -17,12 +17,14 @@ const runUpload = (p: UploadInput, key: string) => uploadModelDocument(p.applica
 const uploadSignature = (p: UploadInput) => [p.applicationId, p.file.name, p.file.size, p.file.lastModified, p.label];
 
 /** Contextual test-report intake on the draft form (WP06.1a). Not a top-level menu. */
-export function DraftTestReports({ applicationId }: { applicationId: string }) {
+export function DraftTestReports({ applicationId, onCount }: { applicationId: string; onCount?: (n: number) => void }) {
   const [docs, setDocs] = useState<ModelDocument[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState("");
+  const [done, setDone] = useState<string | null>(null);
   const upload = useCommand(runUpload, uploadSignature);
 
   const apply = useCallback((res: Awaited<ReturnType<typeof listModelDocuments>>) => {
@@ -33,7 +35,8 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
     setDocs(res.list.items);
     setNote(res.list.verificationNote);
     setError(null);
-  }, []);
+    onCount?.(res.list.items.find((d) => d.documentKind === "test_report")?.versions.length ?? 0);
+  }, [onCount]);
 
   const refresh = useCallback(async () => {
     apply(await listModelDocuments(applicationId));
@@ -56,9 +59,12 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
       return;
     }
     setError(null);
+    setDone(null);
     const result = await upload.execute({ applicationId, file, label: label.trim() });
     if (!result?.ok) return;
+    setDone(`Uploaded ${file.name}. It is stored as version ${(report?.versions.length ?? 0) + 1} of the test report.`);
     setLabel("");
+    setFileName("");
     if (fileRef.current) fileRef.current.value = "";
     await refresh();
   }
@@ -77,6 +83,7 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
         onRun={() => void onUpload()}
         runLabel="Upload test report"
         busyLabel="Uploading…"
+        disabled={!fileName || !label.trim()}
         runTestId="model-doc-upload"
         errorTestId="model-doc-error"
         signInReturnTo="/app/model-label/new-model-application"
@@ -99,9 +106,17 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
             accept="application/pdf,.pdf"
             className="mt-1 block w-full rounded-lg border border-dashed border-outline-variant bg-white p-3 font-body-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[#e7effb] file:px-3 file:py-1.5 file:font-semibold file:text-[#14315E]"
             data-testid="model-doc-file"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              setFileName(f?.name ?? "");
+              setDone(null);
+              if (f && !label.trim()) setLabel(f.name.replace(/\.pdf$/i, ""));
+            }}
           />
+          <span className="mt-1 block text-[12px] text-[#64748b]">{fileName ? `Selected: ${fileName}` : "Choose the laboratory report as a PDF."}</span>
         </label>
       </CommandPanel>
+      {done ? <p role="status" className="mt-space-sm rounded-lg border border-[#b7e0c6] bg-[#e2f3e8] px-3 py-2 text-[13px] font-semibold text-[#14532d]" data-testid="model-doc-done">{done}</p> : null}
       {error ? (
         <p className="text-error font-body-sm mt-space-sm" data-testid="model-doc-input-error">
           {error}

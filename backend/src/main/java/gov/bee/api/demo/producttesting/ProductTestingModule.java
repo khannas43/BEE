@@ -71,6 +71,7 @@ public class ProductTestingModule implements DemoModule {
                 case "grievances" -> grievances();
                 case "selection" -> selection();
                 case "cases" -> cases();
+                case "product" -> product(query.get("reg"));
                 default -> DemoResult.notFound();
             };
         }
@@ -168,6 +169,69 @@ public class ProductTestingModule implements DemoModule {
         res.put("products", all.size() > 60 ? all.subList(0, 60) : all);
         res.put("total", all.size());
         res.put("note", "Review priority only, not a finding. The points and their weights are shown so every rank can be explained.");
+        return DemoResult.ok(res);
+    }
+
+    // ---- one product, consolidated -----------------------------------------------------------------------------------------------
+
+    /** Risk score with its points, the production anomaly check for the model, and the grievances against it, in one answer. */
+    private DemoResult product(String reg) {
+        if (reg == null || reg.isBlank()) {
+            return DemoResult.invalid("reg (the certificate registration ID) is required.");
+        }
+        Optional<Map<String, Object>> found = scoreProducts().stream().filter(p -> reg.equals(p.get("registrationId"))).findFirst();
+        if (found.isEmpty()) {
+            return DemoResult.notFound();
+        }
+        Map<String, Object> p = found.get();
+        Map<String, Object> anomaly = new LinkedHashMap<>();
+        anomaly.put("found", false);
+        try {
+            AiEngines engines = enginesProvider.getIfAvailable();
+            if (engines != null && engines.productionAnomaly().output().get("series") instanceof List<?> list) {
+                for (Object o : list) {
+                    if (o instanceof Map<?, ?> m && String.valueOf(p.get("model")).equals(String.valueOf(m.get("model")))
+                        && String.valueOf(p.get("manufacturer")).equals(clean(String.valueOf(m.get("organisation"))))) {
+                        anomaly.put("found", true);
+                        anomaly.put("status", m.get("status"));
+                        anomaly.put("quarters", m.get("quarters"));
+                        anomaly.put("mean", m.get("mean"));
+                        anomaly.put("boundSerials", m.get("boundSerials"));
+                        anomaly.put("flags", m.get("flags"));
+                        break;
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            // the anomaly check is advisory; the other two panels still answer
+        }
+        List<Map<String, Object>> list = new ArrayList<>();
+        Map<String, Integer> byCategory = new LinkedHashMap<>();
+        Map<String, Integer> bySource = new LinkedHashMap<>();
+        for (Map<String, Object> r : jdbc().queryForList("SELECT reference, source, category, summary, complainant_name, received_at, status FROM grievance WHERE registration_id = ? ORDER BY received_at DESC", reg)) {
+            byCategory.merge(String.valueOf(r.get("category")), 1, Integer::sum);
+            bySource.merge(String.valueOf(r.get("source")), 1, Integer::sum);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("reference", r.get("reference"));
+            m.put("source", r.get("source"));
+            m.put("category", r.get("category"));
+            m.put("summary", r.get("summary"));
+            m.put("complainant", r.get("complainant_name"));
+            m.put("receivedAt", String.valueOf(r.get("received_at")));
+            m.put("status", r.get("status"));
+            list.add(m);
+        }
+        Map<String, Object> grievances = new LinkedHashMap<>();
+        grievances.put("total", list.size());
+        grievances.put("last90", p.get("grievances"));
+        grievances.put("byCategory", byCategory);
+        grievances.put("bySource", bySource);
+        grievances.put("latest", list.size() > 5 ? list.subList(0, 5) : list);
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("product", p);
+        res.put("anomaly", anomaly);
+        res.put("grievances", grievances);
+        res.put("cases", caseList(" WHERE t.registration_id = ?", reg));
         return DemoResult.ok(res);
     }
 

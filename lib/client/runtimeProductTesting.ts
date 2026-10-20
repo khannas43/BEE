@@ -39,6 +39,13 @@ export type MineProduct = {
   tests: { reference: string; result: "pass" | "fail" | "retest"; measuredIseer: string | null; ratedIseer: string | null; testedOn: string | null; laboratory: string | null }[];
 };
 
+export type ProductView = {
+  product: RankedProduct;
+  anomaly: { found: boolean; status?: "normal" | "flagged"; quarters?: { quarter: string; units: number; zVsOthers: number }[]; mean?: number; boundSerials?: number | null; flags?: { type: string; quarter: string; detail: string }[] };
+  grievances: { total: number; last90: number; byCategory: Record<string, number>; bySource: Record<string, number>; latest: { reference: string; source: string; category: string; summary: string; complainant: string | null; receivedAt: string; status: string }[] };
+  cases: TestCase[];
+};
+
 type Read<T> = Promise<{ ok: true; value: T } | { ok: false; message: string }>;
 async function read<T>(part: string, check: (b: DemoBody) => boolean): Read<T> {
   const r = await demoGet<DemoBody>(demoPath("product-testing", part));
@@ -49,6 +56,10 @@ export const readOverview = () => read<Overview>("overview", (b) => typeof b.sta
 export const readGrievances = () => read<{ grievances: Grievance[] }>("grievances", (b) => Array.isArray(b.grievances));
 export const readSelection = () => read<{ products: RankedProduct[]; total: number }>("selection", (b) => Array.isArray(b.products));
 export const readCases = () => read<{ cases: TestCase[] }>("cases", (b) => Array.isArray(b.cases));
+export async function readProduct(reg: string): Read<ProductView> {
+  const r = await demoGet<DemoBody>(`${demoPath("product-testing", "product")}?reg=${encodeURIComponent(reg)}`);
+  return r.ok && typeof r.value.product === "object" ? { ok: true, value: r.value as unknown as ProductView } : { ok: false, message: r.ok ? "Unexpected answer." : r.message };
+}
 export const readMine = () => read<{ products: MineProduct[]; note: string }>("mine", (b) => Array.isArray(b.products));
 
 async function write(path: string, body: object): Promise<{ ok: true; value: DemoBody } | { ok: false; message: string }> {

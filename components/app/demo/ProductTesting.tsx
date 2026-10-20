@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import {
   addToTesting, advanceCase, CATEGORY_WORD, drawAtRandom, readCases, readGrievances, readOverview, readSelection, RECOMMENDATION_WORD, RESULT_WORD,
-  SOURCE_WORD, STAGE_WORD, STAGES, type Grievance, type Overview, type RankedProduct, type Stage, type TestCase,
+  readProduct, SOURCE_WORD, STAGE_WORD, STAGES, type Grievance, type Overview, type ProductView, type RankedProduct, type Stage, type TestCase,
 } from "@/lib/client/runtimeProductTesting";
 
 /**
@@ -117,6 +117,7 @@ function OverviewView() {
         <Tile label="Cases in progress" value={data.stages.selected + data.stages.procured + data.stages.at_lab + data.stages.result_in} note="not yet closed" />
         <Tile label="Results this quarter" value={data.resultsThisQuarter} note="tested by BEE" />
       </div>
+      <ProductPanel />
       <section className={`${card} p-4`}>
         <div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Test cases by stage</div>
         <ol className="grid grid-cols-2 gap-2 lg:grid-cols-5">
@@ -145,6 +146,84 @@ function OverviewView() {
         </ul>
         <Link href="/app/demo/testing?tab=selection" className="mt-2 inline-block text-[13px] font-semibold text-primary hover:underline">Open the risk selection</Link>
       </section>
+    </div>
+  );
+}
+
+function ProductPanel() {
+  const { data: list } = useLoad<{ products: RankedProduct[]; total: number }>(readSelection);
+  const [reg, setReg] = useState("");
+  const [view, setView] = useState<ProductView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const chosen = reg || list?.products[0]?.registrationId || "";
+  useEffect(() => {
+    if (!chosen) return;
+    let live = true;
+    void readProduct(chosen).then((r) => { if (!live) return; if (r.ok) { setView(r.value); setError(null); } else setError(r.message); });
+    return () => { live = false; };
+  }, [chosen]);
+  if (!list) return null;
+  const shown = view && view.product.registrationId === chosen ? view : null;
+  return (
+    <section className={`${card} p-4 space-y-space-sm`} data-testid="product-view">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Product view: risk, production anomaly and grievances</div>
+        <label className={labelCls}>Product
+          <select value={chosen} onChange={(e) => setReg(e.target.value)} className={`${fieldCls} w-auto min-w-[280px]`} data-testid="product-select">
+            {list.products.map((p) => <option key={p.registrationId} value={p.registrationId}>{p.model} · {p.manufacturer} (score {p.score})</option>)}
+          </select>
+        </label>
+      </div>
+      {error ? <p role="alert" className="text-error font-body-sm">{error}</p> : null}
+      {!shown ? <p role="status" className="font-body-sm">Loading…</p> : <ProductBody v={shown} />}
+    </section>
+  );
+}
+
+function ProductBody({ v }: { v: ProductView }) {
+  const p = v.product;
+  const a = v.anomaly;
+  const g = v.grievances;
+  const maxUnits = Math.max(1, ...(a.quarters ?? []).map((q) => q.units));
+  const panel = "rounded-xl border border-[#dbe6f7] bg-[#f9fbff] p-4";
+  const head = "mb-2 text-[12px] font-bold uppercase tracking-wide text-[#475569]";
+  return (
+    <div className="space-y-space-sm">
+      <p className="text-[13px] text-[#334155]"><b>{p.model}</b> · {p.brand} · {p.manufacturer} · {p.registrationId} · {p.stars} star · rated ISEER {p.ratedIseer}
+        {p.openCase ? <> · <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">case {p.openCase}</Link></> : null}</p>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <div className={panel} data-testid="pv-risk">
+          <div className={head}>Risk score</div>
+          <div className="flex items-center gap-3"><span className="text-[34px] font-extrabold leading-9 text-[#14315E]">{p.score}</span><Chip tone={BAND_TONE[p.band]}>{p.band}</Chip><span className="text-[12px] text-[#64748b]">of 100</span></div>
+          <ul className="mt-2 space-y-1 text-[12px]">{p.factors.map((f) => <li key={f.label} className="flex justify-between gap-3"><span>{f.label}</span><b className="tabular-nums">+{f.points}</b></li>)}</ul>
+        </div>
+        <div className={panel} data-testid="pv-anomaly">
+          <div className={head}>Production anomaly</div>
+          {!a.found ? <p className="text-[13px] text-[#64748b]">No production reported for this model, so nothing to check yet.</p> : (
+            <>
+              <Chip tone={a.status === "flagged" ? BAND_TONE.high : BAND_TONE.low}>{a.status === "flagged" ? "Flagged for a look" : "Normal"}</Chip>
+              <ul className="mt-2 space-y-1">{(a.quarters ?? []).map((q) => (
+                <li key={q.quarter} className="text-[12px]"><div className="flex justify-between"><span>{q.quarter}</span><b className="tabular-nums">{q.units.toLocaleString("en-IN")} units</b></div><div className="mt-0.5 h-1.5 rounded-full bg-[#e2e8f0]"><div className="h-1.5 rounded-full bg-[#254e9e]" style={{ width: `${(q.units / maxUnits) * 100}%` }} /></div></li>
+              ))}</ul>
+              {a.boundSerials != null ? <p className="mt-2 text-[12px] text-[#64748b]">{a.boundSerials.toLocaleString("en-IN")} QR serials bound.</p> : null}
+              {(a.flags ?? []).length > 0 ? <ul className="mt-2 space-y-1 text-[12px] text-[#93000a]">{(a.flags ?? []).map((f, i) => <li key={i}>{f.quarter}: {f.detail}</li>)}</ul> : <p className="mt-2 text-[12px] text-[#64748b]">No quarter stands out against the others.</p>}
+            </>
+          )}
+        </div>
+        <div className={panel} data-testid="pv-grievances">
+          <div className={head}>Grievances received</div>
+          {g.total === 0 ? <p className="text-[13px] text-[#64748b]">None received against this product.</p> : (
+            <>
+              <p className="text-[13px]"><b className="text-[22px] text-[#14315E]">{g.total}</b> in total, {g.last90} in the last 90 days</p>
+              <div className="mt-2"><Bars data={g.byCategory} words={CATEGORY_WORD} tone="#c47f17" /></div>
+              <div className="mt-2 text-[12px] text-[#64748b]">Channels: {Object.entries(g.bySource).map(([k, n]) => `${SOURCE_WORD[k] ?? k} ${n}`).join(", ")}</div>
+              <ul className="mt-2 space-y-1 text-[12px]">{g.latest.map((x) => <li key={x.reference}><b>{day(x.receivedAt)}</b> · {CATEGORY_WORD[x.category]} · {x.complainant ?? "-"}</li>)}</ul>
+              <Link href="/app/demo/testing?tab=grievances" className="mt-2 inline-block text-[12px] font-semibold text-primary hover:underline">Open the grievance inbox</Link>
+            </>
+          )}
+        </div>
+      </div>
+      {v.cases.length > 0 ? <p className="text-[12px] text-[#64748b]">BEE testing: {v.cases.map((c) => `${c.reference} (${STAGE_WORD[c.stage]}${c.result ? `, ${RESULT_WORD[c.result]}` : ""})`).join(", ")}.</p> : null}
     </div>
   );
 }

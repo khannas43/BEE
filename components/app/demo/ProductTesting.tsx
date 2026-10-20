@@ -130,11 +130,11 @@ function OverviewView() {
 }
 
 /** The list status of a case: waiting for the Officer, not approved, in testing (approved, not yet resulted) or tested (result in or closed). */
-export type ListStatus = "waiting" | "not_approved" | "in_testing" | "tested";
-export const LIST_STATUS_WORD: Record<ListStatus, string> = { waiting: "Waiting for approval", not_approved: "Not approved", in_testing: "In testing", tested: "Tested" };
-export const listStatusOf = (stage: Stage): ListStatus => (stage === "shortlisted" ? "waiting" : stage === "not_approved" ? "not_approved" : stage === "result_in" || stage === "closed" ? "tested" : "in_testing");
+export type ListStatus = "waiting" | "in_testing" | "tested";
+export const LIST_STATUS_WORD: Record<ListStatus, string> = { waiting: "Waiting for approval", in_testing: "In testing", tested: "Tested" };
+export const listStatusOf = (stage: Stage): ListStatus => (stage === "shortlisted" || stage === "not_approved" ? "waiting" : stage === "result_in" || stage === "closed" ? "tested" : "in_testing");
 const LIST_STATUS_TONE: Record<ListStatus, string> = {
-  waiting: "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]", not_approved: "border-[#e2e8f0] bg-[#f1f5f9] text-[#475569]",
+  waiting: "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]",
   in_testing: "border-[#c9d9f7] bg-[#e7effb] text-[#14315E]", tested: "border-[#b7e0c6] bg-[#e2f3e8] text-[#14532d]",
 };
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { ApplicationFullView } from "@/components/app/lifecycle/ApplicationFullView";
 import { ProductDetails } from "@/components/app/lifecycle/ProductDetails";
 import Link from "next/link";
 import { CertificateCard } from "@/components/app/lifecycle/CertificateCard";
@@ -38,6 +39,9 @@ function detailTabFromParam(raw: string | null): string {
   return raw === DETAIL_TAB_DOCUMENTS || raw === DETAIL_TAB_HISTORY ? raw : DETAIL_TAB_DETAILS;
 }
 
+/** The full page of one application (the "View" link opens the shorter summary beside the list). */
+export const modelApplicationFullHref = (id: string) => `/app/model-label/model-dashboard?id=${encodeURIComponent(id)}&view=full`;
+
 function modelDashboardHrefWithTab(id: string, tab: string): string {
   const q = new URLSearchParams({ id });
   if (tab !== DETAIL_TAB_DETAILS) q.set("tab", tab);
@@ -66,6 +70,7 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
   const identity = useSpringIdentity();
   const params = useSearchParams();
   const selectedId = params.get("id");
+  const fullView = params.get("view") === "full" && Boolean(selectedId);
   const revalidation = useRevalidation();
 
   const shownList = gateRead(identity.status, useRuntimeRead(LIST_TARGET, loadList, revalidation));
@@ -86,6 +91,8 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
       }
     >
       <div className="space-y-space-md" data-testid="model-applications-read">
+        {fullView ? <ApplicationFullView detailRead={shownDetail} returnTo={RETURN_TO} /> : (
+        <>
         <IdentityStrip identity={identity} />
 
         <div className={`grid grid-cols-1 gap-space-md ${selectedId ? "lg:grid-cols-5" : ""}`}>
@@ -111,6 +118,8 @@ export function ModelDashboard({ module, screen }: { module: Module; screen: Scr
             </div>
           ) : null}
         </div>
+        </>
+        )}
       </div>
     </ScreenChrome>
   );
@@ -151,9 +160,9 @@ function ApplicationTable({ items, selectedId }: { items: ModelApplication[]; se
       header: "Reference",
       sortValue: (a) => a.reference,
       render: (a) => (
-        <span className="font-mono" data-testid={`model-app-ref-${a.reference}`}>
+        <Link href={modelApplicationFullHref(a.id)} className="font-mono font-semibold text-primary hover:underline" data-testid={`model-app-ref-${a.reference}`} title="Open the full application">
           {a.reference}
-        </span>
+        </Link>
       ),
     },
     {

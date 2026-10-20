@@ -136,6 +136,15 @@ export function OnboardingWizard() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
+      if (!requestedApplicationId) {
+        // An applicant whose registration is already submitted has nothing left to edit: show its status page instead of starting a new draft.
+        const mine = await clientRef.current.listForApplicant();
+        const editable = mine.some((x) => x.phase === "draft" || x.phase === "automatic_checks_failed" || x.phase === "returned");
+        if (!editable && mine.length > 0) {
+          router.replace(`/app/manufacturer/application/${encodeURIComponent(mine[0].id)}`);
+          return;
+        }
+      }
       const id = requestedApplicationId || (await clientRef.current.defaultDraftId());
       const app = await clientRef.current.getApplication(id);
       const normalised = normalizeLoadedDraft(app.draft);
@@ -147,7 +156,7 @@ export function OnboardingWizard() {
       loadedKeyRef.current = null;
       setLoadError("Could not load the onboarding draft.");
     }
-  }, [requestedApplicationId]);
+  }, [requestedApplicationId, router]);
 
   useEffect(() => {
     const key = requestedApplicationId ?? "default";

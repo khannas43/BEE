@@ -8,10 +8,10 @@ import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtime
 export type SerialCounts = { total: number; bound: number; voided: number };
 export type LineQuarter = { fq: number; units: number; serials: SerialCounts };
 export type ProductionLine = { applicationId: string; model: string; brand: string; reference: string; registrationId: string | null; mark: "" | "expired" | "withdrawn"; quarters: LineQuarter[] };
-export type QuarterPayment = { status: "initiated" | "paid"; orderId: string; method: string | null; receipt: string | null };
+export type QuarterPayment = { status: "initiated" | "paid"; orderId: string; method: string | null; receipt: string | null; amount: string };
 export type QuarterTotal = {
   fq: number; label: string; calendarQuarter: string; units: number; fee: string; payment: QuarterPayment | null;
-  submission: { id: string; state: string; evidence: number } | null; open?: boolean;
+  submission: { id: string; state: string; evidence: number } | null; open?: boolean; canReopen?: boolean;
 };
 export type FeeOrderRow = { orderId: string; financialYear: string; quarters: string; amount: string; status: string; method: string | null; receipt: string | null; at: string };
 export type ProductionDetailsView = {
@@ -23,7 +23,7 @@ export type FeeOrder = { orderId: string; financialYear: string; equipment: stri
 export type PayResult = { orderId: string; method: string; gatewayRef: string; status: "paid" | "failed" | "awaiting_confirmation"; receipt?: string; note?: string };
 
 export const METHOD_WORD: Record<string, string> = { billdesk: "BillDesk", razorpay: "Razorpay", direct_transfer: "Direct transfer" };
-export const inr = (v: string | number) => `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: Number(v) % 1 ? 2 : 0 })}`;
+export const inr = (v: string | number) => `${Number(v) < 0 ? "-" : ""}₹${Math.abs(Number(v)).toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: Number(v) % 1 ? 2 : 0 })}`;
 
 type Res<T> = Promise<{ ok: true; value: T } | { ok: false; message: string }>;
 const path = (part?: string) => demoPath("production-details", ...(part ? [part] : []));
@@ -54,3 +54,4 @@ export const completeOrder = (orderId: string, method: string, outcome: "paid" |
 export const cancelOrder = (orderId: string) => write<{ orderId: string; status: string }>(demoPath("production-details", orderId, "cancel"), {});
 export const saveUnits = (fy: string, fq: number, units: Record<string, string>) => write<{ submissionId: string; models: number; units: number }>(path("units"), { fy, fq, units });
 export const submitSubmission = (submissionId: string) => write<{ state: string }>(demoPath("production", submissionId, "submit"), {});
+export const reopenQuarter = (fy: string, fq: number, reason: string) => write<{ submissionId: string; state: string }>(path("reopen"), { fy, fq, reason });

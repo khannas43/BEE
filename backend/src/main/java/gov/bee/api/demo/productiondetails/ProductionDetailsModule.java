@@ -109,6 +109,9 @@ public class ProductionDetailsModule implements DemoModule {
         if ("POST".equals(method) && "serials".equals(id) && action == null) {
             return makeSerials(caller, own.get(), body);
         }
+        if ("POST".equals(method) && "reopen".equals(id) && action == null) {
+            return reopen(caller, own.get(), body);
+        }
         if ("POST".equals(method) && "units".equals(id) && action == null) {
             return saveUnits(caller, own.get(), body);
         }
@@ -270,6 +273,7 @@ public class ProductionDetailsModule implements DemoModule {
             m.put("orderId", r.get("order_id"));
             m.put("method", r.get("method"));
             m.put("receipt", r.get("receipt_number"));
+            m.put("amount", String.valueOf(r.get("amount_inr")));
             pay.put(((Number) r.get("fy_quarter")).intValue(), m);
         }
         List<Map<String, Object>> quarters = new ArrayList<>();
@@ -287,11 +291,12 @@ public class ProductionDetailsModule implements DemoModule {
             q.put("payment", p);
             q.put("submission", subs.get(fq));
             Map<String, Object> sub = subs.get(fq);
+            q.put("canReopen", own != null && !staff && quarterStarted(start, fq) && sub != null && ("submitted".equals(sub.get("state")) || "accepted".equals(sub.get("state"))));
             q.put("open", own != null && !staff && quarterStarted(start, fq) && (sub == null || "draft".equals(sub.get("state")) || "query".equals(sub.get("state"))));
             quarters.add(q);
             payable = payable.add(fee);
             if (p != null && "paid".equals(p.get("status"))) {
-                paid = paid.add(fee);
+                paid = paid.add(new BigDecimal(String.valueOf(p.get("amount"))));
             }
         }
         res.put("lines", new ArrayList<>(lines.values()));
@@ -580,6 +585,37 @@ public class ProductionDetailsModule implements DemoModule {
         res.put("models", wanted.size());
         res.put("units", wanted.values().stream().mapToLong(Long::longValue).sum());
         return DemoResult.created(res);
+    }
+
+    /** Edit on a submitted or accepted quarter: it goes back to a draft, with the reason on record, and has to be submitted again for BEE's review. */
+    private DemoResult reopen(Caller caller, UUID org, Map<String, Object> body) {
+        String fy = String.valueOf(body.get("fy"));
+        Integer start = startYearOf(fy);
+        int fq;
+        try {
+            fq = Integer.parseInt(String.valueOf(body.get("fq")));
+        } catch (NumberFormatException e) {
+            return DemoResult.invalid("fy and fq are required.");
+        }
+        String reason = body.get("reason") == null ? "" : String.valueOf(body.get("reason")).trim();
+        if (start == null || fq < 1 || fq > 4) {
+            return DemoResult.invalid("fy must look like 2026-27 and fq must be 1 to 4.");
+        }
+        if (reason.length() < 5 || reason.length() > 300) {
+            return DemoResult.invalid("Say why the figures are being corrected (5 to 300 characters).");
+        }
+        List<Map<String, Object>> found = jdbc().queryForList("SELECT id, state FROM production_submission WHERE organisation_id = ? AND quarter = ? FOR UPDATE", org, calendarQuarterOf(start, fq));
+        if (found.isEmpty()) {
+            return DemoResult.notFound();
+        }
+        String state = String.valueOf(found.get(0).get("state"));
+        if (!"submitted".equals(state) && !"accepted".equals(state)) {
+            return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "This quarter is " + state + " and can already be changed.");
+        }
+        UUID sid = (UUID) found.get(0).get("id");
+        jdbc().update("UPDATE production_submission SET state = 'draft', version = version + 1, submitted_by = NULL, submitted_at = NULL, reviewed_by = NULL, reviewed_at = NULL, review_note = NULL WHERE id = ?", sid);
+        event(sid, "reopened", state, "draft", caller, reason);
+        return DemoResult.ok(Map.of("submissionId", sid.toString(), "state", "draft"));
     }
 
     private void event(UUID sub, String action, String from, String to, Caller c, String note) {

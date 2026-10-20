@@ -86,7 +86,7 @@ class SnlWp02bFoundationDatabaseTest {
         Flyway.configure().dataSource(migrateSource(MAIN)).schemas(MAIN).defaultSchema(MAIN).createSchemas(false)
             .locations("classpath:db/migration").load().migrate();
         owner = new JdbcTemplate(migrateSource(MAIN));
-        assertEquals(87, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(88, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
         owner.execute(Files.readString(Path.of("..", "local", "seed", "seed.sql")));
         runtime = new JdbcTemplate(runtimeSource(MAIN));
         maint = new JdbcTemplate(maintSource(MAIN));

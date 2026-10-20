@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/Icon";
 import {
-  cancelOrder, completeOrder, inr, makeSerials, METHOD_WORD, readDetails, readLine, saveUnits, startOrder, submitSubmission,
+  cancelOrder, completeOrder, inr, makeSerials, METHOD_WORD, readDetails, readLine, reopenQuarter, saveUnits, startOrder, submitSubmission,
   type FeeOrder, type PayResult, type ProductionDetailsView, type ProductionLine, type SerialPage,
 } from "@/lib/client/runtimeProductionDetails";
 
@@ -53,6 +53,9 @@ export function ProductionDetails() {
   const [problem, setProblem] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
   const [confirm, setConfirm] = useState<number | null>(null);
+  const [editing, setEditing] = useState<Record<number, boolean>>({});
+  const [reopen, setReopen] = useState<number | null>(null);
+  const [reason, setReason] = useState("");
 
   const load = useCallback(async () => {
     const r = await readDetails(fy || undefined, org || undefined);
@@ -90,7 +93,21 @@ export function ProductionDetails() {
     setBusy(false);
     if (!r.ok) { setProblem(r.message); return; }
     setEdits((all) => { const next = { ...all }; delete next[fq]; return next; });
+    setEditing((e) => ({ ...e, [fq]: false }));
     setNotice(`Production for Q${fq} saved: ${r.value.units.toLocaleString("en-IN")} units across ${r.value.models} model${r.value.models === 1 ? "" : "s"}. Add the CA document in the Quarterly submission tab, then submit.`);
+    await load();
+  };
+  const doReopen = async () => {
+    if (reopen === null) return;
+    if (reason.trim().length < 5) { setProblem("Say why the figures are being corrected (at least 5 characters)."); return; }
+    const fq = reopen;
+    setBusy(true); setProblem(null); setNotice(null);
+    const r = await reopenQuarter(fy, fq, reason.trim());
+    setBusy(false);
+    if (!r.ok) { setProblem(r.message); return; }
+    setReopen(null);
+    setEditing((e) => ({ ...e, [fq]: true }));
+    setNotice(`Q${fq} was reopened for correction. Change the units, save, and submit it again for BEE's review.`);
     await load();
   };
   const submitQuarter = async (fq: number) => {
@@ -147,7 +164,7 @@ export function ProductionDetails() {
         <>
           <section className={`${shell} overflow-hidden`} data-testid="pd-grid">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] p-5">
-              <div><div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">What was manufactured</div><p className="text-[12px] text-[#64748b]">Units per model and quarter, as certified by the CA. A quarter that is open shows entry boxes: type the units and save. Click a figure in another quarter to see its serial numbers. <span className="font-semibold">*</span> expired model, <span className="font-semibold">(W)</span> withdrawn model.</p></div>
+              <div><div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">What was manufactured</div><p className="text-[12px] text-[#64748b]">Units per model and quarter, as certified by the CA. Use Edit on a quarter to change its units. Click a figure to see its serial numbers. <span className="font-semibold">*</span> expired model, <span className="font-semibold">(W)</span> withdrawn model.</p></div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
@@ -159,7 +176,7 @@ export function ProductionDetails() {
                       <td className={td}><span className="font-semibold text-[#14315E]">{l.model}{l.mark === "expired" ? " *" : l.mark === "withdrawn" ? " (W)" : ""}</span><div className="text-[12px] text-[#64748b]">{l.registrationId ?? l.reference}</div></td>
                       {l.quarters.map((q) => (
                         <td key={q.fq} className={`${td} text-right`}>
-                          {quarters[q.fq - 1]?.open ? (
+                          {quarters[q.fq - 1]?.open && editing[q.fq] ? (
                             <input type="number" min={0} max={10000000} inputMode="numeric" aria-label={`${l.model} units, ${quarters[q.fq - 1].label}`}
                               value={edits[q.fq]?.[l.applicationId] ?? (q.units > 0 ? String(q.units) : "")} placeholder="0"
                               onChange={(e) => setEdits((all) => ({ ...all, [q.fq]: { ...(all[q.fq] ?? {}), [l.applicationId]: e.target.value } }))}
@@ -179,15 +196,26 @@ export function ProductionDetails() {
                 <tfoot>
                   <tr className="border-t-2 border-[#c9d9f7] bg-[#f9fbff] font-semibold"><td className={td}>Total units</td>{quarters.map((q) => <td key={q.fq} className={`${td} text-right tabular-nums`}>{q.units ? q.units.toLocaleString("en-IN") : "-"}</td>)}<td className={`${td} text-right tabular-nums`}>{quarters.reduce((n, q) => n + q.units, 0).toLocaleString("en-IN")}</td></tr>
                   <tr className="bg-[#f9fbff] font-semibold"><td className={td}>Label fee</td>{quarters.map((q) => <td key={q.fq} className={`${td} text-right tabular-nums`}>{q.units ? inr(q.fee) : "-"}</td>)}<td className={`${td} text-right tabular-nums`}>{inr(view.payable ?? 0)}</td></tr>
-                  {!staff && quarters.some((q) => q.open) ? (
-                    <tr className="bg-[#fffaf0]" data-testid="pd-entry-row"><td className={td}><span className="font-semibold">Enter production</span><div className="text-[11px] font-normal text-[#64748b]">Type the units in the open quarters, then save</div></td>
+                  {!staff && quarters.some((q) => q.open || q.canReopen) ? (
+                    <tr className="bg-[#fffaf0]" data-testid="pd-entry-row"><td className={td}><span className="font-semibold">Enter production</span><div className="text-[11px] font-normal text-[#64748b]">Edit a quarter, change the units, save, then submit</div></td>
                       {quarters.map((q) => (
                         <td key={q.fq} className={`${td} text-right`}>
-                          {q.open ? (
+                          {q.open && editing[q.fq] ? (
                             <div className="flex flex-col items-end gap-1">
                               <button type="button" className={btnOutline} disabled={busy || !edits[q.fq]} onClick={() => void save(q.fq)} data-testid={`pd-save-q${q.fq}`}>Save Q{q.fq}</button>
-                              {q.submission && q.units > 0 ? <button type="button" className={btn} disabled={busy || Boolean(edits[q.fq])} onClick={() => setConfirm(q.fq)} data-testid={`pd-submit-q${q.fq}`}>Submit Q{q.fq}</button> : null}
+                              <button type="button" className="text-[12px] font-semibold text-primary hover:underline" onClick={() => { setEditing((e) => ({ ...e, [q.fq]: false })); setEdits((all) => { const n = { ...all }; delete n[q.fq]; return n; }); }} data-testid={`pd-cancel-q${q.fq}`}>Cancel</button>
                               <span className="text-[11px] text-[#64748b]">{q.submission ? SUB_WORD[q.submission.state] : "Not started"}</span>
+                            </div>
+                          ) : q.open ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <button type="button" className={btnOutline} disabled={busy} onClick={() => setEditing((e) => ({ ...e, [q.fq]: true }))} data-testid={`pd-edit-q${q.fq}`}><Icon name="edit" size={14} /> {q.units > 0 ? "Edit" : "Enter"} Q{q.fq}</button>
+                              {q.submission && q.units > 0 ? <button type="button" className={btn} disabled={busy} onClick={() => setConfirm(q.fq)} data-testid={`pd-submit-q${q.fq}`}>Submit Q{q.fq}</button> : null}
+                              <span className="text-[11px] text-[#64748b]">{q.submission ? SUB_WORD[q.submission.state] : "Not started"}</span>
+                            </div>
+                          ) : q.canReopen ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <button type="button" className={btnOutline} disabled={busy} onClick={() => { setReason(""); setReopen(q.fq); }} data-testid={`pd-edit-q${q.fq}`}><Icon name="edit" size={14} /> Edit Q{q.fq}</button>
+                              <span className="text-[11px] text-[#64748b]">{q.submission ? SUB_WORD[q.submission.state] : ""}</span>
                             </div>
                           ) : <span className="text-[#94a3b8]">-</span>}
                         </td>
@@ -199,7 +227,7 @@ export function ProductionDetails() {
                     {quarters.map((q) => (
                       <td key={q.fq} className={`${td} text-right`}>
                         {q.units === 0 ? <span className="text-[#94a3b8]">-</span> : q.payment ? (
-                          <span><Chip tone={q.payment.status === "paid" ? GREEN : AMBER}>{q.payment.status === "paid" ? "Paid" : "Awaiting payment"}</Chip>{q.payment.receipt ? <span className="mt-1 block text-[11px] text-[#64748b]">{q.payment.receipt}</span> : null}</span>
+                          <span><Chip tone={q.payment.status === "paid" ? GREEN : AMBER}>{q.payment.status === "paid" ? "Paid" : "Awaiting payment"}</Chip>{q.payment.receipt ? <span className="mt-1 block text-[11px] text-[#64748b]">{q.payment.receipt}</span> : null}{q.payment.status === "paid" && Number(q.payment.amount) !== Number(q.fee) ? <span className="mt-1 block text-[11px] font-semibold text-[#8a4b00]">Paid {inr(q.payment.amount)}, fee now {inr(q.fee)}</span> : null}</span>
                         ) : staff ? <Chip tone={GREY}>Unpaid</Chip> : (
                           <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#14315E]"><input type="checkbox" checked={picked.includes(q.fq)} onChange={(e) => setPicked((p) => (e.target.checked ? [...p, q.fq] : p.filter((x) => x !== q.fq)))} data-testid={`pd-pay-q${q.fq}`} /> Pay Q{q.fq}</label>
                         )}
@@ -246,6 +274,19 @@ export function ProductionDetails() {
           </section>
         </>
       )}
+
+      {reopen !== null && typeof document !== "undefined" ? createPortal(
+        <div role="dialog" aria-modal="true" aria-label="Edit a submitted quarter" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-testid="pd-reopen">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div role="heading" aria-level={2} className="text-[18px] font-extrabold text-[#14315E]">Edit Q{reopen}</div>
+            <p className="mt-2 text-[13px] text-[#334155]">This quarter was already {quarters[reopen - 1]?.submission?.state === "accepted" ? "accepted by BEE" : "submitted"}. Editing returns it to a draft; after the correction it is submitted again for BEE&apos;s review. The reason is kept on record.</p>
+            <label className={`${labelCls} mt-3`}>Reason for the correction (required)
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={300} className="mt-1 block w-full rounded-lg border border-outline-variant bg-white px-3 py-2 text-[13px] normal-case tracking-normal" data-testid="pd-reopen-reason" />
+            </label>
+            {problem ? <p role="alert" className="mt-2 rounded-lg bg-error-container p-space-sm font-body-sm text-on-error-container">{problem}</p> : null}
+            <div className="mt-4 flex justify-end gap-2"><button type="button" className={btnOutline} onClick={() => { setReopen(null); setProblem(null); }} data-testid="pd-reopen-cancel">Cancel</button><button type="button" className={btn} disabled={busy} onClick={() => void doReopen()} data-testid="pd-reopen-ok">Reopen and edit</button></div>
+          </div>
+        </div>, document.body) : null}
 
       {confirm !== null && typeof document !== "undefined" ? createPortal(
         <div role="dialog" aria-modal="true" aria-label="Confirm submission" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-testid="pd-confirm">

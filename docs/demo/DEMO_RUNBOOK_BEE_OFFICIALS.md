@@ -64,6 +64,9 @@ Run `npm run demo:scan-gateway` in a second terminal (it prints the address, for
 ## 2b. Explaining the ledger (item 10)
 On the Secure evidence ledger page, click **How the ledger works**: four short steps (fingerprint, chain, recomputing, two people) and a worked example where changing the stars or the date turns MATCH into MISMATCH live. Then open `BEE/RAC/2026/10301` (MATCH) and `BEE/RAC/2025/90037` (MISMATCH, altered on purpose). The two-person commit: Anita Deshmukh (Director) submitted `10815`; she cannot commit it; Neha Kapoor (Admin) can. A commit is permanent, so use one pending certificate and keep the others.
 
+## 2c. Company registration follows the SOP (section 1.1)
+`ravik24` (and any new applicant) fills nine steps in the order of the SOP's Company Registration Form: Disclaimer, Company and equipment details, Business address and contact, Manufacturing facilities, Contact persons, Company registration and financial details, Documents, Registration charge and security deposit, Review. A large-scale industry pays 5,000 plus a 3,00,000 security deposit (3,05,000); a small-scale one pays 5,000 and uploads the SSI certificate. The payment step offers BillDesk, Razorpay or direct transfer, all simulated. Ravik's earlier data is kept; the new fields are blank for him to fill. Not done (the SOP differs): the account is created at sign-up, before the form, and there is no captcha or verification code.
+
 ## 3. Known limits to say aloud or avoid
 - The company name typed at sign-up now becomes the application's legal name. The organisation record behind the account still carries the applicant's name (BL-276), which only shows in a few organisation-level lists.
 - Product category registration, suspect-label reports and official templates are "Planned" entries without a screen.

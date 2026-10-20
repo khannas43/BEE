@@ -9,6 +9,7 @@ import {
   LABEL_AUTO_RULES,
 } from "@/lib/manufacturer-onboarding/statusLabels";
 import { formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
+import { PAYMENT_METHOD_LABELS, feeTotal, inr, SECURITY_DEPOSIT_LARGE_INR } from "@/lib/manufacturer-onboarding/sopDefaults";
 import { observationCountdown } from "@/lib/manufacturer-onboarding/observation";
 import { useManufacturerOnboardingClient, useManufacturerOnboardingClock } from "./ManufacturerOnboardingProvider";
 import {
@@ -154,10 +155,16 @@ export function ApplicationLifecycle({ id }: { id: string }) {
             <Icon name="mark_email_read" size={18} />
           </span>
           <div>
-            <div role="heading" aria-level={2} className="font-headline-sm text-headline-sm">Thank you, your manufacturer registration has been submitted</div>
+            <div role="heading" aria-level={2} className="font-headline-sm text-headline-sm">Agency details submitted. Thank you!</div>
             <p className="mt-1 font-body-md text-on-surface-variant">
-              Your application reference is <strong className="text-on-surface">{app.reference}</strong>. The registration acknowledgement has been sent to the email address on your applicant account.
+              A mail has been sent to your entered email address. Keep your reference ID: <strong className="text-on-surface">{app.reference}</strong>.
             </p>
+            <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2" data-testid="submitted-details">
+              <div className="flex gap-2"><dt className="text-on-surface-variant">Reference ID</dt><dd className="font-mono font-semibold">{app.reference}</dd></div>
+              <div className="flex gap-2"><dt className="text-on-surface-variant">Firm name</dt><dd className="font-semibold">{app.draft.legalName}</dd></div>
+              {app.draft.sop?.equipment ? <div className="flex gap-2"><dt className="text-on-surface-variant">Equipment</dt><dd className="font-semibold">{app.draft.sop.equipment}</dd></div> : null}
+              {app.draft.sop?.business?.email ? <div className="flex gap-2"><dt className="text-on-surface-variant">Email ID</dt><dd className="font-semibold">{app.draft.sop.business.email}</dd></div> : null}
+            </dl>
           </div>
         </div>
       )}
@@ -216,6 +223,19 @@ export function ApplicationLifecycle({ id }: { id: string }) {
             ) : (
               <p className="font-body-sm text-on-surface-variant">Payment pending until submit.</p>
             )}
+            {app.draft.sop?.scale ? (
+              <div className="space-y-1 border-t border-border-subtle pt-2" data-testid="lifecycle-deposit">
+                <Fact label="Label security deposit">{app.draft.sop.scale === "large" ? inr(SECURITY_DEPOSIT_LARGE_INR) : "Not applicable (small-scale industry)"}</Fact>
+                {app.draft.sop.payment.status ? (
+                  <>
+                    <Fact label="Method">{app.draft.sop.payment.method ? PAYMENT_METHOD_LABELS[app.draft.sop.payment.method] : ""}</Fact>
+                    <Fact label="Status">{app.draft.sop.payment.status === "paid" ? "Paid (simulated)" : "Awaiting confirmation by BEE Finance"}</Fact>
+                    <Fact label="Receipt"><span className="font-mono">{app.draft.sop.payment.receipt}</span></Fact>
+                  </>
+                ) : null}
+                <Fact label="Total payable">{inr(feeTotal(app.draft.sop.scale))}</Fact>
+              </div>
+            ) : null}
             <p className="pt-1 text-xs text-on-surface-variant">Demonstration gateway: no live transaction is made.</p>
           </Card>
 

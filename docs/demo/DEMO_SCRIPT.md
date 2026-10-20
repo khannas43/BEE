@@ -93,7 +93,7 @@ Keep three minutes spare. If you run late, drop the "if time" lines, then shorte
 Say first: "A simulated Fabric test network, not Hyperledger Fabric. Real database tables, a hash chain and the rules a network would apply."
 
 **Sunita submits.** Menu: **Certificate ledger**. (Not the Director: that screen is not for the Director, by design.)
-1. Search `10101` and click **Open**; the ledger panel is below the list. Status "Not submitted". Click **Submit to ledger**. Status becomes "Pending, waiting for a peer" and Commit is disabled with "a second person must commit or fail it". Say: "Nobody commits their own submission."
+1. Search `10101` and click **Open**; the ledger panel is below the list. Status "Not yet on the ledger". Click **Submit to ledger**. Status becomes "Pending, waiting for a peer" and Commit is disabled with "a second person must commit or fail it". Say: "Nobody commits their own submission."
 2. Click **Verify again**: chain verification **MATCH**.
 
 **Arjun commits.** Switch role to Administrator. Open the same certificate.

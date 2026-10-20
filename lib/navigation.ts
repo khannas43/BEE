@@ -146,6 +146,7 @@ const R = {
   mis: "/app/demo/mis",
   ai: "/app/demo/ai",
   messages: "/app/demo/notifications",
+  requests: "/app/demo/requests",
   feeRules: "/app/administration/fee-rules",
   receipts: "/app/finance/receipt",
   ratingSchemes: "/app/administration/rating-formula",
@@ -189,6 +190,7 @@ export const NAVIGATION: readonly NavGroup[] = [
         adminEntry("admin.in-progress", "Applications in progress", "rule", live(R.inProgress)),
         adminEntry("admin.sla", "SLA and escalations", "priority_high", live(R.sla)),
       ]),
+      adminEntry("admin.requests", "Service requests", "support_agent", live(R.requests)),
       adminEntry("admin.messages", "Notifications and messages", "notifications_active", live(R.messages)),
       adminEntry("admin.director-overview", "Programme at a glance", "dashboard", live(R.directorDash)),
     ],
@@ -299,13 +301,13 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     id: "mfr.compliance", title: "Compliance & Support", icon: "support_agent", profile: "manufacturer",
     children: [
-      entry("mfr.renewals", "Renewals", "autorenew", proto("model-label", "renewal-or-degradation"), MFR),
-      entry("mfr.withdrawals", "Withdrawals", "cancel", proto("withdrawal", "brand-withdrawal"), MFR),
+      entry("mfr.renewals", "Renewals", "autorenew", live(R.requests), MFR, { query: "kind=renewal" }),
+      entry("mfr.withdrawals", "Withdrawals", "cancel", live(R.requests), MFR, { query: "kind=withdrawal" }),
       // hidden (not shown in the demonstration): entry("mfr.holds", "Anomalies and holds", "pause_circle", PLANNED, MFR),
       entry("mfr.messages", "Messages", "notifications_active", live(R.messages), MFR),
       entry("mfr.notices", "Application notifications", "notifications", live(R.modelNotices), MFR),
       // hidden (not shown in the demonstration): entry("mfr.templates", "Official templates", "article", PLANNED, MFR),
-      entry("mfr.helpdesk", "Helpdesk", "support_agent", proto("helpdesk", "raise-ticket"), MFR),
+      entry("mfr.helpdesk", "Helpdesk", "support_agent", live(R.requests), MFR, { query: "kind=helpdesk" }),
       grantedSettings("mfr"),
     ],
   },
@@ -328,6 +330,7 @@ export const NAVIGATION: readonly NavGroup[] = [
       entry("dir.holds", "Anomalies and holds", "pause_circle", live(R.monitoring), BEE_OFFICER),
       // "Model recommendations" is hidden (duplicates the Officer work queue); the screen opens from the queue.
       entry("dir.brand-reviews", "Brand registration reviews", "rate_review", live(R.regReviews), BEE_OFFICER),
+      entry("dir.requests", "Service requests", "support_agent", live(R.requests), BEE_OFFICER),
       // "Withdrawal requests" is hidden for now (demonstration).
       entry("dir.revocation", "Rejection and revocation", "gavel", live(R.register), BEE_OFFICER, { query: "tab=pending", alsoQueries: ["tab=history", "view=proposal"] }),
     ],

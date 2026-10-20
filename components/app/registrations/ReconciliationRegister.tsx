@@ -7,6 +7,7 @@ import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/a
 import { demoGet, demoPath, type DemoBody } from "@/lib/client/runtimeDemo";
 import { registerHref } from "@/lib/client/runtimeRegisterRevocations";
 import { useManufacturers } from "@/lib/client/runtimeManufacturers";
+import { readQuarterlyTests, recordQuarterlyTest, RESULT_TONE, RESULT_WORD, type QuarterlyTest, type TestResult } from "@/lib/client/runtimeQuarterlyTest";
 import { manufacturerEntryHref } from "@/components/app/registrations/ManufacturersRegister";
 
 /**
@@ -157,10 +158,63 @@ function Box({ title, testId, children }: { title: string; testId: string; child
 }
 const Fact = ({ label, value }: { label: string; value: ReactNode }) => <div><div className="text-[11px] font-bold uppercase tracking-wider text-[#64748b]">{label}</div><div className="mt-0.5 text-[14px] font-semibold text-[#14315E]">{value || "-"}</div></div>;
 
+const fieldCls = "mt-1 block w-full rounded-lg border border-outline-variant bg-white px-3 py-2 text-[13px]";
+
+/** BEE records the result of testing one product for the quarter. */
+function RecordTest({ quarter, line, existing, onSaved }: { quarter: string; line: Line; existing?: QuarterlyTest; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [result, setResult] = useState<TestResult>(existing?.result ?? "pass");
+  const [iseer, setIseer] = useState(existing?.measuredIseer ?? "");
+  const [testedOn, setTestedOn] = useState(existing?.testedOn ?? new Date().toISOString().slice(0, 10));
+  const [lab, setLab] = useState(existing?.laboratory ?? "LAB");
+  const [remarks, setRemarks] = useState(existing?.remarks ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function save() {
+    setBusy(true); setError(null);
+    const r = await recordQuarterlyTest({ quarter, registrationId: line.certificate, result, testedOn, measuredIseer: iseer.trim() || undefined, laboratoryCode: lab.trim() || undefined, remarks: remarks.trim() || undefined });
+    setBusy(false);
+    if (!r.ok) { setError(r.message); return; }
+    setOpen(false); onSaved();
+  }
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-1 font-semibold text-primary" data-testid={`recon-record-${line.certificate}`}>
+        <Icon name={open ? "expand_less" : "edit_note"} size={16} />{existing ? "Update result" : "Record result"}
+      </button>
+      {open ? (
+        <div className="mt-2 w-[300px] space-y-2 rounded-lg border border-[#dbe6f7] bg-[#f9fbff] p-3" data-testid={`recon-record-form-${line.certificate}`}>
+          <label className="block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Result
+            <select value={result} onChange={(e) => setResult(e.target.value as TestResult)} className={fieldCls}>{(Object.keys(RESULT_WORD) as TestResult[]).map((k) => <option key={k} value={k}>{RESULT_WORD[k]}</option>)}</select>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Measured ISEER<input value={iseer} onChange={(e) => setIseer(e.target.value)} inputMode="decimal" className={fieldCls} placeholder="4.05" /></label>
+            <label className="block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Tested on<input type="date" value={testedOn} onChange={(e) => setTestedOn(e.target.value)} className={fieldCls} /></label>
+          </div>
+          <label className="block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Laboratory<input value={lab} onChange={(e) => setLab(e.target.value)} className={fieldCls} /></label>
+          <label className="block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Remarks<textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500} rows={2} className={fieldCls} /></label>
+          {error ? <p role="alert" className="text-[12px] text-error">{error}</p> : null}
+          <button type="button" disabled={busy} onClick={() => void save()} className="w-full rounded-lg !bg-[#1f3c88] px-3 py-2 text-[13px] font-semibold !text-white disabled:opacity-50" data-testid={`recon-record-save-${line.certificate}`}>{busy ? "Saving…" : "Save result"}</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** One submission's reconciliation, model by model. */
 export function ReconciliationEntry({ id }: { id: string }) {
   const data = useReconciliation();
   const dir = useManufacturers();
+  const [tests, setTests] = useState<QuarterlyTest[]>([]);
+  const [canRecord, setCanRecord] = useState(false);
+  const [reload, setReload] = useState(0);
+  const quarterKey = data.submissions.find((x) => x.id === id)?.quarter;
+  useEffect(() => {
+    if (!quarterKey) return;
+    let live = true;
+    void readQuarterlyTests(quarterKey).then((r) => { if (live && r.ok) { setTests(r.results); setCanRecord(r.canRecord); } });
+    return () => { live = false; };
+  }, [quarterKey, reload]);
   const back = <Link href={`${registerHref()}?tab=reconciliation`} className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary" data-testid="recon-back"><Icon name="arrow_back" size={16} /> All reconciliations</Link>;
   if (data.phase === "loading") return <p role="status" className="font-body-sm">Loading the reconciliation…</p>;
   if (data.phase === "failed") return <p role="alert" className="text-error font-body-sm">{data.message}</p>;
@@ -195,11 +249,15 @@ export function ReconciliationEntry({ id }: { id: string }) {
         {lines.length === 0 ? <p className="text-[13px] text-[#64748b]">No product row has been entered for this submission.</p> : (
           <div className="overflow-x-auto rounded-lg border border-[#e2e8f0]"><table className="w-full text-[13px]">
             <caption className="sr-only">Declared units against bound QR serials for this submission</caption>
-            <thead><tr className="bg-[#eef3fb]"><th className={th}>Model</th><th className={th}>Certificate</th><th className={th}>Declared units</th><th className={th}>Bound QR serials</th><th className={th}>Difference</th><th className={th}>Result</th></tr></thead>
-            <tbody>{lines.map((l) => (
+            <thead><tr className="bg-[#eef3fb]"><th className={th}>Model</th><th className={th}>Certificate</th><th className={th}>Declared units</th><th className={th}>Bound QR serials</th><th className={th}>Difference</th><th className={th}>Result</th><th className={th}>BEE test</th></tr></thead>
+            <tbody>{lines.map((l) => { const t = tests.find((x) => x.registrationId === l.certificate && x.organisationId !== "" && x.quarter === s.quarter); return (
               <tr key={l.key} className="border-t border-[#e7edf6]"><td className={`${td} font-semibold`}>{l.model}</td><td className={`${td} font-mono`}>{l.certificate}</td><td className={td}>{n(l.declared)}</td><td className={td}>{n(l.bound)}</td>
-                <td className={`${td} ${l.gap !== null && l.gap < 0 ? "font-semibold text-[#93000a]" : ""}`}>{l.gap === null ? "-" : l.gap > 0 ? `+${n(l.gap)}` : n(l.gap)}</td><td className={td}><Chip tone={l.flag}>{FLAG_WORD[l.flag]}</Chip></td></tr>
-            ))}</tbody></table></div>
+                <td className={`${td} ${l.gap !== null && l.gap < 0 ? "font-semibold text-[#93000a]" : ""}`}>{l.gap === null ? "-" : l.gap > 0 ? `+${n(l.gap)}` : n(l.gap)}</td><td className={td}><Chip tone={l.flag}>{FLAG_WORD[l.flag]}</Chip></td>
+                <td className={td} data-testid={`recon-test-${l.certificate}`}>
+                  {t ? <><span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${RESULT_TONE[t.result]}`}>{RESULT_WORD[t.result]}</span><div className="mt-1 text-[12px] text-[#64748b]">{t.measuredIseer ? `ISEER ${t.measuredIseer} · ` : ""}{t.testedOn}{t.recordedBy ? ` · ${t.recordedBy}` : ""}</div>{t.remarks ? <div className="mt-0.5 max-w-[260px] text-[12px] text-[#475569]">{t.remarks}</div> : null}</> : <span className="text-[#64748b]">Not tested</span>}
+                  {canRecord ? <div className="mt-1"><RecordTest key={`${l.key}-${t?.recordedAt ?? "new"}`} quarter={s.quarter} line={l} existing={t} onSaved={() => setReload((n) => n + 1)} /></div> : null}
+                </td></tr>
+            ); })}</tbody></table></div>
         )}
         {r ? <p className="mt-2 text-[12px] text-[#64748b]">{r.message}</p> : null}
       </Box>

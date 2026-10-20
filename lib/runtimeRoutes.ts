@@ -99,6 +99,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
+    href: "/app/demo/requests",
+    en: "Service requests",
+    hi: "सेवा अनुरोध",
+    icon: "support_agent",
+    navRoles: ["manufacturer", "agency", "finance", "programme", "reviewer", "officer", "director", "admin", "auditor", "helpdesk"],
+    implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
+  },
+  {
     href: "/app/demo/notifications",
     en: "Messages (email and SMS)",
     hi: "सूचनाएँ (ईमेल और एसएमएस)",
@@ -359,7 +367,7 @@ const MENU_ORDER: string[] = [
   "/app/model-label/new-model-application", "/app/model-label/model-dashboard", "/app/model-label/label-preview", "/app/model-label/notifications",
   "/app/model-label/iame-scrutiny", "/app/model-label/bee-scrutiny", "/app/model-label/rating-calculation",
   "/app/finance/finance-queue", "/app/registrations/fees", "/app/finance/receipt", "/app/demo/payments",
-  "/app/demo/qr", "/app/demo/ledger", "/app/demo/production", "/app/demo/ai", "/app/demo/notifications",
+  "/app/demo/qr", "/app/demo/ledger", "/app/demo/production", "/app/demo/ai", "/app/demo/requests", "/app/demo/notifications",
   "/app/administration/fee-rules", "/app/administration/rating-formula", "/app/administration/business-settings", "/app/delegations",
 ];
 export const menuRank = (href: string) => {

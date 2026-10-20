@@ -8,6 +8,7 @@ import { demoGet, demoPath, type DemoBody } from "@/lib/client/runtimeDemo";
 import { manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import { type ModelApplication, modelDashboardHref, readModelApplicationList, stateLabel } from "@/lib/client/runtimeModelApplications";
 import type { QrBatch } from "./QrDemo";
+import { readQuarterlyTests, RESULT_TONE, RESULT_WORD, type QuarterlyTest } from "@/lib/client/runtimeQuarterlyTest";
 
 /**
  * One quarter at a glance for a manufacturer: the products it declared, the QR codes generated for each and their status, and the
@@ -86,6 +87,7 @@ export function QuarterlySubmission() {
   const [pq, setPq] = useState("");
   const [pQr, setPQr] = useState("");
   const [pResult, setPResult] = useState("");
+  const [tests, setTests] = useState<QuarterlyTest[]>([]);
   const [tq, setTq] = useState("");
   const [tStage, setTStage] = useState("");
   const [tResult, setTResult] = useState("");
@@ -124,6 +126,13 @@ export function QuarterlySubmission() {
   }, [selected]);
 
   const sub = subs?.find((s) => s.id === selected) ?? null;
+  const quarterOf = sub?.quarter;
+  useEffect(() => {
+    if (!quarterOf) return;
+    let live = true;
+    void readQuarterlyTests(quarterOf).then((r) => { if (live) setTests(r.ok ? r.results : []); });
+    return () => { live = false; };
+  }, [quarterOf]);
   const org: ManufacturerProfile | undefined = directory.phase === "ready" ? directory.list.find((m) => m.name === sub?.organisationName?.replace(/\s*\(synthetic[^)]*\)\s*$/, "")) ?? (directory.list.length === 1 ? directory.list[0] : undefined) : undefined;
 
   const byReg = new Map<string, { model: string; units: number; periods: string[]; appId?: string; declared: number; bound: number | null; flag: string }>();
@@ -144,11 +153,12 @@ export function QuarterlySubmission() {
     const voided = mine.reduce((n, b) => n + b.void, 0);
     const app = apps.find((a) => a.id === e.appId);
     const rated = org?.models.find((m) => m.certificate === reg);
-    return { reg, ...e, gen, boundAll: bound, voided, batches: mine.length, app, rated };
+    const bee = tests.find((t) => t.registrationId === reg);
+    return { reg, ...e, gen, boundAll: bound, voided, batches: mine.length, app, rated, bee };
   });
   const result = (ref: string) => org?.models.find((m) => m.reference === ref);
   const qrKind = (p: (typeof products)[number]) => (p.bound === null || p.flag === "unavailable" ? "na" : p.flag === "review" ? "review" : "match");
-  const shownProducts = products.filter((p) => (!pq || `${p.model} ${p.reg}`.toLowerCase().includes(pq.toLowerCase())) && (!pQr || qrKind(p) === pQr) && (!pResult || (pResult === "rated") === Boolean(p.rated && p.rated.stars > 0)));
+  const shownProducts = products.filter((p) => (!pq || `${p.model} ${p.reg}`.toLowerCase().includes(pq.toLowerCase())) && (!pQr || qrKind(p) === pQr) && (!pResult || (pResult === "none" ? !p.bee : p.bee?.result === pResult)));
   const finished = (st: string) => ["approved", "rejected"].includes(st);
   const stages = [...new Set(apps.map((a) => a.state))].sort();
   const shownApps = [...apps]
@@ -157,7 +167,7 @@ export function QuarterlySubmission() {
     .sort((a, b) => Number(finished(a.state)) - Number(finished(b.state)) || a.reference.localeCompare(b.reference));
   const totalUnits = products.reduce((n, p) => n + p.units, 0);
   const totalBound = products.reduce((n, p) => n + (p.bound ?? 0), 0);
-  const tested = products.filter((p) => p.rated && p.rated.stars > 0).length;
+  const tested = products.filter((p) => p.bee).length;
   const inTesting = apps.filter((a) => !["approved", "rejected"].includes(a.state));
 
   if (subs === null) return <p role="status" className="font-body-sm">Loading the quarterly submission…</p>;
@@ -194,7 +204,7 @@ export function QuarterlySubmission() {
             <Stat icon="factory" label="Units declared" value={totalUnits.toLocaleString("en-IN")} note={sub ? `${STATE_WORD[sub.state] ?? sub.state}` : ""} />
             <Stat icon="qr_code_2" label="QR serials bound" value={totalBound.toLocaleString("en-IN")} note="to certificates, all batches" />
             <Stat icon="rule" label="Needs review" value={products.filter((p) => p.flag === "review").length} note="declared above bound QR" tone={products.some((p) => p.flag === "review") ? "text-[#8a4b00]" : "text-[#14532d]"} />
-            <Stat icon="verified" label="Tested and rated" value={`${tested} of ${products.length}`} note="with a star result" />
+            <Stat icon="verified" label="Tested by BEE" value={`${tested} of ${products.length}`} note={products.some((p) => p.bee?.result === "fail" || p.bee?.result === "retest") ? "some need attention" : "result recorded this quarter"} tone={products.some((p) => p.bee?.result === "fail" || p.bee?.result === "retest") ? "text-[#8a4b00]" : "text-[#14315E]"} />
           </div>
           </>) : null}
 
@@ -204,14 +214,14 @@ export function QuarterlySubmission() {
                 <input value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Model or registration" className={fieldCls} data-testid="qs-product-search" />
               </label>
               <Select label="QR status" value={pQr} onChange={setPQr} testId="qs-product-qr" options={[["", "Any"], ["match", "Matches QR"], ["review", "Needs review"], ["na", "Not available"]]} />
-              <Select label="Test result" value={pResult} onChange={setPResult} testId="qs-product-result" options={[["", "Any"], ["rated", "Rated"], ["none", "No result yet"]]} />
+              <Select label="BEE test" value={pResult} onChange={setPResult} testId="qs-product-result" options={[["", "Any"], ["pass", "Passed"], ["fail", "Failed"], ["retest", "Retest needed"], ["none", "Awaiting test"]]} />
             </Filters>
             {products.length === 0 ? <p className="text-[13px] text-[#64748b]">No product rows have been entered for this quarter.</p> : shownProducts.length === 0 ? <p className="text-[13px] text-[#64748b]">No product matches these filters.</p> : (
               <div className="overflow-x-auto rounded-lg border border-[#e2e8f0]">
                 <table className="w-full text-[13px]" data-testid="qs-products">
                   <caption className="sr-only">Products declared in the quarter with QR status and test result</caption>
                   <thead><tr className="bg-[#eef3fb]">
-                    <th className={th}>Model</th><th className={th}>Units declared</th><th className={th}>QR generated</th><th className={th}>QR bound</th><th className={th}>QR void</th><th className={th}>QR status</th><th className={th}>Test result</th>
+                    <th className={th}>Model</th><th className={th}>Units declared</th><th className={th}>QR generated</th><th className={th}>QR bound</th><th className={th}>QR void</th><th className={th}>QR status</th><th className={th}>Rating</th><th className={th}>BEE test this quarter</th>
                   </tr></thead>
                   <tbody>
                     {shownProducts.map((p) => (
@@ -231,6 +241,15 @@ export function QuarterlySubmission() {
                         </td>
                         <td className={td}>
                           {p.rated ? (<><Stars n={p.rated.stars} /><div className="text-[12px] text-[#64748b]">{p.rated.status}{p.app?.declaredIseer ? ` · declared ${p.app.declaredIseer}` : ""}</div></>) : <span className="text-[#64748b]">No result yet</span>}
+                        </td>
+                        <td className={td} data-testid={`qs-bee-${p.reg}`}>
+                          {p.bee ? (
+                            <>
+                              <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${RESULT_TONE[p.bee.result]}`}>{RESULT_WORD[p.bee.result]}</span>
+                              <div className="mt-1 text-[12px] text-[#64748b]">{p.bee.measuredIseer ? `Measured ISEER ${p.bee.measuredIseer} · ` : ""}tested {p.bee.testedOn}{p.bee.laboratory ? ` at ${p.bee.laboratory}` : ""}</div>
+                              {p.bee.remarks ? <div className="mt-0.5 max-w-[240px] text-[12px] text-[#475569]">{p.bee.remarks}</div> : null}
+                            </>
+                          ) : <span className="text-[#64748b]">Awaiting BEE test</span>}
                         </td>
                       </tr>
                     ))}

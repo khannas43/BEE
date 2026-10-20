@@ -99,7 +99,7 @@ class FeeConfirmationDatabaseTest {
         applications = new ModelApplicationRepository(db);
         submissions = new ModelApplicationSubmitRepository(db, applications);
         repo = transactional(new FeeConfirmationRepository(db));
-        assertEquals(81, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V81");
+        assertEquals(82, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V82");
     }
 
     @AfterAll

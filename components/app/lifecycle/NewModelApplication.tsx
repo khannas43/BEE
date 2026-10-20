@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { CommandPanel, useCommand } from "@/components/app/kit/CommandPanel";
@@ -105,7 +105,15 @@ const DRAFT_FORM_RETURN_TO = "/app/model-label/new-model-application";
 export function NewModelApplication({ module, screen }: { module: Module; screen: Screen }) {
   const identity = useSpringIdentity();
   const params = useSearchParams();
+  const router = useRouter();
   const editId = params.get("edit");
+  const justCreated = params.get("saved") === "1";
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!justCreated || !editId) return;
+    const t = window.setTimeout(() => document.getElementById("model-test-reports")?.scrollIntoView({ behavior: "smooth", block: "start" }), 1200);
+    return () => window.clearTimeout(t);
+  }, [justCreated, editId]);
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [brandId, setBrandId] = useState("");
@@ -276,7 +284,14 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     setSubmitPreview(null);
     submitCommand.reset();
     setVersion(res.value.version as number);
+    if (!isEdit) {
+      // A new draft goes straight to its edit page, where the next step (the test report upload) is.
+      router.replace(`${modelDraftFormHref(savedId)}&saved=1`);
+      return;
+    }
     setSaved({ reference: String(res.value.reference), id: String(res.value.id) });
+    setNotice("Saved. Next step: upload the test report below.");
+    window.setTimeout(() => document.getElementById("model-test-reports")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     if (isEdit) {
       setPersistedDraft({ modelNumber: modelNumber.trim(), brandId, evidence });
     }
@@ -465,6 +480,12 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                 </li>
               ))}
             </ol>
+            {(justCreated || notice) && isEdit ? (
+              <p role="status" className="flex items-center gap-2 rounded-lg border border-[#b7e0c6] bg-[#e2f3e8] px-3 py-2 text-[13px] font-semibold text-[#14532d]" data-testid="model-draft-notice">
+                <Icon name="check_circle" size={18} />
+                {reference ? `Draft ${reference} saved. ` : "Draft saved. "}Next step: upload the test report below, then review the fee and submit.
+              </p>
+            ) : null}
             <div className="grid gap-space-md lg:grid-cols-3">
             <div className="lg:col-span-2 space-y-space-md">
             {isEdit && reference ? (
@@ -624,7 +645,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             >
               {saveBusy ? "Saving…" : isEdit ? "Save changes" : "Save draft"}
             </button>
-            {isEdit && activeId ? <DraftTestReports applicationId={activeId} /> : null}
+            {isEdit && activeId ? <div id="model-test-reports"><DraftTestReports applicationId={activeId} /></div> : null}
             {returned && activeId ? (
               <ResubmitPanel
                 application={{ id: activeId, version }}

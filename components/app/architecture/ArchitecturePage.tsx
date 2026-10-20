@@ -127,6 +127,46 @@ const MACH_OF: Record<string, Pillar[]> = {
   "Local runtime": ["C"], "Containers and orchestration": ["C"], "Build and delivery": ["C"], "Infrastructure as code": ["C"], "Monitoring": ["C"], "Security and load testing": ["C"],
 };
 
+
+/** Shown when the pointer rests on a MACH tile: the business services, the API groups with their counts, and the channels and foundation blocks. */
+const SERVICES = [
+  "Identity and access", "Registration (company, brand, agency)", "Manufacturer onboarding and observation", "Model applications and documents", "Fees and payments",
+  "Scrutiny and approval workflow", "Rating", "Certificates and the ledger", "QR and labels", "Production and quarterly tests", "Notifications and service requests",
+  "Public verification", "Insight and AI (dashboards, MIS)", "Master data and settings", "Audit and history",
+];
+const API_GROUPS: [string, number][] = [
+  ["Model applications", 40], ["Registrations (brand, agency)", 24], ["Manufacturer onboarding", 22], ["Fees (rules and corrections)", 16], ["Notifications and messages", 12],
+  ["Ledger", 10], ["Production and quarterly tests", 11], ["Sign-in and identity", 8], ["Dashboards and MIS", 7], ["QR labels", 6], ["Rating schemes", 6], ["Business settings", 6],
+  ["Register and revocation", 6], ["Delegations", 6], ["AI helpers", 5], ["Payments", 4], ["Public verification and sign-up", 4], ["Manufacturer 360 and product details", 3], ["Service requests", 3],
+];
+const API_TOTAL = API_GROUPS.reduce((n, [, c]) => n + c, 0);
+
+function Popover({ pillar }: { pillar: Pillar }) {
+  const channels = LAYERS[0].items.map((i) => i.name);
+  const foundation = LAYERS[LAYERS.length - 1].items.map((i) => i.name);
+  return (
+    <div role="tooltip" data-testid={`arch-pop-${pillar}`} className={`pointer-events-none absolute top-full z-30 mt-2 hidden w-[480px] max-w-[92vw] rounded-xl border border-[#c9d9f7] bg-white p-4 text-left shadow-xl group-hover:block group-focus-within:block ${pillar === "M" ? "left-0" : pillar === "H" ? "right-0" : "left-1/2 -translate-x-1/2"}`}>
+      {pillar === "M" ? (
+        <>
+          <div className="text-[13px] font-bold text-[#14315E]">Business services <span className="font-normal text-[#64748b]">· about {SERVICES.length}</span></div>
+          <ol className="mt-2 columns-2 gap-x-4 text-[12px] text-[#334155] [&>li]:mb-1 [&>li]:break-inside-avoid">{SERVICES.map((n, i) => <li key={n}><span className="mr-1.5 inline-block w-4 text-right font-semibold text-[#254e9e]">{i + 1}</span>{n}</li>)}</ol>
+        </>
+      ) : pillar === "A" ? (
+        <>
+          <div className="text-[13px] font-bold text-[#14315E]">APIs for</div>
+          <ul className="mt-2 columns-2 gap-x-6 text-[12px] text-[#334155] [&>li]:mb-1 [&>li]:break-inside-avoid">{API_GROUPS.map(([n, c]) => <li key={n} className="flex justify-between gap-3"><span>{n}</span><b className="text-[#14315E]">{c}</b></li>)}</ul>
+          <div className="mt-2 flex justify-between border-t border-[#e2e8f0] pt-2 text-[12px] font-bold text-[#14315E]"><span>In all</span><span>about {API_TOTAL}</span></div>
+        </>
+      ) : (
+        <>
+          <div className="text-[13px] font-bold text-[#14315E]">{pillar === "H" ? "Channels that use the same APIs" : "Foundation blocks"}</div>
+          <ul className="mt-2 space-y-1 text-[12px] text-[#334155]">{(pillar === "H" ? channels : foundation).map((n) => <li key={n}>• {n}</li>)}</ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 const PILLAR_ICON: Record<Pillar, string> = { M: "widgets", A: "api", C: "cloud", H: "devices" };
 
 function Donut({ counts }: { counts: Record<Status, number> }) {
@@ -197,9 +237,10 @@ export function ArchitecturePage() {
         <div className="rounded-2xl bg-white p-2"><Donut counts={counts} /></div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4" data-testid="arch-mach">
+      <div className="relative z-20 grid gap-3 md:grid-cols-4" data-testid="arch-mach">
         {PILLARS.map((p) => (
-          <div key={p.key} className="rounded-2xl border border-[#c9d9f7] bg-white p-4 text-center" data-testid={`arch-mach-${p.key}`}>
+          <div key={p.key} tabIndex={0} className="group relative cursor-default rounded-2xl border border-[#c9d9f7] bg-white p-4 text-center outline-none hover:border-[#254e9e] focus:border-[#254e9e]" data-testid={`arch-mach-${p.key}`}>
+            <Popover pillar={p.key} />
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#14315E] text-white"><Icon name={PILLAR_ICON[p.key]} size={26} /></div>
             <div className="mt-2 text-[22px] font-extrabold leading-6 text-[#14315E]">{p.key}</div>
             <div className="text-[14px] font-bold text-[#14315E]">{p.name}</div>

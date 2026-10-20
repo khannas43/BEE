@@ -1,5 +1,6 @@
 "use client";
 
+import { isManufacturerRegistrationDemoIdentity } from "@/lib/manufacturer-onboarding/manufacturerNavPolicy";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { PREVIEW_SUFFIX, useRole } from "@/components/app/RoleContext";
@@ -15,7 +16,7 @@ export default function AppOverview() {
   const { t } = useLang();
   const { tasks } = useLifecycle();
   const identity = useSpringIdentity();
-  const categories = identity.status === "signed-in" ? navigationFor(identity.me.effectiveRoles, identity.me.capabilities ?? []) : [];
+  const categories = identity.status === "signed-in" ? navigationFor(identity.me.effectiveRoles, identity.me.capabilities ?? [], { registering: isManufacturerRegistrationDemoIdentity(identity.me.effectiveRoles, identity.me.organisations) }) : [];
   const external = isExternalRole(role);
   const visible = countForRole(role);
 

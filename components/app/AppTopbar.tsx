@@ -9,6 +9,7 @@ import { NotificationBell } from "./notifications/NotificationBell";
 import { DemoMessageBadge } from "./notifications/DemoMessageBadge";
 import { TopbarSearch } from "./TopbarSearch";
 import { SessionBadge, useSpringIdentity } from "./SessionBadge";
+import { WhoAmI } from "./WhoAmI";
 import { LANGUAGE_SWITCH_ENABLED, useLang } from "@/components/i18n/LangProvider";
 
 export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
@@ -55,6 +56,7 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
         </div>
         )}
 
+        <WhoAmI />
         <NotificationBell />
         <DemoMessageBadge />
 

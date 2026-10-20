@@ -9,7 +9,7 @@ export interface SpringIdentity {
   effectiveRoles: { role: string; scope: string }[];
   /** The permissions the roles hold; the menu offers a screen by it. Spring still decides every action. */
   capabilities?: string[];
-  organisations: { code: string }[];
+  organisations: { code: string; name?: string; kind?: string }[];
   /** Read-only Admin demonstration profile (Brief C3A); set by Spring, not the preview role. */
   adminDemonstrationReadOnly?: boolean;
 }

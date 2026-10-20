@@ -86,7 +86,7 @@ export function ProductTesting() {
         ))}
       </nav>
       {notice ? <p role="status" className="rounded-lg border border-[#b7e0c6] bg-[#e2f3e8] px-3 py-2 text-[13px] font-semibold text-[#14532d]" data-testid="testing-notice">{notice}</p> : null}
-      {tab === "overview" ? <OverviewView /> : tab === "grievances" ? <GrievanceView /> : tab === "selection" ? <SelectionView onDone={setNotice} /> : <CasesView onDone={setNotice} />}
+      {tab === "overview" ? <OverviewView onDone={setNotice} /> : tab === "grievances" ? <GrievanceView onDone={setNotice} /> : tab === "selection" ? <SelectionView onDone={setNotice} /> : <CasesView onDone={setNotice} />}
     </div>
   );
 }
@@ -105,19 +105,25 @@ function Bars({ data, words, tone }: { data: Record<string, number>; words: Reco
   );
 }
 
-function OverviewView() {
+function OverviewView({ onDone }: { onDone: (m: string) => void }) {
   const { data, error } = useLoad<Overview>(readOverview);
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
   return (
     <div className="space-y-space-md" data-testid="testing-overview">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile label="Open grievances" value={data.openGrievances} note={`${data.grievancesLast30} received in the last 30 days`} tone="text-[#8a4b00]" />
+        <a href="#overview-open-grievances" className="block hover:opacity-90" data-testid="tile-open-grievances" aria-label="Open grievances: go to the list">
+          <Tile label="Open grievances" value={data.openGrievances} note={`${data.grievancesLast30} in the last 30 days. Click to list them`} tone="text-[#8a4b00]" />
+        </a>
         <Tile label="Products flagged" value={data.flagged} note="high review priority" tone="text-[#93000a]" />
         <Tile label="Cases in progress" value={data.stages.selected + data.stages.procured + data.stages.at_lab + data.stages.result_in} note="not yet closed" />
         <Tile label="Results this quarter" value={data.resultsThisQuarter} note="tested by BEE" />
       </div>
       <ProductPanel />
+      <section id="overview-open-grievances" data-testid="overview-open-grievances" className="space-y-space-sm">
+        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Open grievances ({data.openGrievances})</div>
+        <GrievanceView onDone={onDone} initialStatus="active" />
+      </section>
       <section className={`${card} p-4`}>
         <div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Test cases by stage</div>
         <ol className="grid grid-cols-2 gap-2 lg:grid-cols-5">
@@ -228,12 +234,15 @@ function ProductBody({ v }: { v: ProductView }) {
   );
 }
 
-function GrievanceView() {
-  const { data, error } = useLoad<{ grievances: Grievance[] }>(readGrievances);
+function GrievanceView({ onDone, initialStatus }: { onDone: (m: string) => void; initialStatus?: string }) {
+  const { data, error, reload } = useLoad<{ grievances: Grievance[] }>(readGrievances);
+  const fromUrl = useSearchParams()?.get("status") ?? "";
+  const startStatus = initialStatus ?? fromUrl;
   const [source, setSource] = useState("");
   const [category, setCategory] = useState("");
-  const [status, setStatus] = useState("");
-  const rows = (data?.grievances ?? []).filter((g) => (!source || g.source === source) && (!category || g.category === category) && (!status || g.status === status));
+  const [status, setStatus] = useState(["active", "open", "in_testing", "closed"].includes(startStatus) ? startStatus : "");
+  const [openRef, setOpenRef] = useState<string | null>(null);
+  const rows = (data?.grievances ?? []).filter((g) => (!source || g.source === source) && (!category || g.category === category) && (!status || (status === "active" ? g.status !== "closed" : g.status === status)));
   const tools = useListTools<Grievance>({
     rows,
     text: (g) => `${g.reference} ${g.model} ${g.manufacturer} ${g.complainant ?? ""} ${g.summary} ${SOURCE_WORD[g.source]} ${CATEGORY_WORD[g.category]}`,
@@ -243,7 +252,8 @@ function GrievanceView() {
   });
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
-  const STATUS = { open: "Open", in_testing: "In testing", closed: "Closed" } as const;
+  const STATUS = { open: "Awaiting approval", in_testing: "In testing", closed: "Closed" } as const;
+  const picked = data.grievances.find((g) => g.reference === openRef) ?? null;
   return (
     <div className="space-y-space-sm" data-testid="testing-grievances">
       <section className={`${card} p-4 space-y-space-sm`}>
@@ -253,9 +263,10 @@ function GrievanceView() {
         <div className="flex flex-wrap items-end gap-3">
           <label className={labelCls}>Source<select value={source} onChange={(e) => { setSource(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="grievance-source"><option value="">All</option>{Object.entries(SOURCE_WORD).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label className={labelCls}>Category<select value={category} onChange={(e) => { setCategory(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="grievance-category"><option value="">All</option>{Object.entries(CATEGORY_WORD).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-          <label className={labelCls}>Status<select value={status} onChange={(e) => { setStatus(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="grievance-status"><option value="">All</option>{Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          <label className={labelCls}>Status<select value={status} onChange={(e) => { setStatus(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="grievance-status"><option value="">All</option><option value="active">Not closed (open and in testing)</option>{Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         </div>
       </section>
+      <p className="text-[13px] text-[#475569]" data-testid="grievance-count">{rows.length} grievance{rows.length === 1 ? "" : "s"} in this list. Click a row to see the details and approve the product for testing.</p>
       <div className={`${card} overflow-x-auto`}>
         <table className="w-full text-[13px]" data-testid="grievance-table">
           <caption className="sr-only">Grievances, newest first</caption>
@@ -265,8 +276,8 @@ function GrievanceView() {
           </tr></thead>
           <tbody>
             {tools.paged.pageRows.length === 0 ? <tr><td className={td} colSpan={7}>No grievance for this selection.</td></tr> : tools.paged.pageRows.map((g) => (
-              <tr key={g.reference} className="border-t border-[#e2e8f0]">
-                <td className={`${td} font-semibold`}>{g.reference}</td><td className={`${td} whitespace-nowrap`}>{day(g.receivedAt)}</td><td className={td}>{SOURCE_WORD[g.source]}</td>
+              <tr key={g.reference} className={`cursor-pointer border-t border-[#e2e8f0] hover:bg-[#f4f8ff] ${openRef === g.reference ? "bg-[#eef3fb]" : ""}`} onClick={() => setOpenRef(g.reference)} data-testid={`grievance-row-${g.reference}`}>
+                <td className={`${td} font-semibold`}><button type="button" className="text-primary hover:underline" onClick={(e) => { e.stopPropagation(); setOpenRef(g.reference); }}>{g.reference}</button></td><td className={`${td} whitespace-nowrap`}>{day(g.receivedAt)}</td><td className={td}>{SOURCE_WORD[g.source]}</td>
                 <td className={td}>{CATEGORY_WORD[g.category]}<div className="max-w-[320px] text-[12px] text-[#64748b]">{g.summary}</div></td>
                 <td className={td}>{g.model}<div className="text-[12px] text-[#64748b]">{g.manufacturer}</div></td>
                 <td className={td}>{g.complainant ?? "-"}<div className="text-[12px] text-[#64748b]">{g.contact}</div></td>
@@ -277,7 +288,49 @@ function GrievanceView() {
         </table>
       </div>
       <ListPager tools={tools} />
+      {picked ? <GrievanceDetail key={picked.reference} g={picked} statusWord={STATUS[picked.status]} onClose={() => setOpenRef(null)} onDone={(m) => { onDone(m); void reload(); }} /> : null}
     </div>
+  );
+}
+
+function GrievanceDetail({ g, statusWord, onClose, onDone }: { g: Grievance; statusWord: string; onClose: () => void; onDone: (m: string) => void }) {
+  const [view, setView] = useState<ProductView | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void readProduct(g.registrationId).then((r) => { if (live && r.ok) setView(r.value); });
+    return () => { live = false; };
+  }, [g.registrationId]);
+  const open = view?.product.openCase ?? null;
+  const approve = async () => {
+    setBusy(true); setProblem(null);
+    const r = await addToTesting(g.registrationId, `Approved by the BEE Officer after grievance ${g.reference} (${CATEGORY_WORD[g.category]}).`);
+    setBusy(false);
+    if (r.ok) onDone(`${g.model} was approved for testing as case ${String(r.value.reference)}. It now goes for testing: BEE buys a unit from the market.`); else setProblem(r.message);
+  };
+  return (
+    <section className={`${card} p-5 space-y-space-sm`} data-testid="grievance-detail">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div><div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">{g.reference} · {CATEGORY_WORD[g.category]}</div><div className="text-[13px] text-[#64748b]">{g.model} · {g.brand} · {g.manufacturer} · {g.registrationId}</div></div>
+        <div className="flex items-center gap-2"><Chip tone="border-[#c9d9f7] bg-[#e7effb] text-[#14315E]">{statusWord}</Chip><button type="button" className={btnOutline} onClick={onClose} data-testid="grievance-close">Close</button></div>
+      </div>
+      <dl className="grid gap-2 text-[13px] sm:grid-cols-2 lg:grid-cols-4">
+        <div><dt className={labelCls}>Received</dt><dd>{stamp(g.receivedAt)}</dd></div>
+        <div><dt className={labelCls}>Channel</dt><dd>{SOURCE_WORD[g.source]}</dd></div>
+        <div><dt className={labelCls}>Complainant</dt><dd>{g.complainant ?? "-"}</dd></div>
+        <div><dt className={labelCls}>Contact</dt><dd>{g.contact ?? "-"}</dd></div>
+      </dl>
+      <p className="rounded-lg bg-[#f9fbff] px-3 py-2 text-[13px] text-[#334155]">{g.summary}</p>
+      {view ? <ProductBody v={view} /> : <p role="status" className="font-body-sm">Loading the product view…</p>}
+      {problem ? <p role="alert" className="rounded-lg bg-error-container p-space-sm font-body-sm text-on-error-container">{problem}</p> : null}
+      <div className="rounded-xl border border-[#dbe6f7] bg-[#f9fbff] p-4">
+        {open ? <p className="text-[13px] text-[#334155]">This product is already approved for testing as case <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{open}</Link>.</p>
+          : g.status === "closed" ? <p className="text-[13px] text-[#475569]">This grievance is closed.</p>
+          : <div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-xl text-[13px] text-[#334155]">Approving puts the product into testing: BEE buys a unit from the market, tests it at its own cost, and the manufacturer sees only the result.</p>
+              <button type="button" className={btn} disabled={busy || !view} onClick={() => void approve()} data-testid="grievance-approve"><Icon name="check_circle" size={16} /> Approve for testing</button></div>}
+      </div>
+    </section>
   );
 }
 
@@ -326,7 +379,7 @@ function SelectionView({ onDone }: { onDone: (m: string) => void }) {
                   <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setOpen(open === p.registrationId ? null : p.registrationId)} aria-expanded={open === p.registrationId} data-testid={`why-${p.registrationId}`}>{open === p.registrationId ? "Hide" : "Show points"}</button>
                   {open === p.registrationId ? <ul className="mt-2 max-w-[360px] space-y-1 text-[12px]">{p.factors.map((f) => <li key={f.label} className="flex justify-between gap-3"><span>{f.label}</span><b className="tabular-nums">+{f.points}</b></li>)}<li className="flex justify-between gap-3 border-t border-[#e2e8f0] pt-1"><b>Total (at most 100)</b><b className="tabular-nums">{p.score}</b></li></ul> : null}
                 </td>
-                <td className={td}>{p.openCase ? <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{p.openCase}</Link> : <button type="button" className={btnOutline} disabled={busy} onClick={() => void add(p)} data-testid={`add-${p.registrationId}`}>Add to testing</button>}</td>
+                <td className={td}>{p.openCase ? <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{p.openCase}</Link> : <button type="button" className={btnOutline} disabled={busy} onClick={() => void add(p)} data-testid={`add-${p.registrationId}`}>Approve for testing</button>}</td>
               </tr>
             ))}
           </tbody>

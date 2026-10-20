@@ -6,14 +6,14 @@ DO $$
 DECLARE
   org uuid;
   officer uuid := '00000000-0000-4000-a000-000000000007';
-  models text[][] := ARRAY[['BEE/RAC/2026/10101','NC-RAC-12D'],['BEE/RAC/2026/10102','NC-RAC-18F'],['BEE/RAC/2026/10901','NC-RAC-S2A'],['BEE/RAC/2026/10103','NC-RAC-24H']];
-  -- model index | category | days ago | source index | complainant
+  models text[][] := ARRAY[['BEE/RAC/2026/10101','NC-RAC-12D'],['BEE/RAC/2026/10102','NC-RAC-18F'],['BEE/RAC/2026/10901','NC-RAC-S2A'],['BEE/RAC/2026/10103','NC-RAC-24H'],['BEE/RAC/2026/10902','NC-RAC-S2B']];
+  -- model index (the fifth, NC-RAC-S2B, has grievances but no test case yet: the Officer approves it live) | category | days ago | source index | complainant
   g text[] := ARRAY[
     '1|cooling|3|1|Meera Kulkarni','1|cooling|6|2|Sanjay Bhatt','1|power|9|3|Farhan Qureshi','1|cooling|12|1|Lata Deshpande','1|cooling|16|4|Gopal Reddy',
     '1|power|19|2|Pooja Nair','1|noise|23|5|Harish Saini','1|cooling|27|1|Divya Menon','1|power|33|3|Ashok Tiwari',
-    '2|cooling|8|2|Ritu Malhotra','2|noise|15|4|Imran Sheikh','2|cooling|24|1|Neelam Joshi','2|noise|38|3|Karthik Iyer','2|label|52|5|Sudha Rao',
+    '2|cooling|8|2|Ritu Malhotra','2|noise|15|4|Imran Sheikh','5|cooling|24|1|Neelam Joshi','5|noise|38|3|Karthik Iyer','2|label|52|5|Sudha Rao',
     '3|power|11|3|Vivek Chauhan','3|power|29|2|Anjali Bose','3|counterfeit|41|1|Rohit Jain','3|label|57|4|Shalini Das',
-    '4|cooling|21|2|Bhavna Patel','4|other|47|5|Manish Gupta'];
+    '5|cooling|21|2|Bhavna Patel','5|other|47|5|Manish Gupta'];
   src text[] := ARRAY['qr_scan','helpline','email','consumer_portal','forum'];
   txt jsonb := '{"cooling":"Room does not cool properly even at 18 degrees; the rating promised better performance.","power":"Electricity bill is much higher than a unit of this star rating should cause.","noise":"The outdoor unit is very noisy and vibrates after a few weeks.","label":"The star label on the unit looks different from the label shown on the website.","counterfeit":"Bought from a local shop; the QR code scan did not match the box and the unit looks like a copy.","other":"Remote and display stopped working within the first month."}';
   r text[];
@@ -60,9 +60,9 @@ BEGIN
   -- 4 result in (a fail, not yet closed)
   case_id := gen_random_uuid();
   INSERT INTO test_case (id, reference, registration_id, model_number, brand_name, organisation_id, basis, reason, risk_score, stage, procured_from, laboratory, result, measured_iseer, rated_iseer, tested_on, selected_by, selected_at, updated_at)
-  VALUES (case_id, 'TC-2026-0004', 'BEE/RAC/2026/10103', 'NC-RAC-24H', 'Nova Cool', org, 'random', 'Drawn at random with weight 46 (risk score 41 plus a base of 5).', 41, 'result_in', 'Retail store, Nagpur (bought by BEE)', 'Synthetic Test Laboratory, Bengaluru', 'fail', 3.62, 3.85, current_date - 3, officer, now() - interval '24 days', now() - interval '3 days');
+  VALUES (case_id, 'TC-2026-0004', 'BEE/RAC/2026/10103', 'NC-RAC-24H', 'Nova Cool', org, 'random', 'Drawn at random with weight 36 (risk score 31 plus a base of 5).', 31, 'result_in', 'Retail store, Nagpur (bought by BEE)', 'Synthetic Test Laboratory, Bengaluru', 'fail', 3.62, 3.85, current_date - 3, officer, now() - interval '24 days', now() - interval '3 days');
   INSERT INTO test_case_event (case_id, stage, note, by_user, at) VALUES
-    (case_id, 'selected', 'Drawn at random with weight 46 (risk score 41 plus a base of 5).', officer, now() - interval '24 days'),
+    (case_id, 'selected', 'Drawn at random with weight 36 (risk score 31 plus a base of 5).', officer, now() - interval '24 days'),
     (case_id, 'procured', 'Bought from a retail store in Nagpur.', officer, now() - interval '19 days'),
     (case_id, 'at_lab', 'Handed to the laboratory.', officer, now() - interval '12 days'),
     (case_id, 'result_in', 'Measured ISEER 3.62 against 3.85 rated: below the rating.', officer, now() - interval '3 days');

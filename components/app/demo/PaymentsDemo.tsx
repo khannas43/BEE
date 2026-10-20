@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Pill } from "./DemoShell";
 import { DescriptionList } from "@/components/app/kit/StatePanels";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
@@ -125,6 +126,7 @@ function PaymentsTable({ payments, finance, receiptId, onToggleReceipt }: { paym
 }
 
 export function PaymentsDemo() {
+  const highlight = useSearchParams()?.get("application") ?? null;
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
@@ -191,6 +193,7 @@ export function PaymentsDemo() {
     });
 
   if (!listing && !error) return <div className="p-space-md lg:p-space-lg" data-testid="demo-payments" role="status">Loading payments…</div>;
+  const justSubmitted = highlight ? (listing?.feeDue ?? []).find((a) => a.reference === highlight) : undefined;
 
   const payments = listing?.payments ?? [];
   const open = payments.filter((p) => p.status === "initiated");
@@ -200,6 +203,7 @@ export function PaymentsDemo() {
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-payments">
       <h1 className="font-headline-md text-headline-md text-on-surface">Payments</h1>
+      {justSubmitted ? <p role="status" className="rounded-lg border border-[#b7e0c6] bg-[#e2f3e8] px-3 py-2 font-body-sm font-semibold text-[#14532d]" data-testid="pay-just-submitted">Application {justSubmitted.reference} was submitted and is waiting for its fee of {inr(justSubmitted.totalInr)}. Pay at the simulated gateway below.</p> : null}
       {error ? <p role="alert" className="font-body-sm text-error" data-testid="pay-error">{error}</p> : null}
       {status ? <p role="status" className="font-body-sm text-on-surface" data-testid="pay-status">{status}</p> : null}
 
@@ -217,7 +221,7 @@ export function PaymentsDemo() {
                   const current = payments.find((p) => p.applicationId === a.applicationId && p.status !== "failed");
                   const live = Boolean(current);
                   return (
-                    <tr key={a.applicationId}>
+                    <tr key={a.applicationId} className={a.reference === highlight ? "bg-[#fff4d6]" : undefined}>
                       <td className={th}>{a.reference}</td><td className={th}>{a.brandName} {a.modelNumber}</td>
                       <td className={th}>{inr(a.feeInr)}</td><td className={th}>{inr(a.taxInr)} ({a.taxRatePercent}%)</td><td className={th}>{inr(a.totalInr)}</td>
                       <td className={th}>

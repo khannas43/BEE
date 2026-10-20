@@ -68,11 +68,11 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
 
   return (
     <Card title="Test reports">
-      <p className="font-body-sm text-on-surface-variant" data-testid="model-doc-verification-note">
+      <p className="font-label-sm text-label-sm text-on-surface-variant mb-space-sm" data-testid="model-doc-verification-note">
         {note ?? "Local store only — pending verification. Upload does not claim laboratory accreditation, malware clearance or BEE approval."}
       </p>
       <CommandPanel
-        className="mt-space-md space-y-space-sm"
+        className="space-y-space-md [&_[data-testid=model-doc-upload]]:mt-1 [&_[data-testid=model-doc-upload]]:w-full [&_[data-testid=model-doc-upload]]:rounded-lg [&_[data-testid=model-doc-upload]]:!bg-[#1f3c88] [&_[data-testid=model-doc-upload]]:py-2.5 [&_[data-testid=model-doc-upload]]:font-label-md [&_[data-testid=model-doc-upload]]:!text-white"
         state={upload.state}
         onRun={() => void onUpload()}
         runLabel="Upload test report"
@@ -81,22 +81,23 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
         errorTestId="model-doc-error"
         signInReturnTo="/app/model-label/new-model-application"
       >
-        <label className="block font-label-sm text-on-surface-variant">
+        <label className="block font-label-sm text-label-sm text-on-surface-variant">
           Report label
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+            className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm"
+            placeholder="For example Laboratory test report, 12 March 2026"
             data-testid="model-doc-label"
           />
         </label>
-        <label className="block font-label-sm text-on-surface-variant">
+        <label className="block font-label-sm text-label-sm text-on-surface-variant">
           PDF file
           <input
             ref={fileRef}
             type="file"
             accept="application/pdf,.pdf"
-            className="mt-1 w-full font-body-sm"
+            className="mt-1 block w-full rounded-lg border border-dashed border-outline-variant bg-white p-3 font-body-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[#e7effb] file:px-3 file:py-1.5 file:font-semibold file:text-[#14315E]"
             data-testid="model-doc-file"
           />
         </label>
@@ -106,12 +107,12 @@ export function DraftTestReports({ applicationId }: { applicationId: string }) {
           {error}
         </p>
       ) : null}
-      <ul className="mt-space-md space-y-space-sm" data-testid="model-doc-versions">
+      <ul className="mt-space-md space-y-2" data-testid="model-doc-versions">
         {versions.length === 0 ? (
-          <li className="font-body-sm text-on-surface-variant">No test report uploaded yet.</li>
+          <li className="rounded-lg border border-dashed border-[#dbe6f7] bg-[#f9fbff] px-3 py-2 text-[13px] text-on-surface-variant">No test report uploaded yet.</li>
         ) : (
           versions.map((v) => (
-            <li key={v.id} className="font-body-sm" data-testid={`model-doc-version-${v.versionNumber}`}>
+            <li key={v.id} className="rounded-lg border border-[#dbe6f7] bg-[#f9fbff] px-3 py-2 text-[13px]" data-testid={`model-doc-version-${v.versionNumber}`}>
               <span className="font-label-sm">v{v.versionNumber}</span> · {v.reportLabel} · {v.originalFilename} ·{" "}
               <span className="font-mono text-[11px]">{v.contentSha256.slice(0, 12)}…</span> ·{" "}
               <span className="text-on-surface-variant">{v.verificationStatus.replaceAll("_", " ")}</span>

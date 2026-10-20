@@ -363,6 +363,8 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     setSubmitOpen(false);
     setSubmitPreview(null);
     setSubmitDone({ reference: res.value.application.reference, id: res.value.application.id, fee: res.value.submissionFee });
+    // The application is now waiting for its fee: take the applicant to the fee payment screen.
+    router.push(`/app/demo/payments?application=${encodeURIComponent(res.value.application.reference)}`);
   }
 
   const activeId = editId ?? saved?.id ?? null;
@@ -691,7 +693,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                 onConfirm={() => void confirmSubmit(activeId)}
               />
             ) : null}
-            <p className="font-label-sm text-on-surface-variant text-center">
+            <p className="text-[12px] text-on-surface-variant text-center">
               Finance confirmation, rating and approval are not offered on this screen. Submit stores a provisional fee snapshot for local demo when rules allow.
             </p>
             </div>

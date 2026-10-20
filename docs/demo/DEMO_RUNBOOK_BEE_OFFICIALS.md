@@ -43,18 +43,20 @@ Sign in as `bee.admin` (it shows the whole menu), or as the person named.
 | # | Item | Where | Status on screen |
 |---|---|---|---|
 | 1 | Seven-screen journey | Admin menu: Registration & Applications, Labels & Consumer Services, Operations & Intelligence, Executive Dashboard | live |
-| 2 | Applicant dashboard | `nova.applicant`: Dashboard, Manufacturer 360 | live (some figures aggregated for the demonstration, disclosed on screen) |
-| 3 | Company / brand registration | Registration & Applications: Company registration, Brand registration | company and brand live; MCA/GSTN check and scoring are future work |
+| 2 | Applicant dashboard | `nova.applicant` lands here: Manufacturer 360 (company profile, brands, models, QR, fees, documents on file) | live (some figures aggregated for the demonstration, disclosed on screen) |
+| 3 | Company / brand registration | `ravik24` lands on Company registration (the wizard); registered manufacturers see Brand registration | company and brand live; MCA/GSTN check and scoring are future work |
 | 4 | Document verification | Registration & Applications: Document verification | upload and return live; OCR and AI evidence are future work |
 | 5 | Model / test report | Registration & Applications: Model applications, Test-report scrutiny | core live; extraction and rating computation are future work |
 | 6 | Officer scrutiny | `bee.officer`: Work Queue & Decisions | approvals live; full risk queue is future work |
-| 7 | Secure QR batch | Labels: QR batches and serials | live demonstration |
+| 7 | Secure QR batch | Labels & Operations: QR batches and serials, Quarterly submission (products, QR status, test results) | live demonstration |
 | 8 | Consumer verification | public site, Verify | basic verification live |
-| 9 | AI use cases | Oversight & Intelligence: AI advisory use cases | simulated, advisory, a person decides |
+| 9 | AI use cases | Oversight & Intelligence: Compliance risk, Production anomaly, Rating trends, Document extraction | simulated, advisory, a person decides |
 | 10 | Blockchain / secure QR | Secure evidence ledger | local simulation only (labelled "Simulated") |
 | 11 | Data model | Admin: Audit history, master data, secure evidence | live |
-| 12 | Generated formats | Labels: Generated forms and letters | partial (prototype letters) |
-| 13 | Official templates | Official templates | planned, shown as "Planned" |
+| 12 | Generated formats | hidden in the menu for the demonstration | partial (prototype letters) |
+| 13 | Official templates | hidden in the menu for the demonstration | planned |
+
+Also built, as `bee.officer`: Registers & Compliance holds the manufacturer, brand and category, model and certificate, and QR reconciliation registers (one tab each, a page per record), Audit History and Delegations.
 
 ## 3. Known limits to say aloud or avoid
 - The company name typed at sign-up now becomes the application's legal name. The organisation record behind the account still carries the applicant's name (BL-276), which only shows in a few organisation-level lists.

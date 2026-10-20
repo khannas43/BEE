@@ -3,7 +3,9 @@
 import { ROLES } from "@/lib/roles";
 import { useSpringIdentity, type SpringIdentity } from "./SessionBadge";
 
-const roleName = (key: string) => ROLES.find((r) => r.key === key)?.name ?? key;
+/** The short role words shown under a name: Officer, Director, Finance and so on. */
+const SHORT: Record<string, string> = { officer: "Officer", director: "Director", finance: "Finance", programme: "Programme", admin: "Admin", reviewer: "Reviewer", auditor: "Auditor", helpdesk: "Helpdesk", iame: "IAME", sda: "SDA" };
+const roleName = (key: string) => SHORT[key] ?? ROLES.find((r) => r.key === key)?.short ?? key;
 const clean = (name: string) => name.replace(/\s*\((synthetic[^)]*|not yet permittee)\)\s*$/i, "").trim();
 
 /** The line shown under the person's name: the company for a manufacturer or agency, otherwise the BEE role. */

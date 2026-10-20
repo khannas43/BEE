@@ -38,6 +38,8 @@ export interface NavEntry {
   activePrefixes?: readonly string[];
   /** Query string that picks a view of the route (several entries may share one screen), e.g. "tab=rating-trends". */
   query?: string;
+  /** Other queries of the same route that also count as this entry for highlighting (a record opened from it). */
+  alsoQueries?: readonly string[];
   /** Shown in the menu only to an organisation still going through company registration; the route itself stays open for the access check. */
   registrationOnly?: boolean;
   /** Short qualifier shown beside the title, e.g. "Advisory". */
@@ -103,13 +105,13 @@ function entry(
   icon: string,
   target: Target,
   roles: readonly RoleKey[],
-  extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "registrationOnly"> = {},
+  extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "alsoQueries" | "registrationOnly"> = {},
 ): NavEntry {
   return { id, title, icon, roles, ...target, ...extra };
 }
 
 /** An Admin-hierarchy entry: Admin, plus the officer roles the runtime registry already gives the screen. */
-function adminEntry(id: string, title: string, icon: string, target: Target, extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "registrationOnly"> = {}): NavEntry {
+function adminEntry(id: string, title: string, icon: string, target: Target, extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "alsoQueries" | "registrationOnly"> = {}): NavEntry {
   const runtime = target.state === "available" ? RUNTIME_ROUTES.find((r) => r.href === target.route) : undefined;
   const officers = runtime ? OFFICER_ROLES.filter((r) => runtime.navRoles.includes(r)) : [];
   return entry(id, title, icon, target, [...ADMIN, ...officers], extra);
@@ -342,7 +344,7 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     id: "dir.registers", title: "Registers & Compliance", icon: "menu_book", profile: "officer",
     children: [
-      entry("dir.manufacturer-register", "Manufacturer register", "factory", PLANNED, BEE_OFFICER),
+      entry("dir.manufacturer-register", "Manufacturer register", "factory", live(R.register), BEE_OFFICER, { query: "tab=manufacturers", alsoQueries: ["view=manufacturer"] }),
       entry("dir.brand-register", "Brand and category register", "menu_book", live(R.register), BEE_OFFICER),
       entry("dir.model-register", "Model and certificate register", "verified_user", proto("mis-ai", "model-dashboard"), BEE_OFFICER),
       entry("dir.reconciliation", "QR and production reconciliation", "balance", proto("production", "reconciliation"), BEE_OFFICER),
@@ -480,13 +482,13 @@ function matches(e: NavEntry, pathname: string): boolean {
 /** The entry for the current page (the first in menu order, exact route before a prefix) and the group holding it. */
 export function activeEntry(groups: readonly NavGroup[], pathname: string, search = ""): { group: NavGroup; entry: NavEntry } | null {
   const params = new URLSearchParams(search);
-  const queryMatches = (e: NavEntry) => Boolean(e.query) && [...new URLSearchParams(e.query).entries()].every(([k, v]) => params.get(k) === v);
+  const one = (q: string) => [...new URLSearchParams(q).entries()].every(([k, v]) => params.get(k) === v);
+  const queryMatches = (e: NavEntry) => Boolean(e.query) && [e.query!, ...(e.alsoQueries ?? [])].some(one);
   for (const exact of [true, false]) {
-    for (const group of groups) {
-      const all = leaves(group.children).filter((e) => (exact ? e.route === pathname && e.state !== "planned" : matches(e, pathname)));
-      const hit = all.find(queryMatches) ?? all[0];
-      if (hit) return { group, entry: hit };
-    }
+    const hits = groups.flatMap((group) => leaves(group.children).filter((e) => (exact ? e.route === pathname && e.state !== "planned" : matches(e, pathname))).map((entry) => ({ group, entry })));
+    // An entry whose query matches the address wins; else one without a query (the plain screen); else the first.
+    const hit = hits.find((h) => queryMatches(h.entry)) ?? hits.find((h) => !h.entry.query) ?? hits[0];
+    if (hit) return hit;
   }
   return null;
 }

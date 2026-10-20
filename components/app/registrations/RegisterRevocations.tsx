@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { ManufacturerEntry, ManufacturersPanel } from "@/components/app/registrations/ManufacturersRegister";
 import { manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import { RegisterDetail, registerDetailHref, type RegisterView } from "@/components/app/registrations/RegisterDetail";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
@@ -56,6 +57,7 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
   const viewParam = params.get("view");
   const view: RegisterView | null = viewParam === "brand" || viewParam === "authorisation" || viewParam === "proposal" ? viewParam : null;
   const detailId = params.get("id");
+  const manufacturerEntry = viewParam === "manufacturer" && detailId;
 
   return (
     <ScreenChrome module={module} screen={screen} subtitle="Register" implemented={runtimeRouteFor(registerHref())?.implemented}>
@@ -69,7 +71,9 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
           errorTestId="rvk-error"
           signInReturnTo={registerHref()}
         >
-          {(r) => view && detailId ? (
+          {(r) => manufacturerEntry ? (
+            <ManufacturerEntry code={detailId} />
+          ) : view && detailId ? (
             <RegisterDetail register={r.register} view={view} id={detailId} />
           ) : (
             <RegisterBody
@@ -87,7 +91,7 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
   );
 }
 
-type TabKey = "brands" | "auths" | "pending" | "history";
+type TabKey = "manufacturers" | "brands" | "auths" | "pending" | "history";
 
 const FIELD = "rounded-lg border border-outline-variant px-3 h-10 box-border font-body-sm bg-surface-card";
 const TH = "py-2 pr-3 text-left font-label-sm text-on-surface-variant";
@@ -142,8 +146,16 @@ function RegisterBody({
   const view: RegisterRevocations = readOnlyAdmin
     ? { ...register, canPropose: false, canDecide: false }
     : register;
-  const [tab, setTab] = useState<TabKey>("brands");
+  const tabParam = useSearchParams().get("tab");
+  const [tab, setTab] = useState<TabKey>(tabParam === "manufacturers" ? "manufacturers" : "brands");
+  const [seenParam, setSeenParam] = useState(tabParam);
+  // A menu link can change ?tab= while this page stays mounted; follow it.
+  if (tabParam !== seenParam) {
+    setSeenParam(tabParam);
+    setTab(tabParam === "manufacturers" ? "manufacturers" : "brands");
+  }
   const count = (xs: { status: string }[], st: string) => xs.filter((x) => x.status === st).length;
+  const manufacturerCount = useManufacturerCount();
   const brandsActive = count(register.brands, "active");
   const authsActive = count(register.authorisations, "active");
   const tabBtn = (key: TabKey, label: string, n: number) => (
@@ -155,7 +167,8 @@ function RegisterBody({
 
   return (
     <div className="space-y-space-md">
-      <div className="grid gap-space-sm sm:grid-cols-2 xl:grid-cols-4" data-testid="rvk-summary">
+      <div className="grid gap-space-sm sm:grid-cols-2 xl:grid-cols-5" data-testid="rvk-summary">
+        <SummaryCard label="Manufacturers" value={manufacturerCount} hint="Permittees and registrations" tone="text-[#14315e]" tab="manufacturers" current={tab} onPick={setTab} />
         <SummaryCard label="Brands" value={register.brands.length} hint={`${brandsActive} active, ${count(register.brands, "suspended")} suspended, ${count(register.brands, "revoked")} revoked`} tone="text-[#14315e]" tab="brands" current={tab} onPick={setTab} />
         <SummaryCard label="Agency authorisations" value={register.authorisations.length} hint={`${authsActive} active, ${count(register.authorisations, "revoked")} revoked`} tone="text-[#14315e]" tab="auths" current={tab} onPick={setTab} />
         <SummaryCard label="Waiting for a decision" value={register.pending.length} hint={register.pending.length ? "Closures or revocations to decide" : "Nothing is waiting"} tone={register.pending.length ? "text-[#8a4b00]" : "text-[#14532d]"} tab="pending" current={tab} onPick={setTab} />
@@ -163,12 +176,16 @@ function RegisterBody({
       </div>
 
       <div role="tablist" aria-label="Register" className="flex flex-wrap gap-space-xs border-b border-outline-variant">
+        {tabBtn("manufacturers", "Manufacturers", manufacturerCount)}
         {tabBtn("brands", "Brands", register.brands.length)}
         {tabBtn("auths", "Agency authorisations", register.authorisations.length)}
         {tabBtn("pending", "Waiting for a decision", register.pending.length)}
         {tabBtn("history", "History", register.decided.length)}
       </div>
 
+      <section role="tabpanel" aria-labelledby="rvk-tab-manufacturers" hidden={tab !== "manufacturers"}>
+        {tab === "manufacturers" ? <ManufacturersPanel /> : null}
+      </section>
       <section role="tabpanel" aria-labelledby="rvk-tab-brands" hidden={tab !== "brands"}>
         <BrandsPanel register={view} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />
       </section>
@@ -183,6 +200,11 @@ function RegisterBody({
       </section>
     </div>
   );
+}
+
+function useManufacturerCount(): number {
+  const read = useManufacturers();
+  return read.phase === "ready" ? read.list.length : 0;
 }
 
 type PanelProps = { register: RegisterRevocations; openId: string | null; onOpen: (id: string | null) => void; onChanged: () => void; onRefresh: () => void };

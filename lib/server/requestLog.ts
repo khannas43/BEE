@@ -61,6 +61,7 @@ export type WebRoute =
   | "/api/runtime/fee-corrections/reversals/{id}/decision"
   | "/api/runtime/verification"
   | "/api/runtime/public/manufacturer-signup"
+  | "/api/runtime/public/agency-registration"
   | "/api/runtime/notifications"
   | "/api/runtime/notifications/read-all"
   | "/api/runtime/notifications/{id}/read"

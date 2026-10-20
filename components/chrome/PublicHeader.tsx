@@ -9,6 +9,7 @@ import { LANGUAGE_SWITCH_ENABLED, useLang } from "@/components/i18n/LangProvider
 import { useA11y } from "@/components/public/A11yProvider";
 import { NAV } from "@/lib/nav";
 import type { Lang } from "@/lib/i18n";
+import { REGISTRATION_HREF } from "@/lib/registrationFlow";
 
 export function PublicHeader() {
   const pathname = usePathname();
@@ -145,7 +146,7 @@ export function PublicHeader() {
               <Icon name="stars" size={18} /> {t("cta.checkLabel")}
             </Link>
             <Link
-              href="/register/manufacturer"
+              href={REGISTRATION_HREF}
               className="bg-primary text-on-primary font-title-lg text-title-lg px-space-md py-1.5 rounded-lg hover:bg-primary-container transition-all inline-flex items-center gap-1.5"
               data-testid="public-register"
             >
@@ -201,7 +202,7 @@ export function PublicHeader() {
                 </div>
               ))}
               <div className="flex items-center gap-space-sm pt-space-sm">
-                <Link href="/register/manufacturer" onClick={closeMobile} className="flex-1 text-center bg-primary-container text-on-primary font-title-lg text-title-lg px-space-md py-2 rounded-lg inline-flex items-center justify-center gap-1.5" data-testid="mobile-public-register">
+                <Link href={REGISTRATION_HREF} onClick={closeMobile} className="flex-1 text-center bg-primary-container text-on-primary font-title-lg text-title-lg px-space-md py-2 rounded-lg inline-flex items-center justify-center gap-1.5" data-testid="mobile-public-register">
                   <Icon name="app_registration" size={18} /> {t("cta.register")}
                 </Link>
                 <Link href="/login" onClick={closeMobile} className="flex-1 text-center bg-surface-container-lowest text-primary font-title-lg text-title-lg px-space-md py-2 rounded-lg">

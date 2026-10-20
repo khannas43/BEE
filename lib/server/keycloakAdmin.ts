@@ -104,3 +104,24 @@ export async function deleteGuestIdentity(id: string): Promise<void> {
     /* best-effort rollback */
   }
 }
+
+/**
+ * Switches a registrant's sign-in on or off and (optionally) sets its password. Public agency registration creates the identity with a password nobody
+ * knows, switches it off, and only after the registration payment switches it on again with the credentials shown to the applicant.
+ */
+export async function setGuestAccess(id: string, access: { enabled: boolean; password?: string }): Promise<void> {
+  const token = await adminToken();
+  const base = `${adminBase()}/users/${encodeURIComponent(id)}`;
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const current = await fetch(base, { cache: "no-store", headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  const user = (await current.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!current.ok || !user) throw new Error("keycloak_admin_unavailable");
+  const update = await fetch(base, { method: "PUT", cache: "no-store", headers, body: JSON.stringify({ ...user, enabled: access.enabled }), signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (!update.ok) throw new Error("keycloak_admin_unavailable");
+  if (access.password) {
+    const reset = await fetch(`${base}/reset-password`, {
+      method: "PUT", cache: "no-store", headers, body: JSON.stringify({ type: "password", value: access.password, temporary: false }), signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!reset.ok) throw new Error("keycloak_admin_unavailable");
+  }
+}

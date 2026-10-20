@@ -12,6 +12,7 @@ import { SectionHeader } from "@/components/public/SectionHeader";
 import { Reveal } from "@/components/public/Reveal";
 import { useLang } from "@/components/i18n/LangProvider";
 import { APPLIANCES, CATEGORIES } from "@/lib/mock/appliances";
+import { REGISTRATION_HREF } from "@/lib/registrationFlow";
 
 const TIERS = [
   { title: "5-Star Inverter AC", desc: "Variable speed BLDC compressor, ISEER > 5.20", stars: 5, kwh: "571", bill: "₹4,568", five: "₹22,840", co2: "2.34 Tonnes", note: "Baseline Efficiency Reference (Tier 1)", accent: "bg-primary-container", box: "bg-forest-light", kwhColor: "text-forest-dark", noteColor: "text-primary", extra: "" },
@@ -220,7 +221,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="mt-space-lg flex flex-wrap items-center gap-space-sm pt-space-md">
-                <Link href="/register/manufacturer" className="bg-primary text-on-primary font-label-lg text-label-lg px-space-md py-2.5 rounded-lg hover:bg-primary-container transition-all flex items-center gap-2 shadow-sm" data-testid="home-manufacturer-register">
+                <Link href={REGISTRATION_HREF} className="bg-primary text-on-primary font-label-lg text-label-lg px-space-md py-2.5 rounded-lg hover:bg-primary-container transition-all flex items-center gap-2 shadow-sm" data-testid="home-manufacturer-register">
                   <Icon name="app_registration" size={18} /> Register
                 </Link>
                 <Link href="/login" className="bg-secondary text-on-secondary font-label-lg text-label-lg px-space-md py-2.5 rounded-lg hover:bg-on-secondary-fixed-variant transition-all flex items-center gap-2 shadow-sm">

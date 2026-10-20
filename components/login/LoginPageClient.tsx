@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { DemoLoginForm } from "@/components/login/DemoLoginForm";
+import { REGISTRATION_HREF, SOP_REGISTRATION_FLOW } from "@/lib/registrationFlow";
 
 const SIGN_IN_ERRORS: Record<string, string> = {
   no_active_account: "Your identity was confirmed, but there is no active BEE portal account for it.",
@@ -66,9 +67,10 @@ export function LoginPageClient({ demo }: { demo: boolean }) {
           <Link href="/contact?request=password-reset" className="text-primary hover:underline" data-testid="forgot-password-link">
             Forgot password?
           </Link>
-          <Link href="/register/manufacturer" className="text-primary hover:underline" data-testid="new-user-registration-link">
+          <Link href={REGISTRATION_HREF} className="text-primary hover:underline" data-testid="new-user-registration-link">
             New user registration
           </Link>
+          {SOP_REGISTRATION_FLOW ? <Link href="/register/agency/pay" className="text-primary hover:underline" data-testid="pay-registration-fee-link">Pay Registration Fee</Link> : null}
         </div>
       </div>
     </section>

@@ -21,7 +21,7 @@ const STATUS: Record<Status, { label: string; tone: string; dot: string }> = {
 
 const LAYERS: Layer[] = [
   {
-    id: "channels", title: "Users and channels", icon: "devices", blurb: "Who uses the solution and how they reach it.",
+    id: "channels", title: "People and channels", icon: "devices", blurb: "Who uses it",
     items: [
       { name: "Public portal", tech: "Next.js pages", what: "Public site, registration ID check, star label verification.", status: "built" },
       { name: "Partner and officer portal", tech: "Next.js, React 19", what: "Manufacturer, BEE Officer, Director, Finance, Programme, Reviewer and Admin work screens.", status: "built" },
@@ -30,7 +30,7 @@ const LAYERS: Layer[] = [
     ],
   },
   {
-    id: "experience", title: "Experience layer", icon: "web", blurb: "What runs in the browser.",
+    id: "experience", title: "Screens", icon: "web", blurb: "What people see",
     items: [
       { name: "Web application", tech: "Next.js 16 (App Router), React 19, TypeScript 5", what: "Server-rendered pages, client screens, route guards, role-based menus.", status: "built" },
       { name: "Design system", tech: "Tailwind CSS 3, Material Symbols", what: "One look across screens: cards, chips, collapsible boxes, tables, filters.", status: "built" },
@@ -39,7 +39,7 @@ const LAYERS: Layer[] = [
     ],
   },
   {
-    id: "api", title: "API and security layer", icon: "shield_lock", blurb: "How requests are authenticated, checked and routed.",
+    id: "api", title: "Access and security", icon: "shield_lock", blurb: "Who may do what",
     items: [
       { name: "Backend for frontend (BFF)", tech: "Next.js server routes", what: "Holds the session, validates every answer against the contract, logs requests.", status: "built" },
       { name: "Business API", tech: "Spring Boot 3.5, Java 17, Spring Security", what: "Resource server: roles, scopes, separation of duties, all business rules.", status: "built" },
@@ -50,7 +50,7 @@ const LAYERS: Layer[] = [
     ],
   },
   {
-    id: "services", title: "Application services", icon: "hub", blurb: "The business modules behind the screens.",
+    id: "services", title: "Business engine", icon: "hub", blurb: "The work behind the screens",
     items: [
       { name: "Registration and onboarding", tech: "Spring modules, PostgreSQL rules", what: "Company, brand and agency registration, scrutiny, observation, holds, revocation.", status: "built" },
       { name: "Model, test and rating workflow", tech: "In-application state machine", what: "Model applications, fee confirmation, IAME and BEE scrutiny, rating, Director approval, certificates.", status: "built" },
@@ -65,7 +65,7 @@ const LAYERS: Layer[] = [
     ],
   },
   {
-    id: "data", title: "Data layer", icon: "database", blurb: "Where records, documents and analytics live.",
+    id: "data", title: "Data and insight", icon: "database", blurb: "Records, documents, dashboards",
     items: [
       { name: "Operational database", tech: "PostgreSQL, Flyway migrations", what: "All records; triggers enforce append-only audit tables, separation of duties and hash chains.", status: "built" },
       { name: "Production database option", tech: "Microsoft SQL Server", what: "Planned production migration of the operational database.", status: "planned" },
@@ -76,7 +76,7 @@ const LAYERS: Layer[] = [
     ],
   },
   {
-    id: "trust", title: "Trust and evidence layer", icon: "link", blurb: "What makes a record tamper-evident and a label verifiable.",
+    id: "trust", title: "Trust and proof", icon: "link", blurb: "Records that cannot be quietly changed",
     items: [
       { name: "Certificate hash chain", tech: "SHA-256 chain in PostgreSQL", what: "Each record carries the previous record's fingerprint; MATCH or MISMATCH on every check.", status: "simulated", note: "Stands in for a blockchain network." },
       { name: "Hyperledger Fabric network", tech: "Hyperledger Fabric (permissioned blockchain)", what: "Certificate and revocation records replicated across organisations, committed by agreement of the member organisations.", status: "planned" },
@@ -87,7 +87,7 @@ const LAYERS: Layer[] = [
     ],
   },
   {
-    id: "external", title: "External integrations", icon: "swap_horiz", blurb: "Systems outside the solution it connects to.",
+    id: "external", title: "Connections to others", icon: "swap_horiz", blurb: "Outside systems",
     items: [
       { name: "Payment gateway", tech: "Government payment gateway", what: "Real fee collection and settlement.", status: "planned" },
       { name: "Email and SMS gateways", tech: "Messaging providers", what: "Real delivery of notices and OTPs.", status: "planned" },
@@ -96,7 +96,7 @@ const LAYERS: Layer[] = [
     ],
   },
   {
-    id: "platform", title: "Platform and operations", icon: "construction", blurb: "How the solution is built, delivered and watched.",
+    id: "platform", title: "Foundation", icon: "construction", blurb: "How it is run and watched",
     items: [
       { name: "Local runtime", tech: "Docker Compose, Maven, Node 22", what: "PostgreSQL, Keycloak, the API and the portal on one machine for the demonstration.", status: "built" },
       { name: "Automated checks", tech: "Vitest, JUnit, browser checks, contract checks", what: "Portal tests, backend tests, live browser journeys, a full gate.", status: "built" },
@@ -127,93 +127,126 @@ const MACH_OF: Record<string, Pillar[]> = {
   "Local runtime": ["C"], "Containers and orchestration": ["C"], "Build and delivery": ["C"], "Infrastructure as code": ["C"], "Monitoring": ["C"], "Security and load testing": ["C"],
 };
 
-function Card({ item }: { item: Item }) {
-  const s = STATUS[item.status];
+const PILLAR_ICON: Record<Pillar, string> = { M: "widgets", A: "api", C: "cloud", H: "devices" };
+
+function Donut({ counts }: { counts: Record<Status, number> }) {
+  const total = counts.built + counts.simulated + counts.planned;
+  const R = 52, C = 2 * Math.PI * R;
+  let acc = 0;
+  const colours: Record<Status, string> = { built: "#1c7c4a", simulated: "#f59e0b", planned: "#254e9e" };
   return (
-    <div className="rounded-xl border border-[#dbe6f7] bg-white p-4" data-testid={`arch-item-${item.name}`} data-status={item.status}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-[14px] font-bold text-[#14315E]">{item.name}</div>
-        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${s.tone}`}><span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />{s.label}</span>
-      </div>
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <span className="text-[12px] font-semibold text-[#254e9e]">{item.tech}</span>
-        <span className="flex shrink-0 gap-0.5" aria-label="MACH pillars">{(MACH_OF[item.name] ?? []).map((k) => <span key={k} title={PILLARS.find((p) => p.key === k)?.name} className="flex h-5 w-5 items-center justify-center rounded bg-[#14315E] text-[10px] font-extrabold text-white">{k}</span>)}</span>
-      </div>
-      <p className="mt-1 text-[12px] leading-4 text-[#475569]">{item.what}</p>
-      {item.note ? <p className="mt-1 text-[11px] italic text-[#64748b]">{item.note}</p> : null}
+    <svg viewBox="0 0 140 140" width={150} height={150} role="img" aria-label={`${counts.built} built, ${counts.simulated} simulated, ${counts.planned} planned`} data-testid="arch-donut">
+      <circle cx="70" cy="70" r={R} fill="none" stroke="#e7edf6" strokeWidth="18" />
+      {(["built", "simulated", "planned"] as Status[]).map((k) => {
+        const len = (counts[k] / total) * C;
+        const el = <circle key={k} cx="70" cy="70" r={R} fill="none" stroke={colours[k]} strokeWidth="18" strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc} transform="rotate(-90 70 70)" />;
+        acc += len;
+        return el;
+      })}
+      <text x="70" y="68" textAnchor="middle" fontSize="26" fontWeight="800" fill="#14315E">{total}</text>
+      <text x="70" y="86" textAnchor="middle" fontSize="10" fill="#64748b">components</text>
+    </svg>
+  );
+}
+
+const chipTone: Record<Status, string> = {
+  built: "border-[#1c7c4a] bg-[#1c7c4a] text-white",
+  simulated: "border-[#f59e0b] bg-[#f59e0b] text-[#3b2400]",
+  planned: "border-dashed border-[#254e9e] bg-white text-[#14315E]",
+};
+
+function Journey() {
+  const steps: [string, string, string][] = [["person", "Person", "manufacturer, officer, public"], ["web", "Screens", "the portal"], ["shield_lock", "Security", "sign-in and roles"], ["settings", "Rules", "the business engine"], ["database", "Data", "records and audit"]];
+  return (
+    <div className="rounded-2xl border border-[#dbe6f7] bg-white p-5" data-testid="arch-flow">
+      <div role="heading" aria-level={2} className="mb-4 text-[16px] font-bold text-[#14315E]">From a click to a record</div>
+      <ol className="flex flex-wrap items-center gap-2">
+        {steps.map(([icon, name, sub], i) => (
+          <li key={name} className="flex items-center gap-2">
+            <span className="flex w-[118px] flex-col items-center rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] px-2 py-3 text-center"><Icon name={icon} size={26} className="text-[#254e9e]" /><b className="mt-1 text-[13px] text-[#14315E]">{name}</b><span className="text-[11px] text-[#64748b]">{sub}</span></span>
+            {i < steps.length - 1 ? <Icon name="arrow_forward" size={20} className="text-[#94a3b8]" /> : null}
+          </li>
+        ))}
+        <li className="flex items-center gap-2"><Icon name="arrow_forward" size={20} className="text-[#94a3b8]" />
+          <span className="flex w-[130px] flex-col items-center rounded-xl border border-[#f3dc9c] bg-[#fffaf0] px-2 py-3 text-center"><Icon name="link" size={26} className="text-[#8a4b00]" /><b className="mt-1 text-[13px] text-[#14315E]">Fingerprint chain</b><span className="text-[11px] text-[#8a4b00]">simulated today</span></span>
+          <Icon name="arrow_forward" size={20} className="text-[#94a3b8]" />
+          <span className="flex w-[130px] flex-col items-center rounded-xl border-2 border-dashed border-[#254e9e] bg-white px-2 py-3 text-center"><Icon name="deployed_code" size={26} className="text-[#254e9e]" /><b className="mt-1 text-[13px] text-[#14315E]">Hyperledger Fabric</b><span className="text-[11px] text-[#254e9e]">planned</span></span>
+        </li>
+      </ol>
     </div>
   );
 }
 
-function LayerBox({ layer }: { layer: Layer }) {
-  const [open, setOpen] = useState(true);
-  const items = layer.items;
-  return (
-    <section className="rounded-2xl border border-[#dbe6f7] bg-[#f9fbff] p-5" data-testid={`arch-layer-${layer.id}`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 text-left">
-        <span className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#14315E] text-white"><Icon name={layer.icon} size={20} /></span>
-          <span><span role="heading" aria-level={2} className="block text-[16px] font-bold text-[#14315E]">{layer.title}</span><span className="block text-[12px] text-[#64748b]">{layer.blurb}</span></span>
-        </span>
-        <Icon name={open ? "expand_less" : "expand_more"} size={22} className="text-[#475569]" />
-      </button>
-      {open ? <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{items.map((i) => <Card key={i.name} item={i} />)}</div> : null}
-    </section>
-  );
-}
-
 export function ArchitecturePage() {
+  const [picked, setPicked] = useState<Item | null>(null);
   const all = LAYERS.flatMap((l) => l.items);
-  const count = (s: Status) => all.filter((i) => i.status === s).length;
+  const counts: Record<Status, number> = { built: 0, simulated: 0, planned: 0 };
+  all.forEach((i) => { counts[i.status] += 1; });
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="architecture-page">
-      <div>
-        <h1 className="font-headline-md text-headline-md text-on-surface">Solution architecture</h1>
-        <p className="mt-1 text-[14px] text-[#475569]">Every layer and component the solution is planned to use. What runs in this demonstration is marked <b>Built</b> or <b>Simulated</b>; the target stack that is not installed here is marked <b>Planned</b>.</p>
-      </div>
-
-      <div className="rounded-2xl border border-[#dbe6f7] bg-white p-5" data-testid="arch-mach">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">A MACH architecture</div>
-          <span className="text-[12px] text-[#64748b]">Microservices · API-first · Cloud-native · Headless. The letters on each card below show which pillar it serves.</span>
+      <div className="grid items-center gap-4 rounded-2xl bg-gradient-to-r from-[#14315E] to-[#254e9e] p-6 text-white md:grid-cols-[1fr_auto]">
+        <div>
+          <h1 className="text-[28px] font-extrabold leading-8 !text-white">Solution architecture</h1>
+          <p className="mt-2 max-w-xl text-[15px] text-white/85">One platform for registration, labelling and verification: what runs today, and what comes next.</p>
+          <div className="mt-4 flex flex-wrap gap-2 text-[13px] font-semibold" data-testid="arch-legend">
+            <span className="rounded-full bg-[#1c7c4a] px-3 py-1">Built · {counts.built}</span>
+            <span className="rounded-full bg-[#f59e0b] px-3 py-1 text-[#3b2400]">Simulated · {counts.simulated}</span>
+            <span className="rounded-full border-2 border-dashed border-white px-3 py-1">Planned · {counts.planned}</span>
+          </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-4">
-          {PILLARS.map((p) => (
-            <div key={p.key} className="rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] p-4" data-testid={`arch-mach-${p.key}`}>
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#14315E] text-[18px] font-extrabold text-white">{p.key}</span>
-                <span className="text-[14px] font-bold text-[#14315E]">{p.name}</span>
-              </div>
-              <p className="mt-2 text-[12px] leading-4 text-[#334155]">{p.how}</p>
-              <div className="mt-2 flex items-start gap-1.5"><span className={`mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS[p.status].tone}`}>{STATUS[p.status].label}</span><span className="text-[11px] italic text-[#64748b]">{p.note}</span></div>
-            </div>
-          ))}
-        </div>
+        <div className="rounded-2xl bg-white p-2"><Donut counts={counts} /></div>
       </div>
 
-      <div className="rounded-2xl border border-[#dbe6f7] bg-white p-5" data-testid="arch-flow">
-        <div role="heading" aria-level={2} className="mb-3 text-[14px] font-bold text-[#14315E]">How a request travels, and where the ledger goes next</div>
-        <ol className="flex flex-wrap items-stretch gap-2 text-[12px]">
-          {[["Browser", "React screens, role menu"], ["Portal server (BFF)", "Session, contract checks"], ["Business API", "Spring Boot, rules, roles"], ["PostgreSQL", "Records, audit, hash chain"]].map(([name, sub], i, a) => (
-            <li key={name} className="flex items-center gap-2">
-              <span className="rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] px-3 py-2"><b className="block text-[#14315E]">{name}</b><span className="text-[#64748b]">{sub}</span></span>
-              {i < a.length - 1 ? <Icon name="arrow_forward" size={18} className="text-[#94a3b8]" /> : null}
-            </li>
-          ))}
-          <li className="flex items-center gap-2 pl-2"><span className="text-[#94a3b8]">with</span><span className="rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] px-3 py-2"><b className="block text-[#14315E]">Keycloak</b><span className="text-[#64748b]">Sign-in and roles</span></span></li>
-          <li className="flex items-center gap-2 pl-2"><span className="text-[#94a3b8]">and evidence on</span><span className="rounded-xl border border-[#f3dc9c] bg-[#fffaf0] px-3 py-2"><b className="block text-[#14315E]">Hash chain <span className="font-normal text-[#8a4b00]">(simulated)</span></b><span className="text-[#64748b]">SHA-256 in PostgreSQL</span></span><Icon name="arrow_forward" size={18} className="text-[#94a3b8]" /><span className="rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] px-3 py-2"><b className="block text-[#14315E]">Hyperledger Fabric <span className="font-normal text-[#254e9e]">(planned)</span></b><span className="text-[#64748b]">Permissioned blockchain</span></span></li>
-        </ol>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-4 text-[13px] text-[#475569]" data-testid="arch-legend" aria-label="Legend">
-        <span className="font-semibold text-[#14315E]">{all.length} components</span>
-        {(Object.keys(STATUS) as Status[]).map((s) => (
-          <span key={s} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-semibold ${STATUS[s].tone}`}><span className={`h-2 w-2 rounded-full ${STATUS[s].dot}`} />{STATUS[s].label} ({count(s)})</span>
+      <div className="grid gap-3 md:grid-cols-4" data-testid="arch-mach">
+        {PILLARS.map((p) => (
+          <div key={p.key} className="rounded-2xl border border-[#c9d9f7] bg-white p-4 text-center" data-testid={`arch-mach-${p.key}`}>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#14315E] text-white"><Icon name={PILLAR_ICON[p.key]} size={26} /></div>
+            <div className="mt-2 text-[22px] font-extrabold leading-6 text-[#14315E]">{p.key}</div>
+            <div className="text-[14px] font-bold text-[#14315E]">{p.name}</div>
+            <span className={`mt-2 inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${STATUS[p.status].tone}`}>{STATUS[p.status].label}</span>
+          </div>
         ))}
       </div>
 
-      <div className="space-y-space-md">{LAYERS.map((l) => <LayerBox key={l.id} layer={l} />)}</div>
-      <p className="text-[12px] text-[#64748b]">Planned components are the target catalogue for the full solution, not something installed in this demonstration. Simulated components follow the same rules as the real ones but use local stand-ins; no external system is contacted.</p>
+      <Journey />
+
+      <div className="rounded-2xl border border-[#dbe6f7] bg-white p-5" data-testid="arch-stack">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">The building blocks</div>
+          <span className="text-[12px] text-[#64748b]">Click any block to see what it does · letters M A C H show the MACH pillar it serves</span>
+        </div>
+        <div className="mt-3 space-y-2">
+          {LAYERS.map((l, idx) => (
+            <div key={l.id} className="grid items-stretch gap-3 md:grid-cols-[190px_1fr]" data-testid={`arch-layer-${l.id}`}>
+              <div className="flex items-center gap-3 rounded-xl px-3 py-3 text-white" style={{ background: `hsl(${215 + idx * 4} ${55 - idx * 3}% ${22 + idx * 3}%)` }}>
+                <Icon name={l.icon} size={24} />
+                <div><div className="text-[14px] font-bold leading-4">{l.title}</div><div className="text-[11px] text-white/75">{l.blurb}</div></div>
+              </div>
+              <div className="flex flex-wrap content-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f9fbff] p-3">
+                {l.items.map((i) => (
+                  <button key={i.name} type="button" onClick={() => setPicked(i)} aria-pressed={picked?.name === i.name} data-testid={`arch-item-${i.name}`} data-status={i.status}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold ${chipTone[i.status]} ${picked?.name === i.name ? "ring-2 ring-[#14315E] ring-offset-1" : ""}`}>
+                    {i.name}
+                    {(MACH_OF[i.name] ?? []).length ? <span className="rounded bg-black/15 px-1 text-[10px] font-extrabold">{(MACH_OF[i.name] ?? []).join("")}</span> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 min-h-[84px] rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] p-4" data-testid="arch-detail" aria-live="polite">
+          {picked ? (
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[15px] font-bold text-[#14315E]">{picked.name}</div>
+                <div className="text-[12px] font-semibold text-[#254e9e]">{picked.tech}</div>
+                <p className="mt-1 max-w-2xl text-[13px] text-[#334155]">{picked.what}{picked.note ? ` ${picked.note}` : ""}</p>
+              </div>
+              <span className={`rounded-full border px-3 py-1 text-[12px] font-semibold ${STATUS[picked.status].tone}`}>{STATUS[picked.status].label}</span>
+            </div>
+          ) : <p className="text-[13px] text-[#64748b]">Solid green blocks run in this demonstration. Amber blocks are simulated with the same rules. Dashed blocks are planned.</p>}
+        </div>
+      </div>
     </div>
   );
 }

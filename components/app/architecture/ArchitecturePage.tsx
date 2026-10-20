@@ -79,7 +79,8 @@ const LAYERS: Layer[] = [
     id: "trust", title: "Trust and evidence layer", icon: "link", blurb: "What makes a record tamper-evident and a label verifiable.",
     items: [
       { name: "Certificate hash chain", tech: "SHA-256 chain in PostgreSQL", what: "Each record carries the previous record's fingerprint; MATCH or MISMATCH on every check.", status: "simulated", note: "Stands in for a blockchain network." },
-      { name: "Permissioned blockchain", tech: "Hyperledger Fabric", what: "Certificate and revocation records replicated across organisations with agreed commits.", status: "planned" },
+      { name: "Hyperledger Fabric network", tech: "Hyperledger Fabric (permissioned blockchain)", what: "Certificate and revocation records replicated across organisations, committed by agreement of the member organisations.", status: "planned" },
+      { name: "Chaincode (smart contracts)", tech: "Hyperledger Fabric chaincode", what: "The rules for issuing, amending and revoking a certificate, run by every peer.", status: "planned" },
       { name: "Signed QR payloads", tech: "Digital signatures on QR content", what: "A label that proves its own origin offline.", status: "planned" },
       { name: "Anchoring", tech: "Merkle tree anchoring", what: "Periodic proof that the evidence set has not changed.", status: "planned" },
       { name: "Digital signature", tech: "eSign service", what: "Signed certificates and letters.", status: "planned" },
@@ -108,6 +109,24 @@ const LAYERS: Layer[] = [
   },
 ];
 
+
+type Pillar = "M" | "A" | "C" | "H";
+const PILLARS: { key: Pillar; name: string; how: string; status: Status; note: string }[] = [
+  { key: "M", name: "Microservices", how: "Business capabilities are separate modules with their own rules and data: registration, models and rating, QR and production, payments, ledger, AI, messages.", status: "planned", note: "Today: modules inside one API. Target: independent services behind a gateway." },
+  { key: "A", name: "API-first", how: "Every screen and channel uses the same pinned OpenAPI contract through the portal server; nothing reads another module's tables directly.", status: "built", note: "Contract, BFF and role checks are running; the API gateway is planned." },
+  { key: "C", name: "Cloud-native", how: "Containers, configuration by environment, stateless portal and API, infrastructure as code and orchestration for scaling and recovery.", status: "planned", note: "Today: Docker on one machine. Target: Kubernetes, pipelines, monitoring." },
+  { key: "H", name: "Headless", how: "The portal is only one client. The public site, partner portal, QR check and the existing mobile app all consume the same APIs.", status: "built", note: "Portal and API are separate today; more channels are planned." },
+];
+const MACH_OF: Record<string, Pillar[]> = {
+  "Public portal": ["H"], "Partner and officer portal": ["H"], "QR scan on a phone": ["H"], "Existing BEE mobile app": ["H"], "Web application": ["H"],
+  "Backend for frontend (BFF)": ["A", "H"], "Business API": ["A"], "API contract": ["A"], "Identity and sign-in": ["A"], "API gateway": ["A"],
+  "Registration and onboarding": ["M"], "Model, test and rating workflow": ["M"], "QR batches, production and reconciliation": ["M"], "Payments": ["M"], "Notifications": ["M"], "AI advisory helpers": ["M"],
+  "Document intelligence (OCR)": ["M"], "Chatbot and assisted helpdesk": ["M"], "Machine learning models": ["M"], "Workflow orchestration and batch jobs": ["M", "C"],
+  "Event streaming and change capture": ["M", "C"], "Search": ["M", "C"], "Analytics store and dashboards": ["M", "C"], "Hyperledger Fabric network": ["M", "C"], "Chaincode (smart contracts)": ["M"],
+  "Payment gateway": ["A"], "Email and SMS gateways": ["A"], "Company and tax verification": ["A"], "National ID and platforms": ["A"],
+  "Local runtime": ["C"], "Containers and orchestration": ["C"], "Build and delivery": ["C"], "Infrastructure as code": ["C"], "Monitoring": ["C"], "Security and load testing": ["C"],
+};
+
 function Card({ item }: { item: Item }) {
   const s = STATUS[item.status];
   return (
@@ -116,17 +135,19 @@ function Card({ item }: { item: Item }) {
         <div className="text-[14px] font-bold text-[#14315E]">{item.name}</div>
         <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${s.tone}`}><span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />{s.label}</span>
       </div>
-      <div className="mt-1 text-[12px] font-semibold text-[#254e9e]">{item.tech}</div>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span className="text-[12px] font-semibold text-[#254e9e]">{item.tech}</span>
+        <span className="flex shrink-0 gap-0.5" aria-label="MACH pillars">{(MACH_OF[item.name] ?? []).map((k) => <span key={k} title={PILLARS.find((p) => p.key === k)?.name} className="flex h-5 w-5 items-center justify-center rounded bg-[#14315E] text-[10px] font-extrabold text-white">{k}</span>)}</span>
+      </div>
       <p className="mt-1 text-[12px] leading-4 text-[#475569]">{item.what}</p>
       {item.note ? <p className="mt-1 text-[11px] italic text-[#64748b]">{item.note}</p> : null}
     </div>
   );
 }
 
-function LayerBox({ layer, filter }: { layer: Layer; filter: Status | "all" }) {
+function LayerBox({ layer }: { layer: Layer }) {
   const [open, setOpen] = useState(true);
-  const items = layer.items.filter((i) => filter === "all" || i.status === filter);
-  if (items.length === 0) return null;
+  const items = layer.items;
   return (
     <section className="rounded-2xl border border-[#dbe6f7] bg-[#f9fbff] p-5" data-testid={`arch-layer-${layer.id}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 text-left">
@@ -142,7 +163,6 @@ function LayerBox({ layer, filter }: { layer: Layer; filter: Status | "all" }) {
 }
 
 export function ArchitecturePage() {
-  const [filter, setFilter] = useState<Status | "all">("all");
   const all = LAYERS.flatMap((l) => l.items);
   const count = (s: Status) => all.filter((i) => i.status === s).length;
   return (
@@ -152,8 +172,27 @@ export function ArchitecturePage() {
         <p className="mt-1 text-[14px] text-[#475569]">Every layer and component the solution is planned to use. What runs in this demonstration is marked <b>Built</b> or <b>Simulated</b>; the target stack that is not installed here is marked <b>Planned</b>.</p>
       </div>
 
+      <div className="rounded-2xl border border-[#dbe6f7] bg-white p-5" data-testid="arch-mach">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">A MACH architecture</div>
+          <span className="text-[12px] text-[#64748b]">Microservices · API-first · Cloud-native · Headless. The letters on each card below show which pillar it serves.</span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          {PILLARS.map((p) => (
+            <div key={p.key} className="rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] p-4" data-testid={`arch-mach-${p.key}`}>
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#14315E] text-[18px] font-extrabold text-white">{p.key}</span>
+                <span className="text-[14px] font-bold text-[#14315E]">{p.name}</span>
+              </div>
+              <p className="mt-2 text-[12px] leading-4 text-[#334155]">{p.how}</p>
+              <div className="mt-2 flex items-start gap-1.5"><span className={`mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS[p.status].tone}`}>{STATUS[p.status].label}</span><span className="text-[11px] italic text-[#64748b]">{p.note}</span></div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-[#dbe6f7] bg-white p-5" data-testid="arch-flow">
-        <div role="heading" aria-level={2} className="mb-3 text-[14px] font-bold text-[#14315E]">How a request travels (as built)</div>
+        <div role="heading" aria-level={2} className="mb-3 text-[14px] font-bold text-[#14315E]">How a request travels, and where the ledger goes next</div>
         <ol className="flex flex-wrap items-stretch gap-2 text-[12px]">
           {[["Browser", "React screens, role menu"], ["Portal server (BFF)", "Session, contract checks"], ["Business API", "Spring Boot, rules, roles"], ["PostgreSQL", "Records, audit, hash chain"]].map(([name, sub], i, a) => (
             <li key={name} className="flex items-center gap-2">
@@ -162,20 +201,18 @@ export function ArchitecturePage() {
             </li>
           ))}
           <li className="flex items-center gap-2 pl-2"><span className="text-[#94a3b8]">with</span><span className="rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] px-3 py-2"><b className="block text-[#14315E]">Keycloak</b><span className="text-[#64748b]">Sign-in and roles</span></span></li>
+          <li className="flex items-center gap-2 pl-2"><span className="text-[#94a3b8]">and evidence on</span><span className="rounded-xl border border-[#f3dc9c] bg-[#fffaf0] px-3 py-2"><b className="block text-[#14315E]">Hash chain <span className="font-normal text-[#8a4b00]">(simulated)</span></b><span className="text-[#64748b]">SHA-256 in PostgreSQL</span></span><Icon name="arrow_forward" size={18} className="text-[#94a3b8]" /><span className="rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] px-3 py-2"><b className="block text-[#14315E]">Hyperledger Fabric <span className="font-normal text-[#254e9e]">(planned)</span></b><span className="text-[#64748b]">Permissioned blockchain</span></span></li>
         </ol>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Show">
-        {([["all", `All components (${all.length})`], ["built", `Built (${count("built")})`], ["simulated", `Simulated (${count("simulated")})`], ["planned", `Planned (${count("planned")})`]] as [Status | "all", string][]).map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} data-testid={`arch-filter-${k}`}
-            className={`rounded-full border px-3 py-1.5 text-[13px] font-semibold ${filter === k ? "border-[#14315E] !bg-[#14315E] !text-white" : "border-[#dbe6f7] bg-white text-[#14315E]"}`}>{label}</button>
+      <div className="flex flex-wrap items-center gap-4 text-[13px] text-[#475569]" data-testid="arch-legend" aria-label="Legend">
+        <span className="font-semibold text-[#14315E]">{all.length} components</span>
+        {(Object.keys(STATUS) as Status[]).map((s) => (
+          <span key={s} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-semibold ${STATUS[s].tone}`}><span className={`h-2 w-2 rounded-full ${STATUS[s].dot}`} />{STATUS[s].label} ({count(s)})</span>
         ))}
-        <span className="ml-auto flex flex-wrap items-center gap-3 text-[12px] text-[#64748b]">
-          {(Object.keys(STATUS) as Status[]).map((s) => <span key={s} className="flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${STATUS[s].dot}`} />{STATUS[s].label}</span>)}
-        </span>
       </div>
 
-      <div className="space-y-space-md">{LAYERS.map((l) => <LayerBox key={l.id} layer={l} filter={filter} />)}</div>
+      <div className="space-y-space-md">{LAYERS.map((l) => <LayerBox key={l.id} layer={l} />)}</div>
       <p className="text-[12px] text-[#64748b]">Planned components are the target catalogue for the full solution, not something installed in this demonstration. Simulated components follow the same rules as the real ones but use local stand-ins; no external system is contacted.</p>
     </div>
   );

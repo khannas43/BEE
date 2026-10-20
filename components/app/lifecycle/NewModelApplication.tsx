@@ -424,13 +424,22 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
         </Link>
       }
     >
-      <div className="max-w-lg space-y-space-md" data-testid="model-draft-form">
+      <div className="space-y-space-md" data-testid="model-draft-form">
         <IdentityStrip identity={identity} />
         {identity.status === "loading" && <p className="text-on-surface-variant">Checking your sign-in…</p>}
         {identity.status === "signed-out" && <p className="text-on-surface-variant">Sign in to save a draft.</p>}
         {loadError && <p role="alert" className="text-error font-body-sm" data-testid="model-draft-load-error">{loadError}</p>}
         {identity.status === "signed-in" && !loadError && (
           <>
+            <ol className="flex flex-wrap gap-2" data-testid="model-draft-steps" aria-label="Steps">
+              {[["1", "Brand, model and test evidence", !activeId], ["2", "Upload the test report", Boolean(activeId) && !returned], ["3", "Review the fee and submit", false]].map(([n, label, on]) => (
+                <li key={String(n)} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[13px] font-semibold ${on ? "border-[#14315E] bg-[#14315E] text-white" : "border-[#dbe6f7] bg-white text-[#14315E]"}`}>
+                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${on ? "bg-white text-[#14315E]" : "bg-[#e7effb]"}`}>{n}</span>{label}
+                </li>
+              ))}
+            </ol>
+            <div className="grid gap-space-md lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-space-md">
             {isEdit && reference ? (
               <p className="font-label-sm text-on-surface-variant">
                 Editing <span className="font-mono">{reference}</span> · {stateLabel(appState)} · version {version}
@@ -453,7 +462,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                     value={brandId}
                     onChange={(e) => setBrandId(e.target.value)}
                     disabled={returned}
-                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm disabled:opacity-60"
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm disabled:opacity-60"
                     data-testid="model-draft-brand"
                   >
                     {legacyUnlinked ? (
@@ -467,12 +476,17 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                   </select>
                 </label>
                 <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Category
+                  <input value="RAC: room air conditioner" readOnly className="mt-1 w-full py-2 px-3 rounded-lg bg-[#f1f5f9] border border-outline-variant font-body-sm text-on-surface-variant" data-testid="model-draft-category" />
+                  <span className="mt-1 block text-[12px]">The programme covers room air conditioners at present.</span>
+                </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
                   Model number
                   <input
                     value={modelNumber}
                     onChange={(e) => setModelNumber(e.target.value)}
                     disabled={returned}
-                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm disabled:opacity-60"
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm disabled:opacity-60"
                     data-testid="model-draft-model-number"
                   />
                 </label>
@@ -488,7 +502,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                   <select
                     value={evidence.laboratoryCode}
                     onChange={(e) => setEvidence({ ...evidence, laboratoryCode: e.target.value })}
-                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm"
                     data-testid="model-draft-laboratory"
                   >
                     <option value="">Select a laboratory</option>
@@ -505,7 +519,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                     type="date"
                     value={evidence.testedOn}
                     onChange={(e) => setEvidence({ ...evidence, testedOn: e.target.value })}
-                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm"
                     data-testid="model-draft-tested-on"
                   />
                 </label>
@@ -515,7 +529,7 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                     inputMode="decimal"
                     value={evidence.declaredIseer}
                     onChange={(e) => setEvidence({ ...evidence, declaredIseer: e.target.value })}
-                    className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+                    className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm"
                     data-testid="model-draft-iseer"
                   />
                 </label>
@@ -588,6 +602,23 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             <p className="font-label-sm text-on-surface-variant text-center">
               Finance confirmation, rating and approval are not offered on this screen. Submit stores a provisional fee snapshot for local demo when rules allow.
             </p>
+            </div>
+            <aside className="space-y-space-md lg:sticky lg:top-space-md lg:self-start" data-testid="model-draft-checklist">
+              <div className="rounded-xl border border-[#dbe6f7] bg-white p-5">
+                <div role="heading" aria-level={2} className="flex items-center gap-2 text-[16px] font-bold text-[#14315E]"><Icon name="checklist" size={20} className="text-[#254e9e]" />Before you submit</div>
+                <p className="mt-1 text-[13px] text-[#64748b]">These checks run when you review the submit. They are provisional local defaults, not BEE rules.</p>
+                <ul className="mt-3 space-y-2">
+                  {Object.values(GATE_LABELS).map((label) => (
+                    <li key={label} className="flex items-start gap-2 text-[13px] text-[#1e293b]"><Icon name="radio_button_unchecked" size={16} className="mt-0.5 text-[#94a3b8]" />{label}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-[#dbe6f7] bg-[#f4f8ff] p-5 text-[13px] text-[#475569]">
+                <div role="heading" aria-level={2} className="mb-1 text-[14px] font-bold text-[#14315E]">What happens next</div>
+                Submitting sends the application to fee confirmation, then IAME scrutiny, BEE scrutiny, rating, Director review and final approval. You see each stage on your application page, and a message for every step.
+              </div>
+            </aside>
+            </div>
           </>
         )}
       </div>
@@ -674,7 +705,7 @@ function ResubmitPanel({
             onChange={(e) => setNote(e.target.value)}
             maxLength={500}
             rows={2}
-            className="mt-1 w-full py-2 px-3 rounded-lg bg-surface-ground font-body-sm"
+            className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm"
             data-testid="model-resubmit-note"
           />
         </label>

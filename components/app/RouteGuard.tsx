@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { useSpringIdentity } from "./SessionBadge";
-import { canOpenConsolePath, navProfileFor } from "@/lib/navigation";
+import { canOpenConsolePath } from "@/lib/navigation";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 
 /**
  * Client route guard for the prototype console screens. It follows the signed-in Spring identity, never the
  * browser preview role: a screen opens only if the person's role menu, or the per-role screen policy for one
  * of their Spring roles, includes it (lib/navigation). It is a prototype convenience, not access control; the
- * BEE service decides access. External partners get a scoped-view banner.
+ * BEE service decides access.
  *
  * Runtime routes (lib/runtimeRoutes.ts) are exempt: they show real BEE records that Spring scopes to the
  * signed-in identity and refuse on their own.
@@ -48,21 +48,12 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const external = navProfileFor(effectiveRoles.map((g) => g.role)) === "manufacturer";
   return (
     <>
       {pathname !== "/app" && pathname !== "/app/screens" && (
         <p className="mx-space-md lg:mx-space-lg mt-space-md inline-flex items-center gap-1.5 rounded-full bg-surface-container-low px-space-sm py-1 font-label-sm text-label-sm text-on-surface-variant" data-testid="preview-screen-note">
           <Icon name="science" size={14} /> Preview screen: sample data, not yet connected to the BEE service.
         </p>
-      )}
-      {external && (
-        <div className="mx-space-md lg:mx-space-lg mt-space-md flex items-start gap-space-sm bg-solar-gold-light/50 border border-solar-gold/40 rounded-xl p-space-sm" role="note">
-          <Icon name="visibility" size={18} className="text-solar-gold-dark shrink-0 mt-0.5" />
-          <p className="font-body-sm text-body-sm text-on-surface">
-            <span className="font-semibold">Organisation view.</span> This preview shows only one organisation&apos;s records and assigned cases, not other parties, BEE approvals or finance ledgers. Scoping is simulated here with sample data.
-          </p>
-        </div>
       )}
       {children}
     </>

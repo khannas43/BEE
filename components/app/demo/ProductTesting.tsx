@@ -201,7 +201,7 @@ function ProductBody({ v }: { v: ProductView }) {
   return (
     <div className="space-y-space-sm">
       <p className="text-[13px] text-[#334155]"><b>{p.model}</b> · {p.brand} · {p.manufacturer} · {p.registrationId} · {p.stars} star · rated ISEER {p.ratedIseer}
-        {p.openCase ? <> · <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">case {p.openCase}</Link></> : null}</p>
+        {p.openCase ? <> · <Link href={`/app/demo/testing?tab=cases&case=${p.openCase}`} className="font-semibold text-primary hover:underline">case {p.openCase}</Link></> : null}</p>
       <div className="grid gap-3 lg:grid-cols-3">
         <div className={panel} data-testid="pv-risk">
           <div className={head}>Risk score</div>
@@ -330,7 +330,7 @@ function GrievanceDetail({ g, statusWord, onClose, onDone }: { g: Grievance; sta
       {view ? <ProductBody v={view} /> : <p role="status" className="font-body-sm">Loading the product view…</p>}
       {problem ? <p role="alert" className="rounded-lg bg-error-container p-space-sm font-body-sm text-on-error-container">{problem}</p> : null}
       <div className="rounded-xl border border-[#dbe6f7] bg-[#f9fbff] p-4">
-        {open ? <p className="text-[13px] text-[#334155]">This product is already on the shortlist or in testing as case <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{open}</Link>.</p>
+        {open ? <p className="text-[13px] text-[#334155]">This product is already on the shortlist or in testing as case <Link href={`/app/demo/testing?tab=cases&case=${open}`} className="font-semibold text-primary hover:underline">{open}</Link>.</p>
           : g.status === "closed" ? <p className="text-[13px] text-[#475569]">This grievance is closed.</p>
           : <div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-xl text-[13px] text-[#334155]">Shortlisting puts the product on the Overview list. The BEE Officer then approves it for testing, with remarks: BEE buys a unit from the market and tests it at its own cost.</p>
               <button type="button" className={btn} disabled={busy || !view} onClick={() => void approve()} data-testid="grievance-approve"><Icon name="playlist_add" size={16} /> Add to shortlist</button></div>}
@@ -384,7 +384,7 @@ function SelectionView({ onDone }: { onDone: (m: string) => void }) {
                   <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setOpen(open === p.registrationId ? null : p.registrationId)} aria-expanded={open === p.registrationId} data-testid={`why-${p.registrationId}`}>{open === p.registrationId ? "Hide" : "Show points"}</button>
                   {open === p.registrationId ? <ul className="mt-2 max-w-[360px] space-y-1 text-[12px]">{p.factors.map((f) => <li key={f.label} className="flex justify-between gap-3"><span>{f.label}</span><b className="tabular-nums">+{f.points}</b></li>)}<li className="flex justify-between gap-3 border-t border-[#e2e8f0] pt-1"><b>Total (at most 100)</b><b className="tabular-nums">{p.score}</b></li></ul> : null}
                 </td>
-                <td className={td}>{p.openCase ? <Link href="/app/demo/testing?tab=cases" className="font-semibold text-primary hover:underline">{p.openCase}</Link> : <button type="button" className={btnOutline} disabled={busy} onClick={() => void add(p)} data-testid={`add-${p.registrationId}`}>Add to shortlist</button>}</td>
+                <td className={td}>{p.openCase ? <Link href={`/app/demo/testing?tab=cases&case=${p.openCase}`} className="font-semibold text-primary hover:underline">{p.openCase}</Link> : <button type="button" className={btnOutline} disabled={busy} onClick={() => void add(p)} data-testid={`add-${p.registrationId}`}>Add to shortlist</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -401,11 +401,13 @@ const NEXT_HINT: Record<"selected" | "procured" | "at_lab" | "result_in", string
 
 function CasesView({ onDone }: { onDone: (m: string) => void }) {
   const { data, error, reload } = useLoad<{ cases: TestCase[] }>(readCases);
+  const caseParam = useSearchParams()?.get("case") ?? "";
   const [openId, setOpenId] = useState<string | null>(null);
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
   const approvedCases = data.cases.filter((c) => STAGES.includes(c.stage));
-  const current = approvedCases.find((c) => c.id === openId) ?? null;
+  const fromLink = openId === null ? approvedCases.find((c) => c.reference === caseParam) ?? null : null;
+  const current = approvedCases.find((c) => c.id === openId) ?? fromLink;
   return (
     <div className="space-y-space-md" data-testid="testing-cases">
       <div className="grid gap-3 lg:grid-cols-5">
@@ -417,8 +419,8 @@ function CasesView({ onDone }: { onDone: (m: string) => void }) {
               <ul className="space-y-2">
                 {list.length === 0 ? <li className="text-[12px] text-[#64748b]">None</li> : list.map((c) => (
                   <li key={c.id}>
-                    <button type="button" onClick={() => setOpenId(openId === c.id ? null : c.id)} aria-pressed={openId === c.id} data-testid={`case-${c.reference}`}
-                      className={`w-full rounded-lg border bg-white p-2 text-left text-[12px] hover:border-[#9dbdec] ${openId === c.id ? "border-[#254e9e] ring-2 ring-[#c9d9f7]" : "border-[#dbe6f7]"}`}>
+                    <button type="button" onClick={() => setOpenId(current?.id === c.id ? "" : c.id)} aria-pressed={current?.id === c.id} data-testid={`case-${c.reference}`}
+                      className={`w-full rounded-lg border bg-white p-2 text-left text-[12px] hover:border-[#9dbdec] ${current?.id === c.id ? "border-[#254e9e] ring-2 ring-[#c9d9f7]" : "border-[#dbe6f7]"}`}>
                       <span className="block font-bold text-[#14315E]">{c.model}</span><span className="block text-[#64748b]">{c.reference} · {c.manufacturer}</span>
                       {c.result ? <span className="mt-1 block"><Chip tone={RESULT_TONE[c.result]}>{RESULT_WORD[c.result]}</Chip></span> : null}
                     </button>

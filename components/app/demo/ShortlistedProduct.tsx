@@ -70,7 +70,7 @@ export function ShortlistedProduct() {
     const r = await decideCase(c.id, decision, remarks.trim());
     setBusy(false);
     if (!r.ok) { setProblem(r.message); return; }
-    if (decision === "approve") { router.push(`/app/demo/testing?tab=cases&approved=${encodeURIComponent(c.reference)}`); return; }
+    if (decision === "approve") { router.push(`/app/demo/testing?tab=cases&case=${encodeURIComponent(c.reference)}&approved=${encodeURIComponent(c.reference)}`); return; }
     setDone("The product was not approved for testing. Your remarks are kept on the case.");
     void load();
   };
@@ -141,7 +141,7 @@ export function ShortlistedProduct() {
             <p><b>{c.stage === "not_approved" ? "Not approved for testing" : "Approved for testing"}</b>{c.approvedAt ? ` on ${stamp(c.approvedAt)}` : ""}.</p>
             {c.stage !== "not_approved" ? <p>Test status: <b>{STAGE_WORD[c.stage]}</b>{c.procuredFrom ? ` · bought from ${c.procuredFrom}` : ""}{c.laboratory ? ` · ${c.laboratory}` : ""}{c.result ? ` · result ${RESULT_WORD[c.result]}, ISEER ${c.measuredIseer} against ${c.ratedIseer} rated` : ""}{c.recommendation ? ` · ${RECOMMENDATION_WORD[c.recommendation]}` : ""}.</p> : null}
             {c.approvalRemarks ? <p className="rounded-lg bg-[#f9fbff] px-3 py-2">{c.approvalRemarks}</p> : null}
-            {c.stage !== "not_approved" ? <Link href="/app/demo/testing?tab=cases" className="inline-block font-semibold text-primary hover:underline">Open the test cases</Link> : null}
+            {c.stage !== "not_approved" ? <Link href={`/app/demo/testing?tab=cases&case=${encodeURIComponent(c.reference)}`} className="inline-block font-semibold text-primary hover:underline" data-testid="open-test-case">Open this test case</Link> : null}
             {done ? <p role="status" className="font-semibold text-[#14532d]">{done}</p> : null}
           </div>
         )}

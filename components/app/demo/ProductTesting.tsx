@@ -6,14 +6,14 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import {
-  addToTesting, advanceCase, CATEGORY_WORD, drawAtRandom, readCases, readGrievances, readOverview, readSelection, RECOMMENDATION_WORD, RESULT_WORD,
-  readProduct, SOURCE_WORD, STAGE_WORD, STAGES, type Grievance, type Overview, type ProductView, type RankedProduct, type Stage, type TestCase,
+  addToTesting, advanceCase, CATEGORY_WORD, drawAtRandom, readCases, readGrievances, readOverview, RECOMMENDATION_WORD, RESULT_WORD,
+  readProduct, SOURCE_WORD, STAGE_WORD, STAGES, type Grievance, type Overview, type ProductView, type Stage, type TestCase,
 } from "@/lib/client/runtimeProductTesting";
 
 /**
  * Product testing (BEE Officer). BEE buys units from the market and tests them at its own cost. Four views: the overview, the grievance inbox
- * (complaints from several channels), the risk-ranked selection list (with a risk-weighted random draw) and the test cases by stage.
- * `?tab=overview|grievances|selection|cases`. A failed test leads only to a recommendation. Local demonstration, not BEE rules.
+ * (complaints from several channels), and the test cases by stage; the shortlist has the risk-weighted random draw.
+ * `?tab=overview|grievances|cases`. A failed test leads only to a recommendation. Local demonstration, not BEE rules.
  */
 
 export const card = "rounded-xl border border-[#dbe6f7] bg-white";
@@ -24,12 +24,11 @@ export const labelCls = "block text-[12px] font-semibold uppercase tracking-wide
 export const btn = "inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50";
 export const btnOutline = "inline-flex items-center gap-1 rounded-lg border border-primary bg-white px-3 py-1.5 text-[13px] font-semibold text-primary disabled:opacity-50";
 
-type Tab = "overview" | "grievances" | "selection" | "cases";
-const TABS: { key: Tab; label: string }[] = [{ key: "overview", label: "Overview" }, { key: "grievances", label: "Grievance inbox" }, { key: "selection", label: "Risk selection" }, { key: "cases", label: "Test cases" }];
+type Tab = "overview" | "grievances" | "cases";
+const TABS: { key: Tab; label: string }[] = [{ key: "overview", label: "Overview" }, { key: "grievances", label: "Grievance inbox" }, { key: "cases", label: "Test cases" }];
 const COPY: Record<Tab, string> = {
   overview: "Products shortlisted for random testing, from complaints and compliance risk. Open one to see why it was picked and to approve it for testing. BEE buys the units from the market and tests them at its own cost.",
   grievances: "Complaints from end customers, from every channel in one list.",
-  selection: "Every certified product ranked by review priority. Each score shows the points behind it. Add a product to the shortlist, or draw at random, weighted by risk.",
   cases: "Products the Officer has approved for testing, one row each. Open a case to see its progress and move it to the next step. The manufacturer sees only the result.",
 };
 
@@ -73,7 +72,7 @@ function useLoad<T>(load: () => Promise<{ ok: true; value: T } | { ok: false; me
 
 export function ProductTesting() {
   const param = useSearchParams()?.get("tab") ?? "";
-  const tab: Tab = param === "grievances" || param === "selection" || param === "cases" ? param : "overview";
+  const tab: Tab = param === "grievances" || param === "cases" ? param : "overview";
   const approved = useSearchParams()?.get("approved") ?? "";
   const [notice, setNotice] = useState<string | null>(approved ? `Case ${approved} was approved for testing. BEE now buys a unit from the market and tests it.` : null);
   return (
@@ -87,7 +86,7 @@ export function ProductTesting() {
         ))}
       </nav>
       {notice ? <p role="status" className="rounded-lg border border-[#b7e0c6] bg-[#e2f3e8] px-3 py-2 text-[13px] font-semibold text-[#14532d]" data-testid="testing-notice">{notice}</p> : null}
-      {tab === "overview" ? <OverviewView /> : tab === "grievances" ? <GrievanceView onDone={setNotice} /> : tab === "selection" ? <SelectionView onDone={setNotice} /> : <CasesView onDone={setNotice} />}
+      {tab === "overview" ? <OverviewView onDone={setNotice} /> : tab === "grievances" ? <GrievanceView onDone={setNotice} /> : <CasesView onDone={setNotice} />}
     </div>
   );
 }
@@ -106,7 +105,7 @@ export function Bars({ data, words, tone }: { data: Record<string, number>; word
   );
 }
 
-function OverviewView() {
+function OverviewView({ onDone }: { onDone: (m: string) => void }) {
   const { data, error } = useLoad<Overview>(readOverview);
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
@@ -120,7 +119,7 @@ function OverviewView() {
         <Tile label="Cases in progress" value={data.stages.selected + data.stages.procured + data.stages.at_lab + data.stages.result_in} note="not yet closed" />
         <Tile label="Results this quarter" value={data.resultsThisQuarter} note="tested by BEE" />
       </div>
-      <ShortlistTable />
+      <ShortlistTable onDone={onDone} />
       <div className="grid gap-space-md lg:grid-cols-2">
         <section className={`${card} p-4`}><div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Grievances by source</div><Bars data={data.sources} words={SOURCE_WORD} tone="#254e9e" /></section>
         <section className={`${card} p-4`}><div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Grievances by category</div><Bars data={data.categories} words={CATEGORY_WORD} tone="#c47f17" /></section>
@@ -138,9 +137,12 @@ const LIST_STATUS_TONE: Record<ListStatus, string> = {
   in_testing: "border-[#c9d9f7] bg-[#e7effb] text-[#14315E]", tested: "border-[#b7e0c6] bg-[#e2f3e8] text-[#14532d]",
 };
 
-function ShortlistTable() {
+function ShortlistTable({ onDone }: { onDone: (m: string) => void }) {
   const router = useRouter();
-  const { data, error } = useLoad<{ cases: TestCase[] }>(readCases);
+  const { data, error, reload } = useLoad<{ cases: TestCase[] }>(readCases);
+  const [size, setSize] = useState("3");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [basis, setBasis] = useState("");
   const all = data?.cases ?? [];
@@ -154,10 +156,23 @@ function ShortlistTable() {
   });
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
+  const draw = async () => {
+    setBusy(true); setProblem(null);
+    const r = await drawAtRandom(Number(size));
+    setBusy(false);
+    if (r.ok) { const refs = r.value.references as string[]; onDone(`Drew ${refs.length} product${refs.length === 1 ? "" : "s"} at random, weighted by risk (${refs.join(", ")}). They are on the shortlist, waiting for the Officer.`); void reload(); } else setProblem(r.message);
+  };
   const open = (c: TestCase) => router.push(`/app/demo/testing/product?reg=${encodeURIComponent(c.registrationId)}&case=${encodeURIComponent(c.reference)}`);
   return (
     <section className="space-y-space-sm" data-testid="shortlist">
-      <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Shortlisted for random testing</div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Shortlisted for random testing</div>
+        <div className="flex items-end gap-2">
+          <label className={labelCls}>Random draw<select value={size} onChange={(e) => setSize(e.target.value)} className={`${fieldCls} w-auto`} data-testid="draw-size" title="Products are drawn in proportion to their risk score plus a base of 5; the seed and weights are kept">{[1, 2, 3, 5, 10].map((n) => <option key={n} value={n}>{n} product{n === 1 ? "" : "s"}</option>)}</select></label>
+          <button type="button" className={btn} disabled={busy} onClick={() => void draw()} data-testid="draw-button"><Icon name="casino" size={16} /> Draw at random</button>
+        </div>
+      </div>
+      {problem ? <p role="alert" className="rounded-lg bg-error-container p-space-sm font-body-sm text-on-error-container">{problem}</p> : null}
       <section className={`${card} p-4 space-y-space-sm`}>
         <ListToolbar tools={tools} searchLabel="Search" placeholder="Product, manufacturer or reference" dateLabel="Shortlisted"
           exportCsv={{ filename: "shortlist", header: ["Case", "Product", "Manufacturer", "Risk score", "Basis", "Shortlisted", "Status"], rows: tools.visible.map((c) => [c.reference, c.model, c.manufacturer, c.riskScore ?? "", c.basis, day(c.selectedAt), LIST_STATUS_WORD[listStatusOf(c.stage)]]) }} />
@@ -336,62 +351,6 @@ function GrievanceDetail({ g, statusWord, onClose, onDone }: { g: Grievance; sta
               <button type="button" className={btn} disabled={busy || !view} onClick={() => void approve()} data-testid="grievance-approve"><Icon name="playlist_add" size={16} /> Add to shortlist</button></div>}
       </div>
     </section>
-  );
-}
-
-function SelectionView({ onDone }: { onDone: (m: string) => void }) {
-  const { data, error, reload } = useLoad<{ products: RankedProduct[]; total: number }>(readSelection);
-  const [busy, setBusy] = useState(false);
-  const [size, setSize] = useState("3");
-  const [problem, setProblem] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-  if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
-  if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
-  const add = async (p: RankedProduct) => {
-    setBusy(true); setProblem(null);
-    const r = await addToTesting(p.registrationId);
-    setBusy(false);
-    if (r.ok) { onDone(`${p.model} was added to the shortlist as case ${String(r.value.reference)}.`); void reload(); } else setProblem(r.message);
-  };
-  const draw = async () => {
-    setBusy(true); setProblem(null);
-    const r = await drawAtRandom(Number(size));
-    setBusy(false);
-    if (r.ok) { onDone(`Drew ${(r.value.references as string[]).length} products at random, weighted by risk (${(r.value.references as string[]).join(", ")}). The draw is recorded and they wait for the Officer on the Overview.`); void reload(); } else setProblem(r.message);
-  };
-  return (
-    <div className="space-y-space-sm" data-testid="testing-selection">
-      <section className={`${card} flex flex-wrap items-end justify-between gap-3 p-4`}>
-        <div className="max-w-xl text-[13px] text-[#334155]"><b>Risk-weighted random draw.</b> Every product that is not already in testing has a chance of being drawn in proportion to its risk score plus a small base, so higher risk is more likely but nothing is certain. The seed and weights of each draw are kept.</div>
-        <div className="flex items-end gap-2">
-          <label className={labelCls}>How many<select value={size} onChange={(e) => setSize(e.target.value)} className={`${fieldCls} w-auto`} data-testid="draw-size">{[1, 2, 3, 5, 10].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-          <button type="button" className={btn} disabled={busy} onClick={() => void draw()} data-testid="draw-button"><Icon name="casino" size={16} /> Draw at random</button>
-        </div>
-      </section>
-      {problem ? <p role="alert" className="rounded-lg bg-error-container p-space-sm font-body-sm text-on-error-container">{problem}</p> : null}
-      <div className={`${card} overflow-x-auto`}>
-        <table className="w-full text-[13px]" data-testid="selection-table">
-          <caption className="sr-only">Products ranked by review priority</caption>
-          <thead><tr className="bg-[#eef3fb]"><th className={th}>Rank</th><th className={th}>Product</th><th className={th}>Manufacturer</th><th className={th}>Grievances (90 days)</th><th className={th}>Review priority</th><th className={th}>Why</th><th className={th}>Testing</th></tr></thead>
-          <tbody>
-            {data.products.map((p, i) => (
-              <tr key={p.registrationId} className="border-t border-[#e2e8f0]">
-                <td className={td}>{i + 1}</td>
-                <td className={td}><span className="font-semibold">{p.model}</span><div className="text-[12px] text-[#64748b]">{p.registrationId} · {p.stars} star</div></td>
-                <td className={td}>{p.manufacturer}</td><td className={td}>{p.grievances}</td>
-                <td className={td}><Chip tone={BAND_TONE[p.band]}>{p.score} · {p.band}</Chip></td>
-                <td className={td}>
-                  <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setOpen(open === p.registrationId ? null : p.registrationId)} aria-expanded={open === p.registrationId} data-testid={`why-${p.registrationId}`}>{open === p.registrationId ? "Hide" : "Show points"}</button>
-                  {open === p.registrationId ? <ul className="mt-2 max-w-[360px] space-y-1 text-[12px]">{p.factors.map((f) => <li key={f.label} className="flex justify-between gap-3"><span>{f.label}</span><b className="tabular-nums">+{f.points}</b></li>)}<li className="flex justify-between gap-3 border-t border-[#e2e8f0] pt-1"><b>Total (at most 100)</b><b className="tabular-nums">{p.score}</b></li></ul> : null}
-                </td>
-                <td className={td}>{p.openCase ? <Link href={`/app/demo/testing?tab=cases&case=${p.openCase}`} className="font-semibold text-primary hover:underline">{p.openCase}</Link> : <button type="button" className={btnOutline} disabled={busy} onClick={() => void add(p)} data-testid={`add-${p.registrationId}`}>Add to shortlist</button>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-[12px] text-[#64748b]">The top {data.products.length} of {data.total} certified products are shown. Review priority only, not a finding.</p>
-    </div>
   );
 }
 

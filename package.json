@@ -12,6 +12,7 @@
     "setup:nosync": "bash scripts/local/nosync.sh",
     "clean:dupes": "bash scripts/local/clean-icloud-dupes.sh",
     "local:up": "bash scripts/local/up.sh",
+    "demo:scan-gateway": "node scripts/demo/scan-gateway.mjs",
     "local:health": "bash scripts/local/health.sh",
     "local:seed": "bash scripts/local/seed.sh",
     "demo:seed": "bash scripts/demo/seed-demo.sh",

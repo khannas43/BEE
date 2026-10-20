@@ -344,3 +344,16 @@ button.list-sort:hover { color: #14315E; }
   background: #EAF1FC; color: #14315E; border: 1px solid #c9d9f7; border-left: 4px solid #254e9e; border-radius: 10px; padding: 10px 14px; font-size: 13px; line-height: 20px;
 }
 .insights-screen [data-testid="screen-meta"] + * { margin-top: 0; }
+
+/* QR labels: the on-screen label dialog and the printable sheet of a batch page (components/app/demo/QrDemo.tsx). */
+.print-sheet { display: none; }
+.print-label { break-inside: avoid; border: 1px dashed #94a3b8; padding: 10px; text-align: center; width: 200px; }
+.print-label-head { font-size: 11px; font-weight: 700; color: #14315e; margin-bottom: 6px; }
+.print-label-serial { font: 700 12px ui-monospace, monospace; margin-top: 4px; }
+.print-label-note { font-size: 9px; color: #475569; }
+@media print {
+  body * { visibility: hidden; }
+  [data-print-sheet], [data-print-sheet] * { visibility: visible; }
+  [data-print-sheet].print-sheet { display: flex; flex-wrap: wrap; gap: 10px; }
+  [data-print-sheet]:not(.print-sheet) { position: absolute; left: 50%; top: 20px; transform: translateX(-50%); box-shadow: none; }
+}

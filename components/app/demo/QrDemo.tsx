@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Pill } from "./DemoShell";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
@@ -8,6 +9,8 @@ import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runti
 import { csvFileName, datedFileName, saveBytes, saveCsv, toCsv } from "@/lib/client/csv";
 import { buildXlsx, XLSX_TYPE } from "@/lib/client/xlsx";
 import { istStamp } from "@/lib/client/istTime";
+import { QrCode } from "@/components/app/lifecycle/QrCode";
+import { useScanBase } from "@/lib/client/scanBase";
 
 /** The service calls a freshly made serial "allocated"; on screen it is "generated". */
 const stateLabel = (state: string) => (state === "allocated" ? "generated" : state);
@@ -175,6 +178,9 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
   const [voidSerial, setVoidSerial] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
+  const [labelFor, setLabelFor] = useState<Serial | null>(null);
+  const scan = useScanBase();
+  const scanUrl = (serial: string) => `${scan.base}${verifyHref(serial)}`;
 
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((n) => n + 1), []);
@@ -265,17 +271,27 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
       ) : (
         <p className="font-body-sm text-on-surface-variant">Read only for your role.</p>
       )}
+      <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[13px] ${scan.viaGateway ? "border-[#b7e0c6] bg-[#e2f3e8] text-[#14532d]" : "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]"}`} data-testid="qr-scan-base">
+        <span>
+          {scan.loading ? "Checking the scan address…" : scan.viaGateway
+            ? <>Codes below open <strong>{scan.base}</strong>: a phone on the same Wi-Fi can scan them.</>
+            : <>Codes below open <strong>{scan.base}</strong>, which only this laptop can reach. For a phone, start the scan gateway: <code className="font-mono">npm run demo:scan-gateway</code>, then reload this page.</>}
+        </span>
+        <button type="button" onClick={() => window.print()} className="rounded-lg border border-current px-3 py-1 font-semibold" data-testid="qr-print-sheet">Print labels (this page)</button>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left font-body-sm" data-testid="qr-serials">
-          <thead><tr><th scope="col">Serial</th><th scope="col">State</th><th scope="col">Note</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th scope="col">QR code</th><th scope="col">Serial</th><th scope="col">State</th><th scope="col">Note</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>
             {detail.serials.map((s) => (
               <tr key={s.serial} data-testid="qr-serial-row">
+                <td>{scan.loading ? null : <button type="button" onClick={() => setLabelFor(s)} aria-label={`Show the label for ${s.serial}`} className="block rounded border border-[#dbe6f7] bg-white p-0.5"><QrCode text={scanUrl(s.serial)} size={56} title={`QR code for ${s.serial}`} /></button>}</td>
                 <td className="font-mono">{s.serial}</td>
                 <td><Pill>{stateLabel(s.state)}</Pill></td>
                 <td>{s.voidReason ?? ""}</td>
                 <td className="space-x-space-sm">
                   <button type="button" onClick={() => void copy(s.serial)} className="text-primary underline" aria-label={`Copy ${s.serial}`}>{copied === s.serial ? "Copied" : "Copy"}</button>
+                  <button type="button" onClick={() => setLabelFor(s)} className="text-primary underline" data-testid="qr-show-label">Show label</button>
                   <Link href={verifyHref(s.serial)} className="text-primary underline" target="_blank">Verify this serial</Link>
                 </td>
               </tr>
@@ -283,6 +299,34 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
           </tbody>
         </table>
       </div>
+      {!labelFor ? <div data-print-sheet className="print-sheet" aria-hidden>
+        {detail.serials.map((s) => (
+          <div key={s.serial} className="print-label">
+            <div className="print-label-head">BEE star label · {detail.brandName} {detail.modelNumber}</div>
+            <QrCode text={scanUrl(s.serial)} size={150} title={`QR code for ${s.serial}`} />
+            <div className="print-label-serial">{s.serial}</div>
+            <div className="print-label-note">Scan to check this label · {detail.registrationId}</div>
+          </div>
+        ))}
+      </div> : null}
+      {labelFor && typeof document !== "undefined" ? createPortal(
+        <div role="dialog" aria-modal="true" aria-label="Label" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 print:static print:bg-white" onClick={() => setLabelFor(null)} data-testid="qr-label-dialog">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl" onClick={(e) => e.stopPropagation()} data-print-sheet>
+            <div className="text-[12px] font-bold uppercase tracking-widest text-[#254e9e]">BEE star label</div>
+            <div className="mt-1 text-[18px] font-extrabold text-[#14315E]">{detail.brandName} {detail.modelNumber}</div>
+            <div className="text-[12px] text-[#64748b]">Certificate {detail.registrationId}</div>
+            <div className="mt-4 flex justify-center"><QrCode text={scanUrl(labelFor.serial)} size={240} title={`QR code for ${labelFor.serial}`} testId="qr-label-code" /></div>
+            <div className="mt-3 font-mono text-[15px] font-bold text-[#14315E]" data-testid="qr-label-serial">{labelFor.serial}</div>
+            <div className="mt-1"><Pill>{stateLabel(labelFor.state)}</Pill></div>
+            <p className="mt-2 text-[12px] text-[#475569]">Scan with a phone camera to check this label.{labelFor.state !== "bound" ? " This serial is not bound to a certificate yet, so the check will not confirm it." : ""}</p>
+            <p className="mt-1 break-all text-[11px] text-[#94a3b8]">{scanUrl(labelFor.serial)}</p>
+            <div className="mt-4 flex justify-center gap-2 print:hidden">
+              <button type="button" onClick={() => window.print()} className="rounded-lg !bg-[#1f3c88] px-4 py-2 text-[13px] font-semibold !text-white">Print label</button>
+              <button type="button" onClick={() => setLabelFor(null)} className="rounded-lg border border-outline-variant bg-white px-4 py-2 text-[13px] font-semibold text-primary" data-testid="qr-label-close">Close</button>
+            </div>
+          </div>
+        </div>
+        , document.body) : null}
       <div className="flex items-center gap-space-sm font-body-sm">
         <button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="underline disabled:opacity-40">Previous</button>
         <span data-testid="qr-page">{detail.total === 0 ? "No serials yet" : `${offset + 1} to ${Math.min(offset + PAGE, detail.total)} of ${detail.total}`}</span>

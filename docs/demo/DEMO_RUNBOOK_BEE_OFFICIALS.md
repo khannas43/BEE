@@ -58,6 +58,9 @@ Sign in as `bee.admin` (it shows the whole menu), or as the person named.
 
 Also built, as `bee.officer`: Registers & Compliance holds the manufacturer, brand and category, model and certificate, and QR reconciliation registers (one tab each, a page per record), Audit History and Delegations.
 
+## 2a. Scanning a label with a phone (optional, about one minute)
+Run `npm run demo:scan-gateway` in a second terminal (it prints the address, for example `http://192.168.1.11:3101`). Put the phone on the same Wi-Fi as the laptop. As `nova.applicant`: Labels & Operations, QR batches and serials, open a batch, click the QR thumbnail (or Show label) and scan the code on screen with the phone camera: the phone shows the label check (valid, revoked or not confirmed). Only the label check is reachable from the network; the portal stays on this laptop. Allow incoming connections if the firewall asks. Without the gateway the codes point at this laptop only.
+
 ## 3. Known limits to say aloud or avoid
 - The company name typed at sign-up now becomes the application's legal name. The organisation record behind the account still carries the applicant's name (BL-276), which only shows in a few organisation-level lists.
 - Product category registration, suspect-label reports and official templates are "Planned" entries without a screen.

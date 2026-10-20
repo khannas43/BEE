@@ -49,11 +49,11 @@ export function DonutChart({ data, title, size = 132, centre, legendMax = 8 }: {
         <text x="60" y="58" textAnchor="middle" className="fill-on-surface" style={{ font: "700 22px Inter, system-ui, sans-serif" }}>{centre ?? formatNumber(total)}</text>
         <text x="60" y="76" textAnchor="middle" className="fill-on-surface-variant" style={{ font: "500 9px Inter, system-ui, sans-serif" }}>{centre ? "" : "in all"}</text>
       </svg>
-      <ul className="space-y-1 font-label-md text-on-surface min-w-0">
+      <ul className="space-y-1.5 text-[12px] leading-4 text-on-surface min-w-0">
         {data.slice(0, legendMax).map((d, i) => (
-          <li key={d.label} className="flex items-center gap-2 min-w-0">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: colourFor(d.label, i) }} />
-            <span className="truncate">{prettyLabel(d.label)}</span>
+          <li key={d.label} className="flex items-start gap-2 min-w-0">
+            <span className="mt-[3px] inline-block h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: colourFor(d.label, i) }} />
+            <span className="min-w-0 break-words" title={prettyLabel(d.label)}>{prettyLabel(d.label)}</span>
             <span className="ml-auto pl-2 font-semibold tabular-nums">{formatNumber(d.value)}</span>
           </li>
         ))}
@@ -70,7 +70,7 @@ export function BarList({ data, title, unit = "" }: { data: Point[]; title: stri
       {data.length === 0 ? <li className="font-body-sm text-on-surface-variant">Nothing in this period.</li> : null}
       {data.map((d, i) => (
         <li key={d.label}>
-          <div className="flex justify-between gap-2 font-label-md text-on-surface"><span className="truncate">{prettyLabel(d.label)}</span><span className="font-semibold tabular-nums">{unit}{formatNumber(d.value)}</span></div>
+          <div className="flex items-start justify-between gap-2 text-[12px] leading-4 text-on-surface"><span className="min-w-0 break-words" title={prettyLabel(d.label)}>{prettyLabel(d.label)}</span><span className="font-semibold tabular-nums">{unit}{formatNumber(d.value)}</span></div>
           <div className="h-2.5 rounded-full bg-[#eef1f5] overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.max(3, (d.value / max) * 100)}%`, background: colourFor(d.label, i) }} /></div>
         </li>
       ))}

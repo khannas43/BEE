@@ -82,7 +82,7 @@ function RankedBars({ data, onPick, picked, empty = "Nothing in this period.", t
       {data.map((d, i) => {
         const inner = (
           <>
-            <div className="flex justify-between gap-2 font-label-md text-on-surface"><span className="truncate">{nice(d.label)}</span><span className="font-semibold tabular-nums">{formatNumber(d.value)}</span></div>
+            <div className="flex items-start justify-between gap-2 text-[12px] leading-4 text-on-surface"><span className="min-w-0 break-words" title={nice(d.label)}>{nice(d.label)}</span><span className="font-semibold tabular-nums">{formatNumber(d.value)}</span></div>
             <div className="h-2.5 rounded-full bg-[#eef1f5] overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.max(3, (d.value / max) * 100)}%`, background: colourFor(d.label, i) }} /></div>
           </>
         );

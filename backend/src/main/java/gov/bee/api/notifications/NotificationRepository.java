@@ -19,6 +19,12 @@ public class NotificationRepository {
     public record Item(UUID id, String kind, String message, UUID applicationId, String reference, Instant createdAt, boolean read) {
     }
 
+    /**
+     * The kinds the documented notifications contract lists (returned, rejected, fee_due, approved). Other kinds exist in the table (company
+     * onboarding steps) and are shown through other screens; listing them here made the portal reject the whole answer for a person who had one.
+     */
+    private static final String LISTED = "('returned', 'rejected', 'fee_due', 'approved')";
+
     private final JdbcTemplate jdbc;
 
     public NotificationRepository(JdbcTemplate jdbc) {
@@ -32,14 +38,14 @@ public class NotificationRepository {
                 + "FROM notification n "
                 + "LEFT JOIN model_application ma ON n.subject_kind = 'model_application' AND ma.id = n.subject_id "
                 + "LEFT JOIN registration_application ra ON n.subject_kind = 'registration_application' AND ra.id = n.subject_id "
-                + "WHERE n.recipient_account_id = ? ORDER BY n.created_at DESC, n.id LIMIT " + PAGE,
+                + "WHERE n.recipient_account_id = ? AND n.kind IN " + LISTED + " ORDER BY n.created_at DESC, n.id LIMIT " + PAGE,
             (rs, i) -> new Item(rs.getObject("id", UUID.class), rs.getString("kind"), rs.getString("message"), rs.getObject("application_id", UUID.class),
                 rs.getString("reference"), rs.getTimestamp("created_at").toInstant(), rs.getBoolean("is_read")),
             account);
     }
 
     public int unread(UUID account) {
-        Integer n = jdbc.queryForObject("SELECT count(*) FROM notification WHERE recipient_account_id = ? AND read_at IS NULL", Integer.class, account);
+        Integer n = jdbc.queryForObject("SELECT count(*) FROM notification WHERE recipient_account_id = ? AND read_at IS NULL AND kind IN " + LISTED, Integer.class, account);
         return n == null ? 0 : n;
     }
 

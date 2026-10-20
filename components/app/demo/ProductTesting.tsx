@@ -27,7 +27,7 @@ export const btnOutline = "inline-flex items-center gap-1 rounded-lg border bord
 type Tab = "overview" | "grievances" | "cases";
 const TABS: { key: Tab; label: string }[] = [{ key: "overview", label: "Overview" }, { key: "grievances", label: "Grievance inbox" }, { key: "cases", label: "Test cases" }];
 const COPY: Record<Tab, string> = {
-  overview: "Products shortlisted for random testing, from complaints and compliance risk. Open one to see why it was picked and to approve it for testing. BEE buys the units from the market and tests them at its own cost.",
+  overview: "Products shortlisted for random testing, from complaints and compliance risk. Open one to see why it was picked and to approve it for testing.",
   grievances: "Complaints from end customers, from every channel in one list.",
   cases: "Products the Officer has approved for testing, one row each. Open a case to see its progress and move it to the next step. The manufacturer sees only the result.",
 };

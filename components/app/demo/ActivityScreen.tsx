@@ -52,43 +52,24 @@ export function ActivityScreen() {
   if (!log && !error) return <p role="status" className="p-space-md font-body-sm" data-testid="activity-loading">Loading sign-in activity…</p>;
   if (!log) return <p role="alert" className="p-space-md text-error font-body-sm" data-testid="activity-error">{error}</p>;
   const all = log.scope === "all";
-  const people = log.people.filter((p) => !org || log.events.some((e) => e.username === p.username && e.organisationCode === org));
-  const logins = events.filter((e) => e.kind === "login").length;
-  const addresses = new Set(events.map((e) => e.ip)).size;
+  const rows = tools.visible;
+  const people = [...rows.reduce((m, e) => {
+    const p = m.get(e.username) ?? { username: e.username, name: e.name, role: e.role, organisation: e.organisation, logins: 0, actions: 0, lastSeen: e.at, lastIp: e.ip, ips: new Set<string>() };
+    if (e.kind === "login") p.logins += 1; else p.actions += 1;
+    if (e.at > p.lastSeen) { p.lastSeen = e.at; p.lastIp = e.ip; }
+    p.ips.add(e.ip);
+    return m.set(e.username, p);
+  }, new Map<string, { username: string; name: string; role: string; organisation: string | null; logins: number; actions: number; lastSeen: string; lastIp: string; ips: Set<string> }>()).values()].sort((a, b) => (a.lastSeen < b.lastSeen ? 1 : -1));
+  const logins = rows.filter((e) => e.kind === "login").length;
+  const addresses = new Set(rows.map((e) => e.ip)).size;
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-activity">
       <h1 className="flex-1 min-w-0">{all ? "Sign-in activity: all manufacturers and staff" : "Sign-in activity of your company"}</h1>
       <p className="ai-lead">{all ? "Every sign-in and recorded action, with the person, their role, the address they came from and the time. Filter by manufacturer, person or type." : "Who from your company has signed in, from which address, and what they did, with the time."}</p>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="activity-summary">
-        <Tile label="People" value={people.length} note="who have signed in" />
-        <Tile label="Sign-ins" value={logins} note="in the rows below" />
-        <Tile label="Actions" value={events.length - logins} note="recorded changes" />
-        <Tile label="Addresses" value={addresses} note="different IP addresses" />
-      </div>
-
-      <section className="space-y-2">
-        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">People</div>
-        <div className={`${card} overflow-x-auto`}>
-          <table className="w-full text-[13px]" data-testid="activity-people">
-            <caption className="sr-only">People who have signed in</caption>
-            <thead><tr className="bg-[#eef3fb]"><th className={th}>Person</th><th className={th}>Role</th>{all ? <th className={th}>Organisation</th> : null}<th className={th}>Sign-ins</th><th className={th}>Actions</th><th className={th}>Last seen</th><th className={th}>Last address</th></tr></thead>
-            <tbody>
-              {people.length === 0 ? <tr><td className={td} colSpan={7}>Nobody has signed in yet.</td></tr> : people.map((p) => (
-                <tr key={p.username} className="border-t border-[#e2e8f0]">
-                  <td className={td}><button type="button" className="font-semibold text-primary hover:underline" onClick={() => setPerson(person === p.username ? "" : p.username)} data-testid={`activity-person-${p.username}`}>{p.name}</button><div className="text-[12px] text-[#64748b]">{p.username}</div></td>
-                  <td className={td}>{roleWord(p.role)}</td>{all ? <td className={td}>{p.organisation ?? "BEE"}</td> : null}
-                  <td className={td}>{p.logins}</td><td className={td}>{p.actions}</td><td className={td}>{stamp(p.lastSeen)}</td><td className={`${td} font-mono text-[12px]`}>{p.lastIp}{p.addresses > 1 ? ` (+${p.addresses - 1})` : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="space-y-space-sm">
-        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Sign-ins and actions</div>
-        <ListToolbar tools={tools} searchLabel="Search the trail" placeholder="Person, address or action" dateLabel="On"
+      <section className={`${card} p-4 space-y-space-sm`} data-testid="activity-filters">
+        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Filters</div>
+        <ListToolbar tools={tools} searchLabel="Search" placeholder="Person, address or action" dateLabel="Date"
           exportCsv={{ filename: "sign-in-activity", header: ["Time", "Person", "Username", "Role", "Organisation", "Address", "Type", "Action"], rows: tools.visible.map((e) => [stamp(e.at), e.name, e.username, roleWord(e.role), e.organisation ?? "BEE", e.ip, e.kind === "login" ? "Sign-in" : "Action", e.action]) }} />
         <div className="flex flex-wrap items-end gap-3">
           {all ? (
@@ -105,6 +86,36 @@ export function ActivityScreen() {
           </label>
           {person ? <button type="button" className="pb-2 text-[13px] font-semibold text-primary underline" onClick={() => setPerson("")} data-testid="activity-clear-person">Showing one person. Show everyone</button> : null}
         </div>
+      </section>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="activity-summary">
+        <Tile label="People" value={people.length} note="in the selection" />
+        <Tile label="Sign-ins" value={logins} note="in the selection" />
+        <Tile label="Actions" value={rows.length - logins} note="recorded changes" />
+        <Tile label="Addresses" value={addresses} note="different IP addresses" />
+      </div>
+
+      <section className="space-y-2">
+        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">People</div>
+        <div className={`${card} overflow-x-auto`}>
+          <table className="w-full text-[13px]" data-testid="activity-people">
+            <caption className="sr-only">People who have signed in</caption>
+            <thead><tr className="bg-[#eef3fb]"><th className={th}>Person</th><th className={th}>Role</th>{all ? <th className={th}>Organisation</th> : null}<th className={th}>Sign-ins</th><th className={th}>Actions</th><th className={th}>Last seen</th><th className={th}>Last address</th></tr></thead>
+            <tbody>
+              {people.length === 0 ? <tr><td className={td} colSpan={7}>Nobody has signed in yet.</td></tr> : people.map((p) => (
+                <tr key={p.username} className="border-t border-[#e2e8f0]">
+                  <td className={td}><button type="button" className="font-semibold text-primary hover:underline" onClick={() => setPerson(person === p.username ? "" : p.username)} data-testid={`activity-person-${p.username}`}>{p.name}</button><div className="text-[12px] text-[#64748b]">{p.username}</div></td>
+                  <td className={td}>{roleWord(p.role)}</td>{all ? <td className={td}>{p.organisation ?? "BEE"}</td> : null}
+                  <td className={td}>{p.logins}</td><td className={td}>{p.actions}</td><td className={td}>{stamp(p.lastSeen)}</td><td className={`${td} font-mono text-[12px]`}>{p.lastIp}{p.ips.size > 1 ? ` (+${p.ips.size - 1})` : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="space-y-space-sm">
+        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Sign-ins and actions</div>
         <div className={`${card} overflow-x-auto`}>
           <table className="w-full text-[13px]" data-testid="activity-table">
             <caption className="sr-only">Sign-ins and actions, newest first</caption>

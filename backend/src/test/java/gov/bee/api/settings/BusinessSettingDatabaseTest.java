@@ -73,7 +73,7 @@ class BusinessSettingDatabaseTest {
         owner.execute(Files.readString(SEED));
         db = new JdbcTemplate(sourceAs(MAIN, env("BEE_RUNTIME_DB_USER", "bee_runtime"), env("BEE_RUNTIME_DB_PASSWORD", "bee-local-runtime")));
         repo = new BusinessSettingRepository(db);
-        assertEquals(80, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V80");
+        assertEquals(81, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V81");
     }
 
     @AfterAll

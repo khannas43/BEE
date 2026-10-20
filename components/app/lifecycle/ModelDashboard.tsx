@@ -1,5 +1,6 @@
 "use client";
 
+import { ProductDetails } from "@/components/app/lifecycle/ProductDetails";
 import Link from "next/link";
 import { CertificateCard } from "@/components/app/lifecycle/CertificateCard";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -308,6 +309,7 @@ function DetailPanel({ selectedId, detailRead }: { selectedId: string; detailRea
 
 function DetailFields({ application }: { application: ModelApplication }) {
   return (
+    <>
     <DescriptionList
       testId="model-applications-detail-fields"
       rows={[
@@ -322,5 +324,7 @@ function DetailFields({ application }: { application: ModelApplication }) {
         { label: "Record id", value: application.id, mono: true },
       ]}
     />
+    <ProductDetails applicationId={application.id} />
+    </>
   );
 }

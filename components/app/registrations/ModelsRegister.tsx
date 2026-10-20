@@ -8,6 +8,7 @@ import { demoGet, demoPath, type DemoBody } from "@/lib/client/runtimeDemo";
 import { manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import { modelDashboardHref } from "@/lib/client/runtimeModelApplications";
 import { registerHref } from "@/lib/client/runtimeRegisterRevocations";
+import { ProductDetails } from "@/components/app/lifecycle/ProductDetails";
 import { manufacturerEntryHref } from "@/components/app/registrations/ManufacturersRegister";
 import type { QrBatch } from "@/components/app/demo/QrDemo";
 
@@ -226,6 +227,8 @@ export function ModelEntry({ id }: { id: string }) {
           </div>
         ) : <p className="text-[13px] text-[#64748b]">A certificate is placed on the ledger once the model is approved.</p>}
       </Box>
+
+      {i.applicationId ? <ProductDetails applicationId={i.applicationId} /> : null}
 
       <Box title="QR codes" testId="modreg-box-qr" defaultOpen={false}>
         {mine.length === 0 ? <p className="text-[13px] text-[#64748b]">No QR batch has been generated for this certificate.</p> : (

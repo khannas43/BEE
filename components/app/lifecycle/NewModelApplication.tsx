@@ -24,6 +24,7 @@ import {
   type SubmittedApplication,
   type SubmissionFee,
 } from "@/lib/client/runtimeModelSubmit";
+import { AC_TYPES, COMPRESSORS, NO_TECHNICAL, REFRIGERANTS, eerOf, readTechnicalDetails, saveTechnicalDetails, technicalComplete, technicalProblems, type TechnicalDetails } from "@/lib/client/runtimeModelTechnical";
 import { DraftTestReports } from "@/components/app/lifecycle/DraftTestReports";
 import { type ResubmitApplicationReceipt, resubmitApplicationSignature, runResubmitApplication } from "@/lib/client/runtimeResubmitApplication";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
@@ -119,6 +120,8 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
   const [persistedDraft, setPersistedDraft] = useState<{ modelNumber: string; brandId: string; evidence: Evidence } | null>(null);
   const [laboratories, setLaboratories] = useState<Laboratory[]>([]);
   const [evidence, setEvidence] = useState<Evidence>(NO_EVIDENCE);
+  const [tech, setTech] = useState<TechnicalDetails>(NO_TECHNICAL);
+  const [persistedTech, setPersistedTech] = useState<TechnicalDetails>(NO_TECHNICAL);
   const [submitPreview, setSubmitPreview] = useState<SubmitPreview | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -219,6 +222,17 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
     };
   }, [applyLoadedDraft, editId, identity.status]);
 
+  useEffect(() => {
+    if (!editId || identity.status !== "signed-in") return;
+    let live = true;
+    void readTechnicalDetails(editId).then((r) => {
+      if (!live || !r.ok) return;
+      setTech(r.details);
+      setPersistedTech(r.details);
+    });
+    return () => { live = false; };
+  }, [editId, identity.status]);
+
   const createPayload = useMemo(
     () => {
       const iseer = parseIseer(evidence.declaredIseer);
@@ -233,6 +247,11 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       setError(ISEER_MESSAGE);
       return;
     }
+    const problems = technicalProblems(tech);
+    if (problems.length) {
+      setError(problems[0]);
+      return;
+    }
     setError(null);
     const patchBody = {
       version,
@@ -245,6 +264,13 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       isEdit && editId ? { mode: "patch", editId, body: patchBody } : { mode: "create", body: createPayload };
     const res = await draftSave.execute(payload);
     if (!res?.ok) return;
+    const savedId = String(res.value.id);
+    const techSaved = await saveTechnicalDetails(savedId, tech);
+    if (!techSaved.ok) {
+      setError(`The draft was saved, but the product details were not: ${techSaved.message}`);
+    } else {
+      setPersistedTech(tech);
+    }
     // A save changes the version, so any open submit preview is stale: close it and review again.
     setSubmitOpen(false);
     setSubmitPreview(null);
@@ -263,7 +289,8 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
       brandId !== persistedDraft.brandId ||
       evidence.laboratoryCode !== persistedDraft.evidence.laboratoryCode ||
       evidence.testedOn !== persistedDraft.evidence.testedOn ||
-      evidence.declaredIseer.trim() !== persistedDraft.evidence.declaredIseer.trim());
+      evidence.declaredIseer.trim() !== persistedDraft.evidence.declaredIseer.trim() ||
+      JSON.stringify(tech) !== JSON.stringify(persistedTech));
 
   const showSubmitConfirm = submitOpen && !draftDirty;
   const draftErrorDisplay = error ?? draftCommandFailure?.message ?? null;
@@ -492,6 +519,43 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                 </label>
               </div>
             </Card>
+            <Card title="Product details">
+              <p className="font-label-sm text-label-sm text-on-surface-variant mb-space-sm">The rated figures as printed on the product and in the test report. They are recorded with the application.</p>
+              <div className="grid gap-space-md sm:grid-cols-2">
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Air conditioner type
+                  <select value={tech.acType} onChange={(e) => setTech({ ...tech, acType: e.target.value })} disabled={returned} className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm" data-testid="model-draft-actype">
+                    <option value="">Select a type</option>{AC_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Compressor
+                  <select value={tech.compressorType} onChange={(e) => setTech({ ...tech, compressorType: e.target.value })} className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm" data-testid="model-draft-compressor">
+                    <option value="">Select a compressor</option>{COMPRESSORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Rated cooling capacity (W)
+                  <input inputMode="numeric" value={tech.coolingCapacityW} onChange={(e) => setTech({ ...tech, coolingCapacityW: e.target.value })} className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm" placeholder="For example 5250" data-testid="model-draft-capacity" />
+                </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Rated power input (W)
+                  <input inputMode="numeric" value={tech.powerInputW} onChange={(e) => setTech({ ...tech, powerInputW: e.target.value })} className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm" placeholder="For example 1600" data-testid="model-draft-power" />
+                  {eerOf(tech) !== null ? <span className="mt-1 block text-[12px]" data-testid="model-draft-eer">Energy efficiency ratio (capacity ÷ power): <strong>{eerOf(tech)}</strong></span> : null}
+                </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Refrigerant
+                  <select value={tech.refrigerant} onChange={(e) => setTech({ ...tech, refrigerant: e.target.value })} className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm" data-testid="model-draft-refrigerant">
+                    <option value="">Select a refrigerant</option>{REFRIGERANTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Rated voltage (V)
+                  <input inputMode="numeric" value={tech.ratedVoltage} onChange={(e) => setTech({ ...tech, ratedVoltage: e.target.value })} className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm" placeholder="For example 230" data-testid="model-draft-voltage" />
+                </label>
+              </div>
+              {technicalProblems(tech).map((m) => <p key={m} role="alert" className="mt-2 text-[13px] text-error">{m}</p>)}
+            </Card>
             <Card title="Test evidence">
               <p className="font-label-sm text-label-sm text-on-surface-variant mb-space-sm">
                 Required before submit. These checks are provisional local defaults, not BEE rules.
@@ -533,6 +597,10 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                     data-testid="model-draft-iseer"
                   />
                 </label>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant">
+                  Test report number
+                  <input value={tech.testReportNumber} onChange={(e) => setTech({ ...tech, testReportNumber: e.target.value })} className="mt-1 w-full py-2 px-3 rounded-lg bg-white border border-outline-variant font-body-sm" placeholder="As printed on the laboratory report" data-testid="model-draft-report-number" />
+                </label>
               </div>
             </Card>
             {draftErrorDisplay ? (
@@ -573,12 +641,15 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
                     Save your changes before reviewing submit.
                   </p>
                 ) : null}
+                {!technicalComplete(persistedTech) ? (
+                  <p className="text-[13px] text-[#8a4b00]" data-testid="model-draft-tech-hint">Complete and save all product details before reviewing the submit.</p>
+                ) : null}
                 {submitError && !submitOpen ? (
                   <p role="alert" className="text-error font-body-sm" data-testid="model-submit-error">{submitError}</p>
                 ) : null}
                 <button
                   type="button"
-                  disabled={previewLoading || submitBusy || draftDirty}
+                  disabled={previewLoading || submitBusy || draftDirty || !technicalComplete(persistedTech)}
                   onClick={() => void openSubmitConfirm(activeId)}
                   className="w-full border border-primary text-primary py-2.5 rounded-lg font-label-md disabled:opacity-50"
                   data-testid="model-draft-submit"
@@ -606,8 +677,16 @@ export function NewModelApplication({ module, screen }: { module: Module; screen
             <aside className="space-y-space-md lg:sticky lg:top-space-md lg:self-start" data-testid="model-draft-checklist">
               <div className="rounded-xl border border-[#dbe6f7] bg-white p-5">
                 <div role="heading" aria-level={2} className="flex items-center gap-2 text-[16px] font-bold text-[#14315E]"><Icon name="checklist" size={20} className="text-[#254e9e]" />Before you submit</div>
-                <p className="mt-1 text-[13px] text-[#64748b]">These checks run when you review the submit. They are provisional local defaults, not BEE rules.</p>
-                <ul className="mt-3 space-y-2">
+                <p className="mt-1 text-[13px] text-[#64748b]">Complete these, save, then review the submit. The checks below are provisional local defaults, not BEE rules.</p>
+                <ul className="mt-3 space-y-2" data-testid="model-draft-ready">
+                  {([["Brand and model number", Boolean(brandId || isEdit) && Boolean(modelNumber.trim())], ["Air conditioner type, compressor and refrigerant", Boolean(tech.acType && tech.compressorType && tech.refrigerant)],
+                    ["Rated cooling capacity, power input and voltage", Boolean(tech.coolingCapacityW.trim() && tech.powerInputW.trim() && tech.ratedVoltage.trim())],
+                    ["Laboratory, test date and test report number", Boolean(evidence.laboratoryCode && evidence.testedOn && tech.testReportNumber.trim())], ["Declared efficiency (ISEER)", Boolean(evidence.declaredIseer.trim())]] as [string, boolean][]).map(([label, done]) => (
+                    <li key={label} className={`flex items-start gap-2 text-[13px] ${done ? "text-[#14532d]" : "text-[#1e293b]"}`}><Icon name={done ? "check_circle" : "radio_button_unchecked"} size={16} className={`mt-0.5 ${done ? "text-[#1c7c4a]" : "text-[#94a3b8]"}`} fill={done} />{label}</li>
+                  ))}
+                </ul>
+                <div className="mt-4 border-t border-[#e7edf6] pt-3 text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Checked when you review the submit</div>
+                <ul className="mt-2 space-y-2">
                   {Object.values(GATE_LABELS).map((label) => (
                     <li key={label} className="flex items-start gap-2 text-[13px] text-[#1e293b]"><Icon name="radio_button_unchecked" size={16} className="mt-0.5 text-[#94a3b8]" />{label}</li>
                   ))}

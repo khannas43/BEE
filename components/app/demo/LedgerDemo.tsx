@@ -5,6 +5,7 @@ import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/a
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
+import { LedgerExplainerButton } from "./LedgerExplainer";
 import { demoGet, demoPath, demoPost, type DemoResult } from "@/lib/client/runtimeDemo";
 import { istStamp } from "@/lib/client/istTime";
 
@@ -357,7 +358,10 @@ export function LedgerDemo() {
   if (selected) {
     return (
       <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-ledger">
-        <button type="button" onClick={closeCert} className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary" data-testid="ledger-back"><Icon name="arrow_back" size={16} /> All certificates</button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button type="button" onClick={closeCert} className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary" data-testid="ledger-back"><Icon name="arrow_back" size={16} /> All certificates</button>
+          <LedgerExplainerButton />
+        </div>
         {notices}
         {!detail ? (error ? null : <p role="status" className="font-body-sm">Loading certificate…</p>) : (
           <>
@@ -448,7 +452,10 @@ export function LedgerDemo() {
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-ledger">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="flex-1 min-w-0">Certificate ledger</h1>
-        <span className="inline-flex items-center gap-1 rounded-full border border-[#d8e0ea] bg-[#eef2f7] px-2.5 py-0.5 text-[12px] font-semibold text-[#475569]" title={SIMULATED_NOTICE}><Icon name="science" size={14} /> Simulated test network</span>
+        <span className="flex flex-wrap items-center gap-2">
+          <LedgerExplainerButton />
+          <span className="inline-flex items-center gap-1 rounded-full border border-[#d8e0ea] bg-[#eef2f7] px-2.5 py-0.5 text-[12px] font-semibold text-[#475569]" title={SIMULATED_NOTICE}><Icon name="science" size={14} /> Simulated test network</span>
+        </span>
       </div>
       <p className="ai-lead">Each certificate has a chain of transactions; every hash is sha256 of the previous hash and the certificate fields. A second person must commit what the first submitted.{readOnly ? " You can read this ledger but not change it." : ""}</p>
       {notices}

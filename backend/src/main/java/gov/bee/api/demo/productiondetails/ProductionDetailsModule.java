@@ -61,13 +61,13 @@ public class ProductionDetailsModule implements DemoModule {
     // ---- financial-year helpers ------------------------------------------------------------------------------------------------
 
     /** "2026-Q2" (calendar quarter) to financial year "2026-27" and quarter 1 to 4 (April to June is Q1). */
-    static int[] fyOf(String calendarQuarter) {
+    public static int[] fyOf(String calendarQuarter) {
         int year = Integer.parseInt(calendarQuarter.substring(0, 4));
         int n = Integer.parseInt(calendarQuarter.substring(6));
         return n == 1 ? new int[] {year - 1, 4} : new int[] {year, n - 1};
     }
 
-    static String fyName(int startYear) {
+    public static String fyName(int startYear) {
         return startYear + "-" + String.format("%02d", (startYear + 1) % 100);
     }
 

@@ -55,7 +55,7 @@ Own-organisation writers: manufacturer, agency. All-submission readers: programm
 | `GET production` | submissions in scope |
 | `POST production` | create a submission for a quarter (`quarter`, for example 2026-Q4) |
 | `GET production/{id}` | detail with rows, evidence and history |
-| `GET production/{id}/reconciliation` | declared units against bound QR serials; `margin` sets the percentage (a finite number from 0 to 1000) |
+| `GET production/{id}/reconciliation` | declared units against bound QR serials; `margin` sets the percentage (a finite number from 0 to 1000). The serials counted are those linked to the quarter's production lines (`production-details`, `serialBasis` production_line); a quarter with no linked batch counts all bound serials of the model (`all_time`) |
 | `GET production/{id}/evidence` | the evidence record (`content=1` adds the file) |
 | `POST production/{id}/rows` | validate or store CSV rows (`csv`, `commit`); all or nothing; two different periods of one model may not overlap; `replace: true` (only while the submission has a query) swaps every stored row for the new ones |
 | `POST production/{id}/evidence` | attach CA evidence (name, membership number, statement, file; at most 5 files, 1 MiB each, standard base64, no slash or control character in the name), stored with its SHA-256, not verified |

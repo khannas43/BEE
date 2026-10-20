@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { Pill } from "./DemoShell";
 import { demoGet, demoPath, type DemoBody } from "@/lib/client/runtimeDemo";
+import { readDetails, type SerialCounts } from "@/lib/client/runtimeProductionDetails";
 import { manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import { type ModelApplication, modelDashboardHref, readModelApplicationList, stateLabel } from "@/lib/client/runtimeModelApplications";
 import type { QrBatch } from "./QrDemo";
@@ -88,6 +89,7 @@ export function QuarterlySubmission() {
   const [pQr, setPQr] = useState("");
   const [pResult, setPResult] = useState("");
   const [tests, setTests] = useState<QuarterlyTest[]>([]);
+  const [lineSerials, setLineSerials] = useState<Record<string, SerialCounts> | null>(null);
   const [tq, setTq] = useState("");
   const [tStage, setTStage] = useState("");
   const [tResult, setTResult] = useState("");
@@ -133,6 +135,23 @@ export function QuarterlySubmission() {
     void readQuarterlyTests(quarterOf).then((r) => { if (live) setTests(r.ok ? r.results : []); });
     return () => { live = false; };
   }, [quarterOf]);
+  // The serial numbers of the quarter are those linked to its production lines on the Production details tab, so both tabs show the same figures.
+  useEffect(() => {
+    if (!quarterOf) return;
+    const year = Number(quarterOf.slice(0, 4));
+    const qn = Number(quarterOf.slice(6));
+    const start = qn === 1 ? year - 1 : year;
+    const fq = qn === 1 ? 4 : qn - 1;
+    let live = true;
+    void readDetails(`${start}-${String((start + 1) % 100).padStart(2, "0")}`).then((r) => {
+      if (!live) return;
+      if (!r.ok || r.value.lines.length === 0) { setLineSerials(null); return; }
+      const map: Record<string, SerialCounts> = {};
+      for (const l of r.value.lines) if (l.registrationId) map[l.registrationId] = l.quarters[fq - 1].serials;
+      setLineSerials(map);
+    });
+    return () => { live = false; };
+  }, [quarterOf]);
   const org: ManufacturerProfile | undefined = directory.phase === "ready" ? directory.list.find((m) => m.name === sub?.organisationName?.replace(/\s*\(synthetic[^)]*\)\s*$/, "")) ?? (directory.list.length === 1 ? directory.list[0] : undefined) : undefined;
 
   const byReg = new Map<string, { model: string; units: number; periods: string[]; appId?: string; declared: number; bound: number | null; flag: string }>();
@@ -148,9 +167,10 @@ export function QuarterlySubmission() {
   }
   const products = [...byReg.entries()].map(([reg, e]) => {
     const mine = batches.filter((b) => b.registrationId === reg);
-    const gen = mine.reduce((n, b) => n + b.quantity, 0);
-    const bound = mine.reduce((n, b) => n + b.bound, 0);
-    const voided = mine.reduce((n, b) => n + b.void, 0);
+    const line = lineSerials?.[reg];
+    const gen = line ? line.total : mine.reduce((n, b) => n + b.quantity, 0);
+    const bound = line ? line.bound : mine.reduce((n, b) => n + b.bound, 0);
+    const voided = line ? line.voided : mine.reduce((n, b) => n + b.void, 0);
     const app = apps.find((a) => a.id === e.appId);
     const rated = org?.models.find((m) => m.certificate === reg);
     const bee = tests.find((t) => t.registrationId === reg);
@@ -231,7 +251,7 @@ export function QuarterlySubmission() {
                           <div className="text-[12px] text-[#64748b]">{p.reg}</div>
                         </td>
                         <td className={td}>{p.units.toLocaleString("en-IN")}</td>
-                        <td className={td}>{p.gen.toLocaleString("en-IN")}<div className="text-[12px] text-[#64748b]">{p.batches} batch{p.batches === 1 ? "" : "es"}</div></td>
+                        <td className={td}>{p.gen.toLocaleString("en-IN")}<div className="text-[12px] text-[#64748b]">{lineSerials ? "linked to this quarter" : `${p.batches} batch${p.batches === 1 ? "" : "es"}`}</div></td>
                         <td className={td}>{p.boundAll.toLocaleString("en-IN")}</td>
                         <td className={td}>{p.voided}</td>
                         <td className={td}>

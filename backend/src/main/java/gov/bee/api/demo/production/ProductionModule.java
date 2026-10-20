@@ -255,7 +255,18 @@ public class ProductionModule implements DemoModule {
                 + "FROM production_row r JOIN model_application m ON m.id = r.model_application_id WHERE r.submission_id = ? "
                 + "GROUP BY r.model_application_id, m.model_number ORDER BY m.model_number", id);
         Map<UUID, Long> bound = new LinkedHashMap<>();
-        if (qr) {
+        // The serial numbers of the quarter are those linked to its production lines (the Production details tab). A quarter with no linked
+        // batch falls back to all serials of the model, as before.
+        int[] fy = gov.bee.api.demo.productiondetails.ProductionDetailsModule.fyOf(String.valueOf(sub.get("quarter")));
+        String fyName = gov.bee.api.demo.productiondetails.ProductionDetailsModule.fyName(fy[0]);
+        boolean byLine = qr && Boolean.TRUE.equals(jdbc().queryForObject("SELECT EXISTS (SELECT 1 FROM production_line_batch l JOIN qr_batch b ON b.id = l.batch_id WHERE b.organisation_id = ? AND l.financial_year = ? AND l.fy_quarter = ?)",
+            Boolean.class, sub.get("organisation_id"), fyName, (short) fy[1]));
+        if (qr && byLine) {
+            jdbc().query("SELECT b.model_application_id AS mid, count(*) AS n FROM production_line_batch l JOIN qr_batch b ON b.id = l.batch_id JOIN qr_serial s ON s.batch_id = b.id "
+                + "WHERE s.state = 'bound' AND b.organisation_id = ? AND l.financial_year = ? AND l.fy_quarter = ? GROUP BY b.model_application_id", rs -> {
+                    bound.put(rs.getObject("mid", UUID.class), rs.getLong("n"));
+                }, sub.get("organisation_id"), fyName, (short) fy[1]);
+        } else if (qr) {
             jdbc().query("SELECT b.model_application_id AS mid, count(*) AS n FROM qr_serial s JOIN qr_batch b ON b.id = s.batch_id "
                 + "WHERE s.state = 'bound' GROUP BY b.model_application_id", rs -> {
                     bound.put(rs.getObject("mid", UUID.class), rs.getLong("n"));
@@ -286,13 +297,14 @@ public class ProductionModule implements DemoModule {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("quarter", sub.get("quarter"));
         out.put("qrAvailable", qr);
+        out.put("serialBasis", byLine ? "production_line" : "all_time");
         out.put("marginPercent", margin);
         out.put("declaredTotal", declaredTotal);
         out.put("boundTotal", qr ? boundTotal : null);
         out.put("models", models);
         out.put("message", qr
             ? "A 'review' flag only means declared units exceed bound QR serials by more than " + margin
-                + " percent. It is a prompt for a person, not a decision. Serials are counted over all time (simulated QR data)."
+                + " percent. It is a prompt for a person, not a decision. " + (byLine ? "Serials are those linked to this quarter's production lines (see Production details)." : "Serials are counted over all time (simulated QR data).")
             : "QR data not available");
         return DemoResult.ok(out);
     }

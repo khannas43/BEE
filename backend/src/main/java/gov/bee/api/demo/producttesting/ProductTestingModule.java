@@ -425,7 +425,7 @@ public class ProductTestingModule implements DemoModule {
         return DemoResult.created(res);
     }
 
-    /** The Officer's decision on a shortlisted product: approve it for testing or decline, with remarks (required). */
+    /** The Officer's decision on a shortlisted product: approve it for testing or decline, with remarks (required). A product that was not approved can still be approved later. */
     private DemoResult decide(Caller caller, String id, Map<String, Object> body) {
         UUID uid;
         try {
@@ -437,8 +437,12 @@ public class ProductTestingModule implements DemoModule {
         if (found.isEmpty()) {
             return DemoResult.notFound();
         }
-        if (!"shortlisted".equals(found.get(0).get("stage"))) {
+        Object current = found.get(0).get("stage");
+        if (!"shortlisted".equals(current) && !"not_approved".equals(current)) {
             return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "This product is not waiting for a decision.");
+        }
+        if ("not_approved".equals(current) && "decline".equals(text(body.get("decision")))) {
+            return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "This product was already not approved; it can only be approved now.");
         }
         String decision = text(body.get("decision"));
         String remarks = text(body.get("remarks"));

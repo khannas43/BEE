@@ -52,7 +52,8 @@ export function ShortlistedProduct() {
   const a = view.anomaly;
   const g = view.grievances;
   const c = view.cases.find((x) => x.reference === caseRef) ?? view.cases.find((x) => x.stage === "shortlisted") ?? view.cases[0] ?? null;
-  const waiting = c?.stage === "shortlisted";
+  const waiting = c?.stage === "shortlisted" || c?.stage === "not_approved";
+  const reconsider = c?.stage === "not_approved";
   const topCategory = Object.entries(g.byCategory).sort((x, y) => y[1] - x[1])[0];
   const flags = a.flags ?? [];
   const maxUnits = Math.max(1, ...(a.quarters ?? []).map((q) => q.units));
@@ -82,7 +83,7 @@ export function ShortlistedProduct() {
           <h1 className="flex-1 min-w-0">{p.model}</h1>
           <p className="text-[13px] text-[#64748b]">{p.brand} · {p.manufacturer} · {p.registrationId} · {p.stars} star · rated ISEER {p.ratedIseer}{c ? ` · case ${c.reference}` : ""}</p>
         </div>
-        {c ? <Chip tone={waiting ? "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]" : "border-[#c9d9f7] bg-[#e7effb] text-[#14315E]"}>{waiting ? "Waiting for approval" : STAGE_WORD[c.stage]}</Chip> : null}
+        {c ? <Chip tone={waiting ? "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]" : "border-[#c9d9f7] bg-[#e7effb] text-[#14315E]"}>{c.stage === "shortlisted" ? "Waiting for approval" : STAGE_WORD[c.stage]}</Chip> : null}
       </div>
 
       <section className={`${card} p-4`} data-testid="product-reason">
@@ -125,7 +126,8 @@ export function ShortlistedProduct() {
         <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">BEE Officer approval</div>
         {!c ? <p className="text-[13px] text-[#64748b]">This product is not on the shortlist.</p> : waiting ? (
           <>
-            <p className="text-[13px] text-[#334155]">Approving sends the product for testing: BEE buys a unit from the market and tests it at its own cost. Remarks are required either way.</p>
+            {reconsider ? <div className="rounded-lg bg-[#f1f5f9] px-3 py-2 text-[13px] text-[#475569]"><b>Not approved{c?.approvedAt ? ` on ${stamp(c.approvedAt)}` : ""}.</b> {c?.approvalRemarks}</div> : null}
+            <p className="text-[13px] text-[#334155]">{reconsider ? "You can still approve this product for testing. Say why you changed your mind." : "Approving sends the product for testing: BEE buys a unit from the market and tests it at its own cost. Remarks are required either way."}</p>
             <label className={`${labelCls} block`}>Remarks (required)
               <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500} rows={3} placeholder="Why you approve, or why not, and any point to note"
                 className="mt-1 block w-full rounded-lg border border-outline-variant bg-white px-3 py-2 text-[13px] normal-case tracking-normal" data-testid="approval-remarks" />
@@ -133,12 +135,12 @@ export function ShortlistedProduct() {
             {problem ? <p role="alert" className="rounded-lg bg-error-container p-space-sm font-body-sm text-on-error-container" data-testid="approval-problem">{problem}</p> : null}
             <div className="flex flex-wrap gap-2">
               <button type="button" className={btn} disabled={busy} onClick={() => void decide("approve")} data-testid="approve-button"><Icon name="check_circle" size={16} /> Approve for testing</button>
-              <button type="button" className={btnOutline} disabled={busy} onClick={() => void decide("decline")} data-testid="decline-button">Do not test</button>
+              {reconsider ? null : <button type="button" className={btnOutline} disabled={busy} onClick={() => void decide("decline")} data-testid="decline-button">Do not test</button>}
             </div>
           </>
         ) : (
           <div className="space-y-2 text-[13px] text-[#334155]">
-            <p><b>{c.stage === "not_approved" ? "Not approved for testing" : "Approved for testing"}</b>{c.approvedAt ? ` on ${stamp(c.approvedAt)}` : ""}.</p>
+            <p><b>{"Approved for testing"}</b>{c.approvedAt ? ` on ${stamp(c.approvedAt)}` : ""}.</p>
             {c.stage !== "not_approved" ? <p>Test status: <b>{STAGE_WORD[c.stage]}</b>{c.procuredFrom ? ` · bought from ${c.procuredFrom}` : ""}{c.laboratory ? ` · ${c.laboratory}` : ""}{c.result ? ` · result ${RESULT_WORD[c.result]}, ISEER ${c.measuredIseer} against ${c.ratedIseer} rated` : ""}{c.recommendation ? ` · ${RECOMMENDATION_WORD[c.recommendation]}` : ""}.</p> : null}
             {c.approvalRemarks ? <p className="rounded-lg bg-[#f9fbff] px-3 py-2">{c.approvalRemarks}</p> : null}
             {c.stage !== "not_approved" ? <Link href={`/app/demo/testing?tab=cases&case=${encodeURIComponent(c.reference)}`} className="inline-block font-semibold text-primary hover:underline" data-testid="open-test-case">Open this test case</Link> : null}

@@ -169,22 +169,45 @@ function Popover({ pillar }: { pillar: Pillar }) {
 
 const PILLAR_ICON: Record<Pillar, string> = { M: "widgets", A: "api", C: "cloud", H: "devices" };
 
-function Donut({ counts }: { counts: Record<Status, number> }) {
-  const total = counts.built + counts.simulated + counts.planned;
+type JStatus = "core" | "simulated" | "partial" | "planned";
+/** The thirteen journey items of the solution walkthrough and how far each works in this demonstration. "Working" counts core and simulated. */
+const JOURNEY: [string, JStatus, string][] = [
+  ["Seven-screen journey", "core", "Admin view across registration, labels, operations and dashboard"],
+  ["Applicant dashboard", "core", "Manufacturer 360 with company, models, QR, fees"],
+  ["Company and brand registration", "core", "Wizard, review, approval; MCA/GSTN checks planned"],
+  ["Document verification", "core", "Upload and return; OCR planned"],
+  ["Model and test report", "core", "Application, product details, test report, rating"],
+  ["Officer scrutiny", "core", "Work queue, holds, approvals; full risk queue planned"],
+  ["Secure QR batch", "core", "Batches, serials, scannable star labels"],
+  ["Consumer verification", "core", "Public check and phone scan"],
+  ["AI use cases", "simulated", "Four advisory use cases, person decides"],
+  ["Secure evidence ledger", "simulated", "Hash chain; Hyperledger Fabric planned"],
+  ["Data model and audit", "core", "Registers, audit history, evidence records"],
+  ["Generated formats", "partial", "Certificates and receipts; versioning and e-sign planned"],
+  ["Official templates", "planned", "Template retrieval still open"],
+];
+const J_TONE: Record<JStatus, { label: string; colour: string; chip: string }> = {
+  core: { label: "Core covered", colour: "#1c7c4a", chip: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]" },
+  simulated: { label: "Simulated", colour: "#f59e0b", chip: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]" },
+  partial: { label: "Partial", colour: "#7aa2d6", chip: "bg-[#e7effb] text-[#14315E] border-[#c9d9f7]" },
+  planned: { label: "Planned", colour: "#254e9e", chip: "bg-white text-[#14315E] border-[#254e9e] border-dashed" },
+};
+
+function Donut({ counts, centre, caption }: { counts: Record<JStatus, number>; centre: string; caption: string }) {
+  const total = counts.core + counts.simulated + counts.partial + counts.planned;
   const R = 52, C = 2 * Math.PI * R;
   let acc = 0;
-  const colours: Record<Status, string> = { built: "#1c7c4a", simulated: "#f59e0b", planned: "#254e9e" };
   return (
-    <svg viewBox="0 0 140 140" width={150} height={150} role="img" aria-label={`${counts.built} built, ${counts.simulated} simulated, ${counts.planned} planned`} data-testid="arch-donut">
+    <svg viewBox="0 0 140 140" width={150} height={150} role="img" aria-label={`${centre}: ${caption}`} data-testid="arch-donut">
       <circle cx="70" cy="70" r={R} fill="none" stroke="#e7edf6" strokeWidth="18" />
-      {(["built", "simulated", "planned"] as Status[]).map((k) => {
+      {(["core", "simulated", "partial", "planned"] as JStatus[]).map((k) => {
         const len = (counts[k] / total) * C;
-        const el = <circle key={k} cx="70" cy="70" r={R} fill="none" stroke={colours[k]} strokeWidth="18" strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc} transform="rotate(-90 70 70)" />;
+        const el = <circle key={k} cx="70" cy="70" r={R} fill="none" stroke={J_TONE[k].colour} strokeWidth="18" strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc} transform="rotate(-90 70 70)" />;
         acc += len;
         return el;
       })}
-      <text x="70" y="68" textAnchor="middle" fontSize="26" fontWeight="800" fill="#14315E">{total}</text>
-      <text x="70" y="86" textAnchor="middle" fontSize="10" fill="#64748b">components</text>
+      <text x="70" y="70" textAnchor="middle" fontSize="28" fontWeight="800" fill="#14315E">{centre}</text>
+      <text x="70" y="88" textAnchor="middle" fontSize="9" fill="#64748b">{caption}</text>
     </svg>
   );
 }
@@ -222,19 +245,36 @@ export function ArchitecturePage() {
   const all = LAYERS.flatMap((l) => l.items);
   const counts: Record<Status, number> = { built: 0, simulated: 0, planned: 0 };
   all.forEach((i) => { counts[i.status] += 1; });
+  const jc: Record<JStatus, number> = { core: 0, simulated: 0, partial: 0, planned: 0 };
+  JOURNEY.forEach(([, st]) => { jc[st] += 1; });
+  const working = jc.core + jc.simulated;
+  const pct = Math.round((working / JOURNEY.length) * 100);
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="architecture-page">
-      <div className="grid items-center gap-4 rounded-2xl bg-gradient-to-r from-[#14315E] to-[#254e9e] p-6 text-white md:grid-cols-[1fr_auto]">
+      <div className="relative z-30 grid items-center gap-4 rounded-2xl bg-gradient-to-r from-[#14315E] to-[#254e9e] p-6 text-white md:grid-cols-[1fr_auto]">
         <div>
           <h1 className="text-[28px] font-extrabold leading-8 !text-white">Solution architecture</h1>
-          <p className="mt-2 max-w-xl text-[15px] text-white/85">One platform for registration, labelling and verification: what runs today, and what comes next.</p>
+          <p className="mt-2 max-w-xl text-[15px] text-white/85">One platform for registration, labelling and verification: what works today, and what comes next.</p>
           <div className="mt-4 flex flex-wrap gap-2 text-[13px] font-semibold" data-testid="arch-legend">
-            <span className="rounded-full bg-[#1c7c4a] px-3 py-1">Built · {counts.built}</span>
-            <span className="rounded-full bg-[#f59e0b] px-3 py-1 text-[#3b2400]">Simulated · {counts.simulated}</span>
-            <span className="rounded-full border-2 border-dashed border-white px-3 py-1">Planned · {counts.planned}</span>
+            <span className="rounded-full bg-[#1c7c4a] px-3 py-1">Core covered · {jc.core}</span>
+            <span className="rounded-full bg-[#f59e0b] px-3 py-1 text-[#3b2400]">Simulated · {jc.simulated}</span>
+            <span className="rounded-full bg-[#7aa2d6] px-3 py-1 text-[#0f2547]">Partial · {jc.partial}</span>
+            <span className="rounded-full border-2 border-dashed border-white px-3 py-1">Planned · {jc.planned}</span>
+          </div>
+          <p className="mt-3 text-[12px] text-white/70">Technology blocks below: Built {counts.built} · Simulated {counts.simulated} · Planned {counts.planned}</p>
+        </div>
+        <div className="group relative rounded-2xl bg-white p-2" tabIndex={0} data-testid="arch-readiness">
+          <Donut counts={jc} centre={`${pct}%`} caption="journey items working" />
+          <div role="tooltip" data-testid="arch-readiness-list" className="pointer-events-none absolute right-0 top-full z-30 mt-2 hidden w-[430px] max-w-[92vw] rounded-xl border border-[#c9d9f7] bg-white p-4 text-left shadow-xl group-hover:block group-focus-within:block">
+            <div className="text-[13px] font-bold text-[#14315E]">{working} of {JOURNEY.length} journey items work in this demonstration <span className="font-normal text-[#64748b]">(core covered or simulated)</span></div>
+            <ul className="mt-2 space-y-1 text-[12px] text-[#334155]">
+              {JOURNEY.map(([name, st, note]) => (
+                <li key={name} className="flex items-start justify-between gap-2"><span><b className="text-[#14315E]">{name}</b> <span className="text-[#64748b]">· {note}</span></span><span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${J_TONE[st].chip}`}>{J_TONE[st].label}</span></li>
+              ))}
+            </ul>
+            <p className="mt-2 border-t border-[#e2e8f0] pt-2 text-[11px] italic text-[#64748b]">This measures the journey shown in the walkthrough. It is not a measure of the complete production solution: the planned technology blocks and advanced features below are still ahead.</p>
           </div>
         </div>
-        <div className="rounded-2xl bg-white p-2"><Donut counts={counts} /></div>
       </div>
 
       <div className="relative z-20 grid gap-3 md:grid-cols-4" data-testid="arch-mach">

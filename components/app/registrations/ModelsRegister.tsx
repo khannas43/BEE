@@ -18,7 +18,7 @@ import type { QrBatch } from "@/components/app/demo/QrDemo";
  */
 
 type LedgerRow = { certificateId: string; registrationId: string; manufacturer: string; brandName: string; modelNumber: string; category?: string; stars?: number; validFrom?: string; validTo: string; ledgerValidTo: string; ledgerStatus: string };
-type Status = "Valid" | "Expiring soon" | "Expired" | "Revoked" | "Awaiting approval";
+type Status = "Valid" | "Expiring soon" | "Expired" | "Revoked" | "Awaiting approval" | "Returned" | "Rejected";
 type Item = {
   key: string; certificate: string | null; certificateId: string | null; model: string; brand: string; manufacturer: string; manufacturerCode: string; category: string;
   stars: number; validFrom: string | null; validTo: string | null; ledgerValidTo: string | null; ledger: string; status: Status; stage: string; reference: string | null; applicationId: string | null;
@@ -30,7 +30,7 @@ const TODAY = () => new Date().toISOString().slice(0, 10);
 const LEDGER_WORD: Record<string, string> = { not_submitted: "Issued, awaiting ledger record", pending: "Pending", active: "Active", failed: "Failed", revoked: "Revoked", amended: "Amended" };
 const TONE: Record<string, string> = {
   Valid: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]", "Expiring soon": "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", Expired: "bg-[#eef2f7] text-[#475569] border-[#d8e0ea]",
-  Revoked: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]", "Awaiting approval": "bg-[#e7effb] text-[#14315E] border-[#c9d9f7]",
+  Revoked: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]", "Awaiting approval": "bg-[#e7effb] text-[#14315E] border-[#c9d9f7]", Returned: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", Rejected: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
   Active: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]", Pending: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", Failed: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
   Amended: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", "Issued, awaiting ledger record": "bg-[#eef2f7] text-[#475569] border-[#d8e0ea]",
 };
@@ -81,7 +81,7 @@ export function useModelRegister(): { phase: "loading" | "failed" | "ready"; ite
     if (m.certificate !== "Not issued") continue;
     items.push({
       key: m.reference, certificate: null, certificateId: null, model: m.model, brand: m.brandName ?? "-", manufacturer: o.name, manufacturerCode: o.code, category: m.category || "RAC",
-      stars: m.stars, validFrom: null, validTo: null, ledgerValidTo: null, ledger: "-", status: "Awaiting approval", stage: m.status, reference: m.reference, applicationId: m.applicationId,
+      stars: m.stars, validFrom: null, validTo: null, ledgerValidTo: null, ledger: "-", status: m.status === "Rejected" ? "Rejected" : m.status === "Returned" ? "Returned" : "Awaiting approval", stage: m.status, reference: m.reference, applicationId: m.applicationId,
     });
   }
   return { phase: "ready", items, message, manufacturers: orgs };
@@ -117,18 +117,20 @@ export function ModelsPanel() {
   );
   return (
     <div className="space-y-space-sm" data-testid="modreg-panel">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-testid="modreg-summary">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7" data-testid="modreg-summary">
         {tile("Valid", n("Valid"), "certificates in force", "Valid", "text-[#14532d]")}
         {tile("Expiring soon", n("Expiring soon"), "within 90 days", "Expiring soon", "text-[#8a4b00]")}
         {tile("Expired", n("Expired"), "past their end date", "Expired")}
         {tile("Revoked", n("Revoked"), "withdrawn on the ledger", "Revoked", "text-[#93000a]")}
-        {tile("Awaiting approval", n("Awaiting approval"), "models without a certificate yet", "Awaiting approval")}
+        {tile("Awaiting approval", n("Awaiting approval"), "application under review", "Awaiting approval")}
+        {tile("Returned", n("Returned"), "sent back to the applicant", "Returned", "text-[#8a4b00]")}
+        {tile("Rejected", n("Rejected"), "application not approved", "Rejected", "text-[#93000a]")}
       </div>
       <ListToolbar tools={tools} searchLabel="Search models and certificates" placeholder="Certificate, model, brand or manufacturer" dateLabel="Valid to"
         exportCsv={{ filename: "register-models-certificates", header: ["Certificate", "Model", "Brand", "Manufacturer", "Category", "Stars", "Valid from", "Valid to", "Status", "Ledger"],
           rows: tools.visible.map((i) => [i.certificate ?? "", i.model, i.brand, i.manufacturer, i.category, i.stars, i.validFrom ?? "", i.validTo ?? "", i.status, i.ledger]) }} />
       <div className="flex flex-wrap items-end gap-3" data-testid="modreg-filters">
-        {([["Status", status, setStatus, ["Valid", "Expiring soon", "Expired", "Revoked", "Awaiting approval"], "modreg-status"], ["Ledger", ledger, setLedger, ledgers, "modreg-ledger"], ["Stars", stars, setStars, ["5", "4", "3", "2", "1"], "modreg-stars"], ["Category", category, setCategory, categories, "modreg-category"], ["Manufacturer", maker, setMaker, makers, "modreg-maker"]] as [string, string, (v: string) => void, string[], string][]).map(([label, value, set, opts, id]) => (
+        {([["Status", status, setStatus, ["Valid", "Expiring soon", "Expired", "Revoked", "Awaiting approval", "Returned", "Rejected"], "modreg-status"], ["Ledger", ledger, setLedger, ledgers, "modreg-ledger"], ["Stars", stars, setStars, ["5", "4", "3", "2", "1"], "modreg-stars"], ["Category", category, setCategory, categories, "modreg-category"], ["Manufacturer", maker, setMaker, makers, "modreg-maker"]] as [string, string, (v: string) => void, string[], string][]).map(([label, value, set, opts, id]) => (
           <label key={id} className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">{label}
             <select value={value} onChange={(e) => { set(e.target.value); tools.setPage(1); }} className={sel} data-testid={id}>
               <option value="">All</option>{opts.map((o) => <option key={o} value={o}>{label === "Stars" ? `${o} star` : o}</option>)}
@@ -150,7 +152,7 @@ export function ModelsPanel() {
               {tools.paged.pageRows.map((i) => (
                 <tr key={i.key} className="border-t border-[#e7edf6] hover:bg-[#f4f8ff]" data-testid={`modreg-row-${i.key}`}>
                   <td className={`${td} font-mono`}>{i.certificate ?? "Not issued"}</td>
-                  <td className={`${td} font-semibold`}><Link href={modelEntryHref(i.key)} className="text-primary hover:underline" data-testid={`modreg-open-${i.key}`}>{i.model}</Link><div className="text-[12px] font-normal text-[#64748b]">{i.category}{i.status === "Awaiting approval" ? ` · ${i.stage}` : ""}</div></td>
+                  <td className={`${td} font-semibold`}><Link href={modelEntryHref(i.key)} className="text-primary hover:underline" data-testid={`modreg-open-${i.key}`}>{i.model}</Link><div className="text-[12px] font-normal text-[#64748b]">{i.category}{i.certificate === null ? ` · ${i.stage}` : ""}</div></td>
                   <td className={td}>{i.brand}</td><td className={td}>{i.manufacturer}</td><td className={td}><Stars n={i.stars} /></td>
                   <td className={td}>{i.validTo ?? "-"}</td><td className={td}><Chip value={i.status} /></td><td className={td}>{i.ledger === "-" ? "-" : <Chip value={i.ledger} />}</td>
                   <td className={td}><Link href={modelEntryHref(i.key)} className="inline-flex items-center gap-1 font-semibold text-primary">Open <Icon name="arrow_forward" size={14} /></Link></td>
@@ -215,7 +217,7 @@ export function ModelEntry({ id }: { id: string }) {
           <Fact label="Certificate" value={i.certificate ?? "Not issued yet"} /><Fact label="Star rating" value={<Stars n={i.stars} />} />
           <Fact label="Valid from" value={i.validFrom} /><Fact label="Valid to" value={i.validTo} />
         </div>
-        {i.status === "Awaiting approval" ? <p className="mt-3 rounded-lg bg-[#e7effb] px-3 py-2 text-[13px] text-[#14315E]">This model has no certificate yet. Its application is at the stage: {i.stage}.</p> : null}
+        {i.certificate === null ? <p className="mt-3 rounded-lg bg-[#e7effb] px-3 py-2 text-[13px] text-[#14315E]">This model has no certificate yet. Its application is at the stage: {i.stage}.</p> : null}
       </div>
 
       <Box title="Certificate and ledger" testId="modreg-box-ledger">

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/Icon";
 import {
-  cancelOrder, completeOrder, inr, makeSerials, METHOD_WORD, readDetails, readLine, startOrder,
+  cancelOrder, completeOrder, inr, makeSerials, METHOD_WORD, readDetails, readLine, saveUnits, startOrder, submitSubmission,
   type FeeOrder, type PayResult, type ProductionDetailsView, type ProductionLine, type SerialPage,
 } from "@/lib/client/runtimeProductionDetails";
 
@@ -51,6 +51,8 @@ export function ProductionDetails() {
   const [order, setOrder] = useState<FeeOrder | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
+  const [confirm, setConfirm] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const r = await readDetails(fy || undefined, org || undefined);
@@ -77,6 +79,29 @@ export function ProductionDetails() {
     const r = await startOrder(fy, picked);
     setBusy(false);
     if (r.ok) setOrder(r.value); else setProblem(r.message);
+  };
+
+  const save = async (fq: number) => {
+    const typed = edits[fq] ?? {};
+    const units: Record<string, string> = {};
+    for (const l of view.lines) units[l.applicationId] = typed[l.applicationId] ?? (l.quarters[fq - 1].units > 0 ? String(l.quarters[fq - 1].units) : "");
+    setBusy(true); setProblem(null); setNotice(null);
+    const r = await saveUnits(fy, fq, units);
+    setBusy(false);
+    if (!r.ok) { setProblem(r.message); return; }
+    setEdits((all) => { const next = { ...all }; delete next[fq]; return next; });
+    setNotice(`Production for Q${fq} saved: ${r.value.units.toLocaleString("en-IN")} units across ${r.value.models} model${r.value.models === 1 ? "" : "s"}. Add the CA document in the Quarterly submission tab, then submit.`);
+    await load();
+  };
+  const submitQuarter = async (fq: number) => {
+    const sub = quarters[fq - 1]?.submission;
+    if (!sub) return;
+    setConfirm(null); setBusy(true); setProblem(null); setNotice(null);
+    const r = await submitSubmission(sub.id);
+    setBusy(false);
+    if (!r.ok) { setProblem(r.message); return; }
+    setNotice(`Q${fq} was submitted to BEE for review.`);
+    await load();
   };
 
   return (
@@ -122,7 +147,7 @@ export function ProductionDetails() {
         <>
           <section className={`${shell} overflow-hidden`} data-testid="pd-grid">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] p-5">
-              <div><div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">What was manufactured</div><p className="text-[12px] text-[#64748b]">Units per model and quarter, as certified by the CA. Click a figure to see its serial numbers. <span className="font-semibold">*</span> expired model, <span className="font-semibold">(W)</span> withdrawn model.</p></div>
+              <div><div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">What was manufactured</div><p className="text-[12px] text-[#64748b]">Units per model and quarter, as certified by the CA. A quarter that is open shows entry boxes: type the units and save. Click a figure in another quarter to see its serial numbers. <span className="font-semibold">*</span> expired model, <span className="font-semibold">(W)</span> withdrawn model.</p></div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
@@ -134,7 +159,12 @@ export function ProductionDetails() {
                       <td className={td}><span className="font-semibold text-[#14315E]">{l.model}{l.mark === "expired" ? " *" : l.mark === "withdrawn" ? " (W)" : ""}</span><div className="text-[12px] text-[#64748b]">{l.registrationId ?? l.reference}</div></td>
                       {l.quarters.map((q) => (
                         <td key={q.fq} className={`${td} text-right`}>
-                          {q.units > 0 ? (
+                          {quarters[q.fq - 1]?.open ? (
+                            <input type="number" min={0} max={10000000} inputMode="numeric" aria-label={`${l.model} units, ${quarters[q.fq - 1].label}`}
+                              value={edits[q.fq]?.[l.applicationId] ?? (q.units > 0 ? String(q.units) : "")} placeholder="0"
+                              onChange={(e) => setEdits((all) => ({ ...all, [q.fq]: { ...(all[q.fq] ?? {}), [l.applicationId]: e.target.value } }))}
+                              className="w-28 rounded-lg border border-[#9dbdec] bg-white px-2 py-1 text-right text-[13px] tabular-nums focus:border-[#254e9e] focus:outline-none focus:ring-2 focus:ring-[#c9d9f7]" data-testid={`pd-input-${l.model}-${q.fq}`} />
+                          ) : q.units > 0 ? (
                             <button type="button" onClick={() => setLine({ l, fq: q.fq })} className={`rounded-lg px-2 py-1 text-right hover:bg-[#f4f8ff] ${line?.l.applicationId === l.applicationId && line.fq === q.fq ? "bg-[#e7effb] ring-2 ring-[#c9d9f7]" : ""}`} data-testid={`pd-cell-${l.model}-${q.fq}`}>
                               <b className="block tabular-nums text-[#14315E]">{q.units.toLocaleString("en-IN")}</b>
                               <span className="block text-[11px] text-[#64748b]">{q.serials.total > 0 ? `${q.serials.total.toLocaleString("en-IN")} serials` : "no serials yet"}</span>
@@ -149,6 +179,22 @@ export function ProductionDetails() {
                 <tfoot>
                   <tr className="border-t-2 border-[#c9d9f7] bg-[#f9fbff] font-semibold"><td className={td}>Total units</td>{quarters.map((q) => <td key={q.fq} className={`${td} text-right tabular-nums`}>{q.units ? q.units.toLocaleString("en-IN") : "-"}</td>)}<td className={`${td} text-right tabular-nums`}>{quarters.reduce((n, q) => n + q.units, 0).toLocaleString("en-IN")}</td></tr>
                   <tr className="bg-[#f9fbff] font-semibold"><td className={td}>Label fee</td>{quarters.map((q) => <td key={q.fq} className={`${td} text-right tabular-nums`}>{q.units ? inr(q.fee) : "-"}</td>)}<td className={`${td} text-right tabular-nums`}>{inr(view.payable ?? 0)}</td></tr>
+                  {!staff && quarters.some((q) => q.open) ? (
+                    <tr className="bg-[#fffaf0]" data-testid="pd-entry-row"><td className={td}><span className="font-semibold">Enter production</span><div className="text-[11px] font-normal text-[#64748b]">Type the units in the open quarters, then save</div></td>
+                      {quarters.map((q) => (
+                        <td key={q.fq} className={`${td} text-right`}>
+                          {q.open ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <button type="button" className={btnOutline} disabled={busy || !edits[q.fq]} onClick={() => void save(q.fq)} data-testid={`pd-save-q${q.fq}`}>Save Q{q.fq}</button>
+                              {q.submission && q.units > 0 ? <button type="button" className={btn} disabled={busy || Boolean(edits[q.fq])} onClick={() => setConfirm(q.fq)} data-testid={`pd-submit-q${q.fq}`}>Submit Q{q.fq}</button> : null}
+                              <span className="text-[11px] text-[#64748b]">{q.submission ? SUB_WORD[q.submission.state] : "Not started"}</span>
+                            </div>
+                          ) : <span className="text-[#94a3b8]">-</span>}
+                        </td>
+                      ))}
+                      <td className={td} />
+                    </tr>
+                  ) : null}
                   <tr className="bg-[#f9fbff]" data-testid="pd-payment-row"><td className={td}><span className="font-semibold">Payment</span><div className="text-[11px] font-normal text-[#64748b]">Select quarters to pay</div></td>
                     {quarters.map((q) => (
                       <td key={q.fq} className={`${td} text-right`}>
@@ -200,6 +246,15 @@ export function ProductionDetails() {
           </section>
         </>
       )}
+
+      {confirm !== null && typeof document !== "undefined" ? createPortal(
+        <div role="dialog" aria-modal="true" aria-label="Confirm submission" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-testid="pd-confirm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div role="heading" aria-level={2} className="text-[18px] font-extrabold text-[#14315E]">Submit Q{confirm} for review?</div>
+            <p className="mt-2 text-[13px] text-[#334155]">Kindly make sure all production data has been filled correctly and matches the CA certified document. After submitting it cannot be changed unless BEE raises a query.</p>
+            <div className="mt-4 flex justify-end gap-2"><button type="button" className={btnOutline} onClick={() => setConfirm(null)} data-testid="pd-confirm-cancel">Cancel</button><button type="button" className={btn} onClick={() => void submitQuarter(confirm)} data-testid="pd-confirm-ok">OK, submit</button></div>
+          </div>
+        </div>, document.body) : null}
 
       {order ? <PaymentDialog order={order} onClose={() => setOrder(null)} onSettled={(r) => { setNotice(r.status === "paid" ? `Payment received. Receipt ${r.receipt}.` : r.status === "awaiting_confirmation" ? "Direct transfer recorded. It is confirmed when BEE Finance sees the transfer." : "The payment failed. You can try again."); setPicked([]); void load(); }} /> : null}
     </div>

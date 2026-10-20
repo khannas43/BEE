@@ -3,6 +3,7 @@ package gov.bee.api.demo.productiondetails;
 import gov.bee.api.application.ModelDraftPolicy;
 import gov.bee.api.demo.DemoModule;
 import gov.bee.api.demo.DemoResult;
+import gov.bee.api.demo.production.ProductionValidator;
 import gov.bee.api.demo.qr.QrRepository;
 import gov.bee.api.identity.Caller;
 import java.math.BigDecimal;
@@ -108,6 +109,9 @@ public class ProductionDetailsModule implements DemoModule {
         if ("POST".equals(method) && "serials".equals(id) && action == null) {
             return makeSerials(caller, own.get(), body);
         }
+        if ("POST".equals(method) && "units".equals(id) && action == null) {
+            return saveUnits(caller, own.get(), body);
+        }
         if ("POST".equals(method) && "pay".equals(id) && action == null) {
             return order(caller, own.get(), body);
         }
@@ -209,6 +213,45 @@ public class ProductionDetailsModule implements DemoModule {
                 unitsQ[fq - 1] += u;
             }
         }
+        // when a quarter is open for entry, every approved model with a certificate can take units, so it gets a row even with none yet
+        boolean writerView = own != null && !staff;
+        boolean anyOpen = false;
+        for (int fq = 1; fq <= 4; fq++) {
+            Map<String, Object> sub = subs.get(fq);
+            anyOpen = anyOpen || (quarterStarted(start, fq) && (sub == null || "draft".equals(sub.get("state")) || "query".equals(sub.get("state"))));
+        }
+        if (writerView && anyOpen) {
+            for (Map<String, Object> r : jdbc().queryForList("SELECT a.id AS app, a.model_number, a.brand_name, a.reference, c.registration_id, c.valid_to, c.id AS cert FROM model_application a "
+                + "JOIN certificate c ON c.application_id = a.id WHERE a.organisation_id = ? AND a.state = 'approved' ORDER BY a.model_number", org)) {
+                UUID app = (UUID) r.get("app");
+                if (!lines.containsKey(app)) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("applicationId", app.toString());
+                    m.put("model", r.get("model_number"));
+                    m.put("brand", r.get("brand_name"));
+                    m.put("reference", r.get("reference"));
+                    m.put("registrationId", r.get("registration_id"));
+                    String mark = "";
+                    if (r.get("valid_to") != null && ((java.sql.Date) r.get("valid_to")).toLocalDate().isBefore(LocalDate.now())) {
+                        mark = "expired";
+                    }
+                    if (qr.ledgerRevoked((UUID) r.get("cert"))) {
+                        mark = "withdrawn";
+                    }
+                    m.put("mark", mark);
+                    List<Map<String, Object>> qs = new ArrayList<>();
+                    for (int q = 1; q <= 4; q++) {
+                        Map<String, Object> qm = new LinkedHashMap<>();
+                        qm.put("fq", q);
+                        qm.put("units", 0L);
+                        qm.put("serials", Map.of("total", 0, "bound", 0, "voided", 0));
+                        qs.add(qm);
+                    }
+                    m.put("quarters", qs);
+                    lines.put(app, m);
+                }
+            }
+        }
         // serial numbers linked to each line
         for (Map<String, Object> r : jdbc().queryForList("SELECT b.model_application_id AS app, l.fy_quarter AS fq, count(s.serial) AS total, count(*) FILTER (WHERE s.state = 'bound') AS bound, count(*) FILTER (WHERE s.state = 'void') AS voided "
             + "FROM production_line_batch l JOIN qr_batch b ON b.id = l.batch_id LEFT JOIN qr_serial s ON s.batch_id = b.id WHERE b.organisation_id = ? AND l.financial_year = ? GROUP BY b.model_application_id, l.fy_quarter", org, fy)) {
@@ -243,6 +286,8 @@ public class ProductionDetailsModule implements DemoModule {
             q.put("fee", fee.toPlainString());
             q.put("payment", p);
             q.put("submission", subs.get(fq));
+            Map<String, Object> sub = subs.get(fq);
+            q.put("open", own != null && !staff && quarterStarted(start, fq) && (sub == null || "draft".equals(sub.get("state")) || "query".equals(sub.get("state"))));
             quarters.add(q);
             payable = payable.add(fee);
             if (p != null && "paid".equals(p.get("status"))) {
@@ -449,6 +494,97 @@ public class ProductionDetailsModule implements DemoModule {
         res.put("status", "paid");
         res.put("receipt", receipt);
         return DemoResult.ok(res);
+    }
+
+    /** True when the quarter has started: units can be entered for a quarter that is under way or past, not one still to come. */
+    static boolean quarterStarted(int startYear, int fq) {
+        LocalDate first = switch (fq) {
+            case 1 -> LocalDate.of(startYear, 4, 1);
+            case 2 -> LocalDate.of(startYear, 7, 1);
+            case 3 -> LocalDate.of(startYear, 10, 1);
+            default -> LocalDate.of(startYear + 1, 1, 1);
+        };
+        return !first.isAfter(LocalDate.now());
+    }
+
+    /**
+     * Saves the units of every model for one quarter (the SOP's "enter the production data"): a draft submission is created if there is none, and the
+     * rows are set in place of the earlier ones. Allowed only while the submission is a draft or has a query. A model with 0 or no figure has no row.
+     */
+    private DemoResult saveUnits(Caller caller, UUID org, Map<String, Object> body) {
+        String fy = String.valueOf(body.get("fy"));
+        Integer start = startYearOf(fy);
+        int fq;
+        try {
+            fq = Integer.parseInt(String.valueOf(body.get("fq")));
+        } catch (NumberFormatException e) {
+            return DemoResult.invalid("fy and fq are required.");
+        }
+        if (start == null || fq < 1 || fq > 4 || !(body.get("units") instanceof Map<?, ?> units)) {
+            return DemoResult.invalid("fy, fq and units (model to number of units) are required.");
+        }
+        if (!quarterStarted(start, fq)) {
+            return DemoResult.invalid("That quarter has not started, so production cannot be declared for it yet.");
+        }
+        String cq = calendarQuarterOf(start, fq);
+        LocalDate[] range = ProductionValidator.quarterRange(cq);
+        Map<UUID, Long> wanted = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : units.entrySet()) {
+            UUID app;
+            long n;
+            try {
+                app = UUID.fromString(String.valueOf(e.getKey()));
+                String v = String.valueOf(e.getValue()).trim();
+                n = v.isEmpty() ? 0 : Long.parseLong(v);
+            } catch (RuntimeException ex) {
+                return DemoResult.invalid("Units must be whole numbers.");
+            }
+            if (n < 0 || n > 10_000_000L) {
+                return DemoResult.invalid("Units must be from 0 to 10,000,000.");
+            }
+            if (n > 0) {
+                wanted.put(app, n);
+            }
+        }
+        Map<UUID, String> registration = new LinkedHashMap<>();
+        for (UUID app : wanted.keySet()) {
+            List<String> reg = jdbc().queryForList("SELECT c.registration_id FROM certificate c JOIN model_application a ON a.id = c.application_id WHERE a.id = ? AND a.organisation_id = ? AND a.state = 'approved'", String.class, app, org);
+            if (reg.isEmpty()) {
+                return DemoResult.invalid("Production can be declared only for an approved model of your organisation with an issued certificate.");
+            }
+            registration.put(app, reg.get(0));
+        }
+        List<Map<String, Object>> found = jdbc().queryForList("SELECT id, state FROM production_submission WHERE organisation_id = ? AND quarter = ? FOR UPDATE", org, cq);
+        UUID sid;
+        if (found.isEmpty()) {
+            if (wanted.isEmpty()) {
+                return DemoResult.invalid("Enter the units of at least one model.");
+            }
+            sid = jdbc().queryForObject("INSERT INTO production_submission (organisation_id, quarter, created_by) VALUES (?,?,?) RETURNING id", UUID.class, org, cq, caller.accountId());
+            event(sid, "created", null, "draft", caller, "Started from the Production details tab");
+        } else {
+            sid = (UUID) found.get(0).get("id");
+            String state = String.valueOf(found.get(0).get("state"));
+            if (!"draft".equals(state) && !"query".equals(state)) {
+                return DemoResult.error(HttpStatus.CONFLICT, "version_conflict", "This quarter is " + state + " and can no longer be changed.");
+            }
+        }
+        int removed = jdbc().queryForObject("SELECT production_replace_rows(?, ?)", Integer.class, sid, caller.accountId());
+        for (Map.Entry<UUID, Long> e : wanted.entrySet()) {
+            jdbc().update("INSERT INTO production_row (submission_id, model_application_id, units, period_start, period_end, registration_id) VALUES (?,?,?,?,?,?)",
+                sid, e.getKey(), e.getValue(), java.sql.Date.valueOf(range[0]), java.sql.Date.valueOf(range[1]), registration.get(e.getKey()));
+        }
+        event(sid, removed > 0 ? "rows_replaced" : "rows_added", null, null, caller, "From the Production details tab: " + wanted.size() + " model(s), " + wanted.values().stream().mapToLong(Long::longValue).sum() + " units");
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("submissionId", sid.toString());
+        res.put("models", wanted.size());
+        res.put("units", wanted.values().stream().mapToLong(Long::longValue).sum());
+        return DemoResult.created(res);
+    }
+
+    private void event(UUID sub, String action, String from, String to, Caller c, String note) {
+        jdbc().update("INSERT INTO production_event (submission_id, action, from_state, to_state, actor_account_id, actor_role, note) VALUES (?,?,?,?,?,?,?)",
+            sub, action, from, to, c.accountId(), c.holds("manufacturer", "own-org") ? "manufacturer" : "agency", note);
     }
 
     /** The person left the payment screen before choosing: the order is released so the quarters can be paid again. A direct transfer already recorded stays. */

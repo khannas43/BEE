@@ -11,7 +11,7 @@ export type ProductionLine = { applicationId: string; model: string; brand: stri
 export type QuarterPayment = { status: "initiated" | "paid"; orderId: string; method: string | null; receipt: string | null };
 export type QuarterTotal = {
   fq: number; label: string; calendarQuarter: string; units: number; fee: string; payment: QuarterPayment | null;
-  submission: { id: string; state: string; evidence: number } | null;
+  submission: { id: string; state: string; evidence: number } | null; open?: boolean;
 };
 export type FeeOrderRow = { orderId: string; financialYear: string; quarters: string; amount: string; status: string; method: string | null; receipt: string | null; at: string };
 export type ProductionDetailsView = {
@@ -52,3 +52,5 @@ export const makeSerials = (applicationId: string, fy: string, fq: number, quant
 export const startOrder = (fy: string, quarters: number[]) => write<FeeOrder>(path("pay"), { fy, quarters });
 export const completeOrder = (orderId: string, method: string, outcome: "paid" | "failed") => write<PayResult>(demoPath("production-details", orderId, "complete"), { method, outcome });
 export const cancelOrder = (orderId: string) => write<{ orderId: string; status: string }>(demoPath("production-details", orderId, "cancel"), {});
+export const saveUnits = (fy: string, fq: number, units: Record<string, string>) => write<{ submissionId: string; models: number; units: number }>(path("units"), { fy, fq, units });
+export const submitSubmission = (submissionId: string) => write<{ state: string }>(demoPath("production", submissionId, "submit"), {});

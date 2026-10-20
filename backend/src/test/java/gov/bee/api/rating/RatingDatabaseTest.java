@@ -109,7 +109,7 @@ class RatingDatabaseTest {
         iameRepo = transactional(new IameRecommendationRepository(db));
         reviewerRepo = transactional(new ReviewerForwardRepository(db));
         repo = transactional(new RatingRepository(db));
-        assertEquals(86, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V86");
+        assertEquals(87, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class), "migrated V1 through V87");
     }
 
     @AfterAll

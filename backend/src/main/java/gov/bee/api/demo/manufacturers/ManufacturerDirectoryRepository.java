@@ -102,20 +102,21 @@ public class ManufacturerDirectoryRepository {
             "SELECT b.id, b.owner_organisation_id AS org, b.name, b.status, b.note, "
                 + "(SELECT e.reason FROM register_status_event e WHERE e.brand_id = b.id AND e.to_status = b.status ORDER BY e.occurred_at DESC LIMIT 1) AS event_reason, "
                 + "(SELECT e.occurred_at FROM register_status_event e WHERE e.brand_id = b.id AND e.to_status = b.status ORDER BY e.occurred_at DESC LIMIT 1) AS event_at, "
-                + "(SELECT count(*) FROM agency_authorisation a WHERE a.brand_id = b.id) AS authorisations FROM brand b ORDER BY b.name",
+                + "b.recorded_at, (SELECT count(*) FROM agency_authorisation a WHERE a.brand_id = b.id) AS authorisations FROM brand b ORDER BY b.name",
             "org", r -> {
                 String status = (String) r.get("status");
                 boolean held = "suspended".equals(status) || "revoked".equals(status);
                 Object reason = !held ? null : r.get("event_reason") != null ? r.get("event_reason") : r.get("note");
-                return map("id", r.get("id").toString(), "name", r.get("name"), "status", status, "reason", reason, "changedOn", day(r.get("event_at")),
+                return map("id", r.get("id").toString(), "name", r.get("name"), "status", status, "reason", reason, "changedOn", day(r.get("event_at")), "registeredOn", day(r.get("recorded_at")),
                     "authorisations", ((Number) r.get("authorisations")).intValue());
             });
         Map<UUID, List<Map<String, Object>>> models = grouped(
-            "SELECT m.organisation_id AS org, m.reference, m.model_number, m.category, m.state, "
+            "SELECT m.organisation_id AS org, m.reference, m.model_number, m.category, m.state, m.brand_id, m.brand_name, "
                 + "COALESCE((SELECT r.stars FROM model_application_rating r WHERE r.application_id = m.id ORDER BY r.rating_version DESC LIMIT 1), c.stars) AS stars, "
                 + "c.registration_id AS certificate, c.valid_to FROM model_application m LEFT JOIN certificate c ON c.application_id = m.id "
                 + "WHERE m.state <> 'draft' ORDER BY m.created_at DESC",
             "org", r -> map("reference", r.get("reference"), "model", r.get("model_number"), "category", r.get("category"),
+                "brandId", r.get("brand_id") == null ? null : r.get("brand_id").toString(), "brandName", r.get("brand_name"),
                 "stars", r.get("stars") == null ? 0 : ((Number) r.get("stars")).intValue(), "status", modelStatus((String) r.get("state")),
                 "certificate", r.get("certificate") == null ? "Not issued" : r.get("certificate"), "validTo", day(r.get("valid_to"))));
         Map<UUID, List<Map<String, Object>>> payments = grouped(

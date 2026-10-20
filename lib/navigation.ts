@@ -40,6 +40,8 @@ export interface NavEntry {
   query?: string;
   /** Other queries of the same route that also count as this entry for highlighting (a record opened from it). */
   alsoQueries?: readonly string[];
+  /** The entry that stands for the route when no query picks another one. */
+  isDefault?: boolean;
   /** Shown in the menu only to an organisation still going through company registration; the route itself stays open for the access check. */
   registrationOnly?: boolean;
   /** Short qualifier shown beside the title, e.g. "Advisory". */
@@ -105,13 +107,13 @@ function entry(
   icon: string,
   target: Target,
   roles: readonly RoleKey[],
-  extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "alsoQueries" | "registrationOnly"> = {},
+  extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "alsoQueries" | "isDefault" | "registrationOnly"> = {},
 ): NavEntry {
   return { id, title, icon, roles, ...target, ...extra };
 }
 
 /** An Admin-hierarchy entry: Admin, plus the officer roles the runtime registry already gives the screen. */
-function adminEntry(id: string, title: string, icon: string, target: Target, extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "alsoQueries" | "registrationOnly"> = {}): NavEntry {
+function adminEntry(id: string, title: string, icon: string, target: Target, extra: Pick<NavEntry, "activePrefixes" | "badge" | "query" | "alsoQueries" | "isDefault" | "registrationOnly"> = {}): NavEntry {
   const runtime = target.state === "available" ? RUNTIME_ROUTES.find((r) => r.href === target.route) : undefined;
   const officers = runtime ? OFFICER_ROLES.filter((r) => runtime.navRoles.includes(r)) : [];
   return entry(id, title, icon, target, [...ADMIN, ...officers], extra);
@@ -327,7 +329,7 @@ export const NAVIGATION: readonly NavGroup[] = [
       // "Model recommendations" is hidden (duplicates the Officer work queue); the screen opens from the queue.
       entry("dir.brand-reviews", "Brand registration reviews", "rate_review", live(R.regReviews), BEE_OFFICER),
       // "Withdrawal requests" is hidden for now (demonstration).
-      entry("dir.revocation", "Rejection and revocation", "gavel", live(R.register), BEE_OFFICER),
+      entry("dir.revocation", "Rejection and revocation", "gavel", live(R.register), BEE_OFFICER, { query: "tab=pending", alsoQueries: ["tab=history", "view=proposal"] }),
     ],
   },
   {
@@ -345,7 +347,7 @@ export const NAVIGATION: readonly NavGroup[] = [
     id: "dir.registers", title: "Registers & Compliance", icon: "menu_book", profile: "officer",
     children: [
       entry("dir.manufacturer-register", "Manufacturer register", "factory", live(R.register), BEE_OFFICER, { query: "tab=manufacturers", alsoQueries: ["view=manufacturer"] }),
-      entry("dir.brand-register", "Brand and category register", "menu_book", live(R.register), BEE_OFFICER),
+      entry("dir.brand-register", "Brand and category register", "menu_book", live(R.register), BEE_OFFICER, { query: "tab=brands", alsoQueries: ["view=brand", "view=authorisation", "tab=auths"], isDefault: true }),
       entry("dir.model-register", "Model and certificate register", "verified_user", proto("mis-ai", "model-dashboard"), BEE_OFFICER),
       entry("dir.reconciliation", "QR and production reconciliation", "balance", proto("production", "reconciliation"), BEE_OFFICER),
       entry("dir.audit", "Audit History", "history", live(R.history), BEE_OFFICER),
@@ -487,7 +489,7 @@ export function activeEntry(groups: readonly NavGroup[], pathname: string, searc
   for (const exact of [true, false]) {
     const hits = groups.flatMap((group) => leaves(group.children).filter((e) => (exact ? e.route === pathname && e.state !== "planned" : matches(e, pathname))).map((entry) => ({ group, entry })));
     // An entry whose query matches the address wins; else one without a query (the plain screen); else the first.
-    const hit = hits.find((h) => queryMatches(h.entry)) ?? hits.find((h) => !h.entry.query) ?? hits[0];
+    const hit = hits.find((h) => queryMatches(h.entry)) ?? hits.find((h) => h.entry.isDefault) ?? hits.find((h) => !h.entry.query) ?? hits[0];
     if (hit) return hit;
   }
   return null;

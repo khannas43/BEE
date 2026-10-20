@@ -23,7 +23,7 @@ const profile = (over: Partial<ManufacturerProfile>): ManufacturerProfile => ({
 const LIST = [
   profile({}),
   profile({ id: "o2", code: "SYNTH-MFG-4", name: "Harbor Breeze Cooling Pvt Ltd", status: "Suspended", city: "Chennai", state: "Tamil Nadu",
-    brands: [{ id: "b1", name: "Breezo Home (synthetic)", status: "suspended", reason: "Ownership of the brand name is disputed.", changedOn: null, authorisations: 0 }] }),
+    brands: [{ id: "b1", name: "Breezo Home (synthetic)", status: "suspended", reason: "Ownership of the brand name is disputed.", changedOn: null, registeredOn: null, authorisations: 0 }] }),
   profile({ id: "o3", code: "SYNTH-MFG-6", name: "Cinder Peak Cooling Pvt Ltd", status: "On hold", city: "Hyderabad", state: "Telangana" }),
 ];
 vi.mock("@/lib/client/runtimeManufacturers", async (orig) => ({

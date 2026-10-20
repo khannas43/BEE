@@ -15,6 +15,8 @@ export interface ManufacturerBrand {
   /** Why a suspended or revoked brand is in that status; null for an active brand or when none was recorded. */
   reason: string | null;
   changedOn: string | null;
+  /** When the brand entered the register. */
+  registeredOn: string | null;
   authorisations: number;
 }
 
@@ -38,7 +40,7 @@ export interface ManufacturerProfile {
   signatory: { name: string | null; designation: string | null; email: string | null; phone: string | null };
   facilities: { name: string; location: string; capacity: string }[];
   brands: ManufacturerBrand[];
-  models: { reference: string; model: string; category: string; stars: number; status: string; certificate: string; validTo: string | null }[];
+  models: { reference: string; model: string; category: string; stars: number; status: string; certificate: string; validTo: string | null; brandId: string | null; brandName: string | null }[];
   fees: { paid: number; outstanding: number; payments: { receipt: string; date: string | null; purpose: string; amount: number | null; status: string }[] };
   qr: { issued: number; bound: number; unused: number };
   production: { period: string; declared: number; state: string }[];
@@ -84,3 +86,14 @@ export function findManufacturer(list: readonly ManufacturerProfile[], key: stri
 }
 
 export const inr = (n: number | null | undefined) => `₹${Number(n ?? 0).toLocaleString("en-IN")}`;
+
+/** The models filed under one brand: by brand id when the model carries it, else by brand name. */
+export function modelsOfBrand(owner: ManufacturerProfile | undefined, brand: { id: string; name: string }): ManufacturerProfile["models"] {
+  return (owner?.models ?? []).filter((m) => m.brandId === brand.id || (!m.brandId && m.brandName === brand.name));
+}
+
+/** The categories a brand is registered under: those of its models, else those of its owner (the programme's own category, RAC). */
+export function brandCategories(owner: ManufacturerProfile | undefined, brand: { id: string; name: string }): string[] {
+  const own = [...new Set(modelsOfBrand(owner, brand).map((m) => m.category))].sort();
+  return own.length ? own : owner?.categories.length ? owner.categories : ["RAC"];
+}

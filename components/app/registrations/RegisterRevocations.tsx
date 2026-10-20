@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ManufacturerEntry, ManufacturersPanel } from "@/components/app/registrations/ManufacturersRegister";
-import { manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
+import { brandCategories, manufacturerProfileHref, modelsOfBrand, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import { RegisterDetail, registerDetailHref, type RegisterView } from "@/components/app/registrations/RegisterDetail";
 import { ScreenChrome } from "@/components/app/ScreenScaffold";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
@@ -147,12 +147,13 @@ function RegisterBody({
     ? { ...register, canPropose: false, canDecide: false }
     : register;
   const tabParam = useSearchParams().get("tab");
-  const [tab, setTab] = useState<TabKey>(tabParam === "manufacturers" ? "manufacturers" : "brands");
+  const tabOf = (v: string | null): TabKey => (v === "manufacturers" || v === "auths" || v === "pending" || v === "history" ? v : "brands");
+  const [tab, setTab] = useState<TabKey>(tabOf(tabParam));
   const [seenParam, setSeenParam] = useState(tabParam);
   // A menu link can change ?tab= while this page stays mounted; follow it.
   if (tabParam !== seenParam) {
     setSeenParam(tabParam);
-    setTab(tabParam === "manufacturers" ? "manufacturers" : "brands");
+    setTab(tabOf(tabParam));
   }
   const count = (xs: { status: string }[], st: string) => xs.filter((x) => x.status === st).length;
   const manufacturerCount = useManufacturerCount();
@@ -177,7 +178,7 @@ function RegisterBody({
 
       <div role="tablist" aria-label="Register" className="flex flex-wrap gap-space-xs border-b border-outline-variant">
         {tabBtn("manufacturers", "Manufacturers", manufacturerCount)}
-        {tabBtn("brands", "Brands", register.brands.length)}
+        {tabBtn("brands", "Brands & categories", register.brands.length)}
         {tabBtn("auths", "Agency authorisations", register.authorisations.length)}
         {tabBtn("pending", "Waiting for a decision", register.pending.length)}
         {tabBtn("history", "History", register.decided.length)}
@@ -221,26 +222,43 @@ function useOwnerLookups(): { names: Map<string, string>; reasons: Map<string, s
 function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelProps) {
   const [status, setStatus] = useState("");
   const [owner, setOwner] = useState("");
+  const [category, setCategory] = useState("");
   const { names, reasons, all } = useOwnerLookups();
-  const rows = register.brands.filter((b) => (!status || b.status === status) && (!owner || b.owner === owner));
+  const info = (b: RegisterBrandEntry) => {
+    const o = all.find((m) => m.code === b.owner);
+    return { categories: brandCategories(o, b), models: modelsOfBrand(o, b).length, registeredOn: o?.brands.find((x) => x.id === b.id)?.registeredOn ?? "" };
+  };
+  const rows = register.brands.filter((b) => (!status || b.status === status) && (!owner || b.owner === owner) && (!category || info(b).categories.includes(category)));
+  const allCategories = [...new Set(register.brands.flatMap((b) => info(b).categories))].sort();
   const tools = useListTools({
     rows,
-    text: (b) => `${b.name} ${b.owner} ${names.get(b.owner) ?? ""} ${b.source} ${words(BRAND_STATUS, b.status)}`,
-    sortValue: (b, k) => (k === "name" ? b.name : k === "owner" ? b.owner : k === "status" ? b.status : b.source),
+    text: (b) => `${b.name} ${b.owner} ${names.get(b.owner) ?? ""} ${b.source} ${words(BRAND_STATUS, b.status)} ${info(b).categories.join(" ")}`,
+    sortValue: (b, k) => (k === "name" ? b.name : k === "owner" ? b.owner : k === "status" ? b.status : k === "cat" ? info(b).categories.join(",") : k === "models" ? info(b).models : k === "on" ? info(b).registeredOn : b.source),
     pageSize: 8,
   });
   const openBrand = register.brands.find((b) => b.id === openId) ?? null;
-  const clear = () => { tools.clear(); setStatus(""); setOwner(""); };
+  const clear = () => { tools.clear(); setStatus(""); setOwner(""); setCategory(""); };
+  const byCategory = allCategories.map((c) => ({ c, brands: register.brands.filter((b) => info(b).categories.includes(c)) }));
   return (
     <div className="space-y-space-sm">
+      <div className="grid gap-space-sm sm:grid-cols-2 lg:grid-cols-4" data-testid="rvk-categories">
+        {byCategory.map(({ c, brands }) => (
+          <button key={c} type="button" onClick={() => { setCategory(category === c ? "" : c); tools.setPage(1); }} aria-pressed={category === c} className={`rounded-xl border bg-white p-3 text-left hover:border-primary ${category === c ? "border-primary ring-2 ring-[#c9d9f7]" : "border-[#dbe6f7]"}`} data-testid={`rvk-category-${c}`}>
+            <span className="block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Category</span>
+            <span className="block text-[18px] font-extrabold text-[#14315E]">{c}</span>
+            <span className="block text-[12px] text-[#64748b]">{brands.length} brands · {brands.filter((x) => x.status === "active").length} active · {brands.filter((x) => x.status !== "active").length} held or revoked</span>
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap items-end gap-space-md">
-        <ListToolbar tools={tools} searchLabel="Search brands" placeholder="Brand, owner or source"
-          exportCsv={{ filename: "register-brands", header: ["Name", "Owner", "Status", "Source"], rows: tools.visible.map((b) => [b.name, b.owner, words(BRAND_STATUS, b.status), b.source]) }} />
+        <ListToolbar tools={tools} searchLabel="Search brands" placeholder="Brand, category, owner or source"
+          exportCsv={{ filename: "register-brands", header: ["Name", "Category", "Owner", "Status", "Models", "Registered on", "Source"], rows: tools.visible.map((b) => [b.name, info(b).categories.join(", "), b.owner, words(BRAND_STATUS, b.status), info(b).models, info(b).registeredOn, b.source]) }} />
       </div>
       <div className="flex flex-wrap items-end gap-space-md" data-testid="rvk-filters">
         <FilterSelect label="Status" value={status} onChange={(v) => { setStatus(v); tools.setPage(1); }} testId="rvk-brand-status" options={[["", "All"], ["active", "Active"], ["suspended", "Suspended"], ["revoked", "Revoked"]]} />
         <FilterSelect label="Owner" value={owner} onChange={(v) => { setOwner(v); tools.setPage(1); }} testId="rvk-brand-owner" options={all.length > 0 ? [["", "All"], ...all.map((m) => [m.code, m.name] as [string, string])] : distinct(register.brands.map((b) => b.owner))} />
-        {(status || owner) ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={clear} data-testid="rvk-brand-clear">Clear filters</button> : null}
+        <FilterSelect label="Category" value={category} onChange={(v) => { setCategory(v); tools.setPage(1); }} testId="rvk-brand-category" options={[["", "All"], ...allCategories.map((c): [string, string] => [c, c])]} />
+        {(status || owner || category) ? <button type="button" className="font-label-md text-primary underline pb-2" onClick={clear} data-testid="rvk-brand-clear">Clear filters</button> : null}
       </div>
       {register.brands.length === 0 ? <p className="font-body-sm text-on-surface-variant">No brand is on the register.</p> : (
         <div className="overflow-x-auto">
@@ -248,8 +266,8 @@ function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPr
             <caption className="sr-only">Registered brands</caption>
             <thead>
               <tr>
-                <SortableTh tools={tools} k="name" className={TH}>Name</SortableTh><SortableTh tools={tools} k="owner" className={TH}>Owner</SortableTh>
-                <SortableTh tools={tools} k="status" className={TH}>Status</SortableTh><th className={TH}>Reason for status</th><SortableTh tools={tools} k="source" className={TH}>Source</SortableTh>
+                <SortableTh tools={tools} k="name" className={TH}>Name</SortableTh><SortableTh tools={tools} k="cat" className={TH}>Category</SortableTh><SortableTh tools={tools} k="owner" className={TH}>Owner</SortableTh>
+                <SortableTh tools={tools} k="status" className={TH}>Status</SortableTh><SortableTh tools={tools} k="models" className={TH}>Models</SortableTh><SortableTh tools={tools} k="on" className={TH}>Registered on</SortableTh><th className={TH}>Reason for status</th><SortableTh tools={tools} k="source" className={TH}>Source</SortableTh>
                 <th className={TH}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -257,16 +275,19 @@ function BrandsPanel({ register, openId, onOpen, onChanged, onRefresh }: PanelPr
               {tools.paged.pageRows.map((brand) => (
                 <tr key={brand.id} className="border-t border-outline-variant" data-testid={`rvk-brand-${brand.id}`} data-status={brand.status}>
                   <td className={`${TD} font-semibold`}><Link href={registerDetailHref("brand", brand.id)} className="text-primary hover:underline" data-testid={`rvk-brand-open-${brand.id}`}>{brand.name}</Link></td>
+                  <td className={TD}>{info(brand).categories.join(", ")}</td>
                   <td className={TD}><Link href={manufacturerProfileHref(brand.owner)} className="text-primary hover:underline" data-testid={`rvk-brand-owner-link-${brand.id}`}>{names.get(brand.owner) ?? brand.owner}</Link></td>
                   <td className={TD}>
                     <StatusPill code={brand.status} label={words(BRAND_STATUS, brand.status)} />
                   </td>
+                  <td className={TD}>{info(brand).models}</td>
+                  <td className={TD}>{info(brand).registeredOn || "-"}</td>
                   <td className={`${TD} max-w-sm text-on-surface-variant`} data-testid={`rvk-brand-reason-${brand.id}`}>{brand.status === "active" ? "-" : reasons.get(brand.id) ?? "No reason recorded."}</td>
                   <td className={TD}>{brand.source}</td>
                   <td className={TD}>{proposeButton(register.canPropose, brand.status === "active", brand.id, openId, onOpen)}</td>
                 </tr>
               ))}
-              {tools.paged.total === 0 ? <tr><td className={TD} colSpan={6}>No brand matches these filters.</td></tr> : null}
+              {tools.paged.total === 0 ? <tr><td className={TD} colSpan={9}>No brand matches these filters.</td></tr> : null}
             </tbody>
           </table>
         </div>

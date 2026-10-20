@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { istStamp } from "@/lib/client/istTime";
-import { manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
+import { brandCategories, modelsOfBrand, manufacturerProfileHref, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import type {
   RegisterAuthorisationEntry,
   RegisterBrandEntry,
@@ -170,11 +170,12 @@ function BrandDetail({ b, r, list }: { b: RegisterBrandEntry; r: RegisterRevocat
   const held = b.status === "suspended" || b.status === "revoked";
   const auths = r.authorisations.filter((a) => a.brandId === b.id);
   const ps = [...r.pending, ...r.decided].filter((p) => p.targetKind === "brand" && p.targetId === b.id);
-  const models = owner ? owner.models.slice(0, 12) : [];
+  const models = modelsOfBrand(owner, b);
+  const categories = brandCategories(owner, b);
   return (
     <div className="space-y-space-md" data-testid="rvk-detail-brand">
       <Back />
-      <Hero kicker="Registered brand" title={b.name} subtitle={owner ? `Owned by ${owner.name}` : `Owner ${b.owner}`} chips={[`Owner code ${b.owner}`, ...(owner ? owner.categories : [])]} status={b.status} />
+      <Hero kicker="Registered brand" title={b.name} subtitle={owner ? `Owned by ${owner.name}` : `Owner ${b.owner}`} chips={[`Owner code ${b.owner}`, ...categories]} status={b.status} />
       {held ? (
         <div className="rounded-2xl border border-[#f5c2c0] bg-[#fdecea] p-space-md" data-testid="rvk-status-reason">
           <div className="flex items-center gap-2 text-[#93000a]">
@@ -189,6 +190,9 @@ function BrandDetail({ b, r, list }: { b: RegisterBrandEntry; r: RegisterRevocat
         <Card title="Brand record" icon="sell">
           <div className="grid gap-space-md sm:grid-cols-2">
             <Fact label="Brand name">{b.name}</Fact>
+            <Fact label="Category">{categories.join(", ")}</Fact>
+            <Fact label="Registered on">{entry?.registeredOn ?? "-"}</Fact>
+            <Fact label="Models under this brand">{models.length}</Fact>
             <Fact label="Register status"><Chip code={b.status} /></Fact>
             <Fact label="Owner"><OwnerFact code={b.owner} list={list} /></Fact>
             <Fact label="Permittee number">{owner?.permitteeNumber ?? "-"}</Fact>
@@ -210,11 +214,11 @@ function BrandDetail({ b, r, list }: { b: RegisterBrandEntry; r: RegisterRevocat
           )}
         </Card>
       </div>
-      <Card title="Models of the owner" icon="workspace_premium">
+      <Card title="Models under this brand" icon="workspace_premium">
         <Table
           head={["Reference", "Model", "Category", "Status", "Certificate"]}
           rows={models.map((m) => [<span key="r" className="font-mono">{m.reference}</span>, m.model, m.category, m.status, m.certificate])}
-          empty="No model is on record for the owner of this brand."
+          empty="No model has been filed under this brand yet."
         />
       </Card>
       <Card title="Agency authorisations for this brand" icon="handshake">

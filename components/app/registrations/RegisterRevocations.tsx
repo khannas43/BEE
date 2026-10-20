@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { ModelEntry, ModelsPanel, useModelRegister } from "@/components/app/registrations/ModelsRegister";
 import { ManufacturerEntry, ManufacturersPanel } from "@/components/app/registrations/ManufacturersRegister";
 import { brandCategories, manufacturerProfileHref, modelsOfBrand, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
 import { RegisterDetail, registerDetailHref, type RegisterView } from "@/components/app/registrations/RegisterDetail";
@@ -58,6 +59,7 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
   const view: RegisterView | null = viewParam === "brand" || viewParam === "authorisation" || viewParam === "proposal" ? viewParam : null;
   const detailId = params.get("id");
   const manufacturerEntry = viewParam === "manufacturer" && detailId;
+  const modelEntry = viewParam === "model" && detailId;
 
   return (
     <ScreenChrome module={module} screen={screen} subtitle="Register" implemented={runtimeRouteFor(registerHref())?.implemented}>
@@ -71,7 +73,9 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
           errorTestId="rvk-error"
           signInReturnTo={registerHref()}
         >
-          {(r) => manufacturerEntry ? (
+          {(r) => modelEntry ? (
+            <ModelEntry id={detailId} />
+          ) : manufacturerEntry ? (
             <ManufacturerEntry code={detailId} />
           ) : view && detailId ? (
             <RegisterDetail register={r.register} view={view} id={detailId} />
@@ -91,7 +95,7 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
   );
 }
 
-type TabKey = "manufacturers" | "brands" | "auths" | "pending" | "history";
+type TabKey = "manufacturers" | "models" | "brands" | "auths" | "pending" | "history";
 
 const FIELD = "rounded-lg border border-outline-variant px-3 h-10 box-border font-body-sm bg-surface-card";
 const TH = "py-2 pr-3 text-left font-label-sm text-on-surface-variant";
@@ -147,7 +151,7 @@ function RegisterBody({
     ? { ...register, canPropose: false, canDecide: false }
     : register;
   const tabParam = useSearchParams().get("tab");
-  const tabOf = (v: string | null): TabKey => (v === "manufacturers" || v === "auths" || v === "pending" || v === "history" ? v : "brands");
+  const tabOf = (v: string | null): TabKey => (v === "manufacturers" || v === "models" || v === "auths" || v === "pending" || v === "history" ? v : "brands");
   const [tab, setTab] = useState<TabKey>(tabOf(tabParam));
   const [seenParam, setSeenParam] = useState(tabParam);
   // A menu link can change ?tab= while this page stays mounted; follow it.
@@ -157,6 +161,7 @@ function RegisterBody({
   }
   const count = (xs: { status: string }[], st: string) => xs.filter((x) => x.status === st).length;
   const manufacturerCount = useManufacturerCount();
+  const modelCount = useModelCount();
   const brandsActive = count(register.brands, "active");
   const authsActive = count(register.authorisations, "active");
   const tabBtn = (key: TabKey, label: string, n: number) => (
@@ -168,8 +173,9 @@ function RegisterBody({
 
   return (
     <div className="space-y-space-md">
-      <div className="grid gap-space-sm sm:grid-cols-2 xl:grid-cols-5" data-testid="rvk-summary">
+      <div className="grid gap-space-sm sm:grid-cols-2 xl:grid-cols-6" data-testid="rvk-summary">
         <SummaryCard label="Manufacturers" value={manufacturerCount} hint="Permittees and registrations" tone="text-[#14315e]" tab="manufacturers" current={tab} onPick={setTab} />
+        <SummaryCard label="Models" value={modelCount} hint="Certificates issued and applications" tone="text-[#14315e]" tab="models" current={tab} onPick={setTab} />
         <SummaryCard label="Brands" value={register.brands.length} hint={`${brandsActive} active, ${count(register.brands, "suspended")} suspended, ${count(register.brands, "revoked")} revoked`} tone="text-[#14315e]" tab="brands" current={tab} onPick={setTab} />
         <SummaryCard label="Agency authorisations" value={register.authorisations.length} hint={`${authsActive} active, ${count(register.authorisations, "revoked")} revoked`} tone="text-[#14315e]" tab="auths" current={tab} onPick={setTab} />
         <SummaryCard label="Waiting for a decision" value={register.pending.length} hint={register.pending.length ? "Closures or revocations to decide" : "Nothing is waiting"} tone={register.pending.length ? "text-[#8a4b00]" : "text-[#14532d]"} tab="pending" current={tab} onPick={setTab} />
@@ -179,6 +185,7 @@ function RegisterBody({
       <div role="tablist" aria-label="Register" className="flex flex-wrap gap-space-xs border-b border-outline-variant">
         {tabBtn("manufacturers", "Manufacturers", manufacturerCount)}
         {tabBtn("brands", "Brands & categories", register.brands.length)}
+        {tabBtn("models", "Models & certificates", modelCount)}
         {tabBtn("auths", "Agency authorisations", register.authorisations.length)}
         {tabBtn("pending", "Waiting for a decision", register.pending.length)}
         {tabBtn("history", "History", register.decided.length)}
@@ -186,6 +193,9 @@ function RegisterBody({
 
       <section role="tabpanel" aria-labelledby="rvk-tab-manufacturers" hidden={tab !== "manufacturers"}>
         {tab === "manufacturers" ? <ManufacturersPanel /> : null}
+      </section>
+      <section role="tabpanel" aria-labelledby="rvk-tab-models" hidden={tab !== "models"}>
+        {tab === "models" ? <ModelsPanel /> : null}
       </section>
       <section role="tabpanel" aria-labelledby="rvk-tab-brands" hidden={tab !== "brands"}>
         <BrandsPanel register={view} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />
@@ -201,6 +211,11 @@ function RegisterBody({
       </section>
     </div>
   );
+}
+
+function useModelCount(): number {
+  const reg = useModelRegister();
+  return reg.phase === "ready" ? reg.items.length : 0;
 }
 
 function useManufacturerCount(): number {

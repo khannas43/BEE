@@ -40,7 +40,7 @@ export interface ManufacturerProfile {
   signatory: { name: string | null; designation: string | null; email: string | null; phone: string | null };
   facilities: { name: string; location: string; capacity: string }[];
   brands: ManufacturerBrand[];
-  models: { reference: string; model: string; category: string; stars: number; status: string; certificate: string; validTo: string | null; brandId: string | null; brandName: string | null }[];
+  models: { applicationId: string; reference: string; model: string; category: string; stars: number; status: string; certificate: string; validTo: string | null; brandId: string | null; brandName: string | null }[];
   fees: { paid: number; outstanding: number; payments: { receipt: string; date: string | null; purpose: string; amount: number | null; status: string }[] };
   qr: { issued: number; bound: number; unused: number };
   production: { period: string; declared: number; state: string }[];

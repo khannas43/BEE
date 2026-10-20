@@ -111,11 +111,11 @@ public class ManufacturerDirectoryRepository {
                     "authorisations", ((Number) r.get("authorisations")).intValue());
             });
         Map<UUID, List<Map<String, Object>>> models = grouped(
-            "SELECT m.organisation_id AS org, m.reference, m.model_number, m.category, m.state, m.brand_id, m.brand_name, "
+            "SELECT m.organisation_id AS org, m.id AS app_id, m.reference, m.model_number, m.category, m.state, m.brand_id, m.brand_name, "
                 + "COALESCE((SELECT r.stars FROM model_application_rating r WHERE r.application_id = m.id ORDER BY r.rating_version DESC LIMIT 1), c.stars) AS stars, "
                 + "c.registration_id AS certificate, c.valid_to FROM model_application m LEFT JOIN certificate c ON c.application_id = m.id "
                 + "WHERE m.state <> 'draft' ORDER BY m.created_at DESC",
-            "org", r -> map("reference", r.get("reference"), "model", r.get("model_number"), "category", r.get("category"),
+            "org", r -> map("applicationId", r.get("app_id").toString(), "reference", r.get("reference"), "model", r.get("model_number"), "category", r.get("category"),
                 "brandId", r.get("brand_id") == null ? null : r.get("brand_id").toString(), "brandName", r.get("brand_name"),
                 "stars", r.get("stars") == null ? 0 : ((Number) r.get("stars")).intValue(), "status", modelStatus((String) r.get("state")),
                 "certificate", r.get("certificate") == null ? "Not issued" : r.get("certificate"), "validTo", day(r.get("valid_to"))));

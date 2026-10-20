@@ -58,9 +58,9 @@ const LAYERS: Layer[] = [
       { name: "Payments", tech: "Payment adapter", what: "Fee payment, receipts, Finance reconciliation.", status: "simulated", note: "Simulated gateway; no money moves." },
       { name: "Notifications", tech: "Email and SMS adapters", what: "Messages for every step to every role.", status: "simulated", note: "Messages are recorded, nothing is sent." },
       { name: "AI advisory helpers", tech: "Transparent rules and statistics", what: "Compliance risk, production anomaly, rating trends, document extraction; a person decides.", status: "simulated" },
-      { name: "Document intelligence (OCR)", tech: "OCR and extraction models", what: "Read test reports and trade licences, compare with declarations.", status: "planned" },
-      { name: "Chatbot and assisted helpdesk", tech: "Rasa", what: "Guided answers and ticket drafting for applicants.", status: "planned" },
-      { name: "Machine learning models", tech: "Production AI", what: "Risk scoring and anomaly detection trained on live data.", status: "planned" },
+      { name: "Document intelligence (OCR)", tech: "Open-source OCR (for example Tesseract) and extraction models", what: "Read test reports and trade licences, compare with declarations.", status: "planned" },
+      { name: "Chatbot and assisted helpdesk", tech: "Rasa Open Source", what: "Guided answers and ticket drafting for applicants.", status: "planned" },
+      { name: "Machine learning models", tech: "Open-source machine learning (for example scikit-learn)", what: "Risk scoring and anomaly detection trained on live data.", status: "planned" },
       { name: "Workflow orchestration and batch jobs", tech: "Apache Airflow", what: "Scheduled checks, renewals, expiry reminders.", status: "planned" },
     ],
   },
@@ -68,8 +68,8 @@ const LAYERS: Layer[] = [
     id: "data", title: "Data and insight", icon: "database", blurb: "Records, documents, dashboards",
     items: [
       { name: "Operational database", tech: "PostgreSQL, Flyway migrations", what: "All records; triggers enforce append-only audit tables, separation of duties and hash chains.", status: "built" },
-      { name: "Production database option", tech: "Microsoft SQL Server", what: "Planned production migration of the operational database.", status: "planned" },
-      { name: "Document and evidence storage", tech: "Managed document store with verification (to be selected)", what: "Test reports, licences, signed documents with virus checks and retention.", status: "planned", note: "Today uploads sit in the database, marked pending verification." },
+      { name: "Production database", tech: "PostgreSQL with replication and backups", what: "The same open-source database run for production: high availability, backups and point-in-time recovery.", status: "planned", note: "No licensed database is needed." },
+      { name: "Document and evidence storage", tech: "Open-source object store with verification (to be selected)", what: "Test reports, licences, signed documents with virus checks and retention.", status: "planned", note: "Today uploads sit in the database, marked pending verification." },
       { name: "Search", tech: "OpenSearch", what: "Full-text search across registers, applications and documents.", status: "planned" },
       { name: "Event streaming and change capture", tech: "Apache Kafka, NiFi, Debezium", what: "Events between services, feeds to analytics and the ledger.", status: "planned" },
       { name: "Analytics store and dashboards", tech: "ClickHouse, Apache Superset", what: "Programme MIS, dashboards, trends for officials.", status: "planned", note: "Dashboards today read PostgreSQL directly." },
@@ -83,7 +83,7 @@ const LAYERS: Layer[] = [
       { name: "Chaincode (smart contracts)", tech: "Hyperledger Fabric chaincode", what: "The rules for issuing, amending and revoking a certificate, run by every peer.", status: "planned" },
       { name: "Signed QR payloads", tech: "Digital signatures on QR content", what: "A label that proves its own origin offline.", status: "planned" },
       { name: "Anchoring", tech: "Merkle tree anchoring", what: "Periodic proof that the evidence set has not changed.", status: "planned" },
-      { name: "Digital signature", tech: "eSign service", what: "Signed certificates and letters.", status: "planned" },
+      { name: "Digital signature", tech: "Government eSign service (external)", what: "Signed certificates and letters.", status: "planned" },
     ],
   },
   {
@@ -98,8 +98,8 @@ const LAYERS: Layer[] = [
   {
     id: "platform", title: "Foundation", icon: "construction", blurb: "How it is run and watched",
     items: [
-      { name: "Local runtime", tech: "Docker Compose, Maven, Node 22", what: "PostgreSQL, Keycloak, the API and the portal on one machine for the demonstration.", status: "built" },
-      { name: "Automated checks", tech: "Vitest, JUnit, browser checks, contract checks", what: "Portal tests, backend tests, live browser journeys, a full gate.", status: "built" },
+      { name: "Local runtime", tech: "Docker Engine and Compose, Maven, Node.js 22, OpenJDK 17", what: "PostgreSQL, Keycloak, the API and the portal on one machine for the demonstration.", status: "built" },
+      { name: "Automated checks", tech: "Vitest, JUnit 5, browser checks, contract checks", what: "Portal tests, backend tests, live browser journeys, a full gate.", status: "built" },
       { name: "Containers and orchestration", tech: "Kubernetes", what: "Deployment, scaling and recovery of every service.", status: "planned" },
       { name: "Build and delivery", tech: "Gitea, Jenkins, Argo CD", what: "Pipelines and GitOps deployment.", status: "planned" },
       { name: "Infrastructure as code", tech: "OpenTofu, Ansible", what: "Repeatable environments.", status: "planned" },
@@ -170,7 +170,7 @@ function Popover({ pillar }: { pillar: Pillar }) {
 const PILLAR_ICON: Record<Pillar, string> = { M: "widgets", A: "api", C: "cloud", H: "devices" };
 
 type JStatus = "core" | "simulated" | "partial" | "planned";
-/** The thirteen journey items of the solution walkthrough and how far each works in this demonstration. "Working" counts core and simulated. */
+/** The sixteen journey items of the solution walkthrough and how far each works in this demonstration. "Working" counts core and simulated. */
 const JOURNEY: [string, JStatus, string][] = [
   ["Seven-screen journey", "core", "Admin view across registration, labels, operations and dashboard"],
   ["Applicant dashboard", "core", "Manufacturer 360 with company, models, QR, fees"],
@@ -183,6 +183,8 @@ const JOURNEY: [string, JStatus, string][] = [
   ["Consumer verification", "core", "Public check and phone scan"],
   ["AI use cases", "simulated", "Four advisory use cases, person decides"],
   ["Secure evidence ledger", "simulated", "Hash chain; Hyperledger Fabric planned"],
+  ["Random product testing", "core", "Grievances and risk shortlist products; BEE tests them; manufacturer sees the result"],
+  ["Sign-in and action trail", "core", "Who signed in, from where, and what they did; per company and for BEE"],
   ["Data model and audit", "core", "Registers, audit history, evidence records"],
   ["Generated formats", "partial", "Certificates and receipts; versioning and e-sign planned"],
   ["Official templates", "planned", "Template retrieval still open"],
@@ -210,6 +212,44 @@ function Donut({ counts, centre, caption }: { counts: Record<JStatus, number>; c
       <text x="70" y="70" textAnchor="middle" fontSize="28" fontWeight="800" fill="#14315E">{centre}</text>
       <text x="70" y="88" textAnchor="middle" fontSize="9" fill="#64748b">{caption}</text>
     </svg>
+  );
+}
+
+
+type Licence = "Apache-2.0" | "MIT" | "BSD-3-Clause" | "GPL-2.0 with Classpath exception" | "GPL-3.0" | "AGPL-3.0" | "EPL-2.0" | "MPL-2.0" | "PostgreSQL Licence";
+type Tech = [name: string, licence: Licence, status: Status];
+/** The technologies behind each layer, with the licence of the open-source project. Every one is open source: there is no licence fee. */
+const STACK: Record<string, Tech[]> = {
+  channels: [["Next.js", "MIT", "built"], ["React", "MIT", "built"]],
+  experience: [["TypeScript", "Apache-2.0", "built"], ["Tailwind CSS", "MIT", "built"], ["Material Symbols", "Apache-2.0", "built"]],
+  api: [["Spring Boot", "Apache-2.0", "built"], ["Spring Security", "Apache-2.0", "built"], ["OpenJDK 17", "GPL-2.0 with Classpath exception", "built"], ["Keycloak", "Apache-2.0", "built"], ["OpenAPI", "Apache-2.0", "built"], ["Apache APISIX", "Apache-2.0", "planned"]],
+  services: [["Spring modules", "Apache-2.0", "built"], ["Apache Airflow", "Apache-2.0", "planned"], ["Rasa Open Source", "Apache-2.0", "planned"], ["Tesseract OCR", "Apache-2.0", "planned"], ["scikit-learn", "BSD-3-Clause", "planned"]],
+  data: [["PostgreSQL", "PostgreSQL Licence", "built"], ["Flyway Community", "Apache-2.0", "built"], ["OpenSearch", "Apache-2.0", "planned"], ["Apache Kafka", "Apache-2.0", "planned"], ["Apache NiFi", "Apache-2.0", "planned"], ["Debezium", "Apache-2.0", "planned"], ["ClickHouse", "Apache-2.0", "planned"], ["Apache Superset", "Apache-2.0", "planned"]],
+  trust: [["SHA-256 hash chain", "Apache-2.0", "simulated"], ["Hyperledger Fabric", "Apache-2.0", "planned"]],
+  platform: [["Docker Engine and Compose", "Apache-2.0", "built"], ["Apache Maven", "Apache-2.0", "built"], ["Node.js", "MIT", "built"], ["Vitest", "MIT", "built"], ["JUnit 5", "EPL-2.0", "built"],
+    ["Kubernetes", "Apache-2.0", "planned"], ["Gitea", "MIT", "planned"], ["Jenkins", "MIT", "planned"], ["Argo CD", "Apache-2.0", "planned"], ["OpenTofu", "MPL-2.0", "planned"], ["Ansible", "GPL-3.0", "planned"],
+    ["Prometheus", "Apache-2.0", "planned"], ["Grafana", "AGPL-3.0", "planned"], ["Trivy", "Apache-2.0", "planned"], ["OWASP ZAP", "Apache-2.0", "planned"], ["k6", "AGPL-3.0", "planned"]],
+};
+const STACK_COUNT = Object.values(STACK).reduce((n, l) => n + l.length, 0);
+
+function OpenSourceBand() {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#b7e0c6] bg-gradient-to-r from-[#0f5132] via-[#146c43] to-[#1c7c4a] text-white shadow-[0_6px_20px_rgba(15,81,50,0.25)]" data-testid="arch-opensource">
+      <div className="grid items-center gap-5 p-6 lg:grid-cols-[1fr_auto]">
+        <div className="flex items-start gap-4">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#146c43]"><Icon name="lock_open" size={30} /></span>
+          <div>
+            <div role="heading" aria-level={2} className="text-[24px] font-extrabold leading-7 !text-white">100% open-source technology stack</div>
+            <p className="mt-1 max-w-2xl text-[14px] text-white/90">Every component we build with or run is open source. No licence fees, no vendor lock-in, and the department keeps full control of the code, the data and the choice of who maintains it.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          {[["100%", "open source"], ["0", "licence fees"], [String(STACK_COUNT), "components"]].map(([v, l]) => (
+            <div key={l} className="rounded-xl bg-white/15 px-4 py-3"><div className="text-[26px] font-extrabold leading-7">{v}</div><div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/80">{l}</div></div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -263,6 +303,7 @@ export function ArchitecturePage() {
             <span className="rounded-full border-2 border-dashed border-white px-3 py-1">Planned · {jc.planned}</span>
           </div>
           <p className="mt-3 text-[12px] text-white/70">Technology blocks below: Built {counts.built} · Simulated {counts.simulated} · Planned {counts.planned}</p>
+          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-[12px] font-bold text-[#146c43]" data-testid="arch-opensource-pill"><Icon name="lock_open" size={16} /> 100% open source · no licence fees</span>
         </div>
         <div className="group relative rounded-2xl bg-white p-2" tabIndex={0} data-testid="arch-readiness">
           <Donut counts={jc} centre={`${pct}%`} caption="journey items working" />
@@ -277,6 +318,8 @@ export function ArchitecturePage() {
           </div>
         </div>
       </div>
+
+      <OpenSourceBand />
 
       <div className="relative z-20 grid gap-3 md:grid-cols-4" data-testid="arch-mach">
         {PILLARS.map((p) => (
@@ -296,7 +339,7 @@ export function ArchitecturePage() {
       <div className="rounded-2xl border border-[#dbe6f7] bg-white p-5" data-testid="arch-stack">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">The building blocks</div>
-          <span className="text-[12px] text-[#64748b]">Click any block to see what it does · letters M A C H show the MACH pillar it serves</span>
+          <span className="text-[12px] text-[#64748b]">Click any block to see what it does · letters M A C H show the MACH pillar it serves · green tags are the open-source technology with its licence</span>
         </div>
         <div className="mt-3 space-y-2">
           {LAYERS.map((l, idx) => (
@@ -313,10 +356,21 @@ export function ArchitecturePage() {
                     {(MACH_OF[i.name] ?? []).length ? <span className="rounded bg-black/15 px-1 text-[10px] font-extrabold">{(MACH_OF[i.name] ?? []).join("")}</span> : null}
                   </button>
                 ))}
+                {(STACK[l.id] ?? []).length ? (
+                  <div className="mt-1 flex w-full flex-wrap items-center gap-1.5 border-t border-dashed border-[#c9d9f7] pt-2" data-testid={`arch-stack-${l.id}`}>
+                    <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#146c43]">Open-source stack</span>
+                    {(STACK[l.id] ?? []).map(([name, licence, st]) => (
+                      <span key={name} title={`${name}: ${licence}${st === "planned" ? " (planned)" : ""}`} className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${st === "planned" ? "border-dashed border-[#9ec9b0] bg-white text-[#146c43]" : "border-[#b7e0c6] bg-[#e9f6ee] text-[#14532d]"}`}>
+                        {name}<span className="font-normal text-[#5b7a6a]">{licence}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           ))}
         </div>
+        <p className="mt-3 text-[11px] italic text-[#64748b]" data-testid="arch-stack-note">Licences are those of each open-source project. External government services (payment gateway, eSign, MCA and GSTN checks, national ID) are connected as services; they are not software we license.</p>
         <div className="mt-4 min-h-[84px] rounded-xl border border-[#c9d9f7] bg-[#f4f8ff] p-4" data-testid="arch-detail" aria-live="polite">
           {picked ? (
             <div className="flex flex-wrap items-start justify-between gap-3">

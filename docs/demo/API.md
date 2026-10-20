@@ -62,6 +62,18 @@ Own-organisation writers: manufacturer, agency. All-submission readers: programm
 | `POST production/{id}/submit` | send for review; editing closes |
 | `POST production/{id}/review` | `decision` accepted or query (a query needs a `note`, at most 800 characters) |
 
+### `production-details` (production per financial-year quarter, serial numbers and label fee; V86)
+After section 1.3 of the SOP for the BEE S&L portal. A manufacturer or agency works its own organisation; BEE staff (officer, director, finance, programme, admin, auditor) read one organisation (`organisation` code) and cannot write. The financial year runs April to March: Q1 is April to June, so the production submission of calendar quarter 2026-Q2 is Q1 of 2026-27, and 2026-Q1 is Q4 of 2025-26.
+| Route | What |
+|---|---|
+| `GET production-details?fy=2026-27` | the grid: per model and quarter the units declared (as certified by the CA), the serial numbers linked (total, bound, voided), a mark for an expired or withdrawn model, and per quarter the units, the label fee, its payment state, and the submission with its count of CA documents; payable, paid and balance; the label fee orders; the financial years offered |
+| `GET production-details/line?app=&fy=&fq=` | the serial numbers linked to one model in one quarter (`offset`, `limit` up to 100, `state` allocated, bound or void) and its batches |
+| `POST production-details/serials` | make serial numbers for a line (`applicationId`, `fy`, `fq`, `quantity` 1 to 5000): a QR batch for the model's certificate, allocated and linked to the line; refused when the quarter has no declared production, when the certificate is revoked on the ledger, and over 100,000 serials for the certificate |
+| `POST production-details/pay` | an order for the label fee of chosen quarters (`fy`, `quarters`): units times the fee rate (a placeholder, 30 rupees a unit, from the SOP example); refused for a quarter with no production or one already paid or pending (409) |
+| `POST production-details/{orderId}/complete` | the simulated gateway answer: `method` billdesk, razorpay or direct_transfer, `outcome` paid or failed; direct transfer stays awaiting confirmation; a paid order gets a receipt number |
+| `POST production-details/{orderId}/cancel` | the person left the payment screen before choosing: the quarters can be paid again |
+Stored in `label_fee_payment` and `production_line_batch` (no foreign keys). CA documents and the submission itself stay in the `production` module. Nothing real moves; the rate is not the rate of Schedules A and B.
+
 ### `mis` (dashboard; V61)
 Read only. Full view: programme, director, secretary, admin, auditor. Finance sees the finance panel only.
 | Route | What |

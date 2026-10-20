@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Pill } from "./DemoShell";
 import { Icon } from "@/components/ui/Icon";
 import { QuarterlySubmission } from "./QuarterlySubmission";
+import { ProductionDetails } from "./ProductionDetails";
 import { ListPager, ListToolbar, SortableTh, useListTools } from "@/components/app/kit/listTools";
 import { demoGet, demoPath, demoPost, type DemoBody } from "@/lib/client/runtimeDemo";
 import { istStamp } from "@/lib/client/istTime";
@@ -113,12 +116,32 @@ function SubmissionsTable({ list, onOpen }: { list: Submission[]; onOpen: (id: s
   );
 }
 
-/** Quarterly production submission: bulk validation, CA evidence, review and reconciliation. Local demonstration, provisional rules. */
+/** Two tabs: the quarterly submission (bulk validation, CA evidence, review, reconciliation) and the production details (what is made, serial numbers, label fee). */
 export function ProductionDemo() {
+  const tab = useSearchParams()?.get("tab") === "details" ? "details" : "submission";
+  return (
+    <>
+      <div className="px-space-md pt-space-md lg:px-space-lg lg:pt-space-lg space-y-space-sm">
+        <h1 className="font-headline-md text-headline-md text-on-surface">Quarterly submission</h1>
+        <nav className="flex flex-wrap gap-2" aria-label="Production views">
+          {([["submission", "Quarterly submission"], ["details", "Production details"]] as const).map(([k, label]) => (
+            <Link key={k} href={k === "details" ? "/app/demo/production?tab=details" : "/app/demo/production"} aria-current={tab === k ? "page" : undefined} data-testid={`production-tab-${k}`}
+              className={`rounded-full border px-4 py-1.5 text-[13px] font-semibold ${tab === k ? "border-primary !bg-primary !text-white" : "border-[#c9d9f7] bg-white !text-primary hover:bg-[#f4f8ff]"}`}>{label}</Link>
+          ))}
+        </nav>
+      </div>
+      {tab === "details" ? <ProductionDetails /> : <SubmissionsTab />}
+    </>
+  );
+}
+
+/** Quarterly production submission: bulk validation, CA evidence, review and reconciliation. Local demonstration, provisional rules. */
+function SubmissionsTab() {
+  const openParam = useSearchParams()?.get("open") ?? "";
   const [list, setList] = useState<Submission[]>([]);
   const [canCreate, setCanCreate] = useState(false);
   const [canReview, setCanReview] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(openParam || null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [recon, setRecon] = useState<Reconciliation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +182,16 @@ export function ProductionDemo() {
       live = false;
     };
   }, []);
+  useEffect(() => {
+    if (!openParam) return;
+    let live = true;
+    void Promise.all([demoGet<Detail & DemoBody>(demoPath("production", openParam)), demoGet<Reconciliation & DemoBody>(demoPath("production", openParam, "reconciliation"))]).then(([d, rc]) => {
+      if (!live || !d.ok) return;
+      setDetail(d.value);
+      setRecon(rc.ok ? rc.value : null);
+    });
+    return () => { live = false; };
+  }, [openParam]);
   const open = (id: string) => {
     setSelected(id);
     setValidation(null);
@@ -207,7 +240,6 @@ export function ProductionDemo() {
 
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="demo-production">
-      <h1 className="font-headline-md text-headline-md text-on-surface">Quarterly submission</h1>
       <QuarterlySubmission />
       <div role="heading" aria-level={2} className="pt-space-md text-[18px] font-bold text-[#14315E]">Production figures and evidence</div>
       {error && (

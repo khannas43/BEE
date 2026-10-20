@@ -181,8 +181,8 @@ public class ManufacturerDirectoryRepository {
                 observation = map("start", day(obsStart), "end", day(obsEnd), "daysLeft", Math.max(0, ChronoUnit.DAYS.between(LocalDate.now(IST), end)));
             }
             List<String> categories = myModels.stream().map(m -> (String) m.get("category")).distinct().collect(Collectors.toList());
-            if (categories.isEmpty() && !myBrands.isEmpty()) {
-                categories = List.of("RAC");
+            if (categories.isEmpty()) {
+                categories = List.of("RAC"); // the programme covers room air conditioners (RAC); a manufacturer with no model yet is listed under it
             }
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", id.toString());

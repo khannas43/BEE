@@ -66,6 +66,7 @@ export const STANDALONE_PAGES: Readonly<Record<string, NavState>> = {
 /** Runtime routes deliberately left out of every menu, or out of the Admin menu while another role has them, with the reason; the Admin coverage tests read this. */
 export const NOT_IN_MENU: Readonly<Record<string, string>> = {
   "/app/registrations/new": "Opened from Registration requests (Start a new request).",
+  "/app/security": "Cybersecurity: opened from the shield icon in the top bar, for every signed-in role.",
   "/app/architecture": "Solution architecture: opened from the icon in the top bar, for every signed-in role.",
   "/app/demo/testing": "Product testing is shown to the BEE Officer only for now; it is not in the Admin menu.",
   "/app/demo/testing/product": "Detail page for one shortlisted product (needs the certificate); opened from the Product testing overview.",

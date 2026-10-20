@@ -107,6 +107,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["The layers and components of the solution: built, simulated and planned"],
   },
   {
+    href: "/app/security",
+    en: "Cybersecurity",
+    hi: "साइबर सुरक्षा",
+    icon: "shield_lock",
+    navRoles: ["manufacturer", "agency", "finance", "programme", "reviewer", "officer", "director", "admin", "auditor", "helpdesk", "iame"],
+    implemented: ["How the solution is secured, by layer, against the OWASP Top 10 and MeitY expectations"],
+  },
+  {
     href: "/app/demo/requests",
     en: "Service requests",
     hi: "सेवा अनुरोध",

@@ -71,6 +71,10 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
           </button>
         ) : null}
 
+        <Link href="/app/security" title="Cybersecurity" aria-label="Cybersecurity" className="flex items-center text-on-surface-variant hover:text-primary" data-testid="security-link">
+          <Icon name="shield_lock" size={22} />
+        </Link>
+
         <Link href="/app/architecture" title="Solution architecture" aria-label="Solution architecture" className="flex items-center text-on-surface-variant hover:text-primary" data-testid="architecture-link">
           <Icon name="account_tree" size={22} />
         </Link>

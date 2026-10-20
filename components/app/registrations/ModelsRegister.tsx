@@ -27,12 +27,12 @@ type Item = {
 export const modelEntryHref = (key: string) => `${registerHref()}?view=model&id=${encodeURIComponent(key)}`;
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
-const LEDGER_WORD: Record<string, string> = { not_submitted: "Not yet on the ledger", pending: "Pending", active: "Active", failed: "Failed", revoked: "Revoked", amended: "Amended" };
+const LEDGER_WORD: Record<string, string> = { not_submitted: "Issued, awaiting ledger record", pending: "Pending", active: "Active", failed: "Failed", revoked: "Revoked", amended: "Amended" };
 const TONE: Record<string, string> = {
   Valid: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]", "Expiring soon": "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", Expired: "bg-[#eef2f7] text-[#475569] border-[#d8e0ea]",
   Revoked: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]", "Awaiting approval": "bg-[#e7effb] text-[#14315E] border-[#c9d9f7]",
   Active: "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]", Pending: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", Failed: "bg-[#fdecea] text-[#93000a] border-[#f5c2c0]",
-  Amended: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", "Not yet on the ledger": "bg-[#eef2f7] text-[#475569] border-[#d8e0ea]",
+  Amended: "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]", "Issued, awaiting ledger record": "bg-[#eef2f7] text-[#475569] border-[#d8e0ea]",
 };
 function Chip({ value }: { value: string }) {
   return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[12px] font-semibold leading-4 ${TONE[value] ?? TONE["Awaiting approval"]}`}>{value}</span>;

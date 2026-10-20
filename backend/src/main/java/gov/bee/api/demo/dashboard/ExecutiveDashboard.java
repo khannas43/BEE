@@ -23,7 +23,7 @@ final class ExecutiveDashboard {
     private static final List<String> PIPELINE = List.of("fee_due", "iame_scrutiny", "bee_scrutiny", "rating", "director_review", "secretary_approval", "approved", "returned", "rejected");
     private static final String MONTH = "to_char(date_trunc('month', %s AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM')";
     private static final String LEDGER_WORD = "CASE "
-        + "WHEN NOT EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id) THEN 'Not yet on the ledger' "
+        + "WHEN NOT EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id) THEN 'Issued, awaiting ledger record' "
         + "WHEN EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id AND t.kind = 'revoke' AND t.state = 'committed') THEN 'Revoked' "
         + "WHEN EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id AND t.state = 'failed' AND NOT EXISTS (SELECT 1 FROM ledger_tx n WHERE n.certificate_id = c.id AND n.seq = t.seq AND n.attempt > t.attempt)) THEN 'Failed' "
         + "WHEN EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id AND t.state = 'pending') THEN 'Waiting for a second signature' "
@@ -105,7 +105,7 @@ final class ExecutiveDashboard {
                 "f.confirmed_at", "a.organisation_id", sc, "m"))));
         charts.add(chart("manufacturers", "bars", "Certificates by manufacturer",
             top(groupCount("SELECT c.organisation_name, count(*) FROM certificate c JOIN model_application a ON a.id = c.application_id WHERE true", "c.issued_at", "a.organisation_id", sc, "c.organisation_name"), 8)));
-        charts.add(chart("ledger", "donut", "Certificates on the ledger", ordered(ledger, List.of("Active", "Waiting for a second signature", "Failed", "Revoked", "Not yet on the ledger"))));
+        charts.add(chart("ledger", "donut", "Certificates on the ledger", ordered(ledger, List.of("Active", "Waiting for a second signature", "Failed", "Revoked", "Issued, awaiting ledger record"))));
         charts.add(chart("waiting", "bars", "How long open applications have waited", waiting(sc)));
         charts.add(chart("production", "bars", "Accepted production by quarter (units)", production(sc)));
         charts.add(chart("payments", "donut", "Payments in the period",

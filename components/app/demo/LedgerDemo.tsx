@@ -30,7 +30,7 @@ type Detail = Row & {
 export const SIMULATED_NOTICE = "Simulated Fabric test network: not Hyperledger Fabric, not a BEE system. Local demonstration with synthetic data.";
 
 const STATUS_LABEL: Record<string, string> = {
-  not_submitted: "Not yet on the ledger", pending: "Pending", active: "Active", failed: "Failed", revoked: "Revoked", amended: "Amended",
+  not_submitted: "Issued, awaiting ledger record", pending: "Pending", active: "Active", failed: "Failed", revoked: "Revoked", amended: "Amended",
 };
 const ACTION_LABEL: Record<string, string> = {
   submit: "Submit to ledger", commit: "Commit (peer)", fail: "Fail commit (simulate)", retry: "Retry", amend: "Amend valid-to", revoke: "Revoke",
@@ -227,7 +227,7 @@ type ChainProps = { detail: Detail };
 /** The certificate's transactions one under the other, each pointing at the hash of the one before it. */
 function Chain({ detail }: ChainProps) {
   const bad = detail.verification.result === "MISMATCH" ? detail.verification.firstBadSeq : null;
-  if (detail.transactions.length === 0) return <p className="text-[13px] text-[#64748b]" data-testid="ledger-txs">Not yet on the ledger: no transactions yet.</p>;
+  if (detail.transactions.length === 0) return <p className="text-[13px] text-[#64748b]" data-testid="ledger-txs">Issued, awaiting ledger record: no transactions yet.</p>;
   return (
     <ol className="space-y-3" data-testid="ledger-txs">
       {detail.transactions.map((t, i) => (
@@ -467,7 +467,7 @@ export function LedgerDemo() {
             <Stat icon="hourglass_top" label="Pending" value={count("pending")} tone="text-[#8a4b00]" note="waiting for a second person" onClick={() => { setView("certs"); setStatusFilter(statusFilter === "pending" ? null : "pending"); }} on={statusFilter === "pending"} />
             <Stat icon="error" label="Failed" value={count("failed")} tone="text-[#93000a]" note="commit failed" onClick={() => { setView("certs"); setStatusFilter(statusFilter === "failed" ? null : "failed"); }} on={statusFilter === "failed"} />
             <Stat icon="block" label="Revoked" value={count("revoked")} tone="text-[#93000a]" note="no longer valid" onClick={() => { setView("certs"); setStatusFilter(statusFilter === "revoked" ? null : "revoked"); }} on={statusFilter === "revoked"} />
-            <Stat icon="deployed_code" label="Transactions" value={blocks.length} note={`${rows.length} certificates, ${count("not_submitted")} not yet on the ledger`} />
+            <Stat icon="deployed_code" label="Transactions" value={blocks.length} note={`${rows.length} certificates, ${count("not_submitted")} awaiting a ledger record`} />
           </div>
           <div role="tablist" aria-label="Ledger views" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button role="tab" aria-selected={view === "certs"} onClick={() => setView("certs")} className="ai-tile" data-testid="ledger-tab-certs">

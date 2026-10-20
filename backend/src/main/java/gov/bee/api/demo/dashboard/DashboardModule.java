@@ -103,7 +103,7 @@ public class DashboardModule implements DemoModule {
 
     /** The ledger's word on a certificate, as a plain phrase (alias {@code c} is the certificate). */
     private static final String LEDGER_WORD = "CASE "
-        + "WHEN NOT EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id) THEN 'Not yet on the ledger' "
+        + "WHEN NOT EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id) THEN 'Issued, awaiting ledger record' "
         + "WHEN EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id AND t.kind = 'revoke' AND t.state = 'committed') THEN 'Revoked' "
         + "WHEN EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id AND t.state = 'failed' AND NOT EXISTS (SELECT 1 FROM ledger_tx n WHERE n.certificate_id = c.id AND n.seq = t.seq AND n.attempt > t.attempt)) THEN 'Failed' "
         + "WHEN EXISTS (SELECT 1 FROM ledger_tx t WHERE t.certificate_id = c.id AND t.state = 'pending') THEN 'Waiting for a second signature' "

@@ -179,6 +179,7 @@ const JOURNEY: [string, JStatus, string][] = [
   ["Model and test report", "core", "Application, product details, test report, rating"],
   ["Officer scrutiny", "core", "Work queue, holds, approvals; full risk queue planned"],
   ["Secure QR batch", "core", "Batches, serials, scannable star labels"],
+  ["Quarterly submission and BEE test", "core", "Products, QR status, BEE test result per quarter"],
   ["Consumer verification", "core", "Public check and phone scan"],
   ["AI use cases", "simulated", "Four advisory use cases, person decides"],
   ["Secure evidence ledger", "simulated", "Hash chain; Hyperledger Fabric planned"],

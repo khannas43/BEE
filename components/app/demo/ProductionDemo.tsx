@@ -46,8 +46,8 @@ const STATE_WORD: Record<string, string> = { draft: "Draft", submitted: "Submitt
 const inputCls = "w-full rounded border border-outline-variant bg-surface px-space-sm py-space-xs font-body-md text-on-surface";
 const btnCls = "rounded bg-primary px-space-md py-space-xs font-label-md text-on-primary disabled:opacity-50";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
+function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <section className="rounded border border-outline-variant p-space-md space-y-space-sm">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 !bg-transparent text-left" data-testid={`prod-section-toggle-${title}`}>
@@ -129,6 +129,11 @@ export function ProductionDemo() {
               className={`rounded-full border px-4 py-1.5 text-[13px] font-semibold ${tab === k ? "border-primary !bg-primary !text-white" : "border-[#c9d9f7] bg-white !text-primary hover:bg-[#f4f8ff]"}`}>{label}</Link>
           ))}
         </nav>
+        <p className="max-w-3xl text-[13px] text-[#475569]" data-testid="production-tab-lead">
+          {tab === "details"
+            ? <>The year&apos;s production ledger: enter and correct the units per model, see the serial numbers and pay the label fee. The CA document and the review by BEE are in <Link href="/app/demo/production" className="font-semibold text-primary hover:underline">Quarterly submission</Link>.</>
+            : <>The quarter&apos;s compliance file: the CA document, submitting to BEE, BEE&apos;s review, the QR reconciliation and the test results. To enter units or pay the label fee, use <Link href="/app/demo/production?tab=details" className="font-semibold text-primary hover:underline">Production details</Link>.</>}
+        </p>
       </div>
       {tab === "details" ? <ProductionDetails /> : <SubmissionsTab />}
     </>
@@ -298,7 +303,7 @@ function SubmissionsTab() {
           </Section>
 
           {editable && (
-            <Section title="Bulk rows (CSV)">
+            <Section title="Advanced: bulk upload (CSV)" defaultOpen={false}>
               <label className="block">
                 <span className="font-label-md">CSV: registration_id,units,period_start,period_end</span>
                 <textarea className={inputCls} rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} />

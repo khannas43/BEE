@@ -19,7 +19,10 @@ describe("ProductionDemo", () => {
       ),
     );
     render(<ProductionDemo />);
-    await waitFor(() => expect(screen.getAllByText("2026-Q3").length).toBeGreaterThan(1));
+    await waitFor(() => expect(screen.getAllByText("2026-Q3").length).toBeGreaterThan(0));
+    // the financial year is chosen and its four quarters are shown: the submitted one is a tile, the other three are greyed out
+    expect(screen.getAllByText("Q2 (July to September)").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("No data yet").length).toBe(3);
     expect(screen.getByRole("button", { name: "Create submission" })).toBeTruthy();
   });
 });

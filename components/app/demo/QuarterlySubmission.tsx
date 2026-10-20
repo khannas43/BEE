@@ -74,6 +74,13 @@ function Stars({ n }: { n: number }) {
 const qrTone = (flag: string, bound: number | null) =>
   bound === null || flag === "unavailable" ? "bg-[#eef2f7] text-[#475569] border-[#d8e0ea]" : flag === "review" ? "bg-[#fff4d6] text-[#8a4b00] border-[#f3dc9c]" : "bg-[#e2f3e8] text-[#14532d] border-[#b7e0c6]";
 
+/** Financial year (April to March) of a calendar quarter such as "2026-Q2", and the calendar quarter of a financial-year quarter. */
+const fyStartOf = (q: string) => (Number(q.slice(6)) === 1 ? Number(q.slice(0, 4)) - 1 : Number(q.slice(0, 4)));
+const fyLabel = (start: number) => `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
+const calendarQuarterOf = (start: number, fq: number) => (fq === 4 ? `${start + 1}-Q1` : `${start}-Q${fq + 1}`);
+const FQ_WORD = ["Q1 (April to June)", "Q2 (July to September)", "Q3 (October to December)", "Q4 (January to March)"];
+const currentFyStart = () => { const d = new Date(); return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; };
+
 export function QuarterlySubmission() {
   const [subs, setSubs] = useState<Submission[] | null>(null);
   const [canCreate, setCanCreate] = useState(false);
@@ -85,6 +92,7 @@ export function QuarterlySubmission() {
   const directory = useManufacturers();
   const [error, setError] = useState<string | null>(null);
   const [glance, setGlance] = useState(true);
+  const [fyPick, setFyPick] = useState<number | null>(null);
   const [pq, setPq] = useState("");
   const [pQr, setPQr] = useState("");
   const [pResult, setPResult] = useState("");
@@ -112,7 +120,11 @@ export function QuarterlySubmission() {
     return () => { live = false; };
   }, []);
 
-  const selected = pick ?? subs?.[0]?.id ?? null;
+  const fyStart = fyPick ?? (subs?.[0] ? fyStartOf(subs[0].quarter) : currentFyStart());
+  const fySubs = (subs ?? []).filter((x) => fyStartOf(x.quarter) === fyStart);
+  const selected = fySubs.find((x) => x.id === pick)?.id ?? fySubs[0]?.id ?? null;
+  const firstFy = Math.min(currentFyStart() - 3, ...(subs ?? []).map((x) => fyStartOf(x.quarter)));
+  const fyOptions = Array.from({ length: currentFyStart() - firstFy + 1 }, (_, k) => currentFyStart() - k);
   useEffect(() => {
     if (!selected) return;
     let live = true;
@@ -210,13 +222,30 @@ export function QuarterlySubmission() {
       {subs.length === 0 ? <p className="font-body-sm text-on-surface-variant">No quarter has been submitted yet.</p> : (
         <>
           {glance ? (<>
-          <div role="tablist" aria-label="Quarters" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {subs.slice(0, 4).map((s) => (
-              <button key={s.id} role="tab" aria-selected={s.id === selected} onClick={() => setPick(s.id)} className="ai-tile" data-testid={`qs-quarter-${s.quarter}`}>
-                <span className="ai-tile-title">{s.quarter}</span>
-                <span className="ai-tile-blurb">{STATE_WORD[s.state] ?? s.state} · {(s.totalUnits ?? 0).toLocaleString("en-IN")} units</span>
-              </button>
-            ))}
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Financial year
+              <select value={fyStart} onChange={(e) => { setFyPick(Number(e.target.value)); setPick(null); }} className="mt-1 block rounded-lg border border-outline-variant bg-white px-3 py-2 text-[13px] normal-case tracking-normal" data-testid="qs-fy">
+                {fyOptions.map((y) => <option key={y} value={y}>{fyLabel(y)}</option>)}
+              </select>
+            </label>
+            <p className="pb-2 text-[12px] text-[#64748b]">{fySubs.length} of 4 quarters have data. A greyed quarter has no submission yet.</p>
+          </div>
+          <div role="tablist" aria-label="Quarters of the financial year" className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="qs-quarters">
+            {[1, 2, 3, 4].map((fq) => {
+              const cq = calendarQuarterOf(fyStart, fq);
+              const s = fySubs.find((x) => x.quarter === cq);
+              return s ? (
+                <button key={fq} role="tab" aria-selected={s.id === selected} onClick={() => setPick(s.id)} className="ai-tile" data-testid={`qs-quarter-${s.quarter}`}>
+                  <span className="ai-tile-title">{FQ_WORD[fq - 1]}</span>
+                  <span className="ai-tile-blurb">{STATE_WORD[s.state] ?? s.state} · {(s.totalUnits ?? 0).toLocaleString("en-IN")} units</span>
+                </button>
+              ) : (
+                <div key={fq} role="tab" aria-disabled="true" aria-selected="false" className="ai-tile !cursor-not-allowed opacity-45" data-testid={`qs-quarter-empty-${fq}`}>
+                  <span className="ai-tile-title">{FQ_WORD[fq - 1]}</span>
+                  <span className="ai-tile-blurb">No data yet</span>
+                </div>
+              );
+            })}
           </div>
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-testid="qs-summary">
@@ -228,6 +257,8 @@ export function QuarterlySubmission() {
           </div>
           </>) : null}
 
+          {fySubs.length === 0 ? <p className="font-body-sm text-on-surface-variant" data-testid="qs-fy-empty">No quarter was submitted in financial year {fyLabel(fyStart)}. Choose another year.</p> : null}
+          {fySubs.length > 0 ? (<>
           <Box testId="qs-box-products" title={`Products in ${sub?.quarter ?? ""}`} note="Units declared for the quarter, the QR codes generated for each product and their status, and the BEE test result.">
             <Filters testId="qs-product-filters" active={Boolean(pq || pQr || pResult)} onClear={() => { setPq(""); setPQr(""); setPResult(""); }}>
               <label className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">Search
@@ -279,6 +310,7 @@ export function QuarterlySubmission() {
             )}
             {recon ? <p className="mt-2 text-[12px] text-[#64748b]">{recon.message}</p> : null}
           </Box>
+          </>) : null}
 
           <Box testId="qs-box-testing" title="Products submitted for testing" note="Each model application is a product sent to BEE for testing. The result appears when the rating is computed and approved.">
             <Filters testId="qs-testing-filters" active={Boolean(tq || tStage || tResult)} onClear={() => { setTq(""); setTStage(""); setTResult(""); }}>

@@ -112,7 +112,7 @@ const LAYERS: Layer[] = [
 
 type Pillar = "M" | "A" | "C" | "H";
 const PILLARS: { key: Pillar; name: string; how: string; status: Status; note: string }[] = [
-  { key: "M", name: "Microservices", how: "Business capabilities are separate modules with their own rules and data: registration, models and rating, QR and production, payments, ledger, AI, messages.", status: "planned", note: "Today: modules inside one API. Target: independent services behind a gateway." },
+  { key: "M", name: "Microservices", how: "Business capabilities are separate modules with their own rules and data: registration, models and rating, QR and production, payments, ledger, AI, messages.", status: "built", note: "Built as separate business modules, deployed together today; independent deployment behind a gateway is planned." },
   { key: "A", name: "API-first", how: "Every screen and channel uses the same pinned OpenAPI contract through the portal server; nothing reads another module's tables directly.", status: "built", note: "Contract, BFF and role checks are running; the API gateway is planned." },
   { key: "C", name: "Cloud-native", how: "Containers, configuration by environment, stateless portal and API, infrastructure as code and orchestration for scaling and recovery.", status: "planned", note: "Today: Docker on one machine. Target: Kubernetes, pipelines, monitoring." },
   { key: "H", name: "Headless", how: "The portal is only one client. The public site, partner portal, QR check and the existing mobile app all consume the same APIs.", status: "built", note: "Portal and API are separate today; more channels are planned." },
@@ -204,6 +204,7 @@ export function ArchitecturePage() {
             <div className="mt-2 text-[22px] font-extrabold leading-6 text-[#14315E]">{p.key}</div>
             <div className="text-[14px] font-bold text-[#14315E]">{p.name}</div>
             <span className={`mt-2 inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${STATUS[p.status].tone}`}>{STATUS[p.status].label}</span>
+            {p.key === "M" ? <div className="mt-1 text-[11px] italic text-[#64748b]">as modules today</div> : null}
           </div>
         ))}
       </div>

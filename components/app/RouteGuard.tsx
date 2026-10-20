@@ -50,11 +50,6 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {pathname !== "/app" && pathname !== "/app/screens" && (
-        <p className="mx-space-md lg:mx-space-lg mt-space-md inline-flex items-center gap-1.5 rounded-full bg-surface-container-low px-space-sm py-1 font-label-sm text-label-sm text-on-surface-variant" data-testid="preview-screen-note">
-          <Icon name="science" size={14} /> Preview screen: sample data, not yet connected to the BEE service.
-        </p>
-      )}
       {children}
     </>
   );

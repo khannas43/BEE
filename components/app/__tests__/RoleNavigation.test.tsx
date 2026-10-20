@@ -281,7 +281,7 @@ describe("15. a preview role grants no route access", () => {
     nav.pathname = "/app/administration/appliance-master";
     render(<RouteGuard><p>admin screen</p></RouteGuard>);
     expect(screen.getByText("admin screen")).toBeTruthy();
-    expect(screen.getByTestId("preview-screen-note")).toBeTruthy();
+    expect(screen.queryByTestId("preview-screen-note")).toBeNull();
     cleanup();
 
     identity.state = { status: "signed-out" };

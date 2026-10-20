@@ -1,3 +1,4 @@
+import { emptySop } from "@/lib/manufacturer-onboarding/sopDefaults";
 import { describe, expect, it } from "vitest";
 import { annexureDocumentsFromHeads } from "../documentKinds";
 import { normalizeDraftFacilities } from "../facilityDefaults";
@@ -17,7 +18,7 @@ function emptyDraft(): ManufacturerDraft {
     annexureNotes: {},
     applicantAccount: null,
     declarationAccepted: false,
-    agreementAccepted: false,
+    agreementAccepted: false, sop: emptySop(),
   };
 }
 

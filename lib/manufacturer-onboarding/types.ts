@@ -30,6 +30,16 @@ export type ManufacturerFacility = {
   city: string;
   state: string;
   pincode: string;
+  /** The SOP's facility form: the same address as the business address, a second address line, district, contact details and the ISO 9001 validity. */
+  sameAsBusiness?: boolean;
+  addressLine2?: string;
+  district?: string;
+  phone?: string;
+  mobile?: string;
+  fax?: string;
+  email?: string;
+  website?: string;
+  qmsValidTill?: string;
 };
 
 export type ManufacturerContact = {
@@ -37,6 +47,36 @@ export type ManufacturerContact = {
   email: string;
   phone: string;
   role: string;
+  /** The SOP's contact person: title, first, middle and last name, designation, mobile and fax. `name` is the full name. */
+  title?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  mobile?: string;
+  fax?: string;
+};
+
+/** Section 1.1 of the SOP for the BEE S&L portal: the fields of the Company Registration Form that the earlier wizard did not have. */
+export type SopDetails = {
+  disclaimerAccepted: boolean;
+  category: "" | "manufacturer" | "importer";
+  /** Small-scale industry (SSI certificate, no security deposit) or large-scale industry (security deposit). */
+  scale: "" | "small" | "large";
+  equipment: string;
+  brandName: string;
+  business: { country: string; district: string; phoneStd: string; phone: string; mobile: string; faxStd: string; fax: string; website: string; email: string };
+  companyRegNo: string;
+  companyRegDate: string;
+  companyPan: string;
+  annualTurnoverLakhs: string;
+  /** The payment of the registration charge and security deposit (simulated; nothing real moves). */
+  payment: {
+    method: "" | "billdesk" | "razorpay" | "direct_transfer";
+    status: "" | "paid" | "awaiting_confirmation";
+    receipt: string;
+    recordedAt: string;
+    transfer: { bank: string; transactionId: string; paymentDate: string; remarks: string };
+  };
 };
 
 /** Demo registration: stored in `draft_payload` for the presenter (Keycloak still uses seeded users). */
@@ -73,6 +113,8 @@ export type AnnexureDocument = {
   uploadedAt: string | null;
   /** Applicant-provided label (also stored in draft `annexureNotes`). */
   customLabel?: string;
+  /** "Valid till" date of the latest version, when the SOP asks for it. */
+  expiresOn?: string;
 };
 
 export type ManufacturerDraft = {
@@ -95,6 +137,7 @@ export type ManufacturerDraft = {
   applicantAccount: ApplicantAccountRecord | null;
   declarationAccepted: boolean;
   agreementAccepted: boolean;
+  sop: SopDetails;
 };
 
 export type PaymentSummary = {

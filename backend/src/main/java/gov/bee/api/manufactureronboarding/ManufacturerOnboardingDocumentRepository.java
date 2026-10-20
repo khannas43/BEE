@@ -13,7 +13,8 @@ public class ManufacturerOnboardingDocumentRepository {
 
     public static final Set<String> DOCUMENT_KINDS = Set.of(
         "trade_licence", "certificate_of_incorporation", "gst_certificate", "pan_card", "signatory_photo_id",
-        "facility_address_proof", "signed_declaration", "signed_agreement", "annexure_supporting");
+        "facility_address_proof", "signed_declaration", "signed_agreement", "annexure_supporting",
+        "retailers_list", "trademark_company_registration", "qms_iso9001", "signatory_authority_letter", "signatory_id_proof", "ssi_certificate");
 
     private final JdbcTemplate jdbc;
 

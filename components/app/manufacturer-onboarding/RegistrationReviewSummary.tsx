@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { formatFeeInr } from "@/lib/manufacturer-onboarding/fees";
+import { CATEGORY_OPTIONS, PAYMENT_METHOD_LABELS, feeLines, feeTotal, inr } from "@/lib/manufacturer-onboarding/sopDefaults";
 import type { ManufacturerApplication, ManufacturerDraft } from "@/lib/manufacturer-onboarding/types";
 import { MANUFACTURER_REGISTRATION_STEPS, type ManufacturerRegistrationStepId } from "./wizardSteps";
 
@@ -59,23 +60,24 @@ type Props = {
 };
 
 export function RegistrationReviewSummary({ draft, appRecord, onEditStep, readOnly }: Props) {
-  const sig = draft.authorisedSignatory;
+  const sop = draft.sop;
   const addr = draft.registeredAddress;
-  const contact = draft.contacts[0];
-  const fee = appRecord ? formatFeeInr(appRecord.payment.amountInr) : "—";
+  const biz = sop.business;
   const account = draft.applicantAccount;
+  const pay = sop.payment;
+  const fee = appRecord ? formatFeeInr(appRecord.payment.amountInr) : "—";
+  const category = CATEGORY_OPTIONS.find((o) => o.value === sop.category)?.label ?? "";
+  const scale = sop.scale === "small" ? "Small-scale industry (SSI)" : sop.scale === "large" ? "Large-scale industry" : "";
+  const dash = (v: string | undefined) => v ?? "";
+  const step = (id: ManufacturerRegistrationStepId) => MANUFACTURER_REGISTRATION_STEPS.find((x) => x.id === id)!.title;
 
   return (
     <div className="space-y-space-md" data-testid="registration-review-summary">
-      {!readOnly ? (
-        <p className="text-sm font-body-sm text-on-surface-variant">
-          Confirm every section below. When you submit, the demonstration fee is recorded automatically and eligibility checks run before activation under the 15-day observation window.
-        </p>
-      ) : (
-        <p className="text-sm font-body-sm text-on-surface-variant">
-          Submitted registration details as recorded in the application draft.
-        </p>
-      )}
+      <p className="text-sm font-body-sm text-on-surface-variant">
+        {readOnly
+          ? "Submitted registration details as recorded in the application."
+          : "Review the agency information. When you submit, the registration charge is recorded automatically and eligibility checks run before activation under the 15-day observation window."}
+      </p>
 
       {account?.username?.trim() ? (
         <ReviewBlock title="Applicant portal account" stepId="company" onEdit={onEditStep} readOnly={readOnly}>
@@ -84,69 +86,77 @@ export function RegistrationReviewSummary({ draft, appRecord, onEditStep, readOn
         </ReviewBlock>
       ) : null}
 
-      <ReviewBlock title={MANUFACTURER_REGISTRATION_STEPS[0].title} stepId="company" onEdit={onEditStep} readOnly={readOnly}>
-        <ReviewItem label="Legal name" value={draft.legalName} wide />
-        <ReviewItem label="CIN" value={draft.cin} />
-        <ReviewItem label="GSTIN" value={draft.gstin} />
-        <ReviewItem label="Address line 1" value={addr.line1} wide />
-        <ReviewItem label="Address line 2" value={addr.line2} wide />
-        <ReviewItem label="State" value={addr.state} />
-        <ReviewItem label="City" value={addr.city} />
-        <ReviewItem label="PIN code" value={addr.pincode} />
+      <ReviewBlock title={step("company")} stepId="company" onEdit={onEditStep} readOnly={readOnly}>
+        <ReviewItem label="Name of the firm" value={draft.legalName} wide />
+        <ReviewItem label="Category" value={category} />
+        <ReviewItem label="Scale of industry" value={scale} />
+        <ReviewItem label="Equipment" value={sop.equipment} />
+        <ReviewItem label="Brand name" value={sop.brandName} />
       </ReviewBlock>
 
-      <ReviewBlock title={MANUFACTURER_REGISTRATION_STEPS[1].title} stepId="facilities" onEdit={onEditStep} readOnly={readOnly}>
+      <ReviewBlock title={step("business")} stepId="business" onEdit={onEditStep} readOnly={readOnly}>
+        <ReviewItem label="Address line 1" value={addr.line1} wide />
+        <ReviewItem label="Address line 2" value={addr.line2} wide />
+        <ReviewItem label="City / town" value={addr.city} />
+        <ReviewItem label="District" value={biz.district} />
+        <ReviewItem label="State" value={addr.state} />
+        <ReviewItem label="Country" value={biz.country} />
+        <ReviewItem label="Pincode" value={addr.pincode} />
+        <ReviewItem label="Phone" value={[biz.phoneStd, biz.phone].filter(Boolean).join("-")} />
+        <ReviewItem label="Mobile" value={biz.mobile} />
+        <ReviewItem label="Fax" value={[biz.faxStd, biz.fax].filter(Boolean).join("-")} />
+        <ReviewItem label="Email" value={biz.email} />
+        <ReviewItem label="Website" value={biz.website} />
+      </ReviewBlock>
+
+      <ReviewBlock title={step("facilities")} stepId="facilities" onEdit={onEditStep} readOnly={readOnly}>
         {draft.facilities.length === 0 ? (
           <ReviewItem label="Facilities" value="None added" wide />
         ) : (
           draft.facilities.flatMap((f, i) => [
-            <ReviewItem key={`${f.id}-name`} label={`Facility ${i + 1} name`} value={f.name} wide />,
-            <ReviewItem key={`${f.id}-street`} label={`Facility ${i + 1} street`} value={f.addressLine} wide />,
-            <ReviewItem key={`${f.id}-state`} label={`Facility ${i + 1} state`} value={f.state} />,
-            <ReviewItem key={`${f.id}-city`} label={`Facility ${i + 1} city`} value={f.city} />,
-            <ReviewItem key={`${f.id}-pin`} label={`Facility ${i + 1} PIN`} value={f.pincode} />,
+            <ReviewItem key={`${f.id}-name`} label={`Facility ${i + 1}`} value={f.name} wide />,
+            <ReviewItem key={`${f.id}-addr`} label="Address" value={[f.addressLine, f.addressLine2, f.city, f.district, f.state, f.pincode].filter(Boolean).join(", ")} wide />,
+            <ReviewItem key={`${f.id}-contact`} label="Contact" value={[f.mobile, f.email].filter(Boolean).join(" · ")} />,
+            <ReviewItem key={`${f.id}-qms`} label="ISO 9001 valid till" value={dash(f.qmsValidTill)} />,
           ])
         )}
       </ReviewBlock>
 
-      <ReviewBlock title={MANUFACTURER_REGISTRATION_STEPS[2].title} stepId="contacts" onEdit={onEditStep} readOnly={readOnly}>
-        <ReviewItem label="Signatory name" value={sig.name} />
-        <ReviewItem label="Designation" value={sig.role} />
-        <ReviewItem label="DIN" value={sig.din} />
-        <ReviewItem label="PAN" value={sig.pan} />
-        <ReviewItem label="Aadhaar" value={sig.aadhaar} />
-        <ReviewItem label="Email" value={sig.email} />
-        <ReviewItem label="Mobile" value={sig.phone} />
-        <ReviewItem label="Father / guardian" value={sig.fatherName} wide />
-        <ReviewItem label="Residential line 1" value={sig.residentialAddress.line1} wide />
-        <ReviewItem label="Residential line 2" value={sig.residentialAddress.line2} wide />
-        <ReviewItem label="Residential state" value={sig.residentialAddress.state} />
-        <ReviewItem label="Residential city" value={sig.residentialAddress.city} />
-        <ReviewItem label="Residential PIN" value={sig.residentialAddress.pincode} />
-        <ReviewItem label="Company contact name" value={contact?.name ?? ""} />
-        <ReviewItem label="Company contact email" value={contact?.email ?? ""} />
-        <ReviewItem label="Company contact mobile" value={contact?.phone ?? ""} />
-        <ReviewItem label="Company contact role" value={contact?.role ?? ""} />
+      <ReviewBlock title={step("contacts")} stepId="contacts" onEdit={onEditStep} readOnly={readOnly}>
+        {draft.contacts.length === 0 ? (
+          <ReviewItem label="Contact persons" value="None added" wide />
+        ) : (
+          draft.contacts.flatMap((c, i) => [
+            <ReviewItem key={`c${i}-name`} label={i === 0 ? "Contact person 1 (signatory)" : `Contact person ${i + 1}`} value={[c.title, c.name].filter(Boolean).join(" ")} wide />,
+            <ReviewItem key={`c${i}-role`} label="Designation" value={c.role} />,
+            <ReviewItem key={`c${i}-email`} label="Email" value={c.email} />,
+            <ReviewItem key={`c${i}-mobile`} label="Mobile" value={dash(c.mobile)} />,
+          ])
+        )}
       </ReviewBlock>
 
-      <ReviewBlock title={MANUFACTURER_REGISTRATION_STEPS[3].title} stepId="annexure" onEdit={onEditStep} readOnly={readOnly}>
+      <ReviewBlock title={step("registration")} stepId="registration" onEdit={onEditStep} readOnly={readOnly}>
+        <ReviewItem label="Company registration no." value={sop.companyRegNo} />
+        <ReviewItem label="Company registration date" value={sop.companyRegDate} />
+        <ReviewItem label="Company's PAN" value={sop.companyPan} />
+        <ReviewItem label="Annual turnover (lakhs)" value={sop.annualTurnoverLakhs} />
+        <ReviewItem label="CIN (optional)" value={draft.cin} />
+        <ReviewItem label="GSTIN (optional)" value={draft.gstin} />
+      </ReviewBlock>
+
+      <ReviewBlock title={step("annexure")} stepId="annexure" onEdit={onEditStep} readOnly={readOnly}>
         {draft.annexureDocuments.map((doc) => (
-          <ReviewItem
-            key={doc.id}
-            label={doc.kind}
-            value={doc.uploadedAt ? doc.fileName : "Not uploaded"}
-            wide
-          />
+          <ReviewItem key={doc.id} label={doc.kind} value={doc.uploadedAt ? `${doc.fileName}${doc.expiresOn ? ` · valid till ${doc.expiresOn}` : ""}` : "Not uploaded"} wide />
         ))}
       </ReviewBlock>
 
-      <ReviewBlock title={MANUFACTURER_REGISTRATION_STEPS[4].title} stepId="declaration" onEdit={onEditStep} readOnly={readOnly}>
-        <ReviewItem label="Declaration accepted" value={draft.declarationAccepted ? "Yes" : "No"} />
-        <ReviewItem label="Agreement accepted" value={draft.agreementAccepted ? "Yes" : "No"} />
-      </ReviewBlock>
-
-      <ReviewBlock title={MANUFACTURER_REGISTRATION_STEPS[5].title} stepId="fee" onEdit={onEditStep} readOnly={readOnly}>
-        <ReviewItem label="Registration fee" value={`₹ ${fee} INR`} wide />
+      <ReviewBlock title={step("payment")} stepId="payment" onEdit={onEditStep} readOnly={readOnly}>
+        {feeLines(sop.scale).map((l) => <ReviewItem key={l.label} label={l.label} value={inr(l.amountInr)} />)}
+        <ReviewItem label="Payment amount" value={sop.scale ? inr(feeTotal(sop.scale)) : ""} />
+        <ReviewItem label="Method" value={pay.method ? PAYMENT_METHOD_LABELS[pay.method] : ""} />
+        <ReviewItem label="Status" value={pay.status === "paid" ? "Paid (simulated)" : pay.status === "awaiting_confirmation" ? "Awaiting confirmation by BEE Finance" : ""} />
+        <ReviewItem label="Receipt" value={pay.receipt} />
+        {appRecord ? <ReviewItem label="Registration charge recorded at submit" value={`₹ ${fee} INR`} wide /> : null}
       </ReviewBlock>
     </div>
   );

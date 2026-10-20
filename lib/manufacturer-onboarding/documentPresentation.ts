@@ -2,6 +2,12 @@ import type { ManufacturerOnboardingDocumentKind } from "./documentKinds";
 import { DOCUMENT_KIND_LABELS, MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "./documentKinds";
 
 export const DOCUMENT_KIND_ICONS: Record<ManufacturerOnboardingDocumentKind, string> = {
+  retailers_list: "storefront",
+  trademark_company_registration: "workspace_premium",
+  qms_iso9001: "verified",
+  signatory_authority_letter: "history_edu",
+  signatory_id_proof: "badge",
+  ssi_certificate: "factory",
   trade_licence: "description",
   certificate_of_incorporation: "account_balance",
   gst_certificate: "receipt",

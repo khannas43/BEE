@@ -96,7 +96,7 @@ class WorkflowFoundationDatabaseTest {
         Flyway.configure().dataSource(migrateSource(MAIN)).schemas(MAIN).defaultSchema(MAIN).createSchemas(false)
             .locations("classpath:db/migration").load().migrate();
         owner = new JdbcTemplate(migrateSource(MAIN));
-        assertEquals(88, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
+        assertEquals(89, owner.queryForObject("SELECT max(installed_rank) FROM flyway_schema_history", Integer.class));
         owner.execute(Files.readString(Path.of("..", "local", "seed", "seed.sql")));
         runtime = new JdbcTemplate(runtimeSource(MAIN));
         tx = new TransactionTemplate(new DataSourceTransactionManager(runtime.getDataSource()));

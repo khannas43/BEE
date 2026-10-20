@@ -2,6 +2,7 @@
  * Initial fixture records for the optimized manufacturer onboarding demo.
  * Imported only by the fixture client — components must use ManufacturerOnboardingClient.
  */
+import { emptySop } from "./sopDefaults";
 import { annexureDocumentsFromHeads, MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "./documentKinds";
 import {
   PROVISIONAL_COMPANY_REGISTRATION_FEE_INR,
@@ -61,7 +62,7 @@ const baseDraft = {
   annexureNotes: {},
   applicantAccount: null,
   declarationAccepted: true,
-  agreementAccepted: true,
+  agreementAccepted: true, sop: emptySop(),
 };
 
 export function buildPaymentBase() {

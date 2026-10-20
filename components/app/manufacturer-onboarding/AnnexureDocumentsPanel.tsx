@@ -1,7 +1,7 @@
 "use client";
 
 import { Icon } from "@/components/ui/Icon";
-import { DOCUMENT_KIND_LABELS, type ManufacturerOnboardingDocumentKind } from "@/lib/manufacturer-onboarding/documentKinds";
+import { DOCUMENT_KIND_HINTS, DOCUMENT_KIND_LABELS, DOCUMENT_KINDS_WITH_VALIDITY, type ManufacturerOnboardingDocumentKind } from "@/lib/manufacturer-onboarding/documentKinds";
 import { DOCUMENT_KIND_ICONS } from "@/lib/manufacturer-onboarding/documentPresentation";
 import type { AnnexureDocument, ManufacturerDraft } from "@/lib/manufacturer-onboarding/types";
 import { wizardInputClass } from "./wizardChrome";
@@ -12,6 +12,9 @@ const uploadBtnBase =
 type Props = {
   draft: ManufacturerDraft;
   busy: boolean;
+  /** "Valid till" dates typed for the documents that carry one (before they are uploaded). */
+  validity?: Record<string, string>;
+  onValidityChange?: (documentKind: string, value: string) => void;
   onNotesChange: (documentKind: string, value: string) => void;
   onUpload: (documentKind: ManufacturerOnboardingDocumentKind, file: File) => void;
   onRemove: (documentKind: ManufacturerOnboardingDocumentKind) => void;
@@ -21,7 +24,7 @@ function requiredKindLabel(kind: ManufacturerOnboardingDocumentKind): string {
   return DOCUMENT_KIND_LABELS[kind];
 }
 
-export function AnnexureDocumentsPanel({ draft, busy, onNotesChange, onUpload, onRemove }: Props) {
+export function AnnexureDocumentsPanel({ draft, busy, validity = {}, onValidityChange, onNotesChange, onUpload, onRemove }: Props) {
   return (
     <ul className="space-y-2" data-testid="annexure-document-list">
       {draft.annexureDocuments.map((doc) => (
@@ -30,6 +33,8 @@ export function AnnexureDocumentsPanel({ draft, busy, onNotesChange, onUpload, o
           doc={doc}
           busy={busy}
           note={draft.annexureNotes[doc.id] ?? ""}
+          validTill={validity[doc.id] ?? doc.expiresOn ?? ""}
+          onValidTillChange={onValidityChange ? (v) => onValidityChange(doc.id, v) : undefined}
           onNotesChange={(v) => onNotesChange(doc.id, v)}
           onUpload={(file) => onUpload(doc.id as ManufacturerOnboardingDocumentKind, file)}
           onRemove={() => onRemove(doc.id as ManufacturerOnboardingDocumentKind)}
@@ -43,12 +48,16 @@ function AnnexureDocumentRow({
   doc,
   note,
   busy,
+  validTill,
+  onValidTillChange,
   onNotesChange,
   onUpload,
   onRemove,
 }: {
   doc: AnnexureDocument;
   note: string;
+  validTill: string;
+  onValidTillChange?: (value: string) => void;
   busy: boolean;
   onNotesChange: (value: string) => void;
   onUpload: (file: File) => void;
@@ -77,7 +86,10 @@ function AnnexureDocumentRow({
 
         <div className="flex-1 min-w-0 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-            <p className="text-sm font-semibold text-on-surface">{requiredTitle}</p>
+            <div>
+              <p className="text-sm font-semibold text-on-surface">{requiredTitle}</p>
+              {DOCUMENT_KIND_HINTS[kind] ? <p className="text-xs text-on-surface-variant">{DOCUMENT_KIND_HINTS[kind]}</p> : null}
+            </div>
             {uploaded ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-xs font-label-sm" data-testid={`upload-status-${doc.id}`}>
                 <Icon name="check_circle" size={14} />
@@ -91,6 +103,12 @@ function AnnexureDocumentRow({
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-end gap-2 w-full">
+            {DOCUMENT_KINDS_WITH_VALIDITY.includes(kind) && onValidTillChange ? (
+              <label className="block shrink-0">
+                <span className="text-xs font-label-sm text-on-surface-variant">Valid till (before uploading)</span>
+                <input type="date" className={wizardInputClass} value={validTill} onChange={(e) => onValidTillChange(e.target.value)} data-testid={`annexure-valid-till-${doc.id}`} />
+              </label>
+            ) : null}
             <label className="block flex-1 min-w-0 sm:mb-0">
               <span className="text-xs font-label-sm text-on-surface-variant">Document name / reference</span>
               <input

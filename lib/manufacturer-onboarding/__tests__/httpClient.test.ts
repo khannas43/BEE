@@ -1,3 +1,4 @@
+import { emptySop } from "@/lib/manufacturer-onboarding/sopDefaults";
 import { describe, expect, it, vi } from "vitest";
 import { MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "../documentKinds";
 import { mapBackendDetail } from "../mapBackend";
@@ -123,7 +124,7 @@ describe("manufacturer onboarding HTTP adapter", () => {
         annexureNotes: {},
         applicantAccount: null,
         declarationAccepted: true,
-        agreementAccepted: false,
+        agreementAccepted: false, sop: emptySop(),
       },
     });
     expect(patchBody).toMatchObject({ version: 2, legalName: "Aarav Appliances Pvt Ltd" });
@@ -199,7 +200,9 @@ describe("manufacturer onboarding HTTP adapter", () => {
   });
 
   it("covers every required document kind constant", () => {
+    // the six kinds of section 1.1 of the SOP, then the eight kinds of the earlier wizard (still read for records submitted before)
     expect(MANUFACTURER_ONBOARDING_DOCUMENT_KINDS).toContain("signed_agreement");
-    expect(MANUFACTURER_ONBOARDING_DOCUMENT_KINDS.length).toBe(8);
+    expect(MANUFACTURER_ONBOARDING_DOCUMENT_KINDS).toContain("retailers_list");
+    expect(MANUFACTURER_ONBOARDING_DOCUMENT_KINDS.length).toBe(14);
   });
 });

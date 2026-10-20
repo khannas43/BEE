@@ -36,6 +36,12 @@ export const MANUFACTURER_ONBOARDING_DOCUMENT_KINDS = [
   "signed_declaration",
   "signed_agreement",
   "annexure_supporting",
+  "retailers_list",
+  "trademark_company_registration",
+  "qms_iso9001",
+  "signatory_authority_letter",
+  "signatory_id_proof",
+  "ssi_certificate",
 ] as const;
 
 export interface ManufacturerOnboardingItem {
@@ -202,7 +208,7 @@ const validateObservation = (o: unknown): boolean => {
 
 const validateDraftObject = (draft: unknown): boolean => {
   if (!isObject(draft)) return false;
-  const allowed = ["cin", "gstin", "declarationAccepted", "agreementAccepted", "registeredAddress", "authorisedSignatory", "facilities", "contacts", "annexureNotes"];
+  const allowed = ["cin", "gstin", "declarationAccepted", "agreementAccepted", "registeredAddress", "authorisedSignatory", "facilities", "contacts", "annexureNotes", "sop"];
   if (!exactKeys(draft, [], allowed)) return false;
   return true;
 };

@@ -3,6 +3,7 @@ import { annexureDocumentsFromHeads } from "./documentKinds";
 import { annexureDisplayTitle, readAnnexureNotes } from "./documentPresentation";
 import { normalizeManufacturerPhase } from "./phaseMapping";
 import { emptyAuthorisedSignatory } from "./signatoryDefaults";
+import { emptySop } from "./sopDefaults";
 import type {
   AnomalyRecord,
   AutomatedCheck,
@@ -15,6 +16,7 @@ import type {
   ManufacturerFacility,
   ManufacturerLifecyclePhase,
   PaymentSummary,
+  SopDetails,
   TimelineEvent,
 } from "./types";
 
@@ -78,14 +80,24 @@ function readFacilities(draft: BackendDraft | undefined): ManufacturerFacility[]
   const raw = draft?.facilities;
   if (!Array.isArray(raw)) return [];
   return raw.map((f, i) => {
-    const row = f as Record<string, string>;
+    const row = f as Record<string, unknown>;
+    const str = (k: string) => (typeof row[k] === "string" ? (row[k] as string) : "");
     return {
-      id: row.id ?? `fac-${i + 1}`,
-      name: row.name ?? "",
-      addressLine: row.addressLine ?? row.line1 ?? "",
-      city: row.city ?? "",
-      state: row.state ?? "",
-      pincode: row.pincode ?? "",
+      id: str("id") || `fac-${i + 1}`,
+      name: str("name"),
+      addressLine: str("addressLine") || str("line1"),
+      city: str("city"),
+      state: str("state"),
+      pincode: str("pincode"),
+      sameAsBusiness: row.sameAsBusiness === true,
+      addressLine2: str("addressLine2"),
+      district: str("district"),
+      phone: str("phone"),
+      mobile: str("mobile"),
+      fax: str("fax"),
+      email: str("email"),
+      website: str("website"),
+      qmsValidTill: str("qmsValidTill"),
     };
   });
 }
@@ -98,6 +110,12 @@ function readContact(raw: unknown): ManufacturerContact {
     email: c.email ?? "",
     phone: c.phone ?? "",
     role: c.role ?? c.designation ?? "",
+    title: c.title ?? "",
+    firstName: c.firstName ?? "",
+    middleName: c.middleName ?? "",
+    lastName: c.lastName ?? "",
+    mobile: c.mobile ?? "",
+    fax: c.fax ?? "",
   };
 }
 
@@ -139,10 +157,47 @@ function readSignatory(raw: unknown): AuthorisedSignatory {
   };
 }
 
+function readSop(raw: unknown): SopDetails {
+  const base = emptySop();
+  if (!raw || typeof raw !== "object") return base;
+  const r = raw as Record<string, unknown>;
+  const str = (o: unknown, k: string, fallback = "") => (o && typeof o === "object" && typeof (o as Record<string, unknown>)[k] === "string" ? ((o as Record<string, string>)[k]) : fallback);
+  const biz = r.business;
+  const pay = r.payment;
+  const transfer = pay && typeof pay === "object" ? (pay as Record<string, unknown>).transfer : null;
+  const category = str(r, "category");
+  const scale = str(r, "scale");
+  const method = str(pay, "method");
+  const status = str(pay, "status");
+  return {
+    disclaimerAccepted: r.disclaimerAccepted === true,
+    category: category === "manufacturer" || category === "importer" ? category : "",
+    scale: scale === "small" || scale === "large" ? scale : "",
+    equipment: str(r, "equipment"),
+    brandName: str(r, "brandName"),
+    business: {
+      country: str(biz, "country", base.business.country), district: str(biz, "district"), phoneStd: str(biz, "phoneStd"), phone: str(biz, "phone"),
+      mobile: str(biz, "mobile"), faxStd: str(biz, "faxStd"), fax: str(biz, "fax"), website: str(biz, "website"), email: str(biz, "email"),
+    },
+    companyRegNo: str(r, "companyRegNo"),
+    companyRegDate: str(r, "companyRegDate"),
+    companyPan: str(r, "companyPan"),
+    annualTurnoverLakhs: str(r, "annualTurnoverLakhs"),
+    payment: {
+      method: method === "billdesk" || method === "razorpay" || method === "direct_transfer" ? method : "",
+      status: status === "paid" || status === "awaiting_confirmation" ? status : "",
+      receipt: str(pay, "receipt"),
+      recordedAt: str(pay, "recordedAt"),
+      transfer: { bank: str(transfer, "bank"), transactionId: str(transfer, "transactionId"), paymentDate: str(transfer, "paymentDate"), remarks: str(transfer, "remarks") },
+    },
+  };
+}
+
 function mapDraft(body: BackendDetail): ManufacturerDraft {
   const draft = body.draft;
   const notes = readAnnexureNotes(draft?.annexureNotes);
-  const documents = annexureDocumentsFromHeads(body.documents).map((d) => ({
+  const sop = readSop(draft?.sop);
+  const documents = annexureDocumentsFromHeads(body.documents, sop.scale).map((d) => ({
     ...d,
     kind: annexureDisplayTitle(d.id, notes),
     customLabel: notes[d.id] ?? "",
@@ -160,6 +215,7 @@ function mapDraft(body: BackendDetail): ManufacturerDraft {
     applicantAccount: readApplicantAccount(draft?.applicantAccount),
     declarationAccepted: draft?.declarationAccepted === true,
     agreementAccepted: draft?.agreementAccepted === true,
+    sop,
   };
 }
 
@@ -354,15 +410,26 @@ export function toBackendDraft(draft: ManufacturerDraft): Record<string, unknown
         pincode: draft.authorisedSignatory.residentialAddress.pincode,
       },
     },
-    facilities: draft.facilities.map(({ name, addressLine, city, state, pincode }) => ({
+    facilities: draft.facilities.map(({ id, name, addressLine, city, state, pincode, sameAsBusiness, addressLine2, district, phone, mobile, fax, email, website, qmsValidTill }) => ({
+      id,
       name,
       addressLine,
       city,
       state,
       pincode,
+      sameAsBusiness: sameAsBusiness === true,
+      addressLine2: addressLine2 ?? "",
+      district: district ?? "",
+      phone: phone ?? "",
+      mobile: mobile ?? "",
+      fax: fax ?? "",
+      email: email ?? "",
+      website: website ?? "",
+      qmsValidTill: qmsValidTill ?? "",
     })),
     contacts: draft.contacts,
     annexureNotes: draft.annexureNotes,
+    sop: draft.sop,
     ...(draft.applicantAccount
       ? {
           applicantAccount: {

@@ -15,7 +15,6 @@ import { observationCountdown } from "@/lib/manufacturer-onboarding/observation"
 import { canAccessManufacturerRoute } from "@/lib/manufacturer-onboarding/access";
 import { effectiveOnboardingRoles } from "@/lib/manufacturer-onboarding/identity";
 import { runtimeNavFor } from "@/lib/runtimeRoutes";
-import { MANUFACTURER_ONBOARDING_DOCUMENT_KINDS } from "@/lib/manufacturer-onboarding/documentKinds";
 import { MANUFACTURER_ONBOARDING_USE_FIXTURE } from "@/lib/manufacturer-onboarding/client";
 import { createManufacturerOnboardingHttpClient, MANUFACTURER_ONBOARDING_BFF } from "@/lib/manufacturer-onboarding/httpClient";
 import RegisterManufacturerPage from "@/app/(public)/register/manufacturer/page";
@@ -147,10 +146,13 @@ describe("manufacturer onboarding UI", () => {
 
   it("wizard, lifecycle and 360 show the same ₹5,000 fee from the payment record", async () => {
     render(wrap(<OnboardingWizard />));
-    await screen.findByTestId("field-legal-name");
-    fireEvent.click(screen.getByTestId("step-fee"));
-    await screen.findByTestId("wizard-fee");
-    expect(screen.getByTestId("wizard-fee").textContent).toContain(feeDisplay);
+    await screen.findByTestId("step-company");
+    // a small-scale industry pays the registration charge only (no security deposit)
+    fireEvent.click(screen.getByTestId("step-company"));
+    fireEvent.click(await screen.findByTestId("field-scale-small"));
+    fireEvent.click(screen.getByTestId("step-payment"));
+    await screen.findByTestId("payment-total");
+    expect(screen.getByTestId("payment-total").textContent).toContain("5,000");
 
     cleanup();
     render(wrap(<ApplicationLifecycle id={FIXTURE_APPLICATION_IDS.director} />));
@@ -165,25 +167,56 @@ describe("manufacturer onboarding UI", () => {
 
   it("complete applicant wizard through submit", async () => {
     render(wrap(<OnboardingWizard />));
-    await screen.findByTestId("field-legal-name");
-    fireEvent.change(screen.getByTestId("field-legal-name"), { target: { value: "Aarav Appliances Pvt Ltd" } });
-    fireEvent.change(screen.getByTestId("field-cin"), { target: { value: "U29300MH2018PTC312045" } });
-    // Company and registered-office details are completed together in step 1.
-    for (const key of ["line1", "city", "state", "pincode"] as const) {
-      fireEvent.change(screen.getByTestId(`field-address-${key}`), { target: { value: "Demo value" } });
-    }
+    await screen.findByTestId("step-disclaimer");
+    const type = (id: string, value: string) => fireEvent.change(screen.getByTestId(id), { target: { value } });
+    fireEvent.click(screen.getByTestId("step-disclaimer"));
+    fireEvent.click(await screen.findByTestId("disclaimer-accept"));
+    fireEvent.click(screen.getByTestId("step-company"));
+    type("field-legal-name", "Aarav Appliances Pvt Ltd");
+    type("field-category", "manufacturer");
+    fireEvent.click(screen.getByTestId("field-scale-large"));
+    type("field-equipment", "Room Air Conditioner (Fixed Speed)");
+    type("field-brand-name", "Aarav Cool");
+    fireEvent.click(screen.getByTestId("step-business"));
+    type("field-address-line1", "12 Industrial Area");
+    type("field-address-state", "Maharashtra");
+    type("field-address-pincode", "400063");
+    type("field-business-mobile", "9876543210");
+    type("field-business-email", "info@aarav.example");
+    fireEvent.click(screen.getByTestId("step-facilities"));
+    type("field-facility-name-0", "Aarav Plant 1");
+    type("field-facility-address-0", "Plot 4, MIDC");
+    type("field-facility-state-0", "Maharashtra");
+    type("field-facility-pincode-0", "400063");
+    type("field-facility-mobile-0", "9876543211");
+    type("field-facility-email-0", "plant@aarav.example");
     fireEvent.click(screen.getByTestId("step-contacts"));
-    fireEvent.change(screen.getByTestId("field-signatory-name"), { target: { value: "Rahul Aarav" } });
+    type("field-contact-title-0", "Mr");
+    type("field-contact-first-0", "Rahul");
+    type("field-contact-last-0", "Aarav");
+    type("field-contact-designation-0", "Director");
+    type("field-contact-email-0", "rahul@aarav.example");
+    type("field-contact-mobile-0", "9876543212");
+    fireEvent.click(screen.getByTestId("step-registration"));
+    type("field-company-reg-no", "U29300MH2018PTC312045");
+    type("field-company-reg-date", "2018-04-02");
+    type("field-company-pan", "AABCA1234A");
+    type("field-turnover", "1200");
     fireEvent.click(screen.getByTestId("step-annexure"));
     const pdf = new File(["demo"], "demo.pdf", { type: "application/pdf" });
-    for (const kind of MANUFACTURER_ONBOARDING_DOCUMENT_KINDS) {
+    for (const kind of ["retailers_list", "trademark_company_registration", "qms_iso9001", "signatory_authority_letter", "signatory_id_proof"]) {
       const input = screen.getByTestId(`upload-${kind}`) as HTMLInputElement;
       fireEvent.change(input, { target: { files: [pdf] } });
       await waitFor(() => expect(screen.getByTestId(`upload-status-${kind}`).textContent).toMatch(/Uploaded/i));
     }
-    fireEvent.click(screen.getByTestId("step-declaration"));
-    fireEvent.click(screen.getByTestId("checkbox-declaration"));
-    fireEvent.click(screen.getByTestId("checkbox-agreement"));
+    fireEvent.click(screen.getByTestId("step-payment"));
+    // a large-scale industry pays the registration charge and the security deposit: 5,000 plus 3,00,000
+    await screen.findByTestId("payment-total");
+    expect(screen.getByTestId("payment-total").textContent).toContain("3,05,000");
+    fireEvent.click(screen.getByTestId("payment-method-razorpay"));
+    fireEvent.click(screen.getByTestId("payment-proceed"));
+    fireEvent.click(await screen.findByTestId("payment-pay-now"));
+    await screen.findByTestId("payment-recorded");
     fireEvent.click(screen.getByTestId("step-review"));
     fireEvent.click(screen.getByTestId("wizard-submit"));
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith(expect.stringContaining("/app/manufacturer/application/")));

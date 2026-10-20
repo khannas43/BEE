@@ -5,7 +5,7 @@ export function createEmptyFacility(): ManufacturerFacility {
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? `fac-${crypto.randomUUID()}`
       : `fac-${Date.now()}`;
-  return { id, name: "", addressLine: "", city: "", state: "", pincode: "" };
+  return { id, name: "", addressLine: "", city: "", state: "", pincode: "", sameAsBusiness: false, addressLine2: "", district: "", phone: "", mobile: "", fax: "", email: "", website: "", qmsValidTill: "" };
 }
 
 /** Real API drafts often omit facilities until the applicant fills step 3. */

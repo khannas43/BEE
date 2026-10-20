@@ -10,6 +10,7 @@ import { csvFileName, datedFileName, saveBytes, saveCsv, toCsv } from "@/lib/cli
 import { buildXlsx, XLSX_TYPE } from "@/lib/client/xlsx";
 import { istStamp } from "@/lib/client/istTime";
 import { QrCode } from "@/components/app/lifecycle/QrCode";
+import { StarLabel, type LabelFacts } from "@/components/app/qr/StarLabel";
 import { useScanBase } from "@/lib/client/scanBase";
 
 /** The service calls a freshly made serial "allocated"; on screen it is "generated". */
@@ -179,8 +180,20 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
   const [voidReason, setVoidReason] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [labelFor, setLabelFor] = useState<Serial | null>(null);
+  const [cert, setCert] = useState<{ stars: number; iseer: string; validTo: string; category: string } | null>(null);
   const scan = useScanBase();
   const scanUrl = (serial: string) => `${scan.base}${verifyHref(serial)}`;
+  const regId = detail?.registrationId;
+  useEffect(() => {
+    if (!regId) return;
+    let live = true;
+    fetch(`/api/runtime/verification?reg=${encodeURIComponent(regId)}`, { cache: "no-store", credentials: "omit" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live && j) setCert({ stars: Number(j.stars) || 0, iseer: String(j.verifiedIseer ?? ""), validTo: String(j.validTo ?? ""), category: String(j.category ?? "RAC") }); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [regId]);
+  const facts = (): LabelFacts => ({ brand: detail?.brandName ?? "", model: detail?.modelNumber ?? "", certificate: detail?.registrationId ?? "", stars: cert?.stars ?? 0, iseer: cert?.iseer ?? "", validTo: cert?.validTo ?? "", category: cert?.category ?? "RAC" });
 
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((n) => n + 1), []);
@@ -300,26 +313,15 @@ function BatchPanel({ id, canWrite, report }: { id: string; canWrite: boolean; r
         </table>
       </div>
       {!labelFor ? <div data-print-sheet className="print-sheet" aria-hidden>
-        {detail.serials.map((s) => (
-          <div key={s.serial} className="print-label">
-            <div className="print-label-head">BEE star label · {detail.brandName} {detail.modelNumber}</div>
-            <QrCode text={scanUrl(s.serial)} size={150} title={`QR code for ${s.serial}`} />
-            <div className="print-label-serial">{s.serial}</div>
-            <div className="print-label-note">Scan to check this label · {detail.registrationId}</div>
-          </div>
-        ))}
+        {detail.serials.map((s) => <StarLabel key={s.serial} facts={facts()} serial={s.serial} url={scanUrl(s.serial)} qrSize={110} compact />)}
       </div> : null}
       {labelFor && typeof document !== "undefined" ? createPortal(
         <div role="dialog" aria-modal="true" aria-label="Label" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 print:static print:bg-white" onClick={() => setLabelFor(null)} data-testid="qr-label-dialog">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl" onClick={(e) => e.stopPropagation()} data-print-sheet>
-            <div className="text-[12px] font-bold uppercase tracking-widest text-[#254e9e]">BEE star label</div>
-            <div className="mt-1 text-[18px] font-extrabold text-[#14315E]">{detail.brandName} {detail.modelNumber}</div>
-            <div className="text-[12px] text-[#64748b]">Certificate {detail.registrationId}</div>
-            <div className="mt-4 flex justify-center"><QrCode text={scanUrl(labelFor.serial)} size={240} title={`QR code for ${labelFor.serial}`} testId="qr-label-code" /></div>
-            <div className="mt-3 font-mono text-[15px] font-bold text-[#14315E]" data-testid="qr-label-serial">{labelFor.serial}</div>
-            <div className="mt-1"><Pill>{stateLabel(labelFor.state)}</Pill></div>
-            <p className="mt-2 text-[12px] text-[#475569]">Scan with a phone camera to check this label.{labelFor.state !== "bound" ? " This serial is not bound to a certificate yet, so the check will not confirm it." : ""}</p>
-            <p className="mt-1 break-all text-[11px] text-[#94a3b8]">{scanUrl(labelFor.serial)}</p>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-xl max-h-[95vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-print-sheet>
+            <StarLabel facts={facts()} serial={labelFor.serial} url={scanUrl(labelFor.serial)} qrSize={200} />
+            <div className="mt-2 flex justify-center"><Pill>{stateLabel(labelFor.state)}</Pill></div>
+            {labelFor.state !== "bound" ? <p className="mt-2 text-[12px] text-[#8a4b00]">This serial is not bound to a certificate yet, so the check will not confirm it.</p> : null}
+            <p className="mt-1 break-all text-[11px] text-[#94a3b8] print:hidden">{scanUrl(labelFor.serial)}</p>
             <div className="mt-4 flex justify-center gap-2 print:hidden">
               <button type="button" onClick={() => window.print()} className="rounded-lg !bg-[#1f3c88] px-4 py-2 text-[13px] font-semibold !text-white">Print label</button>
               <button type="button" onClick={() => setLabelFor(null)} className="rounded-lg border border-outline-variant bg-white px-4 py-2 text-[13px] font-semibold text-primary" data-testid="qr-label-close">Close</button>

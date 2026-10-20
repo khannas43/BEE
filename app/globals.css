@@ -345,15 +345,31 @@ button.list-sort:hover { color: #14315E; }
 }
 .insights-screen [data-testid="screen-meta"] + * { margin-top: 0; }
 
-/* QR labels: the on-screen label dialog and the printable sheet of a batch page (components/app/demo/QrDemo.tsx). */
+/* QR labels: the star label (components/app/qr/StarLabel.tsx), the on-screen label dialog and the printable sheet of a batch page. */
 .print-sheet { display: none; }
-.print-label { break-inside: avoid; border: 1px dashed #94a3b8; padding: 10px; text-align: center; width: 200px; }
-.print-label-head { font-size: 11px; font-weight: 700; color: #14315e; margin-bottom: 6px; }
-.print-label-serial { font: 700 12px ui-monospace, monospace; margin-top: 4px; }
-.print-label-note { font-size: 9px; color: #475569; }
+.star-label { width: 300px; margin: 0 auto; border: 3px solid #14315e; border-radius: 14px; overflow: hidden; background: #fff; color: #14315e; text-align: center; font-family: inherit; break-inside: avoid; }
+.star-label-top { background: #14315e; padding: 8px 12px; }
+.star-label-logo { height: 30px; width: auto; background: #fff; border-radius: 6px; padding: 3px 8px; margin: 0 auto; }
+.star-label-title { font-weight: 900; letter-spacing: .18em; font-size: 15px; padding-top: 10px; }
+.star-label-title span { display: block; font-weight: 600; letter-spacing: .02em; font-size: 11px; color: #475569; }
+.star-label-rating { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 12px 2px; }
+.star-label-stars { font-size: 34px; line-height: 1; color: #f59e0b; letter-spacing: 2px; }
+.star-label-stars i { font-style: normal; color: #d8dee8; }
+.star-label-n { font-weight: 900; font-size: 18px; }
+.star-label-iseer { margin: 6px 14px; border: 2px solid #14315e; border-radius: 10px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 700; }
+.star-label-iseer b { font-size: 22px; }
+.star-label-model { font-size: 13px; padding: 2px 12px; }
+.star-label-qr { padding: 6px 0 0; display: flex; flex-direction: column; align-items: center; }
+.star-label-scan { font-size: 10px; color: #475569; margin-top: 2px; }
+.star-label-serial { font: 700 12px ui-monospace, monospace; padding-top: 4px; }
+.star-label-foot { font-size: 9px; color: #475569; padding: 2px 10px; }
+.star-label-demo { font-size: 8px; color: #94a3b8; padding: 2px 0 8px; text-transform: uppercase; letter-spacing: .08em; }
+.star-label-compact { width: 220px; border-width: 2px; }
+.star-label-compact .star-label-stars { font-size: 26px; }
 @media print {
   body * { visibility: hidden; }
   [data-print-sheet], [data-print-sheet] * { visibility: visible; }
-  [data-print-sheet].print-sheet { display: flex; flex-wrap: wrap; gap: 10px; }
+  [data-print-sheet].print-sheet { display: flex; flex-wrap: wrap; gap: 14px; }
   [data-print-sheet]:not(.print-sheet) { position: absolute; left: 50%; top: 20px; transform: translateX(-50%); box-shadow: none; }
+  .star-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Bars, BAND_TONE, btn, btnOutline, card, Chip, day, labelCls, stamp } from "@/components/app/demo/ProductTesting";
-import { CATEGORY_WORD, decideCase, readProduct, SOURCE_WORD, STAGE_WORD, type ProductView } from "@/lib/client/runtimeProductTesting";
+import { CATEGORY_WORD, decideCase, readProduct, RECOMMENDATION_WORD, RESULT_WORD, SOURCE_WORD, STAGE_WORD, type ProductView } from "@/lib/client/runtimeProductTesting";
 
 /**
  * One shortlisted product (BEE Officer): why it was picked for random testing, in three boxes that open and close (risk score, production
@@ -139,6 +139,7 @@ export function ShortlistedProduct() {
         ) : (
           <div className="space-y-2 text-[13px] text-[#334155]">
             <p><b>{c.stage === "not_approved" ? "Not approved for testing" : "Approved for testing"}</b>{c.approvedAt ? ` on ${stamp(c.approvedAt)}` : ""}.</p>
+            {c.stage !== "not_approved" ? <p>Test status: <b>{STAGE_WORD[c.stage]}</b>{c.procuredFrom ? ` · bought from ${c.procuredFrom}` : ""}{c.laboratory ? ` · ${c.laboratory}` : ""}{c.result ? ` · result ${RESULT_WORD[c.result]}, ISEER ${c.measuredIseer} against ${c.ratedIseer} rated` : ""}{c.recommendation ? ` · ${RECOMMENDATION_WORD[c.recommendation]}` : ""}.</p> : null}
             {c.approvalRemarks ? <p className="rounded-lg bg-[#f9fbff] px-3 py-2">{c.approvalRemarks}</p> : null}
             {c.stage !== "not_approved" ? <Link href="/app/demo/testing?tab=cases" className="inline-block font-semibold text-primary hover:underline">Open the test cases</Link> : null}
             {done ? <p role="status" className="font-semibold text-[#14532d]">{done}</p> : null}

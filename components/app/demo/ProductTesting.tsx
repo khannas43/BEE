@@ -121,71 +121,54 @@ function OverviewView() {
         <Tile label="Results this quarter" value={data.resultsThisQuarter} note="tested by BEE" />
       </div>
       <ShortlistTable />
-      <section className={`${card} p-4`}>
-        <div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Test cases by stage</div>
-        <ol className="grid grid-cols-2 gap-2 lg:grid-cols-5">
-          {STAGES.map((s, i) => (
-            <li key={s} className="rounded-lg border border-[#dbe6f7] bg-[#f9fbff] p-3 text-center">
-              <div className="text-[12px] font-semibold text-[#64748b]">{i + 1}. {STAGE_WORD[s]}</div>
-              <div className="text-[24px] font-extrabold text-[#14315E]">{data.stages[s]}</div>
-            </li>
-          ))}
-        </ol>
-        <Link href="/app/demo/testing?tab=cases" className="mt-3 inline-block text-[13px] font-semibold text-primary hover:underline">Open the test cases</Link>
-      </section>
       <div className="grid gap-space-md lg:grid-cols-2">
         <section className={`${card} p-4`}><div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Grievances by source</div><Bars data={data.sources} words={SOURCE_WORD} tone="#254e9e" /></section>
         <section className={`${card} p-4`}><div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Grievances by category</div><Bars data={data.categories} words={CATEGORY_WORD} tone="#c47f17" /></section>
       </div>
-      <section className={`${card} p-4`}>
-        <div role="heading" aria-level={2} className="mb-3 text-[16px] font-bold text-[#14315E]">Highest review priority</div>
-        <ul className="divide-y divide-[#e2e8f0]">
-          {data.top.map((p) => (
-            <li key={p.registrationId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-[13px]">
-              <span><b>{p.model}</b> · {p.manufacturer}<span className="block text-[12px] text-[#64748b]">{p.grievances} grievance{p.grievances === 1 ? "" : "s"} in 90 days{p.openCase ? ` · case ${p.openCase}` : ""}</span></span>
-              <Chip tone={BAND_TONE[p.band]}>Score {p.score}</Chip>
-            </li>
-          ))}
-        </ul>
-        <Link href="/app/demo/testing?tab=selection" className="mt-2 inline-block text-[13px] font-semibold text-primary hover:underline">Open the risk selection</Link>
-      </section>
     </div>
   );
 }
 
-const SHORT_WORD: Record<string, string> = { shortlisted: "Waiting for approval", not_approved: "Not approved" };
+/** The list status of a case: waiting for the Officer, not approved, in testing (approved, not yet resulted) or tested (result in or closed). */
+export type ListStatus = "waiting" | "not_approved" | "in_testing" | "tested";
+export const LIST_STATUS_WORD: Record<ListStatus, string> = { waiting: "Waiting for approval", not_approved: "Not approved", in_testing: "In testing", tested: "Tested" };
+export const listStatusOf = (stage: Stage): ListStatus => (stage === "shortlisted" ? "waiting" : stage === "not_approved" ? "not_approved" : stage === "result_in" || stage === "closed" ? "tested" : "in_testing");
+const LIST_STATUS_TONE: Record<ListStatus, string> = {
+  waiting: "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]", not_approved: "border-[#e2e8f0] bg-[#f1f5f9] text-[#475569]",
+  in_testing: "border-[#c9d9f7] bg-[#e7effb] text-[#14315E]", tested: "border-[#b7e0c6] bg-[#e2f3e8] text-[#14532d]",
+};
 
 function ShortlistTable() {
   const router = useRouter();
   const { data, error } = useLoad<{ cases: TestCase[] }>(readCases);
   const [status, setStatus] = useState("");
   const [basis, setBasis] = useState("");
-  const all = (data?.cases ?? []).filter((c) => c.stage === "shortlisted" || c.stage === "not_approved");
-  const rows = all.filter((c) => (!status || c.stage === status) && (!basis || c.basis === basis));
+  const all = data?.cases ?? [];
+  const rows = all.filter((c) => (!status || listStatusOf(c.stage) === status) && (!basis || c.basis === basis));
   const tools = useListTools<TestCase>({
     rows,
     text: (c) => `${c.reference} ${c.model} ${c.brand} ${c.manufacturer} ${c.reason}`,
     date: (c) => c.selectedAt.slice(0, 10),
-    sortValue: (c, k) => (k === "ref" ? c.reference : k === "model" ? c.model : k === "mfr" ? c.manufacturer : k === "score" ? c.riskScore ?? 0 : k === "basis" ? c.basis : k === "status" ? c.stage : c.selectedAt),
-    pageSize: 10,
+    sortValue: (c, k) => (k === "ref" ? c.reference : k === "model" ? c.model : k === "mfr" ? c.manufacturer : k === "score" ? c.riskScore ?? 0 : k === "basis" ? c.basis : k === "status" ? listStatusOf(c.stage) : c.selectedAt),
+    pageSize: 12,
   });
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
   const open = (c: TestCase) => router.push(`/app/demo/testing/product?reg=${encodeURIComponent(c.registrationId)}&case=${encodeURIComponent(c.reference)}`);
   return (
     <section className="space-y-space-sm" data-testid="shortlist">
-      <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Shortlisted for random testing ({all.filter((c) => c.stage === "shortlisted").length} waiting for approval)</div>
+      <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Shortlisted for random testing</div>
       <section className={`${card} p-4 space-y-space-sm`}>
         <ListToolbar tools={tools} searchLabel="Search" placeholder="Product, manufacturer or reference" dateLabel="Shortlisted"
-          exportCsv={{ filename: "shortlist", header: ["Case", "Product", "Manufacturer", "Risk score", "Basis", "Shortlisted", "Status"], rows: tools.visible.map((c) => [c.reference, c.model, c.manufacturer, c.riskScore ?? "", c.basis, day(c.selectedAt), SHORT_WORD[c.stage]]) }} />
+          exportCsv={{ filename: "shortlist", header: ["Case", "Product", "Manufacturer", "Risk score", "Basis", "Shortlisted", "Status"], rows: tools.visible.map((c) => [c.reference, c.model, c.manufacturer, c.riskScore ?? "", c.basis, day(c.selectedAt), LIST_STATUS_WORD[listStatusOf(c.stage)]]) }} />
         <div className="flex flex-wrap items-end gap-3">
-          <label className={labelCls}>Status<select value={status} onChange={(e) => { setStatus(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="shortlist-status"><option value="">All</option><option value="shortlisted">Waiting for approval</option><option value="not_approved">Not approved</option></select></label>
+          <label className={labelCls}>Status<select value={status} onChange={(e) => { setStatus(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="shortlist-status"><option value="">All</option>{(Object.keys(LIST_STATUS_WORD) as ListStatus[]).map((k) => <option key={k} value={k}>{LIST_STATUS_WORD[k]}</option>)}</select></label>
           <label className={labelCls}>Picked by<select value={basis} onChange={(e) => { setBasis(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="shortlist-basis"><option value="">All</option><option value="random">Random draw</option><option value="risk">Risk ranking</option><option value="manual">Officer</option></select></label>
         </div>
       </section>
       <div className={`${card} overflow-x-auto`}>
         <table className="w-full text-[13px]" data-testid="shortlist-table">
-          <caption className="sr-only">Products shortlisted for random testing</caption>
+          <caption className="sr-only">Products shortlisted for random testing, with their status</caption>
           <thead><tr className="bg-[#eef3fb]">
             <SortableTh tools={tools} k="ref" className={th}>Case</SortableTh><SortableTh tools={tools} k="model" className={th}>Product</SortableTh><SortableTh tools={tools} k="mfr" className={th}>Manufacturer</SortableTh>
             <SortableTh tools={tools} k="score" className={th}>Risk score</SortableTh><SortableTh tools={tools} k="basis" className={th}>Picked by</SortableTh><SortableTh tools={tools} k="date" className={th}>Shortlisted</SortableTh><SortableTh tools={tools} k="status" className={th}>Status</SortableTh>
@@ -197,7 +180,7 @@ function ShortlistTable() {
                 <td className={td}>{c.model}<div className="text-[12px] text-[#64748b]">{c.registrationId}</div></td><td className={td}>{c.manufacturer}</td>
                 <td className={td}>{c.riskScore ?? "-"}</td><td className={td}>{c.basis === "random" ? "Random draw (risk-weighted)" : c.basis === "risk" ? "Risk ranking" : "Officer"}</td>
                 <td className={`${td} whitespace-nowrap`}>{day(c.selectedAt)}</td>
-                <td className={td}><Chip tone={c.stage === "shortlisted" ? "border-[#f3dc9c] bg-[#fff4d6] text-[#8a4b00]" : "border-[#e2e8f0] bg-[#f1f5f9] text-[#475569]"}>{SHORT_WORD[c.stage]}</Chip></td>
+                <td className={td}><Chip tone={LIST_STATUS_TONE[listStatusOf(c.stage)]}>{LIST_STATUS_WORD[listStatusOf(c.stage)]}</Chip>{STAGES.includes(c.stage) ? <div className="mt-1 text-[12px] text-[#64748b]">{STAGE_WORD[c.stage]}{c.result ? `: ${RESULT_WORD[c.result]}` : ""}</div> : null}</td>
               </tr>
             ))}
           </tbody>

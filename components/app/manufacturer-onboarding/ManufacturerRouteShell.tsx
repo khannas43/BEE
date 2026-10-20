@@ -2,7 +2,10 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { isManufacturerRegistrationDemoIdentity } from "@/lib/manufacturer-onboarding/manufacturerNavPolicy";
+import { manufacturerProfileHref } from "@/lib/client/runtimeManufacturers";
 import { useSpringIdentity } from "@/components/app/SessionBadge";
 import type { SpringIdentity } from "@/components/app/SessionBadge";
 import { adminDemonstrationReadOnly } from "@/lib/adminDemonstration";
@@ -33,7 +36,16 @@ function SignInRequiredPanel() {
 
 function Gate({ children, me }: { children: ReactNode; me: SpringIdentity }) {
   const pathname = usePathname();
+  const router = useRouter();
   const kind = routeKindForPath(pathname);
+  // The company-registration wizard is for an organisation still registering; a registered manufacturer goes to its own 360 profile.
+  const manufacturerOnly = me.effectiveRoles.length > 0 && me.effectiveRoles.every((r) => r.role === "manufacturer");
+  const registered = kind === "onboarding" && manufacturerOnly && me.organisations.length > 0 && !isManufacturerRegistrationDemoIdentity(me.effectiveRoles, me.organisations);
+  const profile = manufacturerProfileHref(me.organisations[0]?.code);
+  useEffect(() => {
+    if (registered) router.replace(profile);
+  }, [registered, router, profile]);
+  if (registered) return <LoadingState label="Opening your Manufacturer 360 profile…" />;
   if (!kind) return <>{children}</>;
   const roles = effectiveOnboardingRoles(me);
   const readOnlyAdmin = adminDemonstrationReadOnly(me);

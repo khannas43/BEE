@@ -66,6 +66,7 @@ export const STANDALONE_PAGES: Readonly<Record<string, NavState>> = {
 /** Runtime routes deliberately left out of every menu, with the reason; the Admin coverage test reads this. */
 export const NOT_IN_MENU: Readonly<Record<string, string>> = {
   "/app/registrations/new": "Opened from Registration requests (Start a new request).",
+  "/app/architecture": "Solution architecture: opened from the icon in the top bar, for every signed-in role.",
   "/app/registrations/request": "Detail page for one request; needs the request ID.",
   "/app/demo/mis": "Programme MIS duplicates the two dashboards (Programme at a glance, Programme performance); the page still opens by link.",
   "/app/manufacturer/director":

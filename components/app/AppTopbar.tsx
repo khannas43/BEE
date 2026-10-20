@@ -71,6 +71,10 @@ export function AppTopbar({ onMenu }: { onMenu?: () => void }) {
           </button>
         ) : null}
 
+        <Link href="/app/architecture" title="Solution architecture" aria-label="Solution architecture" className="flex items-center text-on-surface-variant hover:text-primary" data-testid="architecture-link">
+          <Icon name="account_tree" size={22} />
+        </Link>
+
         <SessionBadge
           signedOut={
             <Link href="/login" className="flex items-center gap-1 font-label-md text-label-md text-primary hover:text-forest-dark">

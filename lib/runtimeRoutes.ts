@@ -99,6 +99,14 @@ export const RUNTIME_ROUTES: readonly RuntimeRoute[] = [
     implemented: ["Local demonstration on the owner's assumptions, not BEE rules"],
   },
   {
+    href: "/app/architecture",
+    en: "Solution architecture",
+    hi: "समाधान आर्किटेक्चर",
+    icon: "account_tree",
+    navRoles: ["manufacturer", "agency", "finance", "programme", "reviewer", "officer", "director", "admin", "auditor", "helpdesk", "iame"],
+    implemented: ["The layers and components of the solution: built, simulated and planned"],
+  },
+  {
     href: "/app/demo/requests",
     en: "Service requests",
     hi: "सेवा अनुरोध",

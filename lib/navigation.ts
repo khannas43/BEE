@@ -349,7 +349,7 @@ export const NAVIGATION: readonly NavGroup[] = [
       entry("dir.manufacturer-register", "Manufacturer register", "factory", live(R.register), BEE_OFFICER, { query: "tab=manufacturers", alsoQueries: ["view=manufacturer"] }),
       entry("dir.brand-register", "Brand and category register", "menu_book", live(R.register), BEE_OFFICER, { query: "tab=brands", alsoQueries: ["view=brand", "view=authorisation", "tab=auths"], isDefault: true }),
       entry("dir.model-register", "Model and certificate register", "verified_user", live(R.register), BEE_OFFICER, { query: "tab=models", alsoQueries: ["view=model"] }),
-      entry("dir.reconciliation", "QR and production reconciliation", "balance", proto("production", "reconciliation"), BEE_OFFICER),
+      entry("dir.reconciliation", "QR and production reconciliation", "balance", live(R.register), BEE_OFFICER, { query: "tab=reconciliation", alsoQueries: ["view=reconciliation"] }),
       entry("dir.audit", "Audit History", "history", live(R.history), BEE_OFFICER),
       entry("dir.delegations", "Delegations", "group", live(R.delegations), BEE_OFFICER),
       grantedSettings("dir"),

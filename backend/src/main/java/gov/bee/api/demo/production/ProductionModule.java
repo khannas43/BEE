@@ -41,7 +41,7 @@ public class ProductionModule implements DemoModule {
     private static final java.util.regex.Pattern UNSAFE_FILE_NAME = java.util.regex.Pattern.compile("[/\\\\\\p{Cntrl}]");
     static final String EVIDENCE_LABEL = "CA evidence: recorded, not verified (local demonstration)";
     static final String NOTE = "Local demonstration: simulated, not a BEE system. Provisional rules.";
-    private static final List<String> READ_ALL = List.of("programme", "admin", "auditor", "director");
+    private static final List<String> READ_ALL = List.of("programme", "admin", "auditor", "director", "officer");
 
     private final ObjectProvider<JdbcTemplate> jdbcProvider;
     private JdbcTemplate fixed;

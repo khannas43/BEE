@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { ReconciliationEntry, ReconciliationPanel } from "@/components/app/registrations/ReconciliationRegister";
 import { ModelEntry, ModelsPanel, useModelRegister } from "@/components/app/registrations/ModelsRegister";
 import { ManufacturerEntry, ManufacturersPanel } from "@/components/app/registrations/ManufacturersRegister";
 import { brandCategories, manufacturerProfileHref, modelsOfBrand, useManufacturers, type ManufacturerProfile } from "@/lib/client/runtimeManufacturers";
@@ -60,6 +61,7 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
   const detailId = params.get("id");
   const manufacturerEntry = viewParam === "manufacturer" && detailId;
   const modelEntry = viewParam === "model" && detailId;
+  const reconEntry = viewParam === "reconciliation" && detailId;
 
   return (
     <ScreenChrome module={module} screen={screen} subtitle="Register" implemented={runtimeRouteFor(registerHref())?.implemented}>
@@ -73,7 +75,9 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
           errorTestId="rvk-error"
           signInReturnTo={registerHref()}
         >
-          {(r) => modelEntry ? (
+          {(r) => reconEntry ? (
+            <ReconciliationEntry id={detailId} />
+          ) : modelEntry ? (
             <ModelEntry id={detailId} />
           ) : manufacturerEntry ? (
             <ManufacturerEntry code={detailId} />
@@ -95,7 +99,7 @@ export function RegisterRevocations({ module, screen }: { module: Module; screen
   );
 }
 
-type TabKey = "manufacturers" | "models" | "brands" | "auths" | "pending" | "history";
+type TabKey = "manufacturers" | "models" | "reconciliation" | "brands" | "auths" | "pending" | "history";
 
 const FIELD = "rounded-lg border border-outline-variant px-3 h-10 box-border font-body-sm bg-surface-card";
 const TH = "py-2 pr-3 text-left font-label-sm text-on-surface-variant";
@@ -151,7 +155,7 @@ function RegisterBody({
     ? { ...register, canPropose: false, canDecide: false }
     : register;
   const tabParam = useSearchParams().get("tab");
-  const tabOf = (v: string | null): TabKey => (v === "manufacturers" || v === "models" || v === "auths" || v === "pending" || v === "history" ? v : "brands");
+  const tabOf = (v: string | null): TabKey => (v === "manufacturers" || v === "models" || v === "reconciliation" || v === "auths" || v === "pending" || v === "history" ? v : "brands");
   const [tab, setTab] = useState<TabKey>(tabOf(tabParam));
   const [seenParam, setSeenParam] = useState(tabParam);
   // A menu link can change ?tab= while this page stays mounted; follow it.
@@ -167,7 +171,7 @@ function RegisterBody({
   const tabBtn = (key: TabKey, label: string, n: number) => (
     <button key={key} type="button" role="tab" aria-selected={tab === key} id={`rvk-tab-${key}`} onClick={() => setTab(key)} data-testid={`rvk-tab-${key}`}
       className={`px-space-md py-2 rounded-t-lg font-label-lg border-b-2 ${tab === key ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
-      {label} <span className="ml-1 rounded-full bg-surface-container px-2 text-[12px]">{n}</span>
+      {label}{n >= 0 ? <span className="ml-1 rounded-full bg-surface-container px-2 text-[12px]">{n}</span> : null}
     </button>
   );
 
@@ -186,6 +190,7 @@ function RegisterBody({
         {tabBtn("manufacturers", "Manufacturers", manufacturerCount)}
         {tabBtn("brands", "Brands & categories", register.brands.length)}
         {tabBtn("models", "Models & certificates", modelCount)}
+        {tabBtn("reconciliation", "QR reconciliation", -1)}
         {tabBtn("auths", "Agency authorisations", register.authorisations.length)}
         {tabBtn("pending", "Waiting for a decision", register.pending.length)}
         {tabBtn("history", "History", register.decided.length)}
@@ -196,6 +201,9 @@ function RegisterBody({
       </section>
       <section role="tabpanel" aria-labelledby="rvk-tab-models" hidden={tab !== "models"}>
         {tab === "models" ? <ModelsPanel /> : null}
+      </section>
+      <section role="tabpanel" aria-labelledby="rvk-tab-reconciliation" hidden={tab !== "reconciliation"}>
+        {tab === "reconciliation" ? <ReconciliationPanel /> : null}
       </section>
       <section role="tabpanel" aria-labelledby="rvk-tab-brands" hidden={tab !== "brands"}>
         <BrandsPanel register={view} openId={openId} onOpen={onOpen} onChanged={onChanged} onRefresh={onRefresh} />

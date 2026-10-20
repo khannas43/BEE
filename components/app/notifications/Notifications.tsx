@@ -13,15 +13,14 @@ import {
   markNotificationRead,
   notificationHref,
   notificationKindLabel,
-  readNotifications,
-  type NotificationItem,
+  readAllNotifications,
+  type ListedNotification,
 } from "@/lib/client/runtimeNotifications";
 import { runtimeRouteFor } from "@/lib/runtimeRoutes";
 import { Module, Screen } from "@/lib/screens";
 
 const ROUTE = "/app/model-label/notifications";
 const LIST_TARGET = "list";
-const loadList = () => readNotifications();
 
 function formatWhen(iso: string): string {
   try {
@@ -41,9 +40,11 @@ export function Notifications({ module, screen }: { module: Module; screen: Scre
   const identity = useSpringIdentity();
   const revalidation = useRevalidation();
   const notifyEpoch = useNotificationRefreshEpoch();
+  const staff = identity.status === "signed-in" && !identity.me.effectiveRoles.some((r) => r.role === "manufacturer" || r.role === "agency");
+  const loadList = () => readAllNotifications(staff);
   const read = gateRead(
     identity.status,
-    useRuntimeRead(`${LIST_TARGET}-${notifyEpoch}`, loadList, revalidation),
+    useRuntimeRead(`${LIST_TARGET}-${notifyEpoch}-${staff}`, loadList, revalidation),
   );
 
   async function markOne(id: string) {
@@ -95,7 +96,7 @@ export function Notifications({ module, screen }: { module: Module; screen: Scre
                 Only the latest 50 notifications are shown.
               </p>
               <ul className="space-y-space-sm">
-                {r.list.items.map((item: NotificationItem) => (
+                {r.list.items.map((item: ListedNotification) => (
                   <li
                     key={item.id}
                     className="bg-surface-card rounded-xl shadow-sm p-space-md border border-border-subtle"

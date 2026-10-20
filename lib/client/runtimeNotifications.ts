@@ -1,12 +1,17 @@
 /**
  * Browser client for in-portal notifications (WP10.1b): list, mark one read, mark all read.
  */
+import { demoGet, demoPath, type DemoBody } from "@/lib/client/runtimeDemo";
 import { type FetchLike, type ReadFailure, runtimeAction, runtimeRead } from "@/lib/client/runtimeHttp";
 import { modelDashboardHref } from "@/lib/client/runtimeModelApplications";
 import { modelDraftFormHref } from "@/lib/client/runtimeModelDrafts";
 
 export const NOTIFICATION_KINDS = ["returned", "rejected", "fee_due", "approved"] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+/** Company-onboarding notices: not in the documented notifications contract, read through the demonstration API (`staff-notices`). */
+export type OnboardingNoticeKind = "manufacturer_onboarding_director_review" | "manufacturer_onboarding_information";
+export const ONBOARDING_NOTICE_KINDS: readonly OnboardingNoticeKind[] = ["manufacturer_onboarding_director_review", "manufacturer_onboarding_information"];
 
 export type NotificationItem = {
   id: string;
@@ -100,6 +105,19 @@ export async function readNotifications(fetchImpl: FetchLike = fetch): Promise<N
   return r.ok ? { ok: true, list: r.value } : r;
 }
 
+/** The contract list, plus (for BEE staff, who receive them) the person's company-onboarding notices, newest first. A failure to read the extra notices never hides the contract list. */
+export type ListedNotification = Omit<NotificationItem, "kind"> & { kind: NotificationKind | OnboardingNoticeKind };
+export type AllNotificationsRead = { ok: true; list: { unread: number; items: ListedNotification[] } } | { ok: false; failure: ReadFailure };
+
+export async function readAllNotifications(withOnboarding: boolean, fetchImpl: FetchLike = fetch): Promise<AllNotificationsRead> {
+  const base = await readNotifications(fetchImpl);
+  if (!base.ok || !withOnboarding) return base;
+  const extra = await demoGet<DemoBody & { items?: ListedNotification[]; unread?: number }>(demoPath("staff-notices"));
+  const more = extra.ok && Array.isArray(extra.value.items) ? extra.value.items.filter((i) => (ONBOARDING_NOTICE_KINDS as readonly string[]).includes(i.kind)) : [];
+  const items = [...(base.list.items as ListedNotification[]), ...more].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return { ok: true, list: { unread: base.list.unread + more.filter((i) => !i.read).length, items } };
+}
+
 export function markNotificationRead(id: string, fetchImpl?: FetchLike) {
   return runtimeAction(notificationReadPath(id), parseReadReceipt, fetchImpl);
 }
@@ -108,8 +126,12 @@ export function markAllNotificationsRead(fetchImpl?: FetchLike) {
   return runtimeAction(NOTIFICATIONS_READ_ALL_PATH, parseReadAllReceipt, fetchImpl);
 }
 
-export function notificationKindLabel(kind: NotificationKind): string {
+export function notificationKindLabel(kind: ListedNotification["kind"]): string {
   switch (kind) {
+    case "manufacturer_onboarding_director_review":
+      return "Company registration to review";
+    case "manufacturer_onboarding_information":
+      return "Company registration update";
     case "returned":
       return "Returned";
     case "rejected":
@@ -121,8 +143,11 @@ export function notificationKindLabel(kind: NotificationKind): string {
   }
 }
 
-export function notificationHref(item: Pick<NotificationItem, "kind" | "applicationId">): string {
+export function notificationHref(item: Pick<ListedNotification, "kind" | "applicationId">): string {
   switch (item.kind) {
+    case "manufacturer_onboarding_director_review":
+    case "manufacturer_onboarding_information":
+      return "/app/demo/manufacturer-360";
     case "returned":
       return modelDraftFormHref(item.applicationId);
     case "approved":

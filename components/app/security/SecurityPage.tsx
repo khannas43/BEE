@@ -115,13 +115,23 @@ function Chip({ state }: { state: State }) {
   return <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${STATE[state].tone}`}>{STATE[state].label}</span>;
 }
 
+function Panel({ id, title, lead, open, onToggle, children }: { id: string; title: string; lead: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#dbe6f7] bg-white shadow-[0_1px_2px_rgba(20,49,94,0.06)]" data-testid={id}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-start justify-between gap-3 p-6 text-left" data-testid={`${id}-toggle`}>
+        <span><span role="heading" aria-level={2} className="block text-[18px] font-bold text-[#14315E]">{title}</span><span className="mt-1 block text-[13px] text-[#64748b]">{lead}</span></span>
+        <span className="mt-1 flex shrink-0 items-center gap-1 text-[12px] font-semibold text-primary">{open ? "Hide" : "Details"}<Icon name={open ? "expand_less" : "expand_more"} size={20} /></span>
+      </button>
+      {open ? <div className="border-t border-[#e2e8f0] p-6">{children}</div> : null}
+    </section>
+  );
+}
+
 function DefenceDiagram() {
   const shades = ["#14315E", "#1c3f78", "#254e9e", "#3b66b8"];
   return (
-    <section className="rounded-2xl border border-[#dbe6f7] bg-white p-6" data-testid="sec-rings">
-      <div role="heading" aria-level={2} className="mb-1 text-[18px] font-bold text-[#14315E]">Defence in depth</div>
-      <p className="mb-5 text-[13px] text-[#64748b]">An attacker has to get through every layer to reach the records, and each layer logs what it sees.</p>
-      <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl" data-testid="sec-rings-body">
+      <div>
         {RINGS.reduceRight<React.ReactNode>((inner, r, i) => (
           <div key={r.name} className="rounded-2xl p-3 text-white" style={{ background: shades[i] }}>
             <div className="mb-2 flex items-center gap-2 px-1"><Icon name={r.icon} size={18} /><b className="text-[14px]">{r.name}</b><span className="text-[12px] text-white/75">{r.note}</span></div>
@@ -134,7 +144,7 @@ function DefenceDiagram() {
           </div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -168,7 +178,9 @@ function GroupCard({ g, open, onToggle }: { g: Group; open: boolean; onToggle: (
 
 export function SecurityPage() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const allOpen = GROUPS.every((g) => open[g.id]);
+  const ids = [...GROUPS.map((g) => g.id), "rings", "owasp", "meity"];
+  const allOpen = ids.every((id) => open[id]);
+  const flip = (id: string) => () => setOpen((o) => ({ ...o, [id]: !o[id] }));
   return (
     <div className="p-space-md lg:p-space-lg space-y-space-md" data-testid="security-page">
       <header className="overflow-hidden rounded-2xl bg-gradient-to-br from-[#14315E] via-[#1c3f78] to-[#254e9e] text-white shadow-[0_6px_20px_rgba(20,49,94,0.25)]" data-testid="sec-hero">
@@ -189,19 +201,17 @@ export function SecurityPage() {
         </div>
       </header>
 
-      <DefenceDiagram />
+      <Panel id="sec-rings" title="Defence in depth" lead="An attacker has to get through every layer to reach the records, and each layer logs what it sees." open={Boolean(open.rings)} onToggle={flip("rings")}><DefenceDiagram /></Panel>
 
       <div className="flex items-center justify-between">
-        <div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">The safeguards</div>
-        <button type="button" className="text-[13px] font-semibold text-primary hover:underline" onClick={() => setOpen(Object.fromEntries(GROUPS.map((g) => [g.id, !allOpen])))} data-testid="sec-toggle-all">{allOpen ? "Collapse all" : "Expand all"}</button>
+        <div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">The safeguards and references</div>
+        <button type="button" className="text-[13px] font-semibold text-primary hover:underline" onClick={() => setOpen(Object.fromEntries(ids.map((id) => [id, !allOpen])))} data-testid="sec-toggle-all">{allOpen ? "Collapse all" : "Expand all"}</button>
       </div>
       <div className="grid items-start gap-space-md lg:grid-cols-2">
         {GROUPS.map((g) => <GroupCard key={g.id} g={g} open={Boolean(open[g.id])} onToggle={() => setOpen((o) => ({ ...o, [g.id]: !o[g.id] }))} />)}
       </div>
 
-      <section className="rounded-2xl border border-[#dbe6f7] bg-white p-6" data-testid="sec-owasp">
-        <div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">Against the OWASP Top 10</div>
-        <p className="mb-4 text-[13px] text-[#64748b]">The ten most common web application risks, and how the solution addresses each.</p>
+      <Panel id="sec-owasp" title="Against the OWASP Top 10" lead="The ten most common web application risks, and how the solution addresses each." open={Boolean(open.owasp)} onToggle={flip("owasp")}>
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <caption className="sr-only">OWASP Top 10 and how each risk is addressed</caption>
@@ -215,17 +225,15 @@ export function SecurityPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </Panel>
 
-      <section className="rounded-2xl border border-[#dbe6f7] bg-white p-6" data-testid="sec-meity">
-        <div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">MeitY and government expectations</div>
-        <p className="mb-4 text-[13px] text-[#64748b]">What the production solution is designed to meet. The exact requirements are to be confirmed with BEE and the department.</p>
+      <Panel id="sec-meity" title="MeitY and government expectations" lead="What the production solution is designed to meet. The exact requirements are to be confirmed with BEE and the department." open={Boolean(open.meity)} onToggle={flip("meity")}>
         <ul className="grid gap-3 md:grid-cols-2">
           {MEITY.map((m) => (
             <li key={m.title} className="flex gap-3 rounded-xl border border-[#e2e8f0] bg-[#fbfcfe] p-4"><Icon name="policy" size={22} className="mt-0.5 shrink-0 text-[#254e9e]" /><span><b className="block text-[14px] text-[#14315E]">{m.title}</b><span className="text-[13px] text-[#334155]">{m.text}</span></span><span className="ml-auto"><Chip state="planned" /></span></li>
           ))}
         </ul>
-      </section>
+      </Panel>
     </div>
   );
 }

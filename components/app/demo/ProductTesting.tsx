@@ -30,7 +30,7 @@ const COPY: Record<Tab, string> = {
   overview: "Products shortlisted for random testing, from complaints and compliance risk. Open one to see why it was picked and to approve it for testing. BEE buys the units from the market and tests them at its own cost.",
   grievances: "Complaints from end customers, from every channel in one list.",
   selection: "Every certified product ranked by review priority. Each score shows the points behind it. Add a product to the shortlist, or draw at random, weighted by risk.",
-  cases: "Each product BEE buys and tests moves through five stages. The manufacturer sees only the result.",
+  cases: "Products the Officer has approved for testing, one row each. Open a case to see its progress and move it to the next step. The manufacturer sees only the result.",
 };
 
 export const stamp = (iso: string) => {
@@ -402,37 +402,86 @@ const NEXT_HINT: Record<"selected" | "procured" | "at_lab" | "result_in", string
 function CasesView({ onDone }: { onDone: (m: string) => void }) {
   const { data, error, reload } = useLoad<{ cases: TestCase[] }>(readCases);
   const caseParam = useSearchParams()?.get("case") ?? "";
-  const [openId, setOpenId] = useState<string | null>(null);
   if (!data && !error) return <p role="status" className="font-body-sm">Loading…</p>;
   if (!data) return <p role="alert" className="text-error font-body-sm">{error}</p>;
   const approvedCases = data.cases.filter((c) => STAGES.includes(c.stage));
-  const fromLink = openId === null ? approvedCases.find((c) => c.reference === caseParam) ?? null : null;
-  const current = approvedCases.find((c) => c.id === openId) ?? fromLink;
+  const current = caseParam ? approvedCases.find((c) => c.reference === caseParam) ?? null : null;
+  if (caseParam && !current) return <div className="space-y-3" data-testid="testing-cases"><Link href="/app/demo/testing?tab=cases" className="text-[13px] font-semibold text-primary hover:underline">All test cases</Link><p className="text-[13px] text-[#64748b]">{caseParam} is not a test case yet. A shortlisted product becomes a test case when the Officer approves it.</p></div>;
+  return current
+    ? <CaseDetail key={current.id} c={current} onDone={(m) => { onDone(m); void reload(); }} />
+    : <CasesList cases={approvedCases} />;
+}
+
+function CasesList({ cases }: { cases: TestCase[] }) {
+  const router = useRouter();
+  const [stage, setStage] = useState("");
+  const [result, setResult] = useState("");
+  const rows = cases.filter((c) => (!stage || c.stage === stage) && (!result || (result === "none" ? !c.result : c.result === result)));
+  const tools = useListTools<TestCase>({
+    rows,
+    text: (c) => `${c.reference} ${c.model} ${c.brand} ${c.manufacturer} ${c.laboratory ?? ""} ${c.procuredFrom ?? ""}`,
+    date: (c) => c.updatedAt.slice(0, 10),
+    sortValue: (c, k) => (k === "ref" ? c.reference : k === "model" ? c.model : k === "mfr" ? c.manufacturer : k === "stage" ? STAGES.indexOf(c.stage) : k === "result" ? c.result ?? "" : c.updatedAt),
+    pageSize: 12,
+  });
+  const open = (c: TestCase) => router.push(`/app/demo/testing?tab=cases&case=${encodeURIComponent(c.reference)}`);
   return (
-    <div className="space-y-space-md" data-testid="testing-cases">
-      <div className="grid gap-3 lg:grid-cols-5">
-        {STAGES.map((s, i) => {
-          const list = approvedCases.filter((c) => c.stage === s);
-          return (
-            <section key={s} className="rounded-xl border border-[#dbe6f7] bg-[#f9fbff] p-3" data-testid={`stage-${s}`}>
-              <div className="mb-2 text-[12px] font-bold uppercase tracking-wide text-[#475569]">{i + 1}. {STAGE_WORD[s]} <span className="text-[#14315E]">({list.length})</span></div>
-              <ul className="space-y-2">
-                {list.length === 0 ? <li className="text-[12px] text-[#64748b]">None</li> : list.map((c) => (
-                  <li key={c.id}>
-                    <button type="button" onClick={() => setOpenId(current?.id === c.id ? "" : c.id)} aria-pressed={current?.id === c.id} data-testid={`case-${c.reference}`}
-                      className={`w-full rounded-lg border bg-white p-2 text-left text-[12px] hover:border-[#9dbdec] ${current?.id === c.id ? "border-[#254e9e] ring-2 ring-[#c9d9f7]" : "border-[#dbe6f7]"}`}>
-                      <span className="block font-bold text-[#14315E]">{c.model}</span><span className="block text-[#64748b]">{c.reference} · {c.manufacturer}</span>
-                      {c.result ? <span className="mt-1 block"><Chip tone={RESULT_TONE[c.result]}>{RESULT_WORD[c.result]}</Chip></span> : null}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          );
-        })}
+    <div className="space-y-space-sm" data-testid="cases-list">
+      <section className={`${card} p-4 space-y-space-sm`}>
+        <div role="heading" aria-level={2} className="text-[16px] font-bold text-[#14315E]">Filters</div>
+        <ListToolbar tools={tools} searchLabel="Search" placeholder="Product, manufacturer, laboratory or case" dateLabel="Updated"
+          exportCsv={{ filename: "test-cases", header: ["Case", "Product", "Manufacturer", "Stage", "Bought from", "Laboratory", "Result", "Updated"], rows: tools.visible.map((c) => [c.reference, c.model, c.manufacturer, STAGE_WORD[c.stage], c.procuredFrom ?? "", c.laboratory ?? "", c.result ? RESULT_WORD[c.result] : "", day(c.updatedAt)]) }} />
+        <div className="flex flex-wrap items-end gap-3">
+          <label className={labelCls}>Stage<select value={stage} onChange={(e) => { setStage(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="cases-stage"><option value="">All</option>{STAGES.map((s) => <option key={s} value={s}>{STAGE_WORD[s]}</option>)}</select></label>
+          <label className={labelCls}>Result<select value={result} onChange={(e) => { setResult(e.target.value); tools.setPage(1); }} className={`${fieldCls} w-auto`} data-testid="cases-result"><option value="">All</option><option value="none">No result yet</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="retest">Retest</option></select></label>
+        </div>
+      </section>
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-[13px]" data-testid="cases-table">
+          <caption className="sr-only">Test cases, one row per product</caption>
+          <thead><tr className="bg-[#eef3fb]">
+            <SortableTh tools={tools} k="ref" className={th}>Case</SortableTh><SortableTh tools={tools} k="model" className={th}>Product</SortableTh><SortableTh tools={tools} k="mfr" className={th}>Manufacturer</SortableTh>
+            <SortableTh tools={tools} k="stage" className={th}>Current stage</SortableTh><th className={th}>Bought from</th><th className={th}>Laboratory</th><SortableTh tools={tools} k="result" className={th}>Result</SortableTh><SortableTh tools={tools} k="date" className={th}>Updated</SortableTh>
+          </tr></thead>
+          <tbody>
+            {tools.paged.pageRows.length === 0 ? <tr><td className={td} colSpan={8}>No test case for this selection.</td></tr> : tools.paged.pageRows.map((c) => (
+              <tr key={c.id} className="cursor-pointer border-t border-[#e2e8f0] hover:bg-[#f4f8ff]" onClick={() => open(c)} data-testid={`case-row-${c.reference}`}>
+                <td className={`${td} font-semibold`}><Link href={`/app/demo/testing?tab=cases&case=${encodeURIComponent(c.reference)}`} onClick={(e) => e.stopPropagation()} className="text-primary hover:underline">{c.reference}</Link></td>
+                <td className={td}>{c.model}<div className="text-[12px] text-[#64748b]">{c.registrationId}</div></td><td className={td}>{c.manufacturer}</td>
+                <td className={td}><Chip tone="border-[#c9d9f7] bg-[#e7effb] text-[#14315E]">{STEPS.indexOf(c.stage) + 1} of 6 · {STAGE_WORD[c.stage]}</Chip></td>
+                <td className={td}>{c.procuredFrom ?? "-"}</td><td className={td}>{c.laboratory ?? "-"}</td>
+                <td className={td}>{c.result ? <Chip tone={RESULT_TONE[c.result]}>{RESULT_WORD[c.result]}</Chip> : "-"}</td>
+                <td className={`${td} whitespace-nowrap`}>{day(c.updatedAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      {current ? <CaseDetail key={current.id} c={current} onDone={(m) => { onDone(m); void reload(); }} /> : <p className="text-[13px] text-[#64748b]">Pick a case to see its history and move it to the next stage.</p>}
+      <ListPager tools={tools} />
     </div>
+  );
+}
+
+const STEPS: Stage[] = ["shortlisted", ...STAGES];
+
+function Stepper({ c }: { c: TestCase }) {
+  const at = STEPS.indexOf(c.stage);
+  return (
+    <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="case-stepper" aria-label="Progress of this test case">
+      {STEPS.map((st, i) => {
+        const ev = c.history.filter((h) => h.stage === st).at(-1);
+        const state = i < at ? "done" : i === at ? "current" : "next";
+        return (
+          <li key={st} aria-current={state === "current" ? "step" : undefined} className={`rounded-lg border p-3 text-[12px] ${state === "current" ? "border-[#254e9e] bg-[#e7effb] ring-2 ring-[#c9d9f7]" : state === "done" ? "border-[#b7e0c6] bg-[#f0f9f3]" : "border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8]"}`}>
+            <div className="flex items-center gap-1 font-bold text-[#14315E]">
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] text-white ${state === "done" ? "bg-[#14532d]" : state === "current" ? "bg-[#254e9e]" : "bg-[#cbd5e1]"}`}>{state === "done" ? "✓" : i + 1}</span>
+              <span className={state === "next" ? "text-[#94a3b8]" : ""}>{STAGE_WORD[st]}</span>
+            </div>
+            <div className="mt-1">{ev ? day(ev.at) : state === "next" ? "Not yet" : ""}</div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -450,10 +499,12 @@ function CaseDetail({ c, onDone }: { c: TestCase; onDone: (m: string) => void })
   const last = c.stage === "closed";
   return (
     <section className={`${card} p-5 space-y-space-sm`} data-testid="case-detail">
+      <Link href="/app/demo/testing?tab=cases" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline" data-testid="case-back"><Icon name="arrow_back" size={16} /> All test cases</Link>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div><div role="heading" aria-level={2} className="text-[18px] font-bold text-[#14315E]">{c.model} · {c.reference}</div><div className="text-[13px] text-[#64748b]">{c.brand} · {c.manufacturer} · {c.registrationId}</div></div>
         <Chip tone="border-[#c9d9f7] bg-[#e7effb] text-[#14315E]">{STAGE_WORD[c.stage]}</Chip>
       </div>
+      <Stepper c={c} />
       <p className="text-[13px] text-[#334155]"><b>{c.basis === "risk" ? "Chosen from the risk ranking" : c.basis === "random" ? "Risk-weighted random draw" : "Chosen by the Officer"}{c.riskScore != null ? ` (score ${c.riskScore})` : ""}:</b> {c.reason}</p>
       <dl className="grid gap-2 text-[13px] sm:grid-cols-2 lg:grid-cols-4">
         <div><dt className={labelCls}>Bought from</dt><dd>{c.procuredFrom ?? "Not yet"}</dd></div>

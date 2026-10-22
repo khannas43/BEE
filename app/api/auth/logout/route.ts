@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { AUTH } from "@/lib/server/authConfig";
 import { correlationIdOf, errorResponse, jsonResponse, logged, methodNotAllowed, withContractHeaders } from "@/lib/server/http";
 import { endKeycloakSession } from "@/lib/server/keycloak";
+import { logoutRequestFromPortal } from "@/lib/server/portalOrigin";
 import { clearSessionCookie, destroySession, sessionCookieOf } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 export const POST = logged("/api/auth/logout", async (request: NextRequest) => {
   const correlationId = correlationIdOf(request);
-  if (request.headers.get("origin") !== AUTH.webOrigin) return errorResponse("cross_origin", 403, correlationId);
+  if (!logoutRequestFromPortal(request, AUTH.webOrigin)) return errorResponse("cross_origin", 403, correlationId);
   const session = destroySession(sessionCookieOf(request));
   const keycloakSessionEnded = session ? await endKeycloakSession(session.refreshToken, correlationId) : false;
   const wantsHtml = (request.headers.get("accept") ?? "").includes("text/html");
